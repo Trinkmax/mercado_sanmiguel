@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { DoorOpen, FilePlus2, MessagesSquare, Wallet } from "lucide-react";
+import { DoorOpen, FilePlus2, MessagesSquare } from "lucide-react";
+import { CajaRegistradora } from "@/components/shared/iconos";
 import { requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatFecha, formatFechaLarga, hoyISO } from "@/lib/format";
@@ -71,7 +72,7 @@ export default async function PorteriaPage({ searchParams }: Props) {
         {perfil.rol === "guardia" ? (
           <Button asChild variant="outline" size="lg" className="h-12 px-5 text-base">
             <Link href="/caja">
-              <Wallet className="size-5" strokeWidth={2} />
+              <CajaRegistradora className="size-5" strokeWidth={2} />
               Canon y cobros → Caja del día
             </Link>
           </Button>

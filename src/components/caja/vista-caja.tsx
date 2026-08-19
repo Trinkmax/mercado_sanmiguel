@@ -1,4 +1,5 @@
-import { CalendarX2, Wallet } from "lucide-react";
+import { CalendarX2 } from "lucide-react";
+import { CajaRegistradora } from "@/components/shared/iconos";
 import type { Rol } from "@/lib/auth";
 import { formatFecha } from "@/lib/format";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -58,7 +59,7 @@ export function VistaCaja({
         {encabezado}
         {esHoy ? (
           <EmptyState
-            icono={Wallet}
+            icono={CajaRegistradora}
             titulo="Todavía no se abrió la caja de hoy"
             descripcion="Abrila para empezar a registrar los cobros del día."
           >

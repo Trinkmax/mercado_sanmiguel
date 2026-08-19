@@ -1,4 +1,5 @@
 import type { Rol } from "@/lib/auth";
+import { CajaRegistradora } from "@/components/shared/iconos";
 import {
   Banknote,
   ClipboardCheck,
@@ -15,13 +16,12 @@ import {
   Landmark,
   Users,
   Vault,
-  Wallet,
   Zap,
   CalendarRange,
   type LucideIcon,
 } from "lucide-react";
 
-export type GrupoNav = "hoy" | "socios" | "plata" | "direccion";
+export type GrupoNav = "hoy" | "gestion" | "plata" | "direccion";
 
 export type ItemNav = {
   href: string;
@@ -35,32 +35,32 @@ export type ItemNav = {
 
 export const LABEL_GRUPO: Record<GrupoNav, string> = {
   hoy: "Hoy",
-  socios: "Socios",
+  gestion: "Gestión",
   plata: "Plata",
   direccion: "Dirección",
 };
 
 /** Orden de los grupos en el menú. */
-export const ORDEN_GRUPOS: GrupoNav[] = ["hoy", "socios", "plata", "direccion"];
+export const ORDEN_GRUPOS: GrupoNav[] = ["hoy", "gestion", "plata", "direccion"];
 
 /** Navegación del panel: cada rol ve solo lo que usa.
  * - `guardia` es el Jefe de Portería (cobra); `porteria` no cobra.
  * - Reportes: oculto para Administración (pedido del cliente).
  * - Aprobaciones y Personal: solo el Líder de Procesos.
  * Con 7 entradas o menos (Portería, Jefe de Portería) el menú es una lista plana;
- * con más, se agrupa en Hoy / Socios / Plata / Dirección. */
+ * con más, se agrupa en Hoy / Gestión / Plata / Dirección. */
 export const NAVEGACION: ItemNav[] = [
   // Hoy: lo que se usa todos los días, a un toque.
   { href: "/inicio", label: "Inicio", icono: LayoutDashboard, grupo: "hoy", roles: ["admin", "guardia", "tesoreria", "consejo", "lider"] },
   { href: "/cobranza", label: "Cobrar", icono: HandCoins, grupo: "hoy", roles: ["admin", "guardia", "tesoreria"] },
-  { href: "/caja", label: "Caja del día", icono: Wallet, grupo: "hoy", roles: ["admin", "guardia", "tesoreria"] },
+  { href: "/caja", label: "Caja del día", icono: CajaRegistradora, grupo: "hoy", roles: ["admin", "guardia", "tesoreria"] },
   { href: "/porteria", label: "Portería", icono: DoorOpen, grupo: "hoy", roles: ["porteria", "guardia", "admin", "lider"] },
   { href: "/mapa", label: "Mapa", icono: Map, grupo: "hoy", roles: ["admin", "guardia", "tesoreria", "consejo", "lider"] },
-  // Socios: la carpeta del cliente y la comunicación con él.
-  { href: "/clientes", label: "Clientes", icono: Store, grupo: "socios", roles: ["admin", "tesoreria", "consejo", "lider"] },
-  { href: "/solicitudes", label: "Solicitudes", icono: MessagesSquare, grupo: "socios", roles: ["admin", "guardia", "porteria", "tesoreria", "consejo", "lider"] },
-  { href: "/aprobaciones", label: "Aprobaciones", icono: ClipboardCheck, grupo: "socios", roles: ["lider"] },
-  { href: "/comunicaciones", label: "Comunicaciones", icono: Megaphone, grupo: "socios", roles: ["admin", "consejo", "lider"] },
+  // Gestión: la carpeta del cliente y la comunicación con él.
+  { href: "/clientes", label: "Clientes", icono: Store, grupo: "gestion", roles: ["admin", "tesoreria", "consejo", "lider"] },
+  { href: "/solicitudes", label: "Solicitudes", icono: MessagesSquare, grupo: "gestion", roles: ["admin", "guardia", "porteria", "tesoreria", "consejo", "lider"] },
+  { href: "/aprobaciones", label: "Aprobaciones", icono: ClipboardCheck, grupo: "gestion", roles: ["lider"] },
+  { href: "/comunicaciones", label: "Comunicaciones", icono: Megaphone, grupo: "gestion", roles: ["admin", "consejo", "lider"] },
   // Plata: lo que entra y lo que sale.
   { href: "/facturacion", label: "Facturación", icono: CalendarRange, grupo: "plata", roles: ["admin", "tesoreria", "consejo", "lider"] },
   { href: "/energia", label: "Energía", icono: Zap, grupo: "plata", roles: ["admin", "tesoreria", "consejo", "lider"] },

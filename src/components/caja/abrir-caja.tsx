@@ -1,7 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
-import { Wallet } from "lucide-react";
+import { CajaRegistradora } from "@/components/shared/iconos";
 import { toast } from "sonner";
 import { abrirCaja } from "@/lib/actions/cajas";
 import { Button } from "@/components/ui/button";
@@ -33,7 +33,7 @@ export function BotonAbrirCaja({ tipo }: { tipo: Enums<"tipo_caja"> }) {
       {enviando ? (
         <Spinner className="size-5" />
       ) : (
-        <Wallet className="size-5" strokeWidth={2} />
+        <CajaRegistradora className="size-5" strokeWidth={2} />
       )}
       Abrir caja
     </Button>

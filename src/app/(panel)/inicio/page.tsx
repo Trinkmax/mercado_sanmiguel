@@ -8,7 +8,6 @@ import {
   Landmark,
   MessagesSquare,
   Vault,
-  Wallet,
   type LucideIcon,
 } from "lucide-react";
 import { requireStaff } from "@/lib/auth";
@@ -21,6 +20,7 @@ import {
   periodoActual,
 } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { CajaRegistradora } from "@/components/shared/iconos";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -382,7 +382,7 @@ export default async function InicioPage() {
         descripcion: "Sumalas a la caja mayor para que el día cierre completo.",
         href: "/caja",
         cta: "Integrar",
-        icono: Wallet,
+        icono: CajaRegistradora,
         tono: "parcial",
       },
       {
@@ -393,7 +393,7 @@ export default async function InicioPage() {
         descripcion: "Revisá el motivo y decidí si se reabre.",
         href: "/caja",
         cta: pedidosReapertura === 1 ? "Ver pedido" : "Ver pedidos",
-        icono: Wallet,
+        icono: CajaRegistradora,
         tono: "parcial",
       },
       {
@@ -482,7 +482,7 @@ export default async function InicioPage() {
         descripcion: "Administración todavía no las sumó a la caja mayor.",
         href: "/tesoreria",
         cta: "Ver cajas",
-        icono: Wallet,
+        icono: CajaRegistradora,
         tono: "parcial",
       }
     );
@@ -602,7 +602,7 @@ export default async function InicioPage() {
                 </Button>
                 <Button asChild size="lg" variant="outline" className="min-h-12 px-5 text-base">
                   <Link href="/caja">
-                    <Wallet className="size-5" />
+                    <CajaRegistradora className="size-5" />
                     Mi caja
                   </Link>
                 </Button>
@@ -704,7 +704,7 @@ export default async function InicioPage() {
                     </p>
                     <Button asChild variant="outline" className="min-h-11 w-full text-base">
                       <Link href="/caja">
-                        <Wallet className="size-5" />
+                        <CajaRegistradora className="size-5" />
                         Abrir caja
                       </Link>
                     </Button>
