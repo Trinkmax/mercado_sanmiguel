@@ -15,7 +15,6 @@ import {
   Store,
   Landmark,
   Users,
-  Vault,
   Zap,
   CalendarRange,
   type LucideIcon,
@@ -66,7 +65,7 @@ export const NAVEGACION: ItemNav[] = [
   { href: "/energia", label: "Energía", icono: Zap, grupo: "plata", roles: ["admin", "tesoreria", "consejo", "lider"] },
   { href: "/cheques", label: "Cheques", icono: Banknote, grupo: "plata", roles: ["admin", "tesoreria", "consejo", "lider"] },
   { href: "/gastos", label: "Gastos", icono: Receipt, grupo: "plata", roles: ["admin", "tesoreria", "consejo", "lider"] },
-  { href: "/tesoreria", label: "Tesorería", icono: Vault, grupo: "plata", roles: ["tesoreria", "consejo", "lider"] },
+  { href: "/tesoreria", label: "Tesorería", icono: Landmark, grupo: "plata", roles: ["tesoreria", "consejo", "lider"] },
   // Dirección: mirar, decidir, configurar.
   { href: "/reportes", label: "Reportes", icono: FileBarChart2, grupo: "direccion", roles: ["tesoreria", "consejo", "lider"] },
   { href: "/personal", label: "Personal", icono: Users, grupo: "direccion", roles: ["lider"] },

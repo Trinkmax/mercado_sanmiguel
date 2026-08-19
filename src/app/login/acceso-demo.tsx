@@ -10,7 +10,7 @@ import {
   Loader2,
   Store,
   Truck,
-  Vault,
+  Landmark,
 } from "lucide-react";
 import { entrarComoDemo, type RolDemo } from "@/lib/actions/auth";
 import { cn } from "@/lib/utils";
@@ -25,7 +25,7 @@ const ROLES: {
   { rol: "lider", label: "Líder de Procesos", detalle: "Aprueba, personal, reportes", icono: ClipboardCheck },
   { rol: "guardia", label: "Jefe de Portería", detalle: "Quinteros, canon, rinde caja", icono: Truck },
   { rol: "porteria", label: "Portería", detalle: "Ingresos de personal", icono: DoorOpen },
-  { rol: "tesoreria", label: "Tesorería", detalle: "Valida, concilia, cheques", icono: Vault },
+  { rol: "tesoreria", label: "Tesorería", detalle: "Valida, concilia, cheques", icono: Landmark },
   { rol: "consejo", label: "Consejo", detalle: "Reportes y resoluciones", icono: FileBarChart2 },
   { rol: "socio", label: "Socio", detalle: "El portal del puestero", icono: Store },
 ];

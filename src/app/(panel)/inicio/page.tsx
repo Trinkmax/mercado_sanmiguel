@@ -7,7 +7,6 @@ import {
   HandCoins,
   Landmark,
   MessagesSquare,
-  Vault,
   type LucideIcon,
 } from "lucide-react";
 import { requireStaff } from "@/lib/auth";
@@ -419,7 +418,7 @@ export default async function InicioPage() {
         descripcion: "Controlalas y dales el OK definitivo.",
         href: "/tesoreria",
         cta: "Validar",
-        icono: Vault,
+        icono: Landmark,
         tono: "parcial",
       },
       {
@@ -456,7 +455,7 @@ export default async function InicioPage() {
         descripcion: "Tesorería todavía no les dio el OK.",
         href: "/tesoreria",
         cta: "Ver cajas",
-        icono: Vault,
+        icono: Landmark,
         tono: "parcial",
       }
     );
@@ -471,7 +470,7 @@ export default async function InicioPage() {
         descripcion: "Tesorería todavía no les dio el OK.",
         href: "/tesoreria",
         cta: "Ver cajas",
-        icono: Vault,
+        icono: Landmark,
         tono: "parcial",
       },
       {
