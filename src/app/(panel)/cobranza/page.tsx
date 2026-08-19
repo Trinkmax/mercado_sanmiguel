@@ -1,16 +1,18 @@
 import Link from "next/link";
 import { Truck, Users } from "lucide-react";
 import { requireRol } from "@/lib/auth";
+import { periodoActual } from "@/lib/format";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
+import { BotonExportar } from "@/components/shared/boton-exportar";
 import {
   BuscadorClientes,
   type FilaCliente,
 } from "@/components/cobranza/buscador-clientes";
 
-export const metadata = { title: "Cobranza" };
+export const metadata = { title: "Cobrar" };
 
 export default async function CobranzaPage() {
   const perfil = await requireRol("admin", "guardia", "tesoreria");
@@ -58,7 +60,7 @@ export default async function CobranzaPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        titulo={esGuardia ? "Quinteros" : "Cobranza"}
+        titulo="Cobrar"
         descripcion={
           esGuardia
             ? "Buscá la quinta y cobrá en tres toques."
@@ -69,10 +71,16 @@ export default async function CobranzaPage() {
           <Button asChild size="lg" variant="outline" className="h-12 px-5 text-base">
             <Link href="/caja">
               <Truck className="size-5" strokeWidth={2} />
-              Canon de camiones
+              Canon de portería
             </Link>
           </Button>
-        ) : null}
+        ) : (
+          <BotonExportar
+            dataset="pagos"
+            periodo={periodoActual()}
+            label="Cobros del mes (.xlsx)"
+          />
+        )}
       </PageHeader>
 
       {filas.length === 0 ? (
@@ -85,7 +93,7 @@ export default async function CobranzaPage() {
           }
           descripcion={
             esGuardia
-              ? "Cuando administración cargue quinteros con expensas EXPQ, van a aparecer acá."
+              ? "Cuando se carguen quinteros con expensas EXPQ, van a aparecer acá."
               : "Cargá los clientes desde la ficha de clientes para empezar a cobrar."
           }
         />

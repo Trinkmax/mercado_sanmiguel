@@ -13,17 +13,20 @@ import {
 } from "@/lib/storage";
 import { hoyISO } from "@/lib/format";
 
-/** Registra una sanción o notificación, con documento adjunto opcional. */
+/**
+ * Registro documental del cliente: notificación, apercibimiento o sanción,
+ * con documento adjunto opcional (administración, consejo y líder).
+ */
 export async function crearSancion(
   formData: FormData
 ): Promise<ActionResult<{ id: string }>> {
-  const perfil = await requireRol("admin", "consejo");
+  const perfil = await requireRol("admin", "consejo", "lider");
 
   const parsed = z
     .object({
       clienteId: z.string().min(1),
-      tipo: z.enum(["sancion", "notificacion"], {
-        error: "Elegí si es sanción o notificación",
+      tipo: z.enum(["notificacion", "apercibimiento", "sancion"], {
+        error: "Elegí si es notificación, apercibimiento o sanción",
       }),
       titulo: z
         .string()

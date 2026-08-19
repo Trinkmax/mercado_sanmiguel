@@ -17,7 +17,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
-/** Borrado de un documento con confirmación (solo administración y consejo). */
+/** Borrado de un documento con confirmación (administración, consejo y líder). */
 export function BorrarDocumento({
   id,
   clienteId,

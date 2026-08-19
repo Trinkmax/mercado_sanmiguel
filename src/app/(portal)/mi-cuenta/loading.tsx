@@ -27,6 +27,15 @@ export default function LoadingMiCuenta() {
         <Skeleton className="h-14 w-full" />
       </div>
 
+      {/* Solicitudes */}
+      <div className="space-y-3 rounded-xl border bg-card p-6">
+        <Skeleton className="h-6 w-40" />
+        <Skeleton className="h-5 w-full max-w-md" />
+        <Skeleton className="h-16 w-full" />
+        <Skeleton className="h-16 w-full" />
+        <Skeleton className="h-12 w-full rounded-md" />
+      </div>
+
       {/* Pagos */}
       <div className="space-y-3 rounded-xl border bg-card p-6">
         <Skeleton className="h-6 w-32" />

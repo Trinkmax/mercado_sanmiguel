@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
+/**
+ * Filtros de la cartera. "listos" no es un estado de la DB: son los cheques
+ * en cartera cuya fecha de cobro ya llegó (se filtra en memoria en la page).
+ */
 export const FILTROS_CHEQUES = [
+  { valor: "listos", label: "Listos para depositar" },
   { valor: "en_cartera", label: "En cartera" },
   { valor: "depositado", label: "Depositados" },
   { valor: "acreditado", label: "Acreditados" },
@@ -10,6 +15,11 @@ export const FILTROS_CHEQUES = [
 ] as const;
 
 export type FiltroCheque = (typeof FILTROS_CHEQUES)[number]["valor"];
+
+/** Href de cada filtro: "en cartera" es la vista por defecto (sin query). */
+export function hrefFiltroCheque(filtro: FiltroCheque): string {
+  return filtro === "en_cartera" ? "/cheques" : `/cheques?estado=${filtro}`;
+}
 
 /** Filtros por estado de la cartera, como pestañas grandes (targets ≥ 44 px). */
 export function FiltroEstado({
@@ -26,7 +36,7 @@ export function FiltroEstado({
         return (
           <Link
             key={f.valor}
-            href={f.valor === "en_cartera" ? "/cheques" : `/cheques?estado=${f.valor}`}
+            href={hrefFiltroCheque(f.valor)}
             aria-current={esActivo ? "page" : undefined}
             className={cn(
               "inline-flex min-h-11 items-center gap-2 rounded-md border px-4 text-sm font-medium transition-colors",

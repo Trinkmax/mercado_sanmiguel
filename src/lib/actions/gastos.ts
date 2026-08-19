@@ -137,6 +137,10 @@ export async function pagarGasto(input: unknown): Promise<ActionResult> {
     return fallo("El gasto ya no está pendiente. Actualizá la página.");
 
   revalidatePath("/gastos");
+  // El pago mueve el flujo de fondos y suma un comprobante a controlar; si
+  // salió de la caja del día, también cambia el arqueo de esa caja.
+  revalidatePath("/tesoreria");
+  if (parsed.data.origen === "caja") revalidatePath("/caja");
   return ok(undefined);
 }
 
@@ -163,5 +167,58 @@ export async function anularGasto(input: unknown): Promise<ActionResult> {
     return fallo("Ese gasto ya no se puede anular. Actualizá la página.");
 
   revalidatePath("/gastos");
+  return ok(undefined);
+}
+
+/**
+ * Adjunta (o reemplaza) la factura de un gasto que se cargó sin comprobante.
+ * Si el gasto ya estaba pagado, vuelve a quedar "sin validar" para que
+ * tesorería controle la factura nueva.
+ */
+export async function adjuntarFacturaGasto(
+  formData: FormData
+): Promise<ActionResult> {
+  const perfil = await requireRol("admin", "tesoreria");
+  const parsedId = z
+    .uuid("No se reconoce el gasto.")
+    .safeParse(String(formData.get("id") ?? ""));
+  if (!parsedId.success) return fallo(parsedId.error.issues[0].message);
+
+  const factura = formData.get("factura");
+  if (!(factura instanceof File) || factura.size === 0) {
+    return fallo("Elegí el archivo de la factura (PDF o foto).");
+  }
+  if (!MIME_PERMITIDOS.includes(factura.type)) {
+    return fallo("La factura tiene que ser un PDF o una imagen (JPG, PNG o WEBP).");
+  }
+  if (factura.size > TAMANO_MAX_BYTES) {
+    return fallo("La factura no puede pesar más de 20 MB.");
+  }
+
+  const supabase = await createClient();
+  const ruta = rutaFacturaGasto(perfil.org_id, factura.name);
+  const { error: errorSubida } = await supabase.storage
+    .from("documentos")
+    .upload(ruta, factura);
+  if (errorSubida) return fallo("No se pudo subir la factura. Probá de nuevo.");
+
+  const { data, error } = await supabase
+    .from("gastos")
+    .update({
+      factura_path: ruta,
+      comprobante_validado: false,
+      validado_por: null,
+      validado_en: null,
+    })
+    .eq("id", parsedId.data)
+    .eq("org_id", perfil.org_id)
+    .neq("estado", "anulado")
+    .select("id");
+  if (error) return fallo(error);
+  if (!data || data.length === 0)
+    return fallo("Ese gasto ya no admite factura (está anulado). Actualizá la página.");
+
+  revalidatePath("/gastos");
+  revalidatePath("/tesoreria");
   return ok(undefined);
 }

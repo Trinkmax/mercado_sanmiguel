@@ -16,7 +16,7 @@ export const metadata = { title: "Libre deuda" };
 type Props = { params: Promise<{ clienteId: string }> };
 
 export default async function LibreDeudaPage({ params }: Props) {
-  await requireRol("admin", "tesoreria", "consejo");
+  const perfil = await requireRol("admin", "tesoreria", "consejo", "lider");
   const { clienteId } = await params;
   const supabase = await createClient();
 
@@ -27,7 +27,7 @@ export default async function LibreDeudaPage({ params }: Props) {
     .maybeSingle();
   if (!cliente) notFound();
 
-  const [cargosRes, itemsRes] = await Promise.all([
+  const [cargosRes, itemsRes, configRes] = await Promise.all([
     supabase
       .from("cargos")
       .select("estado, monto, monto_pagado, descuento_pronto_pago, vencimiento")
@@ -38,7 +38,13 @@ export default async function LibreDeudaPage({ params }: Props) {
       .select("cantidad, activo, conceptos(codigo, nombre)")
       .eq("cliente_id", clienteId)
       .eq("activo", true),
+    supabase
+      .from("configuracion")
+      .select("impresion_directa")
+      .eq("org_id", perfil.org_id)
+      .maybeSingle(),
   ]);
+  const autoImprimir = Boolean(configRes.data?.impresion_directa);
 
   const deuda = (cargosRes.data ?? []).reduce(
     (acc, c) => acc + saldoCargo(c),
@@ -95,7 +101,7 @@ export default async function LibreDeudaPage({ params }: Props) {
 
   return (
     <>
-      <BotonImprimir volverA={`/clientes/${cliente.id}`} />
+      <BotonImprimir volverA={`/clientes/${cliente.id}`} autoImprimir={autoImprimir} />
 
       <div className="etiqueta">
         <div className="etiqueta-interior space-y-8 p-8">

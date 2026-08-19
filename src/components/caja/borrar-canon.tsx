@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { borrarCanon } from "@/lib/actions/cajas";
-import { formatARS } from "@/lib/format";
+import { formatARS, formatFecha } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -16,15 +16,19 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
+import { labelTipoCanon } from "@/components/caja/form-canon";
+import type { TipoCanon } from "@/components/caja/datos";
 
 /** Borra una entrada de canon (solo con la caja abierta). Pide confirmación. */
 export function BotonBorrarCanon({
   id,
-  cantidad,
+  tipo,
+  fecha,
   monto,
 }: {
   id: string;
-  cantidad: number;
+  tipo: TipoCanon;
+  fecha: string;
   monto: number;
 }) {
   const [abierto, setAbierto] = useState(false);
@@ -58,8 +62,8 @@ export function BotonBorrarCanon({
         <DialogHeader>
           <DialogTitle className="text-xl">Borrar entrada de canon</DialogTitle>
           <DialogDescription className="text-base">
-            {cantidad} {cantidad === 1 ? "camión" : "camiones"} por{" "}
-            {formatARS(monto)}. Se descuenta del total del día.
+            {labelTipoCanon(tipo)} del {formatFecha(fecha)} por {formatARS(monto)}.
+            Se resta del total del día.
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>

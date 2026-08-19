@@ -29,14 +29,15 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 
 const TIPOS = [
-  { valor: "impuesto", label: "Impuesto" },
-  { valor: "comision", label: "Comisión" },
-  { valor: "ajuste", label: "Ajuste" },
+  { valor: "impuesto", label: "Impuesto", ayuda: "IIBB, SIRCREB, impuesto al cheque…" },
+  { valor: "debito_fiscal", label: "Débito fiscal (IVA)", ayuda: "IVA que retiene el banco" },
+  { valor: "comision", label: "Comisión", ayuda: "Mantenimiento, transferencias, cheques" },
+  { valor: "ajuste", label: "Ajuste", ayuda: "Corrección del saldo, con signo" },
 ] as const;
 
 type Tipo = (typeof TIPOS)[number]["valor"];
 
-/** Alta de un movimiento bancario (impuesto, comisión o ajuste). Solo tesorería. */
+/** Alta de un movimiento bancario (impuesto, débito fiscal, comisión o ajuste). Solo tesorería. */
 export function NuevoMovimiento() {
   const [abierto, setAbierto] = useState(false);
   const [tipo, setTipo] = useState<Tipo>("impuesto");
@@ -97,7 +98,8 @@ export function NuevoMovimiento() {
         <DialogHeader>
           <DialogTitle className="text-lg">Registrar movimiento bancario</DialogTitle>
           <DialogDescription className="text-sm">
-            Impuestos y comisiones que el banco descuenta, o un ajuste del saldo.
+            Impuestos, débito fiscal (IVA) y comisiones que cobra el banco, o un
+            ajuste del saldo.
           </DialogDescription>
         </DialogHeader>
 
@@ -118,6 +120,9 @@ export function NuevoMovimiento() {
                 ))}
               </SelectContent>
             </Select>
+            <p className="text-sm text-muted-foreground">
+              {TIPOS.find((t) => t.valor === tipo)?.ayuda}
+            </p>
           </div>
 
           {tipo === "ajuste" ? (
@@ -152,7 +157,11 @@ export function NuevoMovimiento() {
               id="mov-descripcion"
               value={descripcion}
               onChange={(e) => setDescripcion(e.target.value)}
-              placeholder="Por ejemplo: IIBB SIRCREB"
+              placeholder={
+                tipo === "debito_fiscal"
+                  ? "Por ejemplo: IVA sobre comisiones de julio"
+                  : "Por ejemplo: IIBB SIRCREB"
+              }
               className="h-11 text-base"
               maxLength={200}
             />

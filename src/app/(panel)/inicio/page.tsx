@@ -1,5 +1,16 @@
 import Link from "next/link";
-import { ArrowRight, HandCoins, Vault, Wallet } from "lucide-react";
+import { redirect } from "next/navigation";
+import {
+  ArrowRight,
+  ClipboardCheck,
+  DoorOpen,
+  HandCoins,
+  Landmark,
+  MessagesSquare,
+  Vault,
+  Wallet,
+  type LucideIcon,
+} from "lucide-react";
 import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -9,6 +20,7 @@ import {
   labelPeriodo,
   periodoActual,
 } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -38,10 +50,13 @@ type ResumenConcepto = {
   pendiente: number;
 };
 
+/** Barra verde (cobrado) sobre pista roja suave (lo que falta), por concepto. */
 function BarraConcepto({ fila }: { fila: ResumenConcepto }) {
-  const objetivo = fila.cobrado + fila.pendiente;
-  const pct = objetivo > 0 ? Math.min((fila.cobrado / objetivo) * 100, 100) : 100;
-  const completo = fila.pendiente <= 0;
+  const cobrado = Number(fila.cobrado);
+  const pendiente = Number(fila.pendiente);
+  const objetivo = cobrado + pendiente;
+  const pct = objetivo > 0 ? Math.min((cobrado / objetivo) * 100, 100) : 100;
+  const completo = pendiente <= 0;
   return (
     <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-1.5 py-3 sm:grid-cols-[5rem_1fr_11rem]">
       <Codigo codigo={fila.codigo} />
@@ -49,7 +64,7 @@ function BarraConcepto({ fila }: { fila: ResumenConcepto }) {
         <div className="flex items-baseline justify-between gap-3">
           <p className="truncate font-medium">{fila.nombre}</p>
           <p className="text-sm text-muted-foreground tabular sm:hidden">
-            {formatARS(fila.cobrado)} / {formatARS(objetivo)}
+            {formatARS(cobrado)} / {formatARS(objetivo)}
           </p>
         </div>
         <div
@@ -58,7 +73,7 @@ function BarraConcepto({ fila }: { fila: ResumenConcepto }) {
           aria-valuenow={Math.round(pct)}
           aria-valuemin={0}
           aria-valuemax={100}
-          aria-label={`${fila.nombre}: cobrado ${formatARS(fila.cobrado)} de ${formatARS(objetivo)}`}
+          aria-label={`${fila.nombre}: cobrado ${formatARS(cobrado)} de ${formatARS(objetivo)}`}
         >
           <div
             className="h-full rounded-full bg-pagado transition-[width]"
@@ -67,55 +82,248 @@ function BarraConcepto({ fila }: { fila: ResumenConcepto }) {
         </div>
       </div>
       <div className="col-start-2 text-sm text-muted-foreground tabular max-sm:hidden sm:col-start-3 sm:text-right">
-        <span className="font-semibold text-pagado">{formatARS(fila.cobrado)}</span>
+        <span className="font-semibold text-pagado">{formatARS(cobrado)}</span>
         {" de "}
         {formatARS(objetivo)}
         {completo ? null : (
-          <span className="block text-pendiente">
-            faltan {formatARS(fila.pendiente)}
-          </span>
+          <span className="block text-pendiente">faltan {formatARS(pendiente)}</span>
         )}
       </div>
     </div>
   );
 }
 
+/** Aviso lateral: qué hay pendiente, cuánto, y el botón que lo resuelve. */
+type Aviso = {
+  clave: string;
+  n: number;
+  singular: string;
+  plural: string;
+  descripcion: string;
+  href: string;
+  cta: string;
+  icono?: LucideIcon;
+  /** "parcial" = espera una acción tuya (ámbar); "pendiente" = deuda (rojo). */
+  tono: "parcial" | "pendiente";
+};
+
+function TarjetaAviso({ aviso }: { aviso: Aviso }) {
+  const Icono = aviso.icono;
+  const titulo = aviso.n === 1 ? aviso.singular : aviso.plural;
+  if (aviso.tono === "pendiente") {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <p className="font-semibold">
+            <span className="text-pendiente">{aviso.n}</span> {titulo}
+          </p>
+          <p className="mt-1 text-sm text-muted-foreground">{aviso.descripcion}</p>
+          <Button asChild variant="outline" className="mt-3 min-h-11 text-base">
+            <Link href={aviso.href}>{aviso.cta}</Link>
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+  return (
+    <Card className="border-parcial bg-parcial-suave">
+      <CardContent className="flex items-center justify-between gap-3 pt-6">
+        <div>
+          <p className="font-semibold">
+            {aviso.n} {titulo}
+          </p>
+          <p className="text-sm text-muted-foreground">{aviso.descripcion}</p>
+        </div>
+        <Button asChild className="min-h-11 shrink-0 text-base">
+          <Link href={aviso.href}>
+            {Icono ? <Icono className="size-5" strokeWidth={2} /> : null}
+            {aviso.cta}
+          </Link>
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Fila del escritorio del Líder: número grande + qué es + botón. */
+function FilaEscritorio({
+  n,
+  titulo,
+  detalle,
+  href,
+  cta,
+  icono: Icono,
+}: {
+  n: number;
+  titulo: string;
+  detalle: string;
+  href: string;
+  cta: string;
+  icono: LucideIcon;
+}) {
+  return (
+    <div className="grid grid-cols-[4rem_1fr] items-center gap-x-4 gap-y-2 py-4 sm:grid-cols-[4rem_1fr_auto]">
+      <p
+        className={cn(
+          "font-display text-3xl font-extrabold tabular",
+          n > 0 ? "text-parcial" : "text-muted-foreground/60"
+        )}
+      >
+        {n}
+      </p>
+      <div className="min-w-0">
+        <p className="font-medium">{titulo}</p>
+        <p className="text-sm text-muted-foreground">{detalle}</p>
+      </div>
+      <Button
+        asChild
+        variant={n > 0 ? "default" : "outline"}
+        className="col-start-2 min-h-11 justify-self-start text-base sm:col-start-3 sm:justify-self-end"
+      >
+        <Link href={href}>
+          <Icono className="size-5" strokeWidth={2} />
+          {cta}
+        </Link>
+      </Button>
+    </div>
+  );
+}
+
 export default async function InicioPage() {
   const perfil = await requireStaff();
+  // Portería tiene su propia pantalla de inicio (rutaInicio ya apunta ahí).
+  if (perfil.rol === "porteria") redirect("/porteria");
+
   const supabase = await createClient();
+  const org = perfil.org_id;
+  const rol = perfil.rol;
   const periodo = periodoActual();
   const hoy = hoyISO();
 
-  const tipoCajaPropia =
-    perfil.rol === "guardia" ? "guardia" : "administracion";
+  const puedeCobrar = rol === "admin" || rol === "guardia" || rol === "tesoreria";
+  const veCobranzaMes = rol !== "guardia";
+  const veGrafico = veCobranzaMes;
+  const veReportes = rol === "tesoreria" || rol === "consejo" || rol === "lider";
+  const tipoCajaPropia = rol === "guardia" ? "guardia" : "administracion";
 
-  const [cajaHoyRes, resumenRes, pendientesValidarRes, deudaVencidaRes] =
-    await Promise.all([
-      supabase
-        .from("cajas")
-        .select("id, tipo, estado, total_efectivo, total_transferencia, total_cheques")
-        .eq("fecha", hoy)
-        .eq("tipo", tipoCajaPropia)
-        .maybeSingle(),
-      perfil.rol === "guardia"
-        ? Promise.resolve({ data: null })
-        : supabase.rpc("resumen_conceptos", { p_periodo: periodo }),
-      perfil.rol === "tesoreria" || perfil.rol === "consejo"
-        ? supabase.from("cajas").select("id", { count: "exact", head: true }).eq("estado", "cerrada")
-        : Promise.resolve({ count: null }),
-      perfil.rol === "guardia"
-        ? Promise.resolve({ data: null })
-        : supabase
-            .from("v_deuda_clientes")
-            .select("cliente_id, deuda, periodo_mas_viejo")
-            .lt("periodo_mas_viejo", periodo)
-            .gt("deuda", 0),
-    ]);
+  const cuenta = async (q: PromiseLike<{ count: number | null }>) => (await q).count ?? 0;
+  const cero = Promise.resolve(0);
+
+  const [
+    cajaHoyRes,
+    resumenRes,
+    deudaVencidaRes,
+    cajasSinValidar,
+    rendicionesSinIntegrar,
+    pedidosReapertura,
+    transferenciasSinConciliar,
+    cambiosPorAprobar,
+    solicitudesRes,
+    ingresosHoyRes,
+  ] = await Promise.all([
+    puedeCobrar
+      ? supabase
+          .from("cajas")
+          .select("id, tipo, estado")
+          .eq("org_id", org)
+          .eq("fecha", hoy)
+          .eq("tipo", tipoCajaPropia)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    veCobranzaMes
+      ? supabase.rpc("resumen_conceptos", { p_periodo: periodo })
+      : Promise.resolve({ data: null }),
+    veCobranzaMes
+      ? supabase
+          .from("v_deuda_clientes")
+          .select("cliente_id")
+          .eq("org_id", org)
+          .lt("periodo_mas_viejo", periodo)
+          .gt("deuda", 0)
+      : Promise.resolve({ data: null }),
+    // Cajas que esperan el OK de Tesorería (cerradas o ya integradas en la caja mayor).
+    rol === "tesoreria" || rol === "consejo" || rol === "lider"
+      ? cuenta(
+          supabase
+            .from("cajas")
+            .select("id", { count: "exact", head: true })
+            .eq("org_id", org)
+            .in("estado", ["cerrada", "integrada"])
+        )
+      : cero,
+    // Rendiciones de Portería cerradas que Administración todavía no integró.
+    rol === "admin" || rol === "lider"
+      ? cuenta(
+          supabase
+            .from("cajas")
+            .select("id", { count: "exact", head: true })
+            .eq("org_id", org)
+            .eq("tipo", "guardia")
+            .eq("estado", "cerrada")
+        )
+      : cero,
+    rol === "admin"
+      ? cuenta(
+          supabase
+            .from("cajas")
+            .select("id", { count: "exact", head: true })
+            .eq("org_id", org)
+            .not("reapertura_solicitada_en", "is", null)
+        )
+      : cero,
+    rol === "tesoreria"
+      ? cuenta(
+          supabase
+            .from("pagos")
+            .select("id", { count: "exact", head: true })
+            .eq("org_id", org)
+            .eq("medio", "transferencia")
+            .eq("anulado", false)
+            .eq("conciliado", false)
+        )
+      : cero,
+    rol === "lider"
+      ? cuenta(
+          supabase
+            .from("cambios_pendientes")
+            .select("id", { count: "exact", head: true })
+            .eq("org_id", org)
+            .eq("estado", "pendiente")
+        )
+      : cero,
+    rol === "lider" || rol === "admin" || rol === "consejo"
+      ? supabase
+          .from("solicitudes")
+          .select("estado")
+          .eq("org_id", org)
+          .in("estado", ["nueva", "en_revision", "en_consejo", "resuelta", "asignada"])
+      : Promise.resolve({ data: null }),
+    rol === "guardia"
+      ? supabase
+          .from("ingresos_personal")
+          .select("egreso_en")
+          .eq("org_id", org)
+          .gte("ingreso_en", `${hoy}T00:00:00-03:00`)
+      : Promise.resolve({ data: null }),
+  ]);
 
   const cajaHoy = cajaHoyRes.data;
   const resumen = (resumenRes.data ?? []) as ResumenConcepto[];
-  const pendientesValidar = pendientesValidarRes.count ?? 0;
   const clientesVencidos = deudaVencidaRes.data?.length ?? 0;
+
+  const porEstado = new Map<string, number>();
+  for (const s of solicitudesRes.data ?? []) {
+    porEstado.set(s.estado, (porEstado.get(s.estado) ?? 0) + 1);
+  }
+  const solNuevas = porEstado.get("nueva") ?? 0;
+  const solEnRevision = porEstado.get("en_revision") ?? 0;
+  const solResueltas = porEstado.get("resuelta") ?? 0;
+  const solEnConsejo = porEstado.get("en_consejo") ?? 0;
+  const solAsignadas = porEstado.get("asignada") ?? 0;
+  const solPorRevisar = solNuevas + solEnRevision + solResueltas;
+
+  const ingresosHoy = ingresosHoyRes.data?.length ?? 0;
+  const adentroAhora = (ingresosHoyRes.data ?? []).filter((i) => !i.egreso_en).length;
 
   // Cobrado hoy en la caja propia: siempre desde los pagos, esté la caja
   // abierta o cerrada (los totales del arqueo mezclan canon y gastos).
@@ -129,8 +337,7 @@ export default async function InicioPage() {
     cobradoHoy = (pagosHoy ?? []).reduce((acc, p) => acc + Number(p.monto), 0);
   }
 
-  // Cobranza de los últimos 14 días (solo roles que ven reportería).
-  const veGrafico = ["admin", "tesoreria", "consejo"].includes(perfil.rol);
+  // Cobranza de los últimos 14 días (todos menos el Jefe de Portería).
   let serie14: PuntoCobranza[] = [];
   if (veGrafico) {
     const rango14 = rangoUltimosDias(14);
@@ -138,11 +345,13 @@ export default async function InicioPage() {
       supabase
         .from("pagos")
         .select("fecha, monto")
+        .eq("org_id", org)
         .eq("anulado", false)
         .gte("fecha", `${rango14.desde}T00:00:00-03:00`),
       supabase
         .from("canon_camiones")
         .select("fecha, monto")
+        .eq("org_id", org)
         .gte("fecha", rango14.desde),
     ]);
     serie14 = armarSerieDiaria(
@@ -161,7 +370,139 @@ export default async function InicioPage() {
     { cobrado: 0, pendiente: 0 }
   );
 
-  const puedeCobrar = ["admin", "guardia", "tesoreria"].includes(perfil.rol);
+  // ---------- Avisos por rol (solo se muestran los que tienen algo) ----------
+  const avisos: Aviso[] = [];
+  if (rol === "admin") {
+    avisos.push(
+      {
+        clave: "rendiciones",
+        n: rendicionesSinIntegrar,
+        singular: "rendición de Portería por integrar",
+        plural: "rendiciones de Portería por integrar",
+        descripcion: "Sumalas a la caja mayor para que el día cierre completo.",
+        href: "/caja",
+        cta: "Integrar",
+        icono: Wallet,
+        tono: "parcial",
+      },
+      {
+        clave: "reaperturas",
+        n: pedidosReapertura,
+        singular: "pedido de reapertura de caja",
+        plural: "pedidos de reapertura de caja",
+        descripcion: "Revisá el motivo y decidí si se reabre.",
+        href: "/caja",
+        cta: pedidosReapertura === 1 ? "Ver pedido" : "Ver pedidos",
+        icono: Wallet,
+        tono: "parcial",
+      },
+      {
+        clave: "asignadas",
+        n: solAsignadas,
+        singular: "solicitud asignada a Administración",
+        plural: "solicitudes asignadas a Administración",
+        descripcion: "El Líder de Procesos te las pasó para ejecutar.",
+        href: "/solicitudes?estado=asignadas",
+        cta: "Ver solicitudes",
+        icono: MessagesSquare,
+        tono: "parcial",
+      }
+    );
+  }
+  if (rol === "tesoreria") {
+    avisos.push(
+      {
+        clave: "validar",
+        n: cajasSinValidar,
+        singular: "caja para validar",
+        plural: "cajas para validar",
+        descripcion: "Controlalas y dales el OK definitivo.",
+        href: "/tesoreria",
+        cta: "Validar",
+        icono: Vault,
+        tono: "parcial",
+      },
+      {
+        clave: "transferencias",
+        n: transferenciasSinConciliar,
+        singular: "transferencia sin conciliar",
+        plural: "transferencias sin conciliar",
+        descripcion: "Cotejalas con el banco y marcalas conciliadas.",
+        href: "/tesoreria",
+        cta: "Conciliar",
+        icono: Landmark,
+        tono: "parcial",
+      }
+    );
+  }
+  if (rol === "consejo") {
+    avisos.push(
+      {
+        clave: "consejo",
+        n: solEnConsejo,
+        singular: "solicitud en el Consejo",
+        plural: "solicitudes en el Consejo",
+        descripcion: "Esperan la resolución del Consejo.",
+        href: "/solicitudes?estado=consejo",
+        cta: "Resolver",
+        icono: MessagesSquare,
+        tono: "parcial",
+      },
+      {
+        clave: "validar",
+        n: cajasSinValidar,
+        singular: "caja sin validar",
+        plural: "cajas sin validar",
+        descripcion: "Tesorería todavía no les dio el OK.",
+        href: "/tesoreria",
+        cta: "Ver cajas",
+        icono: Vault,
+        tono: "parcial",
+      }
+    );
+  }
+  if (rol === "lider") {
+    avisos.push(
+      {
+        clave: "validar",
+        n: cajasSinValidar,
+        singular: "caja sin validar",
+        plural: "cajas sin validar",
+        descripcion: "Tesorería todavía no les dio el OK.",
+        href: "/tesoreria",
+        cta: "Ver cajas",
+        icono: Vault,
+        tono: "parcial",
+      },
+      {
+        clave: "rendiciones",
+        n: rendicionesSinIntegrar,
+        singular: "rendición de Portería sin integrar",
+        plural: "rendiciones de Portería sin integrar",
+        descripcion: "Administración todavía no las sumó a la caja mayor.",
+        href: "/tesoreria",
+        cta: "Ver cajas",
+        icono: Wallet,
+        tono: "parcial",
+      }
+    );
+  }
+  if (veCobranzaMes) {
+    avisos.push({
+      clave: "vencidos",
+      n: clientesVencidos,
+      singular: "cliente con deuda vencida",
+      plural: "clientes con deuda vencida",
+      descripcion: `Deben meses anteriores a ${labelPeriodo(periodo)}.`,
+      href: "/clientes?tipo=vencidos",
+      cta: "Ver clientes",
+      tono: "pendiente",
+    });
+  }
+  const avisosVisibles = avisos.filter((a) => a.n > 0);
+
+  const escritorioVacio =
+    rol === "lider" && cambiosPorAprobar + solPorRevisar + solEnConsejo === 0;
 
   return (
     <div className="space-y-8">
@@ -184,27 +525,82 @@ export default async function InicioPage() {
         ) : null}
       </div>
 
+      {/* Escritorio del Líder de Procesos: lo que espera su decisión */}
+      {rol === "lider" ? (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Tu escritorio</CardTitle>
+            <CardDescription>
+              {escritorioVacio
+                ? "Nada espera tu decisión por ahora."
+                : "Lo que espera tu decisión, en orden."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="divide-y">
+              <FilaEscritorio
+                n={cambiosPorAprobar}
+                titulo="Cambios por aprobar"
+                detalle="Altas, bajas y modificaciones de clientes y conceptos que propuso el equipo."
+                href="/aprobaciones"
+                cta="Revisar"
+                icono={ClipboardCheck}
+              />
+              <FilaEscritorio
+                n={solPorRevisar}
+                titulo="Solicitudes por revisar"
+                detalle={
+                  solPorRevisar > 0
+                    ? [
+                        solNuevas > 0 ? `${solNuevas} ${solNuevas === 1 ? "nueva" : "nuevas"}` : null,
+                        solEnRevision > 0 ? `${solEnRevision} en revisión` : null,
+                        solResueltas > 0
+                          ? `${solResueltas} ${solResueltas === 1 ? "resuelta" : "resueltas"} para asignar`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")
+                    : "Nuevas, en revisión o resueltas para asignar a Administración."
+                }
+                href="/solicitudes"
+                cta="Ver solicitudes"
+                icono={MessagesSquare}
+              />
+              <FilaEscritorio
+                n={solEnConsejo}
+                titulo="En el Consejo"
+                detalle="Solicitudes derivadas que esperan la resolución del Consejo."
+                href="/solicitudes?estado=consejo"
+                cta="Ver"
+                icono={Landmark}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      ) : null}
+
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
-        {/* Columna principal: la cobranza del período */}
-        {perfil.rol === "guardia" ? (
+        {/* Columna principal: el día de Portería o la cobranza del período */}
+        {rol === "guardia" ? (
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Tu día</CardTitle>
+              <CardTitle className="text-lg">Tu día en Portería</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-muted-foreground">
                 Cobrá a los quinteros y cargá el canon de camiones desde{" "}
-                <strong>Cobrar</strong>. Al terminar el día, cerrá tu caja: el
-                sistema te dice cuánta plata tenés que rendir.
+                <strong>Cobrar</strong>. Al terminar el día, rendí tu caja de
+                Portería: el sistema te dice cuánta plata tenés que entregar en
+                Administración.
               </p>
               <div className="flex flex-wrap gap-3">
-                <Button asChild size="lg">
+                <Button asChild size="lg" className="min-h-12 px-5 text-base font-semibold">
                   <Link href="/cobranza">
                     <HandCoins className="size-5" />
                     Cobrar quinteros
                   </Link>
                 </Button>
-                <Button asChild size="lg" variant="outline">
+                <Button asChild size="lg" variant="outline" className="min-h-12 px-5 text-base">
                   <Link href="/caja">
                     <Wallet className="size-5" />
                     Mi caja
@@ -216,17 +612,17 @@ export default async function InicioPage() {
         ) : (
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">
-                Cobranza de {labelPeriodo(periodo)}
-              </CardTitle>
-              <CardAction>
-                <Link
-                  href="/reportes"
-                  className="inline-flex min-h-11 items-center text-sm font-medium text-primary hover:underline"
-                >
-                  Ver reportes
-                </Link>
-              </CardAction>
+              <CardTitle className="text-lg">Cobranza de {labelPeriodo(periodo)}</CardTitle>
+              {veReportes ? (
+                <CardAction>
+                  <Link
+                    href="/reportes"
+                    className="inline-flex min-h-11 items-center text-sm font-medium text-primary hover:underline"
+                  >
+                    Ver reportes
+                  </Link>
+                </CardAction>
+              ) : null}
             </CardHeader>
             <CardContent>
               {resumen.length === 0 ? (
@@ -277,7 +673,9 @@ export default async function InicioPage() {
           {puedeCobrar ? (
             <Card>
               <CardHeader>
-                <CardTitle className="text-lg">Caja de hoy</CardTitle>
+                <CardTitle className="text-lg">
+                  {rol === "guardia" ? "Caja de Portería de hoy" : "Caja de hoy"}
+                </CardTitle>
                 {cajaHoy ? (
                   <CardAction>
                     <Sello estado={cajaHoy.estado} />
@@ -289,9 +687,7 @@ export default async function InicioPage() {
                   <>
                     <div>
                       <p className="text-sm text-muted-foreground">Cobrado hoy</p>
-                      <p className="text-2xl font-bold tabular">
-                        {formatARS(cobradoHoy)}
-                      </p>
+                      <p className="text-2xl font-bold tabular">{formatARS(cobradoHoy)}</p>
                     </div>
                     <Button asChild variant="outline" className="min-h-11 w-full text-base">
                       <Link href="/caja">
@@ -318,6 +714,30 @@ export default async function InicioPage() {
             </Card>
           ) : null}
 
+          {rol === "guardia" ? (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Ingresos de personal</CardTitle>
+                <CardDescription>Hoy en Portería</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-baseline gap-2">
+                  <p className="font-display text-3xl font-extrabold tabular">{ingresosHoy}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {ingresosHoy === 1 ? "ingreso registrado" : "ingresos registrados"}
+                    {adentroAhora > 0 ? ` · ${adentroAhora} adentro ahora` : ""}
+                  </p>
+                </div>
+                <Button asChild className="min-h-11 w-full text-base">
+                  <Link href="/porteria">
+                    <DoorOpen className="size-5" strokeWidth={2} />
+                    Registrar ingreso
+                  </Link>
+                </Button>
+              </CardContent>
+            </Card>
+          ) : null}
+
           {veGrafico ? (
             <Card>
               <CardHeader>
@@ -330,48 +750,9 @@ export default async function InicioPage() {
             </Card>
           ) : null}
 
-          {(perfil.rol === "tesoreria" || perfil.rol === "consejo") &&
-          pendientesValidar > 0 ? (
-            <Card className="border-parcial bg-parcial-suave">
-              <CardContent className="flex items-center justify-between gap-3 pt-6">
-                <div>
-                  <p className="font-semibold">
-                    {pendientesValidar}{" "}
-                    {pendientesValidar === 1 ? "caja cerrada" : "cajas cerradas"}{" "}
-                    sin validar
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Controlalas y dales el OK.
-                  </p>
-                </div>
-                <Button asChild className="min-h-11 text-base">
-                  <Link href="/tesoreria">
-                    <Vault className="size-5" />
-                    Validar
-                  </Link>
-                </Button>
-              </CardContent>
-            </Card>
-          ) : null}
-
-          {perfil.rol !== "guardia" && clientesVencidos > 0 ? (
-            <Card>
-              <CardContent className="pt-6">
-                <p className="font-semibold">
-                  <span className="text-pendiente">{clientesVencidos}</span>{" "}
-                  {clientesVencidos === 1
-                    ? "cliente con deuda vencida"
-                    : "clientes con deuda vencida"}
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Deben meses anteriores a {labelPeriodo(periodo)}.
-                </p>
-                <Button asChild variant="outline" className="mt-3 min-h-11 text-base">
-                  <Link href="/clientes?filtro=vencidos">Ver clientes</Link>
-                </Button>
-              </CardContent>
-            </Card>
-          ) : null}
+          {avisosVisibles.map((aviso) => (
+            <TarjetaAviso key={aviso.clave} aviso={aviso} />
+          ))}
         </div>
       </div>
     </div>

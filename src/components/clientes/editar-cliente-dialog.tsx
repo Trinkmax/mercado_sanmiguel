@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Pencil } from "lucide-react";
+import type { Rol } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -12,9 +13,16 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { FormCliente, type DatosCliente } from "./form-cliente";
+import { aplicaDirectoRol } from "./constantes";
 
 /** Botón "Editar" de la ficha: abre el formulario de datos en un diálogo. */
-export function EditarClienteDialog({ cliente }: { cliente: DatosCliente }) {
+export function EditarClienteDialog({
+  cliente,
+  rol,
+}: {
+  cliente: DatosCliente;
+  rol: Rol;
+}) {
   const [abierto, setAbierto] = useState(false);
 
   return (
@@ -29,10 +37,16 @@ export function EditarClienteDialog({ cliente }: { cliente: DatosCliente }) {
         <DialogHeader>
           <DialogTitle>Editar datos del cliente</DialogTitle>
           <DialogDescription>
-            Corregí los datos de la carpeta y guardá.
+            {aplicaDirectoRol(rol)
+              ? "Corregí los datos de la carpeta y guardá."
+              : "Corregí los datos de la carpeta y envialos: el Líder de Procesos los aprueba."}
           </DialogDescription>
         </DialogHeader>
-        <FormCliente cliente={cliente} alGuardar={() => setAbierto(false)} />
+        <FormCliente
+          cliente={cliente}
+          rol={rol}
+          alGuardar={() => setAbierto(false)}
+        />
       </DialogContent>
     </Dialog>
   );

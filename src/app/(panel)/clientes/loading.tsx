@@ -10,7 +10,10 @@ export default function ClientesLoading() {
           <Skeleton className="h-9 w-44" />
           <Skeleton className="h-5 w-80 max-w-full" />
         </div>
-        <Skeleton className="h-13 w-44" />
+        <div className="flex gap-2">
+          <Skeleton className="h-12 w-36" />
+          <Skeleton className="h-13 w-44" />
+        </div>
       </div>
 
       <div className="space-y-3">

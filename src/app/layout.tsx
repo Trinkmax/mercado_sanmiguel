@@ -69,6 +69,7 @@ finish review, the verdict, and DESIGN.md.`,
           }}
         />
         {children}
+        {/* Debajo de la barra superior en tablet/celular: no tapa el menú ni "Salir". */}
         <Toaster position="top-center" richColors />
       </body>
     </html>

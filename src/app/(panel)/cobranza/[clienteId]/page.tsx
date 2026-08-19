@@ -1,17 +1,38 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, BadgePercent, Users } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { formatARS, hoyISO, labelPeriodo, periodoActual, saldoCargo } from "@/lib/format";
-import { Button } from "@/components/ui/button";
+import {
+  formatARS,
+  hoyISO,
+  labelPeriodo,
+  periodoActual,
+  saldoCargo,
+} from "@/lib/format";
 import { PageHeader } from "@/components/shared/page-header";
 import { Codigo } from "@/components/shared/codigo";
 import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
 import { FormCobro } from "@/components/cobranza/form-cobro";
+import { AvisoDeuda } from "@/components/cobranza/aviso-deuda";
 
 export const metadata = { title: "Cobrar" };
+
+function redondear2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
+/**
+ * Beneficio por pago en término de un cargo (monto − objetivo con beneficio),
+ * en centavos enteros con el mismo redondeo que saldoCargo y la RPC.
+ */
+function beneficioCargo(monto: number, descuentoPct: number): number {
+  const montoCents = Math.round(monto * 100);
+  const descCentesimas = Math.round(descuentoPct * 100);
+  const objetivoCents = Math.floor((montoCents * (10000 - descCentesimas) + 5000) / 10000);
+  return Math.max((montoCents - objetivoCents) / 100, 0);
+}
 
 export default async function CobrarClientePage({
   params,
@@ -22,7 +43,7 @@ export default async function CobrarClientePage({
   await requireRol("admin", "guardia", "tesoreria");
   const supabase = await createClient();
 
-  const [clienteRes, cargosRes] = await Promise.all([
+  const [clienteRes, cargosRes, saldoFavorRes] = await Promise.all([
     supabase
       .from("clientes")
       .select("id, codigo, nombre, cuotas_mes")
@@ -35,6 +56,11 @@ export default async function CobrarClientePage({
       )
       .eq("cliente_id", clienteId)
       .neq("estado", "anulado"),
+    supabase
+      .from("v_saldo_favor")
+      .select("saldo_favor")
+      .eq("cliente_id", clienteId)
+      .maybeSingle(),
   ]);
 
   const cliente = clienteRes.data;
@@ -54,6 +80,8 @@ export default async function CobrarClientePage({
     orden: Number(c.conceptos?.orden_imputacion ?? 0),
     saldo: saldoCargo(c),
     pagado: Number(c.monto_pagado),
+    monto: Number(c.monto),
+    descuento: Number(c.descuento_pronto_pago ?? 0),
     vencido: c.vencimiento < hoy,
     enTermino: hoy <= c.vencimiento,
   }));
@@ -62,17 +90,34 @@ export default async function CobrarClientePage({
     .filter((c) => c.saldo > 0)
     .sort((a, b) => a.periodo.localeCompare(b.periodo) || a.orden - b.orden);
 
-  const deudaTotal = Math.round(items.reduce((acc, c) => acc + c.saldo, 0) * 100) / 100;
+  const deudaTotal = redondear2(items.reduce((acc, c) => acc + c.saldo, 0));
   // Total ORIGINAL del período (pagado + saldo): la cuota sugerida no se achica
   // a medida que el cliente va pagando; siempre es total / N.
-  const totalPeriodoActual =
-    Math.round(
-      todos
-        .filter((c) => c.periodo === periodo)
-        .reduce((acc, c) => acc + c.pagado + c.saldo, 0) * 100
-    ) / 100;
-  const hayExppEnTermino = items.some(
-    (c) => c.codigo === "EXPP" && c.enTermino
+  const totalPeriodoActual = redondear2(
+    todos
+      .filter((c) => c.periodo === periodo)
+      .reduce((acc, c) => acc + c.pagado + c.saldo, 0)
+  );
+
+  // Crédito del cliente: la RPC lo aplica solo antes de imputar el cobro, así que
+  // lo que tiene que pagar hoy es la deuda neta de ese saldo.
+  const saldoFavor = Number(saldoFavorRes.data?.saldo_favor ?? 0);
+  const deudaNeta = Math.max(redondear2(deudaTotal - saldoFavor), 0);
+
+  // Aviso de deuda activa: beneficio que mantiene (en término) o que perdió (mora).
+  const enTerminoConBeneficio = items.filter((c) => c.enTermino && c.descuento > 0);
+  const ahorroEnTermino = redondear2(
+    enTerminoConBeneficio.reduce(
+      (acc, c) => acc + beneficioCargo(c.monto, c.descuento),
+      0
+    )
+  );
+  const vencimientoBeneficio = enTerminoConBeneficio.length
+    ? enTerminoConBeneficio.map((c) => c.vencimiento).sort()[0]
+    : null;
+  const vencidos = items.filter((c) => c.vencido);
+  const recargoPerdido = redondear2(
+    vencidos.reduce((acc, c) => acc + beneficioCargo(c.monto, c.descuento), 0)
   );
 
   return (
@@ -91,6 +136,15 @@ export default async function CobrarClientePage({
           className="pb-0"
         />
       </div>
+
+      {deudaTotal > 0 ? (
+        <AvisoDeuda
+          hayVencidos={vencidos.length > 0}
+          recargoPerdido={recargoPerdido}
+          ahorroEnTermino={ahorroEnTermino}
+          vencimientoBeneficio={vencimientoBeneficio}
+        />
+      ) : null}
 
       {/* Deuda total HOY + desglose */}
       <section className="rounded-lg border bg-card">
@@ -128,37 +182,37 @@ export default async function CobrarClientePage({
           </div>
         ) : null}
 
-        {hayExppEnTermino ? (
-          <p className="flex items-start gap-1.5 border-t px-5 py-3 text-sm text-muted-foreground">
-            <BadgePercent
-              className="mt-0.5 size-4 shrink-0 text-pagado"
-              strokeWidth={2}
-            />
-            Pagando hoy mantiene el descuento por pago en término.
-          </p>
+        {saldoFavor > 0 ? (
+          <div className="space-y-2 border-t bg-pagado-suave/60 px-5 py-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <Sello estado="saldo_favor" />
+                <p className="text-sm">Crédito del cliente, se aplica solo</p>
+              </div>
+              <Money monto={-saldoFavor} className="font-semibold text-pagado" />
+            </div>
+            {deudaTotal > 0 ? (
+              <div className="flex flex-wrap items-baseline justify-between gap-3">
+                <p className="font-medium">Tiene que pagar hoy</p>
+                <p className="text-2xl font-bold tabular">{formatARS(deudaNeta)}</p>
+              </div>
+            ) : null}
+          </div>
         ) : null}
       </section>
 
-      {deudaTotal > 0 ? (
-        <FormCobro
-          clienteId={cliente.id}
-          deudaTotal={deudaTotal}
-          cuotasMes={cliente.cuotas_mes}
-          totalPeriodoActual={totalPeriodoActual}
-        />
-      ) : (
-        <section className="space-y-4 rounded-lg border bg-card p-6 text-center">
-          <p className="text-muted-foreground">
-            No tiene nada para pagar hoy.
-          </p>
-          <Button asChild size="lg" className="h-12 w-full text-base font-semibold">
-            <Link href="/cobranza">
-              <Users className="size-5" strokeWidth={2} />
-              Cobrar a otro cliente
-            </Link>
-          </Button>
-        </section>
-      )}
+      {/* Siempre montado en la misma posición: tras registrar el cobro, la
+          server action revalida y Next re-renderiza esta página; si el
+          componente cambiara de rama se perdería la confirmación con el
+          sello y el botón "Ver recibo". Con deuda 0 muestra "nada para pagar". */}
+      <FormCobro
+        clienteId={cliente.id}
+        deudaTotal={deudaNeta}
+        deudaBruta={deudaTotal}
+        cuotasMes={cliente.cuotas_mes}
+        totalPeriodoActual={totalPeriodoActual}
+        saldoFavorPrevio={saldoFavor}
+      />
     </div>
   );
 }

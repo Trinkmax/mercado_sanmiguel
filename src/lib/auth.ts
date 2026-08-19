@@ -33,9 +33,11 @@ export const getPerfil = cache(async (): Promise<Perfil | null> => {
   return { ...perfil, email: user.email ?? "" };
 });
 
-/** Ruta de inicio según el rol. */
+/** Ruta de inicio según el rol. Portería arranca en su propia pantalla. */
 export function rutaInicio(rol: Rol): string {
-  return rol === "socio" ? "/mi-cuenta" : "/inicio";
+  if (rol === "socio") return "/mi-cuenta";
+  if (rol === "porteria") return "/porteria";
+  return "/inicio";
 }
 
 /** Exige sesión con uno de los roles dados; si no, redirige. */
@@ -50,5 +52,11 @@ export async function requireRol(...roles: Rol[]): Promise<Perfil> {
 
 /** Cualquier miembro del staff (todo menos socio). */
 export async function requireStaff(): Promise<Perfil> {
-  return requireRol("admin", "guardia", "tesoreria", "consejo");
+  return requireRol("admin", "guardia", "porteria", "tesoreria", "consejo", "lider");
+}
+
+/** El Líder de Procesos aplica cambios de clientes/conceptos directo; los demás
+ * roles de gestión los proponen y esperan aprobación. */
+export function aplicaDirecto(rol: Rol): boolean {
+  return rol === "lider";
 }

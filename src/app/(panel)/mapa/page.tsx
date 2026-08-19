@@ -11,24 +11,33 @@ import type {
   DepositoMapa,
   EspacioMapa,
   EstadoEspacio,
+  PosicionMapa,
+  TipoEspacio,
 } from "@/components/mapa/tipos";
 
 export const metadata = { title: "Mapa del mercado" };
 
+const TIPOS_POSICION: TipoEspacio[] = ["puesto", "quinta", "local", "deposito"];
+
 export default async function MapaPage() {
-  const perfil = await requireRol("admin", "guardia", "tesoreria", "consejo");
+  const perfil = await requireRol("admin", "guardia", "tesoreria", "consejo", "lider");
   const supabase = await createClient();
   const periodo = periodoActual();
+  const puedeEditar = perfil.rol === "admin" || perfil.rol === "lider";
 
-  const [clientesRes, deudaRes] = await Promise.all([
+  const [clientesRes, deudaRes, posicionesRes] = await Promise.all([
     supabase
       .from("clientes")
-      .select("id, codigo, nombre, cliente_conceptos(cantidad, activo, conceptos(codigo))")
+      .select("id, codigo, nombre, apodo, cliente_conceptos(cantidad, activo, conceptos(codigo))")
       .eq("activo", true)
       .order("codigo"),
     supabase
       .from("v_deuda_clientes")
       .select("cliente_id, deuda, periodo_mas_viejo"),
+    supabase
+      .from("mapa_posiciones")
+      .select("cliente_id, tipo, x, y")
+      .eq("org_id", perfil.org_id),
   ]);
 
   const deudaPorCliente = new Map(
@@ -36,6 +45,17 @@ export default async function MapaPage() {
       .filter((d) => d.cliente_id)
       .map((d) => [d.cliente_id as string, d])
   );
+
+  const posiciones: PosicionMapa[] = (posicionesRes.data ?? [])
+    .filter((p): p is typeof p & { tipo: TipoEspacio } =>
+      TIPOS_POSICION.includes(p.tipo as TipoEspacio)
+    )
+    .map((p) => ({
+      cliente_id: p.cliente_id,
+      tipo: p.tipo,
+      x: Number(p.x),
+      y: Number(p.y),
+    }));
 
   const puesteros: EspacioMapa[] = [];
   const quinteros: EspacioMapa[] = [];
@@ -67,6 +87,7 @@ export default async function MapaPage() {
       id: c.id,
       codigo: c.codigo,
       nombre: c.nombre,
+      apodo: c.apodo?.trim() ? c.apodo.trim() : null,
       deuda,
       estado,
     };
@@ -107,7 +128,11 @@ export default async function MapaPage() {
     <div className="space-y-8">
       <PageHeader
         titulo="Mapa del mercado"
-        descripcion="El plano del predio con el estado de cobro de cada espacio. La ubicación es ilustrativa (se ordena por N° de carpeta)."
+        descripcion={
+          puedeEditar
+            ? "El plano del predio con el estado de cobro de cada espacio. Los puestos se ordenan por N° de carpeta; con “Reubicar puestos” los acomodás donde están de verdad."
+            : "El plano del predio con el estado de cobro de cada espacio. Los puestos se ordenan por N° de carpeta, salvo los que Administración ya ubicó en su lugar."
+        }
       />
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
@@ -138,6 +163,8 @@ export default async function MapaPage() {
               depositos={depositos}
               cocheras={cocheras}
               hrefBase={perfil.rol === "guardia" ? "/cobranza" : "/clientes"}
+              posiciones={posiciones}
+              puedeEditar={puedeEditar}
             />
           </CardContent>
         </Card>

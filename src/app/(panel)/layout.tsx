@@ -2,6 +2,7 @@ import { LogOut } from "lucide-react";
 import { requireStaff } from "@/lib/auth";
 import { cerrarSesion } from "@/lib/actions/auth";
 import { LABEL_ROL } from "@/lib/roles";
+import { pendientesNav } from "@/lib/pendientes";
 import { Button } from "@/components/ui/button";
 import { NavLinks } from "@/components/shared/nav-links";
 import { MobileNav } from "@/components/shared/mobile-nav";
@@ -29,6 +30,7 @@ export default async function PanelLayout({
 }) {
   const perfil = await requireStaff();
   const rolLabel = LABEL_ROL[perfil.rol];
+  const badges = await pendientesNav(perfil);
 
   return (
     <div className="flex min-h-svh w-full">
@@ -38,7 +40,7 @@ export default async function PanelLayout({
           <Marca className="text-sidebar-foreground" />
         </div>
         <div className="flex-1 overflow-y-auto p-2.5">
-          <NavLinks rol={perfil.rol} />
+          <NavLinks rol={perfil.rol} badges={badges} />
         </div>
         <div className="border-t border-sidebar-border p-4 space-y-3">
           <div className="text-sm">
@@ -54,6 +56,7 @@ export default async function PanelLayout({
         <header className="no-print sticky top-0 z-20 flex items-center gap-3 bg-sidebar px-3 py-2 text-sidebar-foreground lg:hidden">
           <MobileNav
             rol={perfil.rol}
+            badges={badges}
             nombre={perfil.nombre}
             rolLabel={rolLabel}
             logout={<BotonSalir />}

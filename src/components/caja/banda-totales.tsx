@@ -42,6 +42,28 @@ export function BandaTotales({ totales }: { totales: TotalesCaja }) {
         <Bloque label="Transferencias" monto={totales.transferencia} />
         <Bloque label="Cheques" monto={totales.cheques} />
       </div>
+      {totales.rendidoEfectivo > 0 || totales.rendidoTransferencia > 0 ? (
+        <p className="border-t border-dashed border-foreground/30 px-4 py-2 text-sm text-muted-foreground sm:px-6">
+          Incluye{" "}
+          <Money
+            monto={totales.rendidoEfectivo}
+            className="font-medium text-foreground"
+          />{" "}
+          en efectivo
+          {totales.rendidoTransferencia > 0 ? (
+            <>
+              {" "}
+              y{" "}
+              <Money
+                monto={totales.rendidoTransferencia}
+                className="font-medium text-foreground"
+              />{" "}
+              en transferencias
+            </>
+          ) : null}{" "}
+          rendidos por portería.
+        </p>
+      ) : null}
     </div>
   );
 }

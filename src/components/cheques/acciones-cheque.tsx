@@ -2,8 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Landmark } from "lucide-react";
-import { formatARS, hoyISO } from "@/lib/format";
+import { CalendarClock, Landmark } from "lucide-react";
+import { formatARS, formatFecha, hoyISO } from "@/lib/format";
 import type { ActionResult } from "@/lib/actions/result";
 import {
   depositarCheque,
@@ -21,7 +21,14 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Spinner } from "@/components/ui/spinner";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 type Cheque = {
   id: string;
@@ -29,6 +36,10 @@ type Cheque = {
   banco: string | null;
   monto: number;
   estado: string;
+  /** "YYYY-MM-DD": desde cuándo se puede depositar. */
+  fechaCobro: string;
+  /** Calculado en el server con la fecha de negocio (huso argentino). */
+  puedeDepositar: boolean;
 };
 
 type Dialogo = "depositar" | "acreditar" | "rechazar" | null;
@@ -37,10 +48,12 @@ type Dialogo = "depositar" | "acreditar" | "rechazar" | null;
 export function AccionesCheque({ cheque }: { cheque: Cheque }) {
   const [dialogo, setDialogo] = useState<Dialogo>(null);
   const [fecha, setFecha] = useState(hoyISO());
+  const [motivo, setMotivo] = useState("");
   const [pendiente, startTransition] = useTransition();
 
   function abrir(cual: Dialogo) {
     setFecha(hoyISO());
+    setMotivo("");
     setDialogo(cual);
   }
 
@@ -57,14 +70,34 @@ export function AccionesCheque({ cheque }: { cheque: Cheque }) {
   }
 
   const descripcionCheque = `cheque N° ${cheque.numero}${cheque.banco ? ` del ${cheque.banco}` : ""} por ${formatARS(cheque.monto)}`;
+  const esDiferido = cheque.estado === "en_cartera" && !cheque.puedeDepositar;
 
   return (
     <>
       <div className="flex justify-end gap-2">
         {cheque.estado === "en_cartera" ? (
-          <Button className="h-11 px-4 font-semibold" onClick={() => abrir("depositar")}>
-            Depositar
-          </Button>
+          esDiferido ? (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  {/* El botón deshabilitado no recibe eventos: el span es el que muestra el tooltip. */}
+                  <span tabIndex={0} className="inline-flex rounded-md">
+                    <Button className="h-11 px-4 font-semibold" disabled>
+                      <CalendarClock className="size-4" strokeWidth={2} />
+                      Depositar
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent className="text-sm">
+                  Se puede depositar desde el {formatFecha(cheque.fechaCobro)}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          ) : (
+            <Button className="h-11 px-4 font-semibold" onClick={() => abrir("depositar")}>
+              Depositar
+            </Button>
+          )
         ) : null}
         {cheque.estado === "depositado" ? (
           <Button className="h-11 px-4 font-semibold" onClick={() => abrir("acreditar")}>
@@ -174,10 +207,24 @@ export function AccionesCheque({ cheque }: { cheque: Cheque }) {
           <DialogHeader>
             <DialogTitle>¿Rechazar el cheque N° {cheque.numero}?</DialogTitle>
             <DialogDescription>
-              El {descripcionCheque} queda marcado como rechazado. Esta acción no
-              se puede deshacer.
+              El {descripcionCheque} queda marcado como rechazado y el cobro que
+              respaldaba se anula: la deuda del cliente vuelve a figurar. Esta
+              acción no se puede deshacer.
             </DialogDescription>
           </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor={`motivo-rechazo-${cheque.id}`} className="text-base">
+              Motivo <span className="font-normal text-muted-foreground">(opcional)</span>
+            </Label>
+            <Textarea
+              id={`motivo-rechazo-${cheque.id}`}
+              value={motivo}
+              onChange={(e) => setMotivo(e.target.value)}
+              placeholder="Por ejemplo: sin fondos suficientes"
+              className="min-h-20 text-base"
+              maxLength={300}
+            />
+          </div>
           <DialogFooter className="gap-2">
             <Button
               variant="outline"
@@ -193,7 +240,14 @@ export function AccionesCheque({ cheque }: { cheque: Cheque }) {
               className="h-12 font-semibold"
               disabled={pendiente}
               onClick={() =>
-                ejecutar(() => rechazarCheque({ id: cheque.id }), "Cheque rechazado.")
+                ejecutar(
+                  () =>
+                    rechazarCheque({
+                      id: cheque.id,
+                      motivo: motivo.trim() || undefined,
+                    }),
+                  "Cheque rechazado."
+                )
               }
             >
               {pendiente ? <Spinner /> : null}

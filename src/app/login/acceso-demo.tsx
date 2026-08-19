@@ -3,6 +3,8 @@
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
+  ClipboardCheck,
+  DoorOpen,
   FileBarChart2,
   HandCoins,
   Loader2,
@@ -19,10 +21,12 @@ const ROLES: {
   detalle: string;
   icono: typeof HandCoins;
 }[] = [
-  { rol: "admin", label: "Administración", detalle: "Cobra y maneja todo", icono: HandCoins },
-  { rol: "guardia", label: "Guardia", detalle: "Quinteros y camiones", icono: Truck },
-  { rol: "tesoreria", label: "Tesorería", detalle: "Valida y controla la plata", icono: Vault },
-  { rol: "consejo", label: "Consejo", detalle: "Reportes y decisiones", icono: FileBarChart2 },
+  { rol: "admin", label: "Administración", detalle: "Cobra, cheques, caja mayor", icono: HandCoins },
+  { rol: "lider", label: "Líder de Procesos", detalle: "Aprueba, personal, reportes", icono: ClipboardCheck },
+  { rol: "guardia", label: "Jefe de Portería", detalle: "Quinteros, canon, rinde caja", icono: Truck },
+  { rol: "porteria", label: "Portería", detalle: "Ingresos de personal", icono: DoorOpen },
+  { rol: "tesoreria", label: "Tesorería", detalle: "Valida, concilia, cheques", icono: Vault },
+  { rol: "consejo", label: "Consejo", detalle: "Reportes y resoluciones", icono: FileBarChart2 },
   { rol: "socio", label: "Socio", detalle: "El portal del puestero", icono: Store },
 ];
 

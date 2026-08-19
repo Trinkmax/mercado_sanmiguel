@@ -23,9 +23,12 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { Codigo } from "@/components/shared/codigo";
 import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
+import { BotonExportar } from "@/components/shared/boton-exportar";
 import { SelectorMes } from "@/components/gastos/selector-mes";
 import { DialogNuevoGasto } from "@/components/gastos/dialog-nuevo-gasto";
 import { AccionesGasto } from "@/components/gastos/acciones-gasto";
+import { AdjuntarFactura } from "@/components/gastos/adjuntar-factura";
+import { SelloComprobante } from "@/components/gastos/sello-comprobante";
 
 export const metadata = { title: "Gastos" };
 
@@ -46,7 +49,7 @@ export default async function GastosPage({
 }: {
   searchParams: Promise<{ periodo?: string }>;
 }) {
-  const perfil = await requireRol("admin", "tesoreria", "consejo");
+  const perfil = await requireRol("admin", "tesoreria", "consejo", "lider");
   const sp = await searchParams;
   const periodo = /^\d{4}-\d{2}-01$/.test(sp.periodo ?? "")
     ? sp.periodo!
@@ -59,7 +62,7 @@ export default async function GastosPage({
     supabase
       .from("gastos")
       .select(
-        "id, descripcion, tipo, monto, estado, vencimiento, fecha_pago, medio_pago, pagado_desde, factura_path, notas, creado_en, rubro:rubros_gasto(codigo, nombre)"
+        "id, descripcion, tipo, monto, estado, vencimiento, fecha_pago, medio_pago, pagado_desde, factura_path, comprobante_validado, notas, creado_en, rubro:rubros_gasto(codigo, nombre)"
       ),
     supabase
       .from("rubros_gasto")
@@ -77,6 +80,7 @@ export default async function GastosPage({
 
   const rubros = rubrosRes.data ?? [];
   const hayCajaAbierta = Boolean(cajaRes.data);
+  // Consejo y Líder de Procesos solo miran; admin y tesorería operan.
   const puedeOperar = perfil.rol === "admin" || perfil.rol === "tesoreria";
 
   // Gastos del mes: coalesce(fecha_pago, vencimiento, creado_en) dentro del período.
@@ -124,8 +128,9 @@ export default async function GastosPage({
     <div className="space-y-8">
       <PageHeader
         titulo="Gastos"
-        descripcion="Los gastos fijos y variables del mercado, mes a mes."
+        descripcion="Los gastos fijos y variables del mercado, mes a mes, con su comprobante."
       >
+        <BotonExportar dataset="gastos" periodo={periodo} />
         {puedeOperar ? <DialogNuevoGasto rubros={rubros} /> : null}
       </PageHeader>
 
@@ -154,7 +159,7 @@ export default async function GastosPage({
           descripcion={
             puedeOperar
               ? "Cargá el primer gasto del mes con el botón de arriba."
-              : "Cuando administración o tesorería carguen gastos, van a aparecer acá."
+              : "Cuando Administración o Tesorería carguen gastos, van a aparecer acá."
           }
         />
       ) : (
@@ -169,7 +174,7 @@ export default async function GastosPage({
                   <TableHead>Tipo</TableHead>
                   <TableHead className="text-right">Monto</TableHead>
                   <TableHead>Estado</TableHead>
-                  <TableHead>Factura</TableHead>
+                  <TableHead>Comprobante</TableHead>
                   <TableHead className="pr-4 text-right">Pago</TableHead>
                 </TableRow>
               </TableHeader>
@@ -222,18 +227,35 @@ export default async function GastosPage({
                         <Sello estado={g.estado} />
                       </TableCell>
                       <TableCell>
-                        {urlFactura ? (
-                          <a
-                            href={urlFactura}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex min-h-11 items-center gap-1.5 font-medium text-primary hover:underline"
-                          >
-                            <FileText className="size-4" strokeWidth={2} />
-                            Ver
-                          </a>
-                        ) : (
+                        {g.estado === "anulado" ? (
                           "—"
+                        ) : (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <SelloComprobante
+                              estadoGasto={g.estado}
+                              tieneFactura={Boolean(g.factura_path)}
+                              validado={g.comprobante_validado}
+                            />
+                            {urlFactura ? (
+                              <a
+                                href={urlFactura}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex min-h-11 items-center gap-1.5 font-medium text-primary hover:underline"
+                              >
+                                <FileText className="size-4" strokeWidth={2} />
+                                Ver
+                              </a>
+                            ) : !g.factura_path && puedeOperar ? (
+                              <AdjuntarFactura
+                                gasto={{
+                                  id: g.id,
+                                  descripcion: g.descripcion,
+                                  monto: Number(g.monto),
+                                }}
+                              />
+                            ) : null}
+                          </div>
                         )}
                       </TableCell>
                       <TableCell className="pr-4 text-right">

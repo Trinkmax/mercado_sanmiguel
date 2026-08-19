@@ -34,7 +34,7 @@ export function GastosCaja({ gastos }: { gastos: GastoCaja[] }) {
         </ul>
         <div className="flex flex-wrap items-baseline justify-between gap-2 border-t pt-4">
           <p className="text-sm text-muted-foreground">
-            Los pagados en efectivo se descuentan del arqueo.
+            Los pagados en efectivo se restan del arqueo.
           </p>
           <Money monto={total} className="text-lg font-bold" />
         </div>

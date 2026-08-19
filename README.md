@@ -22,15 +22,23 @@ Contraseña de todos: `SanMiguel2026`
 
 | Email | Rol | Qué ve |
 |---|---|---|
-| `admin@sanmiguel.coop` | Administración | Cobranza, clientes, caja, cheques, energía, gastos, facturación, reportes |
-| `guardia@sanmiguel.coop` | Jefe de guardia | Cobro a quinteros, canon de camiones, su caja |
-| `tesorera@sanmiguel.coop` | Tesorería | Validación de cajas, movimientos bancarios, flujo de caja + todo lo de admin |
-| `consejo@sanmiguel.coop` | Consejo (Franco) | Reportería, clientes, configuración (solo lectura de cajas) |
-| `socio@sanmiguel.coop` | Socio (puestero) | Su portal: estado de cuenta, pagos, documentos, notificaciones |
+| `lider@sanmiguel.coop` | Líder de Procesos (Franco) | Aprobaciones, personal, solicitudes ↔ consejo, reportes, configuración; aplica cambios directo |
+| `admin@sanmiguel.coop` | Administración | Cobranza, clientes (propone cambios), caja mayor + rendiciones de portería, cheques, energía, gastos, facturación, solicitudes, circulares. **Sin reportes** |
+| `guardia@sanmiguel.coop` | Jefe de Portería | Cobro a quinteros, canon diario (camiones / ambulantes / quinteros), su caja, ingresos de personal |
+| `porteria@sanmiguel.coop` | Portería | Registro de ingreso de personal con firma digital, solicitudes/informes. No cobra |
+| `tesorera@sanmiguel.coop` | Tesorería | Validación definitiva de cajas, conciliación de transferencias y comprobantes, flujo de fondos, cheques + todo lo de admin |
+| `consejo@sanmiguel.coop` | Consejo Directivo | Reportería y resolución de solicitudes (solo lectura del resto) |
+| `socio@sanmiguel.coop` | Socio (puestero) | Su portal: términos y condiciones, circulares (recepción obligatoria), estado de cuenta, pagos, documentos, solicitudes |
 
 Datos demo cargados: **julio 2026** generado y cobrado en parte (los clientes 1, 2
 y 8 deben; hay una caja del 31/07 cerrada sin validar y un cheque diferido en
 cartera) y **agosto 2026** recién generado, todo pendiente, vence el 30/08.
+
+Datos demo de la fase 2: una rendición de portería del 18/08 esperando que
+administración la integre, un cambio de cliente esperando aprobación del Líder,
+tres solicitudes en distintos estados (una en el Consejo, una asignada a
+Administración, un informe de portería nuevo), una circular obligatoria sin
+confirmar y los términos y condiciones v1 sin aceptar por el socio.
 
 ## Recorrido sugerido para la demo con el cliente
 
@@ -41,7 +49,8 @@ cartera) y **agosto 2026** recién generado, todo pendiente, vence el 30/08.
 4. Entrá como **tesorera** → validá la caja del 31/07 pendiente → mirá el flujo de caja.
 5. **Energía** → cargá lecturas (solo tipeás la actual) → imprimí la planilla del electricista.
 6. **Reportes** → reporte mensual para la contadora (PDF por impresión).
-7. Entrá como **socio** → el puestero ve su estado verde/rojo y sube documentación.
+7. Entrá como **socio** → acepta los términos, confirma la circular, ve su estado verde/rojo, su saldo a favor si lo tiene, y escribe una solicitud.
+8. **Fase 2** — entrá como **admin** → Caja del día: recibí la rendición de portería e integrala a la caja mayor; Clientes: editá un teléfono → "Enviar a aprobación". Entrá como **Líder de Procesos** → Aprobaciones: aprobá el cambio; Solicitudes: derivá al Consejo / asigná a Administración; Personal: cargá un empleado con horarios. Entrá como **Portería** → registrá un ingreso con firma. **Tesorería** → conciliá una transferencia con su comprobante y validá la caja (arrastra la de portería). **Reportes** → exportá el balance a Excel.
 
 ## Arquitectura
 
@@ -56,7 +65,7 @@ cartera) y **agosto 2026** recién generado, todo pendiente, vence el 30/08.
   chequeo de rol): generación mensual idempotente, imputación de pagos por
   prioridad con descuento por pronto pago, arqueo de caja, validación de
   tesorería, flujo de caja y reportería. El frontend nunca la reimplementa.
-- Migraciones en `supabase/migrations/`, seed reproducible en `supabase/seed.sql`.
+- Migraciones en `supabase/migrations/` (0007–0008 = fase 2), seed reproducible en `supabase/seed.sql` + `supabase/seed_fase2.sql`.
 
 ## Configuración pendiente para producción
 
@@ -71,5 +80,6 @@ cartera) y **agosto 2026** recién generado, todo pendiente, vence el 30/08.
 - `PRODUCT.md` — verdad del producto y supuestos.
 - `DESIGN.md` — sistema visual (mundo "etiqueta de cajón de mercado").
 - `docs/GUIA-MODULOS.md` — contrato técnico para extender el sistema.
+- `docs/FASE2-CONTRATO.md` — lo nuevo de la fase 2 (roles, tablas, RPCs, regla de aprobación, rutas).
 - `docs/reunion-2026-07-24.md` — transcripción de la reunión de requerimientos.
 - `docs/codigos-conceptos.md` — códigos oficiales de la cooperativa.

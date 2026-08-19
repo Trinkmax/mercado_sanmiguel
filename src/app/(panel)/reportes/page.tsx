@@ -19,7 +19,9 @@ import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Codigo } from "@/components/shared/codigo";
 import { Money } from "@/components/shared/money";
+import { BotonExportar } from "@/components/shared/boton-exportar";
 import { SelectorPeriodo } from "@/components/reportes/selector-periodo";
+import { MenuExportar } from "@/components/reportes/menu-exportar";
 import { FilaIngreso, type ResumenConcepto } from "@/components/reportes/fila-ingreso";
 import { ChartCobranzaDiaria } from "@/components/charts/chart-cobranza-diaria";
 import { ChartGastosRubro, type GastoRubro } from "@/components/charts/chart-gastos-rubro";
@@ -34,7 +36,8 @@ export default async function ReportesPage({
 }: {
   searchParams: Promise<{ periodo?: string | string[] }>;
 }) {
-  await requireRol("admin", "tesoreria", "consejo");
+  // Reportes es de Dirección: Tesorería, Consejo y Líder de Procesos (sin Administración).
+  const perfil = await requireRol("tesoreria", "consejo", "lider");
   const sp = await searchParams;
   const crudo = typeof sp.periodo === "string" ? sp.periodo : "";
   const periodo = /^\d{4}-\d{2}-01$/.test(crudo) ? crudo : periodoActual();
@@ -117,8 +120,14 @@ export default async function ReportesPage({
     <div className="space-y-8">
       <PageHeader
         titulo="Reportes"
-        descripcion="Cuánto se estimó, cuánto entró y cuánto se gastó en el mes."
+        descripcion="Cuánto se estimó, cuánto entró y cuánto se gastó en el mes. Todo se puede bajar a Excel."
       >
+        <MenuExportar rol={perfil.rol} periodo={periodo} />
+        <BotonExportar
+          dataset="balance_mensual"
+          periodo={periodo}
+          label="Balance del mes (.xlsx)"
+        />
         <Button asChild size="lg" className="h-13 px-6 text-base font-semibold">
           <Link href={`/reporte-mensual/${periodo}`}>
             <FileText className="size-5" strokeWidth={2} />
@@ -185,7 +194,7 @@ export default async function ReportesPage({
                   />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Descuentos otorgados</p>
+                  <p className="text-sm text-muted-foreground">Beneficios otorgados</p>
                   <Money monto={totIngresos.descuentos} className="text-lg font-semibold" />
                 </div>
                 <div>

@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Info, Pencil } from "lucide-react";
+import { Info, Pencil, Send } from "lucide-react";
 import { toast } from "sonner";
 import {
   actualizarConcepto,
   cambiarActivoConcepto,
+  type EstadoSolicitud,
 } from "@/lib/actions/configuracion";
 import { formatARS } from "@/lib/format";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -31,6 +32,7 @@ import {
 } from "@/components/ui/table";
 import { Codigo } from "@/components/shared/codigo";
 import { Money } from "@/components/shared/money";
+import { Sello } from "@/components/shared/sello";
 
 export type ConceptoFila = {
   id: string;
@@ -43,6 +45,12 @@ export type ConceptoFila = {
   activo: boolean;
 };
 
+/** Cambio que espera la aprobación del Líder para un concepto. */
+export type CambioPendienteConcepto = {
+  resumen: string;
+  solicitadoEn: string;
+};
+
 const LABEL_TIPO: Record<ConceptoFila["tipo"], string> = {
   recurrente: "Mensual",
   energia: "Energía",
@@ -50,11 +58,23 @@ const LABEL_TIPO: Record<ConceptoFila["tipo"], string> = {
   deuda: "Deuda",
 };
 
+const TOAST_ENVIADO = "Enviado al Líder de Procesos para su aprobación.";
+
 function soloDigitos(valor: string): string {
   return valor.replace(/\D+/g, "");
 }
 
-export function TablaConceptos({ conceptos }: { conceptos: ConceptoFila[] }) {
+export function TablaConceptos({
+  conceptos,
+  pendientes,
+  aplicaDirecto,
+}: {
+  conceptos: ConceptoFila[];
+  /** Cambios pendientes por id de concepto (para el sello "Esperando aprobación"). */
+  pendientes: Record<string, CambioPendienteConcepto[]>;
+  /** true = Líder de Procesos: sus cambios se aplican en el acto. */
+  aplicaDirecto: boolean;
+}) {
   const [editando, setEditando] = useState<ConceptoFila | null>(null);
   const [precio, setPrecio] = useState("");
   const [descuento, setDescuento] = useState("");
@@ -70,6 +90,16 @@ export function TablaConceptos({ conceptos }: { conceptos: ConceptoFila[] }) {
     setOrden(String(concepto.orden_imputacion));
   }
 
+  function avisar(estado: EstadoSolicitud, aplicado: string) {
+    if (estado === "sin_cambios") {
+      toast.info("No había nada para cambiar.");
+    } else if (estado === "pendiente") {
+      toast.success(TOAST_ENVIADO);
+    } else {
+      toast.success(aplicado);
+    }
+  }
+
   function guardar() {
     if (!editando) return;
     startGuardar(async () => {
@@ -83,7 +113,7 @@ export function TablaConceptos({ conceptos }: { conceptos: ConceptoFila[] }) {
         toast.error(res.error);
         return;
       }
-      toast.success(`Guardado. ${editando.nombre} quedó actualizado.`);
+      avisar(res.data.estado, `Guardado. ${editando.nombre} quedó actualizado.`);
       setEditando(null);
     });
   }
@@ -94,7 +124,8 @@ export function TablaConceptos({ conceptos }: { conceptos: ConceptoFila[] }) {
       const res = await cambiarActivoConcepto({ id: concepto.id, activo });
       if (!res.ok) toast.error(res.error);
       else
-        toast.success(
+        avisar(
+          res.data.estado,
           activo
             ? `${concepto.nombre} quedó activo.`
             : `${concepto.nombre} quedó inactivo: no se genera más.`
@@ -117,10 +148,13 @@ export function TablaConceptos({ conceptos }: { conceptos: ConceptoFila[] }) {
           bajo cobra primero). Cambiá el orden acá y rige para los próximos
           cobros. Para que un concepto no se le aplique a un cliente puntual,
           desactivalo desde su carpeta, pestaña Conceptos.
+          {aplicaDirecto
+            ? ""
+            : " Cada cambio queda esperando la aprobación del Líder de Procesos antes de aplicarse."}
         </AlertDescription>
       </Alert>
 
-      <div className="rounded-lg border bg-card">
+      <div className="overflow-x-auto rounded-lg border bg-card">
         <Table className="text-sm">
           <TableHeader>
             <TableRow>
@@ -128,55 +162,68 @@ export function TablaConceptos({ conceptos }: { conceptos: ConceptoFila[] }) {
               <TableHead>Concepto</TableHead>
               <TableHead>Tipo</TableHead>
               <TableHead className="text-right">Precio</TableHead>
-              <TableHead className="text-right">Pronto pago</TableHead>
+              <TableHead className="text-right">Beneficio pago en término</TableHead>
               <TableHead className="text-right">Orden</TableHead>
               <TableHead>Activo</TableHead>
               <TableHead className="pr-4" />
             </TableRow>
           </TableHeader>
           <TableBody>
-            {conceptos.map((concepto) => (
-              <TableRow key={concepto.id} className="h-14">
-                <TableCell className="pl-4">
-                  <Codigo codigo={concepto.codigo} />
-                </TableCell>
-                <TableCell className="font-medium">{concepto.nombre}</TableCell>
-                <TableCell className="text-muted-foreground">
-                  {LABEL_TIPO[concepto.tipo]}
-                </TableCell>
-                <TableCell className="text-right tabular">
-                  <Money monto={concepto.precio} />
-                </TableCell>
-                <TableCell className="text-right tabular">
-                  {Number(concepto.descuento_pronto_pago) > 0
-                    ? `${concepto.descuento_pronto_pago} %`
-                    : "—"}
-                </TableCell>
-                <TableCell className="text-right tabular">
-                  {concepto.orden_imputacion}
-                </TableCell>
-                <TableCell>
-                  <Switch
-                    checked={concepto.activo}
-                    disabled={togglePendiente === concepto.id}
-                    onCheckedChange={(activo) =>
-                      cambiarActivo(concepto, activo)
-                    }
-                    aria-label={`${concepto.nombre} activo`}
-                  />
-                </TableCell>
-                <TableCell className="pr-4 text-right">
-                  <Button
-                    variant="outline"
-                    className="min-h-11 px-4 text-sm"
-                    onClick={() => abrirEdicion(concepto)}
-                  >
-                    <Pencil className="size-4" strokeWidth={2} />
-                    Editar
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
+            {conceptos.map((concepto) => {
+              const enEspera = pendientes[concepto.id] ?? [];
+              return (
+                <TableRow key={concepto.id} className="h-14">
+                  <TableCell className="pl-4">
+                    <Codigo codigo={concepto.codigo} />
+                  </TableCell>
+                  <TableCell className="font-medium">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span>{concepto.nombre}</span>
+                      {enEspera.length > 0 ? (
+                        <Sello estado="pendiente_aprobacion" />
+                      ) : null}
+                    </div>
+                    {enEspera.length > 0 ? (
+                      <p className="mt-0.5 text-xs font-normal text-muted-foreground">
+                        {enEspera.map((c) => c.resumen).join(" · ")}
+                      </p>
+                    ) : null}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {LABEL_TIPO[concepto.tipo]}
+                  </TableCell>
+                  <TableCell className="text-right tabular">
+                    <Money monto={concepto.precio} />
+                  </TableCell>
+                  <TableCell className="text-right tabular">
+                    {Number(concepto.descuento_pronto_pago) > 0
+                      ? `${concepto.descuento_pronto_pago} %`
+                      : "—"}
+                  </TableCell>
+                  <TableCell className="text-right tabular">
+                    {concepto.orden_imputacion}
+                  </TableCell>
+                  <TableCell>
+                    <Switch
+                      checked={concepto.activo}
+                      disabled={togglePendiente === concepto.id}
+                      onCheckedChange={(activo) => cambiarActivo(concepto, activo)}
+                      aria-label={`${concepto.nombre} activo`}
+                    />
+                  </TableCell>
+                  <TableCell className="pr-4 text-right">
+                    <Button
+                      variant="outline"
+                      className="min-h-11 px-4 text-sm"
+                      onClick={() => abrirEdicion(concepto)}
+                    >
+                      <Pencil className="size-4" strokeWidth={2} />
+                      Editar
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </div>
@@ -193,7 +240,9 @@ export function TablaConceptos({ conceptos }: { conceptos: ConceptoFila[] }) {
               {editando ? editando.nombre : ""}
             </DialogTitle>
             <DialogDescription className="text-sm">
-              El precio nuevo rige desde la próxima generación mensual.
+              {aplicaDirecto
+                ? "El precio nuevo rige desde la próxima generación mensual."
+                : "El cambio lo aprueba el Líder de Procesos; una vez aprobado, rige desde la próxima generación mensual."}
             </DialogDescription>
           </DialogHeader>
 
@@ -219,7 +268,7 @@ export function TablaConceptos({ conceptos }: { conceptos: ConceptoFila[] }) {
 
             <div className="space-y-2">
               <Label htmlFor="descuento-concepto" className="text-sm">
-                Descuento por pago en término (%)
+                Beneficio por pago en término (%)
               </Label>
               <Input
                 id="descuento-concepto"
@@ -232,7 +281,7 @@ export function TablaConceptos({ conceptos }: { conceptos: ConceptoFila[] }) {
                 }
               />
               <p className="text-sm text-muted-foreground">
-                0 si no tiene descuento. La expensa hoy usa 15.
+                0 si no tiene beneficio.
               </p>
             </div>
 
@@ -261,7 +310,14 @@ export function TablaConceptos({ conceptos }: { conceptos: ConceptoFila[] }) {
               disabled={guardando || !precio || !orden}
               onClick={guardar}
             >
-              {guardando ? "Guardando…" : "Guardar cambios"}
+              {aplicaDirecto ? null : <Send className="size-5" strokeWidth={2} />}
+              {guardando
+                ? aplicaDirecto
+                  ? "Guardando…"
+                  : "Enviando…"
+                : aplicaDirecto
+                  ? "Guardar cambios"
+                  : "Enviar a aprobación"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -23,12 +23,15 @@ export default function MapaLoading() {
 
       <Card>
         <CardContent className="space-y-3">
-          <div className="flex justify-end gap-2">
-            <Skeleton className="h-6 w-20" />
-            <Skeleton className="h-6 w-20" />
-            <Skeleton className="h-6 w-28" />
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <Skeleton className="h-11 w-40" />
+            <div className="flex gap-2">
+              <Skeleton className="h-6 w-20" />
+              <Skeleton className="h-6 w-20" />
+              <Skeleton className="h-6 w-28" />
+            </div>
           </div>
-          <Skeleton className="aspect-[1000/640] w-full" />
+          <Skeleton className="aspect-[1000/640] w-full rounded-[14px]" />
         </CardContent>
       </Card>
     </div>

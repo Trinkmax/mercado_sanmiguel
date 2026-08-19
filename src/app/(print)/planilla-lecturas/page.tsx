@@ -11,11 +11,11 @@ export const metadata = { title: "Planilla de lecturas" };
  * la lectura actual con lapicera.
  */
 export default async function PlanillaLecturasPage() {
-  const perfil = await requireRol("admin", "tesoreria", "consejo");
+  const perfil = await requireRol("admin", "tesoreria", "consejo", "lider");
   const supabase = await createClient();
   const periodo = periodoActual();
 
-  const [orgRes, medidoresRes, lecturasMesRes, previasRes] = await Promise.all([
+  const [orgRes, medidoresRes, lecturasMesRes, previasRes, configRes] = await Promise.all([
     supabase
       .from("organizaciones")
       .select("nombre")
@@ -34,7 +34,14 @@ export default async function PlanillaLecturasPage() {
       .select("medidor_id, lectura_actual")
       .lt("periodo", periodo)
       .order("periodo", { ascending: false }),
+    // Impresión directa (Configuración → General): abre el diálogo solo.
+    supabase
+      .from("configuracion")
+      .select("impresion_directa")
+      .eq("org_id", perfil.org_id)
+      .maybeSingle(),
   ]);
+  const autoImprimir = Boolean(configRes.data?.impresion_directa);
 
   // Última lectura conocida por medidor: si este mes ya tiene lectura cargada,
   // su "anterior"; si no, la lectura actual más reciente de meses previos.
@@ -54,7 +61,7 @@ export default async function PlanillaLecturasPage() {
 
   return (
     <div>
-      <BotonImprimir volverA="/energia" />
+      <BotonImprimir volverA="/energia" autoImprimir={autoImprimir} />
 
       <div className="etiqueta mb-6">
         <div className="etiqueta-interior space-y-1 text-center">

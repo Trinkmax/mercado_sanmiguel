@@ -10,6 +10,9 @@ export default function CobrarClienteLoading() {
         <Skeleton className="h-5 w-36" />
       </div>
 
+      {/* Aviso de deuda activa */}
+      <Skeleton className="h-14 w-full rounded-lg" />
+
       {/* Deuda + desglose */}
       <div className="rounded-lg border bg-card">
         <div className="flex items-center justify-between gap-3 border-b p-5">

@@ -1,6 +1,7 @@
 import { KeyRound } from "lucide-react";
-import { requireRol } from "@/lib/auth";
+import { aplicaDirecto, requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { ORDEN_ROL } from "@/lib/roles";
 import { PageHeader } from "@/components/shared/page-header";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import {
@@ -11,6 +12,7 @@ import {
 } from "@/components/ui/tabs";
 import {
   TablaConceptos,
+  type CambioPendienteConcepto,
   type ConceptoFila,
 } from "@/components/configuracion/tabla-conceptos";
 import { FormGeneral } from "@/components/configuracion/form-general";
@@ -29,20 +31,13 @@ import {
 
 export const metadata = { title: "Configuración" };
 
-const ORDEN_ROL: Record<string, number> = {
-  admin: 0,
-  tesoreria: 1,
-  consejo: 2,
-  guardia: 3,
-  socio: 4,
-};
-
 export default async function ConfiguracionPage() {
-  const perfil = await requireRol("admin", "tesoreria", "consejo");
+  const perfil = await requireRol("admin", "tesoreria", "consejo", "lider");
   const supabase = await createClient();
   const hayClaveAdmin = Boolean(process.env.SUPABASE_SECRET_KEY);
+  const esLider = aplicaDirecto(perfil.rol);
 
-  const [conceptosRes, configRes, perfilesRes, rubrosRes, clientesRes] =
+  const [conceptosRes, pendientesRes, configRes, perfilesRes, rubrosRes, clientesRes] =
     await Promise.all([
       supabase
         .from("conceptos")
@@ -51,9 +46,19 @@ export default async function ConfiguracionPage() {
         )
         .eq("org_id", perfil.org_id)
         .order("orden_imputacion"),
+      // Cambios de conceptos que esperan la aprobación del Líder.
+      supabase
+        .from("cambios_pendientes")
+        .select("entidad_id, resumen, solicitado_en")
+        .eq("org_id", perfil.org_id)
+        .eq("entidad", "concepto")
+        .eq("estado", "pendiente")
+        .order("solicitado_en"),
       supabase
         .from("configuracion")
-        .select("dia_vencimiento, precio_canon_camion")
+        .select(
+          "dia_vencimiento, precio_canon_camion, precio_canon_ambulante, precio_canon_quintero_dia, impresion_directa"
+        )
         .eq("org_id", perfil.org_id)
         .maybeSingle(),
       supabase
@@ -84,25 +89,46 @@ export default async function ConfiguracionPage() {
     orden_imputacion: Number(c.orden_imputacion),
   }));
 
+  const pendientesPorConcepto: Record<string, CambioPendienteConcepto[]> = {};
+  for (const p of pendientesRes.data ?? []) {
+    if (!p.entidad_id) continue;
+    (pendientesPorConcepto[p.entidad_id] ??= []).push({
+      resumen: p.resumen,
+      solicitadoEn: p.solicitado_en,
+    });
+  }
+
   const usuarios: UsuarioFila[] = (perfilesRes.data ?? [])
     .slice()
-    .sort(
-      (a, b) =>
-        (ORDEN_ROL[a.rol] ?? 9) - (ORDEN_ROL[b.rol] ?? 9) ||
+    .sort((a, b) => {
+      const ia = ORDEN_ROL.indexOf(a.rol);
+      const ib = ORDEN_ROL.indexOf(b.rol);
+      return (
+        (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib) ||
         a.nombre.localeCompare(b.nombre, "es")
-    );
+      );
+    });
 
   const rubros: RubroFila[] = rubrosRes.data ?? [];
   const clientesSinAcceso: ClienteSinAcceso[] = clientesRes.data ?? [];
 
-  const diaVencimiento = configRes.data?.dia_vencimiento ?? 30;
-  const precioCanonCamion = Number(configRes.data?.precio_canon_camion ?? 0);
+  const config = configRes.data;
+  const diaVencimiento = config?.dia_vencimiento ?? 30;
+  const preciosPorteria = {
+    camion: Number(config?.precio_canon_camion ?? 0),
+    ambulante: Number(config?.precio_canon_ambulante ?? 0),
+    quintero: Number(config?.precio_canon_quintero_dia ?? 0),
+  };
+  const impresionDirecta = Boolean(config?.impresion_directa ?? false);
+
+  const puedeGestionarUsuarios =
+    perfil.rol === "admin" || perfil.rol === "consejo" || perfil.rol === "lider";
 
   return (
     <div className="space-y-8">
       <PageHeader
         titulo="Configuración"
-        descripcion="Precios, vencimiento, usuarios y rubros de gasto. Los cambios rigen para lo que se genere de acá en adelante."
+        descripcion="Precios, vencimiento, cobro en portería, usuarios y rubros de gasto. Los cambios rigen para lo que se genere de acá en adelante."
       />
 
       <Tabs defaultValue="precios">
@@ -134,13 +160,19 @@ export default async function ConfiguracionPage() {
         </TabsList>
 
         <TabsContent value="precios" className="mt-4 text-sm/relaxed">
-          <TablaConceptos conceptos={conceptos} />
+          <TablaConceptos
+            conceptos={conceptos}
+            pendientes={pendientesPorConcepto}
+            aplicaDirecto={esLider}
+          />
         </TabsContent>
 
         <TabsContent value="general" className="mt-4 text-sm/relaxed">
           <FormGeneral
             diaVencimiento={diaVencimiento}
-            precioCanonCamion={precioCanonCamion}
+            preciosPorteria={preciosPorteria}
+            impresionDirecta={impresionDirecta}
+            esLider={esLider}
           />
         </TabsContent>
 
@@ -149,7 +181,7 @@ export default async function ConfiguracionPage() {
             usuarios={usuarios}
             miUserId={perfil.user_id}
             miEmail={perfil.email}
-            puedeGestionar={perfil.rol === "admin" || perfil.rol === "consejo"}
+            puedeGestionar={puedeGestionarUsuarios}
           />
           {hayClaveAdmin ? (
             <FormAccesoSocio clientes={clientesSinAcceso} />

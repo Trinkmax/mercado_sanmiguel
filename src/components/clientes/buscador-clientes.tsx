@@ -6,7 +6,7 @@ import { Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 
 /**
- * Búsqueda por nombre o número de carpeta.
+ * Búsqueda por nombre, apodo o número de carpeta.
  * Actualiza la URL (?q=…) con debounce y conserva el filtro de tipo activo:
  * el listado filtra en el servidor.
  */
@@ -47,8 +47,8 @@ export function BuscadorClientes({
         inputMode="search"
         value={valor}
         onChange={(e) => setValor(e.target.value)}
-        placeholder="Buscá por nombre o N° de carpeta"
-        aria-label="Buscar cliente por nombre o número de carpeta"
+        placeholder="Buscá por nombre, apodo o N° de carpeta"
+        aria-label="Buscar cliente por nombre, apodo o número de carpeta"
         className="h-11 pl-10 text-base"
       />
     </div>

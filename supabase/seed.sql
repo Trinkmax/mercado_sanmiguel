@@ -3,6 +3,8 @@
 -- Org + catálogos + usuarios por rol + clientes + actividad
 -- de julio (cobrada en parte) y agosto 2026 (recién generado).
 -- Contraseña de todos los usuarios demo: SanMiguel2026
+-- Después de este archivo, correr supabase/seed_fase2.sql (usuarios lider@ y
+-- porteria@, personal, solicitudes, circular, términos, rendición de portería).
 -- ============================================================
 
 -- ---------- Organización y configuración ----------

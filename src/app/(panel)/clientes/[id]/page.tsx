@@ -4,10 +4,12 @@ import {
   FileCheck,
   FileText,
   HandCoins,
+  Megaphone,
   ReceiptText,
   ShieldAlert,
 } from "lucide-react";
-import { requireRol } from "@/lib/auth";
+import { aplicaDirecto, requireRol } from "@/lib/auth";
+import { ROLES_COBRAN } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/server";
 import {
   formatARS,
@@ -33,7 +35,15 @@ import { Codigo } from "@/components/shared/codigo";
 import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
 import { EmptyState } from "@/components/shared/empty-state";
+import { BotonExportar } from "@/components/shared/boton-exportar";
 import { EditarClienteDialog } from "@/components/clientes/editar-cliente-dialog";
+import { BajaCliente } from "@/components/clientes/baja-cliente";
+import { AplicarSaldoFavor } from "@/components/clientes/aplicar-saldo-favor";
+import { BannerDeuda } from "@/components/clientes/banner-deuda";
+import {
+  CambiosPendientesCliente,
+  type CambioDeCliente,
+} from "@/components/clientes/cambios-pendientes-cliente";
 import { DeudaAnterior } from "@/components/clientes/deuda-anterior";
 import { ConceptosCliente } from "@/components/clientes/conceptos-cliente";
 import { SubirDocumento } from "@/components/clientes/subir-documento";
@@ -68,15 +78,16 @@ function estadoCargo(
 }
 
 export default async function FichaClientePage({ params }: Props) {
-  const perfil = await requireRol("admin", "tesoreria", "consejo");
+  const perfil = await requireRol("admin", "tesoreria", "consejo", "lider");
   const { id } = await params;
   const supabase = await createClient();
   const hoy = hoyISO();
+  const esLider = aplicaDirecto(perfil.rol);
 
   const { data: cliente } = await supabase
     .from("clientes")
     .select(
-      "id, codigo, nombre, tipo_persona, cuit, telefono, email, direccion, cuotas_mes, notas"
+      "id, codigo, nombre, apodo, activo, tipo_persona, cuit, telefono, email, direccion, cuotas_mes, notas"
     )
     .eq("id", id)
     .maybeSingle();
@@ -91,6 +102,10 @@ export default async function FichaClientePage({ params }: Props) {
     sancionesRes,
     medidoresRes,
     perfilesRes,
+    saldoFavorRes,
+    cambiosRes,
+    circularesRes,
+    recepcionesRes,
   ] = await Promise.all([
     supabase
       .from("cargos")
@@ -103,7 +118,7 @@ export default async function FichaClientePage({ params }: Props) {
     supabase
       .from("pagos")
       .select(
-        "id, numero, fecha, medio, monto, recibido_por, anulado, motivo_anulacion"
+        "id, numero, fecha, medio, monto, recibido_por, anulado, motivo_anulacion, titular_transferencia, imputaciones(monto)"
       )
       .eq("cliente_id", id)
       .order("fecha", { ascending: false }),
@@ -133,6 +148,28 @@ export default async function FichaClientePage({ params }: Props) {
       .eq("cliente_id", id)
       .order("numero"),
     supabase.from("perfiles").select("user_id, nombre"),
+    supabase
+      .from("v_saldo_favor")
+      .select("saldo_favor")
+      .eq("cliente_id", id)
+      .maybeSingle(),
+    supabase
+      .from("cambios_pendientes")
+      .select(
+        "id, resumen, estado, solicitado_por, solicitado_en, revisado_por, revisado_en, motivo_rechazo"
+      )
+      .or(`cliente_id.eq.${id},entidad_id.eq.${id}`)
+      .in("estado", ["pendiente", "rechazado"])
+      .order("solicitado_en", { ascending: false }),
+    supabase
+      .from("circulares")
+      .select("id, numero, titulo, fecha, obligatoria, storage_path")
+      .eq("activa", true)
+      .order("fecha", { ascending: false }),
+    supabase
+      .from("circular_recepciones")
+      .select("circular_id, recibida_en")
+      .eq("cliente_id", id),
   ]);
 
   const cargos = cargosRes.data ?? [];
@@ -141,15 +178,41 @@ export default async function FichaClientePage({ params }: Props) {
   const documentos = documentosRes.data ?? [];
   const sanciones = sancionesRes.data ?? [];
   const medidores = medidoresRes.data ?? [];
+  const circulares = circularesRes.data ?? [];
   const nombrePorUsuario = new Map(
     (perfilesRes.data ?? []).map((p) => [p.user_id, p.nombre])
   );
+  const nombreUsuario = (userId: string | null | undefined) =>
+    userId ? (nombrePorUsuario.get(userId) ?? "—") : "—";
 
   // Deuda exigible hoy: suma del saldo de los cargos pendientes o parciales.
   const deuda = cargos
     .filter((c) => c.estado === "pendiente" || c.estado === "parcial")
     .reduce((acc, c) => acc + saldoCargo(c), 0);
   const debe = deuda > 0;
+  const saldoFavor = Number(saldoFavorRes.data?.saldo_favor ?? 0);
+  const tieneSaldoFavor = saldoFavor > 0.009;
+
+  // Cambios de este cliente que esperan aprobación + rechazados recientes.
+  const cambios: CambioDeCliente[] = (cambiosRes.data ?? []).map((c) => ({
+    id: c.id,
+    resumen: c.resumen,
+    estado: c.estado,
+    solicitadoPor: nombreUsuario(c.solicitado_por),
+    solicitadoEn: c.solicitado_en,
+    revisadoPor: c.revisado_por ? nombreUsuario(c.revisado_por) : null,
+    revisadoEn: c.revisado_en,
+    motivoRechazo: c.motivo_rechazo,
+  }));
+  const cambiosPendientes = cambios.filter((c) => c.estado === "pendiente");
+  const cambiosRechazados = cambios
+    .filter((c) => c.estado === "rechazado")
+    .slice(0, 5);
+
+  // Circulares activas de la organización y si este cliente las confirmó.
+  const recibidaEn = new Map(
+    (recepcionesRes.data ?? []).map((r) => [r.circular_id, r.recibida_en])
+  );
 
   // Última lectura conocida de cada medidor.
   const ultimaPorMedidor = new Map<
@@ -183,10 +246,11 @@ export default async function FichaClientePage({ params }: Props) {
     ultimaLectura: ultimaPorMedidor.get(m.id) ?? null,
   }));
 
-  // URLs firmadas (1 h) para ver documentos y adjuntos de sanciones.
+  // URLs firmadas (1 h) para ver documentos, adjuntos de registros y circulares.
   const rutasArchivos = [
     ...documentos.map((d) => d.storage_path),
     ...sanciones.flatMap((s) => (s.storage_path ? [s.storage_path] : [])),
+    ...circulares.flatMap((c) => (c.storage_path ? [c.storage_path] : [])),
   ];
   const urlPorRuta = new Map<string, string>();
   if (rutasArchivos.length > 0) {
@@ -223,6 +287,7 @@ export default async function FichaClientePage({ params }: Props) {
   );
 
   const contacto = [
+    cliente.apodo ? `Le dicen “${cliente.apodo}”` : null,
     LABEL_TIPO_PERSONA[cliente.tipo_persona],
     cliente.cuit ? `CUIT ${cliente.cuit}` : null,
     cliente.telefono,
@@ -232,50 +297,108 @@ export default async function FichaClientePage({ params }: Props) {
     .filter(Boolean)
     .join(" · ");
 
-  const puedeSancionar = perfil.rol === "admin" || perfil.rol === "consejo";
+  const puedeCobrar = ROLES_COBRAN.includes(perfil.rol);
+  const puedeRegistrar =
+    perfil.rol === "admin" || perfil.rol === "consejo" || perfil.rol === "lider";
+  const puedeDeudaAnterior =
+    perfil.rol === "admin" || perfil.rol === "tesoreria" || perfil.rol === "lider";
+  const puedeAplicarSaldo =
+    perfil.rol === "admin" || perfil.rol === "tesoreria" || perfil.rol === "lider";
 
   return (
     <div className="space-y-8">
-      <div>
-        <div className="mb-2 flex flex-wrap items-center gap-2">
-          <Codigo codigo={`N° ${cliente.codigo}`} />
-          <Sello estado={debe ? "debe" : "al_dia"} />
-        </div>
-        <PageHeader titulo={cliente.nombre} descripcion={contacto} className="pb-4">
-          {perfil.rol !== "consejo" ? (
-            <Button asChild size="lg" className="h-12 px-6 text-base font-semibold">
-              <Link href={`/cobranza/${cliente.id}`}>
-                <HandCoins className="size-5" />
-                Cobrar
-              </Link>
-            </Button>
-          ) : null}
-          {!debe ? (
-            <Button
-              asChild
-              variant="outline"
-              size="lg"
-              className="h-12 px-5 text-base"
-            >
-              <Link href={`/libre-deuda/${cliente.id}`}>
-                <FileCheck className="size-5" />
-                Libre deuda
-              </Link>
-            </Button>
-          ) : null}
-          <EditarClienteDialog cliente={cliente} />
-        </PageHeader>
+      <div className="space-y-5">
         <div>
-          <p className="text-sm text-muted-foreground">Debe hoy</p>
-          <p
-            className={cn(
-              "text-3xl font-bold tabular",
-              debe ? "text-pendiente" : "text-pagado"
-            )}
-          >
-            {formatARS(deuda)}
-          </p>
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <Codigo codigo={`N° ${cliente.codigo}`} />
+            {!cliente.activo ? (
+              <Sello estado="inactivo" texto="Dado de baja" />
+            ) : null}
+            <Sello estado={debe ? "debe" : "al_dia"} />
+            {tieneSaldoFavor ? (
+              <span className="inline-flex items-center gap-1.5">
+                <Sello estado="saldo_favor" />
+                <Money
+                  monto={saldoFavor}
+                  className="text-sm font-semibold text-pagado"
+                />
+              </span>
+            ) : null}
+            {cambiosPendientes.length > 0 ? (
+              <Sello estado="pendiente_aprobacion" />
+            ) : null}
+          </div>
+          <PageHeader titulo={cliente.nombre} descripcion={contacto} className="pb-2">
+            {puedeCobrar ? (
+              <Button asChild size="lg" className="h-12 px-6 text-base font-semibold">
+                <Link href={`/cobranza/${cliente.id}`}>
+                  <HandCoins className="size-5" />
+                  Cobrar
+                </Link>
+              </Button>
+            ) : null}
+            {!debe ? (
+              <Button
+                asChild
+                variant="outline"
+                size="lg"
+                className="h-12 px-5 text-base"
+              >
+                <Link href={`/libre-deuda/${cliente.id}`}>
+                  <FileCheck className="size-5" />
+                  Libre deuda
+                </Link>
+              </Button>
+            ) : null}
+            <EditarClienteDialog cliente={cliente} rol={perfil.rol} />
+            <BajaCliente
+              clienteId={cliente.id}
+              nombre={cliente.nombre}
+              activo={cliente.activo}
+              rol={perfil.rol}
+            />
+          </PageHeader>
         </div>
+
+        {/* Debe hoy + Saldo a favor, lado a lado */}
+        <div className="flex flex-wrap items-end gap-x-10 gap-y-4">
+          <div>
+            <p className="text-sm text-muted-foreground">Debe hoy</p>
+            <p
+              className={cn(
+                "text-3xl font-bold tabular",
+                debe ? "text-pendiente" : "text-pagado"
+              )}
+            >
+              {formatARS(deuda)}
+            </p>
+          </div>
+          <div>
+            <p className="text-sm text-muted-foreground">Saldo a favor</p>
+            <Money
+              monto={saldoFavor}
+              className={cn(
+                "block text-3xl font-bold",
+                tieneSaldoFavor ? "text-pagado" : "text-muted-foreground/60"
+              )}
+            />
+          </div>
+          {tieneSaldoFavor && debe && puedeAplicarSaldo ? (
+            <AplicarSaldoFavor
+              clienteId={cliente.id}
+              saldoFavor={saldoFavor}
+              deuda={deuda}
+            />
+          ) : null}
+        </div>
+
+        <BannerDeuda cargos={cargos} hoy={hoy} />
+
+        <CambiosPendientesCliente
+          pendientes={cambiosPendientes}
+          rechazados={cambiosRechazados}
+          esLider={esLider}
+        />
       </div>
 
       <Tabs defaultValue="cuenta">
@@ -289,8 +412,8 @@ export default async function FichaClientePage({ params }: Props) {
           <TabsTrigger value="documentos" className="h-11 flex-none px-4 text-sm font-medium">
             Documentos
           </TabsTrigger>
-          <TabsTrigger value="sanciones" className="h-11 flex-none px-4 text-sm font-medium">
-            Sanciones
+          <TabsTrigger value="registros" className="h-11 flex-none px-4 text-sm font-medium">
+            Registros
           </TabsTrigger>
           <TabsTrigger value="medidores" className="h-11 flex-none px-4 text-sm font-medium">
             Medidores
@@ -299,11 +422,16 @@ export default async function FichaClientePage({ params }: Props) {
 
         {/* ------------------------------------------------ Cuenta */}
         <TabsContent value="cuenta" className="space-y-6 pt-4 text-base">
-          {perfil.rol === "admin" || perfil.rol === "tesoreria" ? (
-            <div className="flex justify-end">
-              <DeudaAnterior clienteId={cliente.id} />
-            </div>
-          ) : null}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <BotonExportar
+              dataset="cuenta_corriente"
+              extra={{ cliente: cliente.id }}
+              label="Cuenta corriente de la carpeta (.xlsx)"
+            />
+            {puedeDeudaAnterior ? (
+              <DeudaAnterior clienteId={cliente.id} fechaHoy={hoy} />
+            ) : null}
+          </div>
           {cargos.length === 0 ? (
             <EmptyState
               icono={ReceiptText}
@@ -369,48 +497,65 @@ export default async function FichaClientePage({ params }: Props) {
                 </p>
               ) : (
                 <div className="divide-y">
-                  {pagos.map((p) => (
-                    <div
-                      key={p.id}
-                      className="flex flex-wrap items-center gap-x-4 gap-y-1 py-3"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <p
+                  {pagos.map((p) => {
+                    const imputado = (p.imputaciones ?? []).reduce(
+                      (acc, i) => acc + Number(i.monto),
+                      0
+                    );
+                    const sobrante =
+                      Math.round((Number(p.monto) - imputado) * 100) / 100;
+                    const medio =
+                      p.medio === "transferencia" && p.titular_transferencia
+                        ? `Transferencia de ${p.titular_transferencia}`
+                        : (LABEL_MEDIO[p.medio] ?? p.medio);
+                    return (
+                      <div
+                        key={p.id}
+                        className="flex flex-wrap items-center gap-x-4 gap-y-1 py-3"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p
+                            className={cn(
+                              "font-medium",
+                              p.anulado && "text-muted-foreground line-through"
+                            )}
+                          >
+                            Recibo N° {p.numero} · {medio}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {formatFechaHora(p.fecha)} · Cobró{" "}
+                            {nombreUsuario(p.recibido_por)}
+                          </p>
+                          {p.anulado ? (
+                            <p className="text-sm text-muted-foreground">
+                              Anulado{p.motivo_anulacion ? `: ${p.motivo_anulacion}` : ""}
+                            </p>
+                          ) : sobrante > 0.009 ? (
+                            <p className="flex flex-wrap items-center gap-2 pt-1 text-sm">
+                              <Sello estado="saldo_favor" />
+                              <Money monto={sobrante} className="font-semibold text-pagado" />
+                              <span className="text-muted-foreground">
+                                sin imputar de este pago
+                              </span>
+                            </p>
+                          ) : null}
+                        </div>
+                        <Money
+                          monto={p.monto}
                           className={cn(
-                            "font-medium",
+                            "font-semibold",
                             p.anulado && "text-muted-foreground line-through"
                           )}
+                        />
+                        <Link
+                          href={`/recibos/${p.id}`}
+                          className="flex min-h-11 items-center px-2 text-sm font-medium text-primary hover:underline"
                         >
-                          Recibo N° {p.numero} ·{" "}
-                          {LABEL_MEDIO[p.medio] ?? p.medio}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          {formatFechaHora(p.fecha)} · Cobró{" "}
-                          {p.recibido_por
-                            ? (nombrePorUsuario.get(p.recibido_por) ?? "—")
-                            : "—"}
-                        </p>
-                        {p.anulado ? (
-                          <p className="text-sm text-muted-foreground">
-                            Anulado{p.motivo_anulacion ? `: ${p.motivo_anulacion}` : ""}
-                          </p>
-                        ) : null}
+                          Ver recibo
+                        </Link>
                       </div>
-                      <Money
-                        monto={p.monto}
-                        className={cn(
-                          "font-semibold",
-                          p.anulado && "text-muted-foreground line-through"
-                        )}
-                      />
-                      <Link
-                        href={`/recibos/${p.id}`}
-                        className="flex min-h-11 items-center px-2 text-sm font-medium text-primary hover:underline"
-                      >
-                        Ver recibo
-                      </Link>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
@@ -424,6 +569,7 @@ export default async function FichaClientePage({ params }: Props) {
             cuotasMes={cliente.cuotas_mes}
             items={itemsConceptos}
             disponibles={disponibles}
+            rol={perfil.rol}
           />
         </TabsContent>
 
@@ -458,9 +604,7 @@ export default async function FichaClientePage({ params }: Props) {
                           <p className="text-sm text-muted-foreground">
                             {labelCategoria(d.categoria)} ·{" "}
                             {formatFechaTS(d.creado_en)} · Subió{" "}
-                            {d.subido_por
-                              ? (nombrePorUsuario.get(d.subido_por) ?? "—")
-                              : "—"}
+                            {nombreUsuario(d.subido_por)}
                           </p>
                         </div>
                         {url ? (
@@ -470,7 +614,7 @@ export default async function FichaClientePage({ params }: Props) {
                             </a>
                           </Button>
                         ) : null}
-                        {puedeSancionar ? (
+                        {puedeRegistrar ? (
                           <BorrarDocumento
                             id={d.id}
                             clienteId={cliente.id}
@@ -487,20 +631,18 @@ export default async function FichaClientePage({ params }: Props) {
           <SubirDocumento clienteId={cliente.id} />
         </TabsContent>
 
-        {/* ------------------------------------------------ Sanciones */}
-        <TabsContent value="sanciones" className="space-y-6 pt-4 text-base">
+        {/* ------------------------------------------------ Registros */}
+        <TabsContent value="registros" className="space-y-6 pt-4 text-base">
           <Card className="text-base">
             <CardHeader>
-              <CardTitle className="text-lg">
-                Sanciones y notificaciones
-              </CardTitle>
+              <CardTitle className="text-lg">Registros documentales</CardTitle>
             </CardHeader>
             <CardContent>
               {sanciones.length === 0 ? (
                 <EmptyState
                   icono={ShieldAlert}
-                  titulo="No tiene sanciones ni notificaciones"
-                  descripcion="Si el consejo resuelve alguna, se registra acá con su documento."
+                  titulo="No tiene registros"
+                  descripcion="Las notificaciones, los apercibimientos y las sanciones que resuelva el Consejo se guardan acá con su documento."
                 />
               ) : (
                 <div className="divide-y">
@@ -550,9 +692,70 @@ export default async function FichaClientePage({ params }: Props) {
               )}
             </CardContent>
           </Card>
-          {puedeSancionar ? (
+
+          {puedeRegistrar ? (
             <NuevaSancion clienteId={cliente.id} fechaHoy={hoy} />
           ) : null}
+
+          <Card className="text-base">
+            <CardHeader>
+              <CardTitle className="text-lg">Circulares</CardTitle>
+              <CardAction>
+                <p className="text-sm text-muted-foreground">
+                  Confirma la recepción desde su portal
+                </p>
+              </CardAction>
+            </CardHeader>
+            <CardContent>
+              {circulares.length === 0 ? (
+                <EmptyState
+                  icono={Megaphone}
+                  titulo="No hay circulares activas"
+                  descripcion="Se crean desde Comunicaciones y el socio confirma que las recibió desde su portal."
+                />
+              ) : (
+                <div className="divide-y">
+                  {circulares.map((c) => {
+                    const fechaRecibida = recibidaEn.get(c.id);
+                    const url = c.storage_path
+                      ? urlPorRuta.get(c.storage_path)
+                      : undefined;
+                    return (
+                      <div
+                        key={c.id}
+                        className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3"
+                      >
+                        <Megaphone
+                          className="size-5 shrink-0 text-muted-foreground"
+                          strokeWidth={1.8}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium">
+                            Circular N° {c.numero} · {c.titulo}
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            {formatFecha(c.fecha)}
+                            {c.obligatoria ? " · Recepción obligatoria" : ""}
+                            {fechaRecibida
+                              ? ` · Recibida el ${formatFechaTS(fechaRecibida)}`
+                              : ""}
+                          </p>
+                        </div>
+                        <Sello estado={fechaRecibida ? "recibida" : "sin_recibir"} />
+                        {url ? (
+                          <Button asChild variant="outline" className="h-11 px-4">
+                            <a href={url} target="_blank" rel="noreferrer">
+                              Ver
+                            </a>
+                          </Button>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* ------------------------------------------------ Medidores */}

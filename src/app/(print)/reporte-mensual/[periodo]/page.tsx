@@ -22,7 +22,7 @@ export default async function ReporteMensualPage({
   const { periodo } = await params;
   if (!/^\d{4}-\d{2}-01$/.test(periodo)) notFound();
 
-  const perfil = await requireRol("admin", "tesoreria", "consejo");
+  const perfil = await requireRol("tesoreria", "consejo", "lider");
   const supabase = await createClient();
 
   const [ingresosRes, gastosRes] = await Promise.all([
@@ -55,6 +55,7 @@ export default async function ReporteMensualPage({
 
   return (
     <>
+      {/* Sin impresión directa: este reporte suele guardarse como PDF para la contadora. */}
       <BotonImprimir volverA="/reportes" />
 
       <div className="etiqueta">
@@ -84,7 +85,7 @@ export default async function ReporteMensualPage({
                   <th className={cn(th, "pr-3")}>Concepto</th>
                   <th className={cn(th, "pl-3 text-right")}>Estimado</th>
                   <th className={cn(th, "pl-3 text-right")}>Cobrado</th>
-                  <th className={cn(th, "pl-3 text-right")}>Descuentos</th>
+                  <th className={cn(th, "pl-3 text-right")}>Beneficios</th>
                   <th className={cn(th, "pl-3 text-right")}>Pendiente</th>
                 </tr>
               </thead>

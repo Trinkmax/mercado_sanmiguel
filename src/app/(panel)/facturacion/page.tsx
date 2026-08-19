@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CalendarRange, Store } from "lucide-react";
 import { requireRol } from "@/lib/auth";
+import { ROLES_REPORTES } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/server";
 import {
   fechaLocal,
@@ -43,13 +44,16 @@ type FilaPreview = {
 };
 
 export default async function FacturacionPage() {
-  await requireRol("admin", "tesoreria", "consejo");
+  const perfil = await requireRol("admin", "tesoreria", "consejo", "lider");
+  // Administración no ve Reportes (pedido del cliente): sin link "Ver reporte".
+  const veReportes = ROLES_REPORTES.includes(perfil.rol);
   const supabase = await createClient();
 
   const [periodosRes, previewRes, configRes] = await Promise.all([
     supabase
       .from("periodos")
       .select("id, periodo, vencimiento, generado_en, generado_por")
+      .eq("org_id", perfil.org_id)
       .not("generado_en", "is", null)
       .order("periodo", { ascending: false })
       .limit(24),
@@ -58,11 +62,16 @@ export default async function FacturacionPage() {
       .select(
         "cantidad, cliente_id, conceptos!inner(codigo, nombre, precio, orden_imputacion), clientes!inner(activo)"
       )
+      .eq("org_id", perfil.org_id)
       .eq("activo", true)
       .eq("clientes.activo", true)
       .eq("conceptos.activo", true)
       .eq("conceptos.tipo", "recurrente"),
-    supabase.from("configuracion").select("dia_vencimiento").maybeSingle(),
+    supabase
+      .from("configuracion")
+      .select("dia_vencimiento")
+      .eq("org_id", perfil.org_id)
+      .maybeSingle(),
   ]);
 
   const historial = periodosRes.data ?? [];
@@ -213,7 +222,9 @@ export default async function FacturacionPage() {
                   <TableHead>Generado</TableHead>
                   <TableHead className="text-right">Estimado</TableHead>
                   <TableHead className="text-right">Cobrado</TableHead>
-                  <TableHead className="sr-only">Acciones</TableHead>
+                  {veReportes ? (
+                    <TableHead className="sr-only">Acciones</TableHead>
+                  ) : null}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -247,11 +258,13 @@ export default async function FacturacionPage() {
                           className="font-semibold text-pagado"
                         />
                       </TableCell>
-                      <TableCell className="text-right">
-                        <Button asChild variant="ghost" className="min-h-11 px-3">
-                          <Link href={`/reportes?periodo=${clave}`}>Ver reporte</Link>
-                        </Button>
-                      </TableCell>
+                      {veReportes ? (
+                        <TableCell className="text-right">
+                          <Button asChild variant="ghost" className="min-h-11 px-3">
+                            <Link href={`/reportes?periodo=${clave}`}>Ver reporte</Link>
+                          </Button>
+                        </TableCell>
+                      ) : null}
                     </TableRow>
                   );
                 })}

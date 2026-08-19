@@ -35,14 +35,19 @@ export async function validarCaja(
   if (error) return fallo(error);
 
   revalidatePath("/tesoreria");
+  revalidatePath("/caja");
   revalidatePath("/inicio");
   return ok(undefined);
 }
 
-/* ---------------- Movimientos bancarios (impuestos, comisiones, ajustes) ---------------- */
+/* ---------------- Flujo de fondos: movimientos bancarios ---------------- */
+/* Impuestos, débito fiscal (IVA) y comisiones restan del banco; el ajuste lleva signo. */
 
 const movimientoSchema = z.object({
-  tipo: z.enum(["impuesto", "comision", "ajuste"], "Elegí el tipo de movimiento."),
+  tipo: z.enum(
+    ["impuesto", "debito_fiscal", "comision", "ajuste"],
+    "Elegí el tipo de movimiento."
+  ),
   descripcion: z
     .string()
     .trim()
@@ -64,8 +69,9 @@ export async function crearMovimiento(
   if (!parsed.success) return fallo(parsed.error.issues[0].message);
 
   const { tipo, descripcion, monto, resta, fecha } = parsed.data;
-  // Impuestos y comisiones se guardan en positivo (el flujo de caja los resta solo).
-  // El ajuste guarda el signo: "resta" → negativo, "suma" → positivo.
+  // Impuestos, débito fiscal y comisiones se guardan en positivo (el flujo de
+  // fondos los resta solo). El ajuste guarda el signo: "resta" → negativo,
+  // "suma" → positivo.
   const montoFinal = tipo === "ajuste" && resta ? -monto : monto;
 
   const supabase = await createClient();
@@ -142,5 +148,106 @@ export async function guardarSaldoInicial(
   if (error) return fallo(error);
 
   revalidatePath("/tesoreria");
+  return ok(undefined);
+}
+
+/* ---------------- Conciliación bancaria: transferencias ---------------- */
+
+const idsSchema = z
+  .array(z.uuid("Hay una transferencia que no se reconoce. Actualizá la página."))
+  .min(1, "Elegí al menos una transferencia.")
+  .max(200, "Conciliá de a 200 transferencias como máximo.");
+
+/**
+ * Marca como conciliadas una o varias transferencias: la tesorera las vio
+ * acreditadas en el resumen del banco. Solo toca pagos por transferencia,
+ * vigentes y todavía sin conciliar (lo demás se ignora y se informa).
+ */
+export async function conciliarTransferencias(
+  ids: string[]
+): Promise<ActionResult<{ conciliadas: number }>> {
+  const perfil = await requireRol("tesoreria");
+  const parsed = idsSchema.safeParse(ids);
+  if (!parsed.success) return fallo(parsed.error.issues[0].message);
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("pagos")
+    .update({
+      conciliado: true,
+      conciliado_por: perfil.user_id,
+      conciliado_en: new Date().toISOString(),
+    })
+    .in("id", parsed.data)
+    .eq("org_id", perfil.org_id)
+    .eq("medio", "transferencia")
+    .eq("anulado", false)
+    .eq("conciliado", false)
+    .select("id");
+  if (error) return fallo(error);
+  if (!data || data.length === 0)
+    return fallo("Esas transferencias ya estaban conciliadas. Actualizá la página.");
+
+  revalidatePath("/tesoreria");
+  return ok({ conciliadas: data.length });
+}
+
+/** Deshace una conciliación marcada por error (vuelve a "sin conciliar"). */
+export async function desconciliarTransferencia(id: string): Promise<ActionResult> {
+  const perfil = await requireRol("tesoreria");
+  const parsed = z
+    .uuid("La transferencia no se reconoce. Actualizá la página.")
+    .safeParse(id);
+  if (!parsed.success) return fallo(parsed.error.issues[0].message);
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("pagos")
+    .update({ conciliado: false, conciliado_por: null, conciliado_en: null })
+    .eq("id", parsed.data)
+    .eq("org_id", perfil.org_id)
+    .eq("conciliado", true)
+    .select("id");
+  if (error) return fallo(error);
+  if (!data || data.length === 0)
+    return fallo("Esa transferencia ya no figura como conciliada. Actualizá la página.");
+
+  revalidatePath("/tesoreria");
+  return ok(undefined);
+}
+
+/* ---------------- Comprobantes de gastos ---------------- */
+
+/**
+ * Tesorería da el OK a la factura de un gasto ya pagado. Solo aplica a gastos
+ * pagados que tienen factura adjunta y todavía no fueron validados.
+ */
+export async function validarComprobanteGasto(id: string): Promise<ActionResult> {
+  const perfil = await requireRol("tesoreria");
+  const parsed = z.uuid("El gasto no se reconoce. Actualizá la página.").safeParse(id);
+  if (!parsed.success) return fallo(parsed.error.issues[0].message);
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("gastos")
+    .update({
+      comprobante_validado: true,
+      validado_por: perfil.user_id,
+      validado_en: new Date().toISOString(),
+    })
+    .eq("id", parsed.data)
+    .eq("org_id", perfil.org_id)
+    .eq("estado", "pagado")
+    .eq("comprobante_validado", false)
+    .not("factura_path", "is", null)
+    .select("id");
+  if (error) return fallo(error);
+  if (!data || data.length === 0)
+    return fallo(
+      "Ese gasto no se puede validar: no está pagado, no tiene factura o ya se validó. Actualizá la página."
+    );
+
+  revalidatePath("/tesoreria");
+  revalidatePath("/gastos");
   return ok(undefined);
 }

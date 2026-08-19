@@ -1,5 +1,5 @@
 import { Truck } from "lucide-react";
-import { formatFechaHora, formatNumero } from "@/lib/format";
+import { formatFecha, formatNumero, formatSoloHora, hoyISO } from "@/lib/format";
 import {
   Card,
   CardAction,
@@ -10,37 +10,68 @@ import {
 import { Codigo } from "@/components/shared/codigo";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Money } from "@/components/shared/money";
+import { Sello } from "@/components/shared/sello";
 import { labelMedio } from "@/components/caja/medios";
 import { FormCanon } from "@/components/caja/form-canon";
 import { BotonBorrarCanon } from "@/components/caja/borrar-canon";
-import type { CanonDia } from "@/components/caja/datos";
+import type { CanonDia, PreciosCanon, TipoCanon } from "@/components/caja/datos";
 
-/** Canon de camiones del día: entradas + carga inline (solo caja de guardia). */
+const PLURAL: Record<TipoCanon, [string, string]> = {
+  camion: ["camión", "camiones"],
+  ambulante: ["ambulante", "ambulantes"],
+  quintero: ["quintero", "quinteros"],
+};
+
+/** "2 camiones · 1 ambulante" */
+function resumenTipos(entradas: CanonDia[]): string {
+  const cuenta = new Map<TipoCanon, number>();
+  for (const e of entradas) cuenta.set(e.tipo, (cuenta.get(e.tipo) ?? 0) + e.cantidad);
+  return (["camion", "ambulante", "quintero"] as TipoCanon[])
+    .filter((t) => (cuenta.get(t) ?? 0) > 0)
+    .map((t) => {
+      const n = cuenta.get(t) ?? 0;
+      return `${formatNumero(n)} ${PLURAL[t][n === 1 ? 0 : 1]}`;
+    })
+    .join(" · ");
+}
+
+/** Canon del día: entradas + carga inline (solo caja de portería). */
 export function CanonCamiones({
   cajaId,
   cajaAbierta,
+  fechaCaja,
   entradas,
-  precioCanon,
+  precios,
 }: {
   cajaId: string;
   cajaAbierta: boolean;
+  fechaCaja: string;
   entradas: CanonDia[];
-  precioCanon: number;
+  precios: PreciosCanon;
 }) {
-  const totalCamiones = entradas.reduce((acc, e) => acc + e.cantidad, 0);
   const totalMonto = entradas.reduce((acc, e) => acc + e.monto, 0);
+  const hoy = hoyISO();
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-lg">Canon de camiones</CardTitle>
+        <CardTitle className="text-lg">
+          Canon del día{" "}
+          <span className="font-normal text-muted-foreground">
+            (camiones, ambulantes, quinteros)
+          </span>
+        </CardTitle>
         <CardAction>
-          <Codigo codigo="BC" />
+          <div className="flex items-center gap-1">
+            <Codigo codigo="BC" />
+            <Codigo codigo="BA" />
+            <Codigo codigo="BQ" />
+          </div>
         </CardAction>
       </CardHeader>
       <CardContent className="space-y-5">
         {cajaAbierta ? (
-          <FormCanon cajaId={cajaId} precioCanon={precioCanon} />
+          <FormCanon cajaId={cajaId} fechaCaja={fechaCaja} precios={precios} />
         ) : null}
 
         {entradas.length === 0 ? (
@@ -49,7 +80,7 @@ export function CanonCamiones({
             titulo="Todavía no se cargó canon hoy"
             descripcion={
               cajaAbierta
-                ? "Cargá cada entrada de camiones con el formulario de arriba."
+                ? "Elegí qué entró y cargá el monto con el formulario de arriba."
                 : "No hubo entradas de canon en esta caja."
             }
             className="py-8"
@@ -62,13 +93,16 @@ export function CanonCamiones({
                   key={entrada.id}
                   className="flex flex-wrap items-center gap-x-4 gap-y-1 py-3"
                 >
+                  <Sello estado={entrada.tipo} />
                   <span className="text-sm text-muted-foreground tabular">
-                    {formatFechaHora(entrada.creado_en)}
+                    {formatFecha(entrada.fecha)}
+                    {entrada.fecha === hoy ? ` · ${formatSoloHora(entrada.creado_en)}` : ""}
                   </span>
-                  <span className="font-medium">
-                    {formatNumero(entrada.cantidad)}{" "}
-                    {entrada.cantidad === 1 ? "camión" : "camiones"}
-                  </span>
+                  {entrada.cantidad !== 1 ? (
+                    <span className="text-sm font-medium tabular">
+                      × {formatNumero(entrada.cantidad)}
+                    </span>
+                  ) : null}
                   <span className="text-sm text-muted-foreground">
                     {labelMedio(entrada.medio)}
                   </span>
@@ -82,7 +116,8 @@ export function CanonCamiones({
                     {cajaAbierta ? (
                       <BotonBorrarCanon
                         id={entrada.id}
-                        cantidad={entrada.cantidad}
+                        tipo={entrada.tipo}
+                        fecha={entrada.fecha}
                         monto={entrada.monto}
                       />
                     ) : null}
@@ -91,10 +126,7 @@ export function CanonCamiones({
               ))}
             </ul>
             <div className="flex flex-wrap items-baseline justify-between gap-2 border-t pt-4">
-              <p className="text-muted-foreground">
-                {formatNumero(totalCamiones)}{" "}
-                {totalCamiones === 1 ? "camión" : "camiones"} en el día
-              </p>
+              <p className="text-muted-foreground">{resumenTipos(entradas)} en el día</p>
               <Money monto={totalMonto} className="text-lg font-bold" />
             </div>
           </>

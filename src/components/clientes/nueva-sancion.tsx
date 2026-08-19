@@ -3,7 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ShieldAlert } from "lucide-react";
+import { FilePenLine } from "lucide-react";
 import { crearSancion } from "@/lib/actions/sanciones";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,16 +11,18 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { ACCEPT_ARCHIVOS } from "./constantes";
+import { Sello } from "@/components/shared/sello";
+import { cn } from "@/lib/utils";
+import { ACCEPT_ARCHIVOS, TIPOS_REGISTRO, type TipoRegistro } from "./constantes";
 
-/** Alta de sanción o notificación (solo administración y consejo). */
+const TOAST_POR_TIPO: Record<TipoRegistro, string> = {
+  notificacion: "Notificación registrada",
+  apercibimiento: "Apercibimiento registrado",
+  sancion: "Sanción registrada",
+};
+
+/** Alta de un registro documental (notificación, apercibimiento o sanción),
+ * con documento adjunto opcional. Administración, Consejo y Líder. */
 export function NuevaSancion({
   clienteId,
   fechaHoy,
@@ -31,7 +33,7 @@ export function NuevaSancion({
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const [pendiente, startTransition] = useTransition();
-  const [tipo, setTipo] = useState<string>("notificacion");
+  const [tipo, setTipo] = useState<TipoRegistro>("notificacion");
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -44,9 +46,7 @@ export function NuevaSancion({
         toast.error(res.error);
         return;
       }
-      toast.success(
-        tipo === "sancion" ? "Sanción registrada" : "Notificación registrada"
-      );
+      toast.success(TOAST_POR_TIPO[tipo]);
       formRef.current?.reset();
       setTipo("notificacion");
       router.refresh();
@@ -56,25 +56,43 @@ export function NuevaSancion({
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-lg">
-          Registrar sanción o notificación
-        </CardTitle>
+        <CardTitle className="text-lg">Nuevo registro</CardTitle>
       </CardHeader>
       <CardContent>
         <form ref={formRef} onSubmit={onSubmit} className="space-y-5">
-          <div className="grid gap-5 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label className="text-base">Tipo</Label>
-              <Select value={tipo} onValueChange={setTipo}>
-                <SelectTrigger className="h-12 w-full text-base">
-                  <SelectValue placeholder="Elegí el tipo" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="notificacion">Notificación</SelectItem>
-                  <SelectItem value="sancion">Sanción</SelectItem>
-                </SelectContent>
-              </Select>
+          <div className="space-y-2">
+            <Label className="text-base">¿Qué se registra?</Label>
+            <div
+              role="group"
+              aria-label="Tipo de registro"
+              className="grid gap-2 sm:grid-cols-3"
+            >
+              {TIPOS_REGISTRO.map((t) => {
+                const activo = tipo === t.valor;
+                return (
+                  <button
+                    key={t.valor}
+                    type="button"
+                    aria-pressed={activo}
+                    onClick={() => setTipo(t.valor)}
+                    className={cn(
+                      "flex min-h-16 flex-col items-start justify-center gap-1 rounded-lg border px-3 py-2 text-left transition-colors",
+                      activo
+                        ? "border-primary bg-accent ring-2 ring-primary/30"
+                        : "border-border bg-card hover:bg-accent/60"
+                    )}
+                  >
+                    <Sello estado={t.valor} />
+                    <span className="text-xs leading-snug text-muted-foreground">
+                      {t.ayuda}
+                    </span>
+                  </button>
+                );
+              })}
             </div>
+          </div>
+
+          <div className="grid gap-5 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="sancion-fecha" className="text-base">
                 Fecha
@@ -88,20 +106,19 @@ export function NuevaSancion({
                 required
               />
             </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="sancion-titulo" className="text-base">
-              Título
-            </Label>
-            <Input
-              id="sancion-titulo"
-              name="titulo"
-              placeholder="Ej.: Falta de limpieza del puesto"
-              className="h-12 text-base"
-              autoComplete="off"
-              required
-            />
+            <div className="space-y-2">
+              <Label htmlFor="sancion-titulo" className="text-base">
+                Título
+              </Label>
+              <Input
+                id="sancion-titulo"
+                name="titulo"
+                placeholder="Ej.: Falta de limpieza del puesto"
+                className="h-12 text-base"
+                autoComplete="off"
+                required
+              />
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -142,9 +159,9 @@ export function NuevaSancion({
             {pendiente ? (
               <Spinner className="size-5" />
             ) : (
-              <ShieldAlert className="size-5" />
+              <FilePenLine className="size-5" />
             )}
-            Registrar
+            Registrar {TIPOS_REGISTRO.find((t) => t.valor === tipo)?.label.toLowerCase()}
           </Button>
         </form>
       </CardContent>

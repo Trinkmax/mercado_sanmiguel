@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 export default function LoadingEnergia() {
   return (
     <div className="space-y-8">
-      {/* PageHeader: título + precio del kWh + botón de planilla */}
+      {/* PageHeader: título + precio del kWh + planilla + exportar */}
       <div className="flex flex-wrap items-end justify-between gap-4 pb-6">
         <div className="space-y-2">
           <Skeleton className="h-9 w-44" />
@@ -13,6 +13,7 @@ export default function LoadingEnergia() {
         <div className="flex flex-wrap items-center gap-2">
           <Skeleton className="h-16 w-44 rounded-lg" />
           <Skeleton className="h-11 w-72 max-w-full" />
+          <Skeleton className="h-11 w-44 max-w-full" />
         </div>
       </div>
 

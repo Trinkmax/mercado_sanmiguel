@@ -1,6 +1,8 @@
 /** Tipo de cliente derivado de sus conceptos activos (no se guarda en la base:
  * se calcula siempre desde `cliente_conceptos`). Compartido server/client. */
 
+import { formatFraccion } from "@/lib/format";
+
 export type ConceptoDeCliente = {
   cantidad: number;
   activo: boolean;
@@ -30,11 +32,9 @@ export function derivarTipoCliente(items: ConceptoDeCliente[]): TipoCliente {
   return "Sin conceptos";
 }
 
-/** 0,5 → "½" · 1,5 → "1½" · 2 → "2" */
+/** ¼ → "¼" · 0,5 → "½" · 1,25 → "1¼" · 2 → "2" (cuartos, como pide el cliente). */
 export function formatCantidadCorta(n: number): string {
-  const entero = Math.floor(n);
-  if (n - entero === 0.5) return entero === 0 ? "½" : `${entero}½`;
-  return String(n);
+  return formatFraccion(n);
 }
 
 const EXTRAS: Array<[codigo: string, singular: string, plural: string]> = [

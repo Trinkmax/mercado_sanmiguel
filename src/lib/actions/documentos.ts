@@ -23,7 +23,7 @@ const CATEGORIAS = [
 export async function subirDocumento(
   formData: FormData
 ): Promise<ActionResult<{ id: string }>> {
-  const perfil = await requireRol("admin", "tesoreria", "consejo");
+  const perfil = await requireRol("admin", "tesoreria", "consejo", "lider");
 
   const parsed = z
     .object({
@@ -90,11 +90,11 @@ export async function subirDocumento(
   return ok({ id: data.id });
 }
 
-/** Borra un documento de la carpeta (solo administración y consejo). */
+/** Borra un documento de la carpeta (administración, consejo y líder). */
 export async function borrarDocumento(
   input: unknown
 ): Promise<ActionResult<void>> {
-  await requireRol("admin", "consejo");
+  await requireRol("admin", "consejo", "lider");
   const parsed = z
     .object({ id: z.string().min(1), clienteId: z.string().min(1) })
     .safeParse(input);

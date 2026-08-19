@@ -13,15 +13,18 @@ import {
 import { NavLinks } from "@/components/shared/nav-links";
 import { Marca } from "@/components/shared/marca";
 import type { Rol } from "@/lib/auth";
+import type { BadgesNav } from "@/lib/navegacion";
 
 /** Menú de navegación para tablet/celular: cajón lateral con targets grandes. */
 export function MobileNav({
   rol,
+  badges,
   nombre,
   rolLabel,
   logout,
 }: {
   rol: Rol;
+  badges?: BadgesNav;
   nombre: string;
   rolLabel: string;
   logout: React.ReactNode;
@@ -50,7 +53,7 @@ export function MobileNav({
           </SheetTitle>
         </SheetHeader>
         <div className="flex-1 overflow-y-auto p-3">
-          <NavLinks rol={rol} onNavigate={() => setAbierto(false)} />
+          <NavLinks rol={rol} badges={badges} onNavigate={() => setAbierto(false)} />
         </div>
         <div className="border-t border-sidebar-border p-4 space-y-3">
           <div className="text-sm">

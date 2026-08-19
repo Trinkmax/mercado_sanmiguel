@@ -10,7 +10,7 @@ export default function FichaClienteLoading() {
           <Skeleton className="h-7 w-16" />
           <Skeleton className="h-7 w-20" />
         </div>
-        <div className="flex flex-wrap items-end justify-between gap-4 pb-4">
+        <div className="flex flex-wrap items-end justify-between gap-4 pb-2">
           <div className="space-y-2">
             <Skeleton className="h-9 w-72 max-w-full" />
             <Skeleton className="h-5 w-96 max-w-full" />
@@ -18,16 +18,27 @@ export default function FichaClienteLoading() {
           <div className="flex gap-2">
             <Skeleton className="h-12 w-32" />
             <Skeleton className="h-12 w-28" />
+            <Skeleton className="h-12 w-24" />
           </div>
         </div>
-        <div className="space-y-2">
-          <Skeleton className="h-4 w-16" />
-          <Skeleton className="h-9 w-40" />
+        <div className="mt-5 flex flex-wrap items-end gap-10">
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-16" />
+            <Skeleton className="h-9 w-40" />
+          </div>
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-9 w-32" />
+          </div>
         </div>
       </div>
 
       <div className="space-y-4">
         <Skeleton className="h-13 w-full max-w-xl" />
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-11 w-40" />
+          <Skeleton className="h-11 w-36" />
+        </div>
         {Array.from({ length: 2 }).map((_, i) => (
           <Card key={i}>
             <CardHeader>

@@ -176,6 +176,14 @@
   }
 }
 
+/* Toasts: en tablet/celular (hay barra superior) bajan para no tapar el menú ni "Salir". */
+@media (max-width: 1023px) {
+  [data-sonner-toaster][data-y-position="top"] {
+    --offset-top: 72px !important;
+    --mobile-offset-top: 72px !important;
+  }
+}
+
 @layer components {
   /* Sello de goma: el estado de cada cosa, como en la carpeta de papel.
      Uso: <span class="sello sello-pagado">Pagado</span> */
@@ -208,6 +216,12 @@
   .sello-neutro {
     color: var(--muted-foreground);
     background: var(--muted);
+  }
+  /* Azul institucional: "en curso" administrativo (en revisión, en caja mayor,
+     listo para depositar). No es un estado de cobro: no compite con verde/rojo. */
+  .sello-info {
+    color: var(--accent-foreground);
+    background: var(--accent);
   }
   /* Sello grande para recibos y libre deuda (imprimibles) */
   .sello-grande {

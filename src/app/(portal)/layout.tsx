@@ -3,8 +3,10 @@ import { requireRol } from "@/lib/auth";
 import { cerrarSesion } from "@/lib/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Marca } from "@/components/shared/marca";
+import { GateTerminos } from "@/components/portal/gate-terminos";
 
-/** Portal del socio: una sola columna, simple, pensado para el celular. */
+/** Portal del socio: una sola columna, simple, pensado para el celular.
+ * Antes de mostrar cualquier cosa, exige aceptar los términos vigentes. */
 export default async function PortalLayout({
   children,
 }: {
@@ -32,7 +34,7 @@ export default async function PortalLayout({
       </header>
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-6">
         <p className="sr-only">Sesión de {perfil.nombre}</p>
-        {children}
+        <GateTerminos perfil={perfil}>{children}</GateTerminos>
       </main>
     </div>
   );

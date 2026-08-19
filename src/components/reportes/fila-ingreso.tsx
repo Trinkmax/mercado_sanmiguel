@@ -12,7 +12,8 @@ export type ResumenConcepto = {
 
 /**
  * Fila de ingresos por concepto: barra verde (cobrado) sobre fondo rojo suave
- * (lo que falta), con el detalle de estimado, descuentos y pendiente.
+ * (lo que falta), con el detalle de estimado, beneficios otorgados y pendiente.
+ * `descuentos` es el nombre de la columna de la RPC; en pantalla es "Beneficios".
  */
 export function FilaIngreso({ fila }: { fila: ResumenConcepto }) {
   const cobrado = Number(fila.cobrado);
@@ -47,7 +48,7 @@ export function FilaIngreso({ fila }: { fila: ResumenConcepto }) {
         </div>
         <div className="flex flex-wrap gap-x-5 gap-y-0.5 pt-0.5 text-sm text-muted-foreground tabular">
           <span>Estimado {formatARS(fila.estimado)}</span>
-          <span>Descuentos {formatARS(fila.descuentos)}</span>
+          <span>Beneficios {formatARS(fila.descuentos)}</span>
           {pendiente > 0 ? (
             <span className="font-medium text-pendiente">
               Faltan {formatARS(pendiente)}

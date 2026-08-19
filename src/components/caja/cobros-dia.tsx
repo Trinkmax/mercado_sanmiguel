@@ -69,18 +69,23 @@ export function CobrosDia({
                         {cobro.cliente?.nombre ?? "—"}
                       </p>
                       {cobro.anulado ? (
-                        <p className="mt-0.5 flex items-center gap-1.5 text-xs whitespace-normal no-underline">
+                        <div className="mt-1 space-y-0.5 whitespace-normal">
                           <Sello estado="anulado" />
                           {cobro.motivo_anulacion ? (
-                            <span className="text-muted-foreground">
+                            <p className="text-xs text-muted-foreground">
                               {cobro.motivo_anulacion}
-                            </span>
+                            </p>
                           ) : null}
-                        </p>
+                        </div>
                       ) : null}
                     </TableCell>
                     <TableCell className={tachado}>
                       {labelMedio(cobro.medio)}
+                      {cobro.medio === "transferencia" && cobro.titular_transferencia ? (
+                        <span className="block text-xs text-muted-foreground">
+                          de {cobro.titular_transferencia}
+                        </span>
+                      ) : null}
                     </TableCell>
                     <TableCell className={`${tachado} text-right`}>
                       <Money monto={cobro.monto} className="font-semibold" />

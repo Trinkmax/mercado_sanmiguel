@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Pencil } from "lucide-react";
+import { Pencil, Send } from "lucide-react";
 import { toast } from "sonner";
 import { formatARS } from "@/lib/format";
 import { cambiarPrecioKwh } from "@/lib/actions/energia";
@@ -16,12 +16,25 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Sello } from "@/components/shared/sello";
 
 /**
  * Precio vigente del kWh como dato grande, con edición en Dialog corto.
  * El precio nuevo vale para las próximas lecturas; las cargadas no cambian.
+ * Si el que lo cambia no es el Líder, queda esperando aprobación y acá se ve
+ * el precio propuesto junto al vigente.
  */
-export function PrecioKwh({ precio }: { precio: number }) {
+export function PrecioKwh({
+  precio,
+  propuesto = null,
+  aplicaDirecto,
+}: {
+  precio: number;
+  /** Precio que espera la aprobación del Líder (null si no hay ninguno). */
+  propuesto?: number | null;
+  /** true = Líder de Procesos: el cambio se aplica en el acto. */
+  aplicaDirecto: boolean;
+}) {
   const [abierto, setAbierto] = useState(false);
   const [valor, setValor] = useState(String(precio));
   const [error, setError] = useState<string | null>(null);
@@ -41,7 +54,15 @@ export function PrecioKwh({ precio }: { precio: number }) {
         toast.error(res.error);
         return;
       }
-      toast.success(`Precio del kWh actualizado a ${formatARS(res.data.precio)}`);
+      if (res.data.estado === "sin_cambios") {
+        toast.info("Ese ya es el precio vigente del kWh.");
+      } else if (res.data.estado === "pendiente") {
+        toast.success("Enviado al Líder de Procesos para su aprobación.", {
+          description: `Precio propuesto: ${formatARS(res.data.precio)} por kWh.`,
+        });
+      } else {
+        toast.success(`Precio del kWh actualizado a ${formatARS(res.data.precio)}`);
+      }
       setAbierto(false);
     });
   }
@@ -55,13 +76,22 @@ export function PrecioKwh({ precio }: { precio: number }) {
         <p className="text-2xl font-bold tabular leading-tight">
           {formatARS(precio)}
         </p>
+        {propuesto !== null ? (
+          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+            <Sello estado="pendiente_aprobacion" />
+            <span className="text-xs text-muted-foreground">
+              Propuesto:{" "}
+              <strong className="tabular text-foreground">{formatARS(propuesto)}</strong>
+            </span>
+          </div>
+        ) : null}
       </div>
       <Dialog
         open={abierto}
         onOpenChange={(open) => {
           setAbierto(open);
           if (open) {
-            setValor(String(precio));
+            setValor(String(propuesto ?? precio));
             setError(null);
           }
         }}
@@ -80,8 +110,9 @@ export function PrecioKwh({ precio }: { precio: number }) {
           <DialogHeader>
             <DialogTitle className="text-xl">Cambiar precio del kWh</DialogTitle>
             <DialogDescription className="text-sm">
-              El precio nuevo vale para las próximas lecturas. Las que ya
-              cargaste no cambian.
+              {aplicaDirecto
+                ? "El precio nuevo vale para las próximas lecturas. Las que ya cargaste no cambian."
+                : "El cambio lo aprueba el Líder de Procesos. Una vez aprobado, vale para las próximas lecturas; las ya cargadas no cambian."}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-5">
@@ -112,7 +143,7 @@ export function PrecioKwh({ precio }: { precio: number }) {
               ) : numero !== null ? (
                 <p className="text-sm text-muted-foreground">
                   Queda en <strong className="tabular">{formatARS(numero)}</strong>{" "}
-                  por kWh.
+                  por kWh. Hoy: <span className="tabular">{formatARS(precio)}</span>.
                 </p>
               ) : null}
             </div>
@@ -122,7 +153,14 @@ export function PrecioKwh({ precio }: { precio: number }) {
               onClick={guardar}
               disabled={pendiente}
             >
-              {pendiente ? "Guardando…" : "Guardar precio"}
+              {aplicaDirecto ? null : <Send className="size-5" strokeWidth={2} />}
+              {pendiente
+                ? aplicaDirecto
+                  ? "Guardando…"
+                  : "Enviando…"
+                : aplicaDirecto
+                  ? "Guardar precio"
+                  : "Enviar a aprobación"}
             </Button>
           </div>
         </DialogContent>

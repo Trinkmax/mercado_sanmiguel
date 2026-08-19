@@ -5,17 +5,27 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRol } from "@/lib/auth";
 import { ok, fallo, type ActionResult } from "@/lib/actions/result";
+import { hoyISO } from "@/lib/format";
 
 const schemaConFecha = z.object({
   id: z.uuid("No se reconoce el cheque."),
   fecha: z.iso.date("Poné una fecha válida."),
 });
 
-const schemaSoloId = z.object({
+const schemaRechazo = z.object({
   id: z.uuid("No se reconoce el cheque."),
+  motivo: z
+    .string()
+    .trim()
+    .max(300, "El motivo es muy largo (máximo 300 caracteres).")
+    .optional(),
 });
 
-/** Marca un cheque en cartera como depositado en el banco. */
+/**
+ * Marca un cheque en cartera como depositado en el banco. Un cheque diferido
+ * (fecha de cobro futura) no se puede depositar todavía: la guarda está acá
+ * además de en la UI.
+ */
 export async function depositarCheque(input: unknown): Promise<ActionResult> {
   await requireRol("admin", "tesoreria");
   const parsed = schemaConFecha.safeParse(input);
@@ -27,13 +37,17 @@ export async function depositarCheque(input: unknown): Promise<ActionResult> {
     .update({ estado: "depositado", fecha_depositado: parsed.data.fecha })
     .eq("id", parsed.data.id)
     .eq("estado", "en_cartera")
+    .lte("fecha_cobro", hoyISO())
     .select("id");
 
   if (error) return fallo(error);
   if (!data || data.length === 0)
-    return fallo("El cheque ya no está en cartera. Actualizá la página.");
+    return fallo(
+      "El cheque ya no está en cartera o todavía es diferido (no llegó su fecha de cobro). Actualizá la página."
+    );
 
   revalidatePath("/cheques");
+  revalidatePath("/tesoreria");
   return ok(undefined);
 }
 
@@ -56,6 +70,7 @@ export async function acreditarCheque(input: unknown): Promise<ActionResult> {
     return fallo("El cheque ya no figura como depositado. Actualizá la página.");
 
   revalidatePath("/cheques");
+  revalidatePath("/tesoreria");
   return ok(undefined);
 }
 
@@ -66,12 +81,13 @@ export async function acreditarCheque(input: unknown): Promise<ActionResult> {
  */
 export async function rechazarCheque(input: unknown): Promise<ActionResult> {
   await requireRol("admin", "tesoreria");
-  const parsed = schemaSoloId.safeParse(input);
+  const parsed = schemaRechazo.safeParse(input);
   if (!parsed.success) return fallo(parsed.error.issues[0].message);
 
   const supabase = await createClient();
   const { error } = await supabase.rpc("rechazar_cheque", {
     p_cheque: parsed.data.id,
+    ...(parsed.data.motivo ? { p_motivo: parsed.data.motivo } : {}),
   });
 
   if (error) return fallo(error);
@@ -79,6 +95,7 @@ export async function rechazarCheque(input: unknown): Promise<ActionResult> {
   revalidatePath("/cheques");
   revalidatePath("/cobranza");
   revalidatePath("/clientes");
+  revalidatePath("/caja");
   revalidatePath("/tesoreria");
   return ok(undefined);
 }

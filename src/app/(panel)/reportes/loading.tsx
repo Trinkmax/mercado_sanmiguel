@@ -11,7 +11,11 @@ export default function ReportesLoading() {
           <Skeleton className="h-9 w-48" />
           <Skeleton className="h-5 w-80 max-w-full" />
         </div>
-        <Skeleton className="h-13 w-64" />
+        <div className="flex flex-wrap items-center gap-2">
+          <Skeleton className="h-11 w-40" />
+          <Skeleton className="h-11 w-44" />
+          <Skeleton className="h-13 w-64" />
+        </div>
       </div>
 
       {/* Selector de período */}

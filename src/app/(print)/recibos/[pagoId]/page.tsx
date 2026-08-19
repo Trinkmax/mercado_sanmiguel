@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { Paperclip } from "lucide-react";
 import { requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -19,24 +20,24 @@ export default async function ReciboPage({
   params: Promise<{ pagoId: string }>;
 }) {
   const { pagoId } = await params;
-  // Consejo también puede ver comprobantes (es solo lectura).
-  await requireRol("admin", "guardia", "tesoreria", "consejo");
+  // Consejo y el Líder de Procesos también pueden ver comprobantes (solo lectura).
+  const perfil = await requireRol("admin", "guardia", "tesoreria", "consejo", "lider");
   const supabase = await createClient();
 
   const { data: pago } = await supabase
     .from("pagos")
     .select(
-      "id, numero, fecha, monto, medio, notas, anulado, motivo_anulacion, recibido_por, clientes(nombre, codigo), cheques(numero, banco, titular, es_tercero, fecha_cobro)"
+      "id, numero, fecha, monto, medio, notas, anulado, motivo_anulacion, recibido_por, titular_transferencia, comprobante_path, clientes(nombre, codigo), cheques(numero, banco, titular, es_tercero, fecha_cobro)"
     )
     .eq("id", pagoId)
     .maybeSingle();
 
   if (!pago) notFound();
 
-  const [imputacionesRes, perfilRes] = await Promise.all([
+  const [imputacionesRes, perfilRes, configRes, comprobanteRes] = await Promise.all([
     supabase
       .from("imputaciones")
-      .select("id, monto, cargos(descripcion, periodo)")
+      .select("id, monto, cargos(descripcion, periodo, estado, descuento_aplicado)")
       .eq("pago_id", pagoId),
     pago.recibido_por
       ? supabase
@@ -44,6 +45,17 @@ export default async function ReciboPage({
           .select("nombre")
           .eq("user_id", pago.recibido_por)
           .maybeSingle()
+      : Promise.resolve({ data: null }),
+    supabase
+      .from("configuracion")
+      .select("impresion_directa")
+      .eq("org_id", perfil.org_id)
+      .maybeSingle(),
+    // Link al comprobante de la transferencia (1 hora), solo para la pantalla.
+    pago.comprobante_path
+      ? supabase.storage
+          .from("documentos")
+          .createSignedUrl(pago.comprobante_path, 3600)
       : Promise.resolve({ data: null }),
   ]);
 
@@ -55,10 +67,45 @@ export default async function ReciboPage({
   const medioLabel =
     MEDIOS_PAGO.find((m) => m.valor === pago.medio)?.label ?? pago.medio;
   const nombreRecibio = perfilRes.data?.nombre ?? "—";
+  const urlComprobante = comprobanteRes.data?.signedUrl ?? null;
+  const autoImprimir = Boolean(configRes.data?.impresion_directa) && !pago.anulado;
+  // Consejo y líder no cobran: "Volver" los lleva a donde estaban.
+  const volverA = ["admin", "guardia", "tesoreria"].includes(perfil.rol)
+    ? "/cobranza"
+    : undefined;
+
+  // Lo imputado vs. lo cobrado: si sobró, quedó como saldo a favor del cliente.
+  const totalImputado = imputaciones.reduce((acc, i) => acc + Number(i.monto), 0);
+  // Un cobro anulado no deja crédito (sus imputaciones ya se revirtieron).
+  const saldoFavor = pago.anulado
+    ? 0
+    : Math.round((Number(pago.monto) - totalImputado) * 100) / 100;
+  // Beneficio por pago en término de los cargos que este cobro dejó saldados.
+  const beneficio = imputaciones.reduce(
+    (acc, i) =>
+      i.cargos?.estado === "pagado"
+        ? acc + Number(i.cargos.descuento_aplicado ?? 0)
+        : acc,
+    0
+  );
 
   return (
     <>
-      <BotonImprimir volverA="/cobranza" />
+      <BotonImprimir volverA={volverA} autoImprimir={autoImprimir} />
+
+      {urlComprobante ? (
+        <p className="no-print mb-4 text-sm">
+          <a
+            href={urlComprobante}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex min-h-11 items-center gap-1.5 font-medium text-primary underline-offset-4 hover:underline"
+          >
+            <Paperclip className="size-4" strokeWidth={2} />
+            Ver comprobante de la transferencia
+          </a>
+        </p>
+      ) : null}
 
       <div className="etiqueta">
         <div className="etiqueta-interior space-y-6">
@@ -93,6 +140,18 @@ export default async function ReciboPage({
               <span className="text-muted-foreground">Medio de pago:</span>{" "}
               <strong>{medioLabel}</strong>
             </p>
+            {pago.medio === "transferencia" && pago.titular_transferencia ? (
+              <p>
+                <span className="text-muted-foreground">Transferencia de:</span>{" "}
+                <strong>{pago.titular_transferencia}</strong>
+                {pago.comprobante_path ? (
+                  <span className="text-sm text-muted-foreground">
+                    {" "}
+                    · comprobante adjunto
+                  </span>
+                ) : null}
+              </p>
+            ) : null}
             {cheque ? (
               <div className="mt-2 space-y-0.5 rounded-md border px-4 py-3 text-sm">
                 <p className="font-medium">
@@ -132,15 +191,45 @@ export default async function ReciboPage({
                   </td>
                 </tr>
               ))}
+              {saldoFavor > 0.009 ? (
+                <tr className="border-b border-dashed">
+                  <td className="py-2" colSpan={2}>
+                    Saldo a favor{" "}
+                    <span className="text-muted-foreground">
+                      (se aplica al próximo período)
+                    </span>
+                  </td>
+                  <td className="py-2 text-right tabular">
+                    <Money monto={saldoFavor} />
+                  </td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
 
           {/* Total */}
-          <div className="flex items-baseline justify-between border-t-2 border-foreground pt-3">
-            <p className="font-display font-semibold uppercase tracking-wide">
-              Total
-            </p>
-            <Money monto={pago.monto} className="text-3xl font-bold" />
+          <div className="space-y-1">
+            <div className="flex items-baseline justify-between border-t-2 border-foreground pt-3">
+              <p className="font-display font-semibold uppercase tracking-wide">
+                Total
+              </p>
+              <Money monto={pago.monto} className="text-3xl font-bold" />
+            </div>
+            {beneficio > 0.009 ? (
+              <p className="text-right text-sm text-muted-foreground">
+                Incluye beneficio por pago en término de{" "}
+                <Money monto={beneficio} className="font-medium text-foreground" /> (ya
+                aplicado en el importe).
+              </p>
+            ) : null}
+            {saldoFavor > 0.009 ? (
+              <p className="flex items-center justify-end gap-2 text-sm">
+                <Sello estado="saldo_favor" />
+                <span>
+                  Saldo a favor: <Money monto={saldoFavor} className="font-semibold" />
+                </span>
+              </p>
+            ) : null}
           </div>
 
           {/* Sello y firma */}

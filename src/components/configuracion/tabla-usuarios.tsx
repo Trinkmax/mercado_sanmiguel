@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { cambiarActivoUsuario } from "@/lib/actions/usuarios";
-import { LABEL_ROL } from "@/lib/roles";
+import { DESCRIPCION_ROL, LABEL_ROL } from "@/lib/roles";
 import type { Rol } from "@/lib/auth";
 import { Switch } from "@/components/ui/switch";
 import {
@@ -31,7 +31,7 @@ export function TablaUsuarios({
   usuarios: UsuarioFila[];
   miUserId: string;
   miEmail: string;
-  /** Solo admin/consejo pueden activar/desactivar (la RLS lo exige igual). */
+  /** Solo Administración, Consejo y el Líder activan/desactivan (la RLS lo exige igual). */
   puedeGestionar: boolean;
 }) {
   const [pendiente, setPendiente] = useState<string | null>(null);
@@ -56,7 +56,7 @@ export function TablaUsuarios({
   }
 
   return (
-    <div className="rounded-lg border bg-card">
+    <div className="overflow-x-auto rounded-lg border bg-card">
       <Table className="text-sm">
         <TableHeader>
           <TableRow>
@@ -70,7 +70,7 @@ export function TablaUsuarios({
             const soyYo = usuario.user_id === miUserId;
             return (
               <TableRow key={usuario.user_id} className="h-14">
-                <TableCell className="pl-4">
+                <TableCell className="pl-4 align-top">
                   <p className="font-medium">
                     {usuario.nombre}
                     {soyYo ? (
@@ -81,10 +81,11 @@ export function TablaUsuarios({
                     <p className="text-muted-foreground">{miEmail}</p>
                   ) : null}
                 </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {LABEL_ROL[usuario.rol]}
+                <TableCell className="max-w-sm whitespace-normal align-top">
+                  <p className="font-medium">{LABEL_ROL[usuario.rol]}</p>
+                  <p className="text-muted-foreground">{DESCRIPCION_ROL[usuario.rol]}</p>
                 </TableCell>
-                <TableCell className="pr-4">
+                <TableCell className="pr-4 align-top">
                   {puedeGestionar ? (
                     <Switch
                       checked={usuario.activo}

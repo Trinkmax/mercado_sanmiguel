@@ -17,8 +17,8 @@ const activoSchema = z.object({
 export async function cambiarActivoUsuario(
   input: unknown
 ): Promise<ActionResult> {
-  // Solo admin/consejo: la RLS de perfiles no deja escribir a tesorería.
-  const perfil = await requireRol("admin", "consejo");
+  // Solo admin/consejo/líder: la RLS de perfiles no deja escribir a tesorería.
+  const perfil = await requireRol("admin", "consejo", "lider");
   const parsed = activoSchema.safeParse(input);
   if (!parsed.success) return fallo(parsed.error.issues[0].message);
 
@@ -59,7 +59,7 @@ const accesoSchema = z.object({
 export async function crearAccesoSocio(
   input: unknown
 ): Promise<ActionResult<{ email: string }>> {
-  const perfil = await requireRol("admin", "tesoreria", "consejo");
+  const perfil = await requireRol("admin", "tesoreria", "consejo", "lider");
   if (!hayClaveAdmin()) {
     return fallo(
       "Para crear accesos de socios, cargá la SUPABASE_SECRET_KEY en el servidor (ver .env.local)."

@@ -4,12 +4,15 @@ export default function LoadingGastos() {
   return (
     <div className="space-y-8">
       {/* PageHeader: título + botón Cargar gasto */}
-      <div className="flex flex-wrap items-end justify-between gap-4 pb-6">
+      <div className="flex flex-wrap items-end justify-between gap-4 pb-5">
         <div className="space-y-2">
           <Skeleton className="h-9 w-40" />
           <Skeleton className="h-5 w-80 max-w-full" />
         </div>
-        <Skeleton className="h-13 w-44 rounded-md" />
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-11 w-40 rounded-md" />
+          <Skeleton className="h-13 w-44 rounded-md" />
+        </div>
       </div>
 
       {/* Selector de mes + resumen */}

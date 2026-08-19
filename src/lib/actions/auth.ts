@@ -55,7 +55,9 @@ export async function cerrarSesion(): Promise<void> {
 const USUARIOS_DEMO = {
   admin: "admin@sanmiguel.coop",
   guardia: "guardia@sanmiguel.coop",
+  porteria: "porteria@sanmiguel.coop",
   tesoreria: "tesorera@sanmiguel.coop",
+  lider: "lider@sanmiguel.coop",
   consejo: "consejo@sanmiguel.coop",
   socio: "socio@sanmiguel.coop",
 } as const;

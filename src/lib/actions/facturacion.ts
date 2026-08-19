@@ -17,6 +17,8 @@ export type ResultadoGeneracion = {
   vencimiento: string;
   cargos: number;
   energia: number;
+  /** Saldo a favor de clientes que se aplicó solo a los cargos nuevos. */
+  saldo_favor_aplicado?: number;
 };
 
 /**
@@ -26,7 +28,7 @@ export type ResultadoGeneracion = {
 export async function generarPeriodo(
   input: unknown
 ): Promise<ActionResult<ResultadoGeneracion>> {
-  await requireRol("admin", "tesoreria", "consejo");
+  await requireRol("admin", "tesoreria", "consejo", "lider");
 
   const parsed = schema.safeParse(input);
   if (!parsed.success) return fallo(parsed.error.issues[0].message);
@@ -40,5 +42,6 @@ export async function generarPeriodo(
   revalidatePath("/facturacion");
   revalidatePath("/reportes");
   revalidatePath("/inicio");
+  revalidatePath("/clientes", "layout");
   return ok(data as unknown as ResultadoGeneracion);
 }

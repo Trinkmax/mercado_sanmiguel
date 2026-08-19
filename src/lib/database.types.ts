@@ -14,22 +14,125 @@ export type Database = {
   }
   public: {
     Tables: {
+      aceptaciones_terminos: {
+        Row: {
+          aceptado_en: string
+          cliente_id: string
+          id: string
+          org_id: string
+          terminos_id: string
+          user_id: string | null
+        }
+        Insert: {
+          aceptado_en?: string
+          cliente_id: string
+          id?: string
+          org_id: string
+          terminos_id: string
+          user_id?: string | null
+        }
+        Update: {
+          aceptado_en?: string
+          cliente_id?: string
+          id?: string
+          org_id?: string
+          terminos_id?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "aceptaciones_terminos_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "aceptaciones_terminos_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizaciones"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "aceptaciones_terminos_terminos_id_fkey"
+            columns: ["terminos_id"]
+            isOneToOne: false
+            referencedRelation: "terminos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      caja_eventos: {
+        Row: {
+          caja_id: string
+          creado_en: string
+          detalle: string | null
+          id: string
+          org_id: string
+          tipo: string
+          usuario_id: string | null
+        }
+        Insert: {
+          caja_id: string
+          creado_en?: string
+          detalle?: string | null
+          id?: string
+          org_id: string
+          tipo: string
+          usuario_id?: string | null
+        }
+        Update: {
+          caja_id?: string
+          creado_en?: string
+          detalle?: string | null
+          id?: string
+          org_id?: string
+          tipo?: string
+          usuario_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "caja_eventos_caja_id_fkey"
+            columns: ["caja_id"]
+            isOneToOne: false
+            referencedRelation: "cajas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "caja_eventos_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizaciones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cajas: {
         Row: {
           abierta_en: string
           abierta_por: string | null
+          caja_destino_id: string | null
           cerrada_en: string | null
           cerrada_por: string | null
           estado: Database["public"]["Enums"]["estado_caja"]
           fecha: string
           id: string
+          integrada_en: string | null
+          integrada_por: string | null
           observaciones: string | null
           org_id: string
+          reapertura_motivo: string | null
+          reapertura_solicitada_en: string | null
+          reapertura_solicitada_por: string | null
+          reaperturas: number
           tipo: Database["public"]["Enums"]["tipo_caja"]
           total_canon: number | null
           total_cheques: number | null
           total_efectivo: number | null
           total_gastos: number | null
+          total_rendido_efectivo: number | null
+          total_rendido_transferencia: number | null
           total_transferencia: number | null
           validada_en: string | null
           validada_por: string | null
@@ -37,18 +140,27 @@ export type Database = {
         Insert: {
           abierta_en?: string
           abierta_por?: string | null
+          caja_destino_id?: string | null
           cerrada_en?: string | null
           cerrada_por?: string | null
           estado?: Database["public"]["Enums"]["estado_caja"]
           fecha?: string
           id?: string
+          integrada_en?: string | null
+          integrada_por?: string | null
           observaciones?: string | null
           org_id: string
+          reapertura_motivo?: string | null
+          reapertura_solicitada_en?: string | null
+          reapertura_solicitada_por?: string | null
+          reaperturas?: number
           tipo: Database["public"]["Enums"]["tipo_caja"]
           total_canon?: number | null
           total_cheques?: number | null
           total_efectivo?: number | null
           total_gastos?: number | null
+          total_rendido_efectivo?: number | null
+          total_rendido_transferencia?: number | null
           total_transferencia?: number | null
           validada_en?: string | null
           validada_por?: string | null
@@ -56,25 +168,113 @@ export type Database = {
         Update: {
           abierta_en?: string
           abierta_por?: string | null
+          caja_destino_id?: string | null
           cerrada_en?: string | null
           cerrada_por?: string | null
           estado?: Database["public"]["Enums"]["estado_caja"]
           fecha?: string
           id?: string
+          integrada_en?: string | null
+          integrada_por?: string | null
           observaciones?: string | null
           org_id?: string
+          reapertura_motivo?: string | null
+          reapertura_solicitada_en?: string | null
+          reapertura_solicitada_por?: string | null
+          reaperturas?: number
           tipo?: Database["public"]["Enums"]["tipo_caja"]
           total_canon?: number | null
           total_cheques?: number | null
           total_efectivo?: number | null
           total_gastos?: number | null
+          total_rendido_efectivo?: number | null
+          total_rendido_transferencia?: number | null
           total_transferencia?: number | null
           validada_en?: string | null
           validada_por?: string | null
         }
         Relationships: [
           {
+            foreignKeyName: "cajas_caja_destino_id_fkey"
+            columns: ["caja_destino_id"]
+            isOneToOne: false
+            referencedRelation: "cajas"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "cajas_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizaciones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cambios_pendientes: {
+        Row: {
+          accion: string
+          cliente_id: string | null
+          datos: Json
+          datos_anteriores: Json | null
+          entidad: string
+          entidad_id: string | null
+          estado: Database["public"]["Enums"]["estado_cambio"]
+          id: string
+          motivo_rechazo: string | null
+          org_id: string
+          resultado_id: string | null
+          resumen: string
+          revisado_en: string | null
+          revisado_por: string | null
+          solicitado_en: string
+          solicitado_por: string | null
+        }
+        Insert: {
+          accion: string
+          cliente_id?: string | null
+          datos?: Json
+          datos_anteriores?: Json | null
+          entidad: string
+          entidad_id?: string | null
+          estado?: Database["public"]["Enums"]["estado_cambio"]
+          id?: string
+          motivo_rechazo?: string | null
+          org_id: string
+          resultado_id?: string | null
+          resumen: string
+          revisado_en?: string | null
+          revisado_por?: string | null
+          solicitado_en?: string
+          solicitado_por?: string | null
+        }
+        Update: {
+          accion?: string
+          cliente_id?: string | null
+          datos?: Json
+          datos_anteriores?: Json | null
+          entidad?: string
+          entidad_id?: string | null
+          estado?: Database["public"]["Enums"]["estado_cambio"]
+          id?: string
+          motivo_rechazo?: string | null
+          org_id?: string
+          resultado_id?: string | null
+          resumen?: string
+          revisado_en?: string | null
+          revisado_por?: string | null
+          solicitado_en?: string
+          solicitado_por?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cambios_pendientes_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cambios_pendientes_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizaciones"
@@ -94,6 +294,7 @@ export type Database = {
           monto: number
           notas: string | null
           org_id: string
+          tipo: string
         }
         Insert: {
           caja_id: string
@@ -106,6 +307,7 @@ export type Database = {
           monto: number
           notas?: string | null
           org_id: string
+          tipo?: string
         }
         Update: {
           caja_id?: string
@@ -118,6 +320,7 @@ export type Database = {
           monto?: number
           notas?: string | null
           org_id?: string
+          tipo?: string
         }
         Relationships: [
           {
@@ -300,6 +503,105 @@ export type Database = {
           },
         ]
       }
+      circular_recepciones: {
+        Row: {
+          circular_id: string
+          cliente_id: string
+          id: string
+          org_id: string
+          recibida_en: string
+          recibida_por: string | null
+        }
+        Insert: {
+          circular_id: string
+          cliente_id: string
+          id?: string
+          org_id: string
+          recibida_en?: string
+          recibida_por?: string | null
+        }
+        Update: {
+          circular_id?: string
+          cliente_id?: string
+          id?: string
+          org_id?: string
+          recibida_en?: string
+          recibida_por?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "circular_recepciones_circular_id_fkey"
+            columns: ["circular_id"]
+            isOneToOne: false
+            referencedRelation: "circulares"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "circular_recepciones_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "circular_recepciones_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizaciones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      circulares: {
+        Row: {
+          activa: boolean
+          creada_en: string
+          creada_por: string | null
+          detalle: string | null
+          fecha: string
+          id: string
+          numero: number
+          obligatoria: boolean
+          org_id: string
+          storage_path: string | null
+          titulo: string
+        }
+        Insert: {
+          activa?: boolean
+          creada_en?: string
+          creada_por?: string | null
+          detalle?: string | null
+          fecha?: string
+          id?: string
+          numero?: never
+          obligatoria?: boolean
+          org_id: string
+          storage_path?: string | null
+          titulo: string
+        }
+        Update: {
+          activa?: boolean
+          creada_en?: string
+          creada_por?: string | null
+          detalle?: string | null
+          fecha?: string
+          id?: string
+          numero?: never
+          obligatoria?: boolean
+          org_id?: string
+          storage_path?: string | null
+          titulo?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "circulares_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizaciones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cliente_conceptos: {
         Row: {
           activo: boolean
@@ -355,6 +657,7 @@ export type Database = {
       clientes: {
         Row: {
           activo: boolean
+          apodo: string | null
           auth_user_id: string | null
           codigo: number
           creado_en: string
@@ -371,6 +674,7 @@ export type Database = {
         }
         Insert: {
           activo?: boolean
+          apodo?: string | null
           auth_user_id?: string | null
           codigo: number
           creado_en?: string
@@ -387,6 +691,7 @@ export type Database = {
         }
         Update: {
           activo?: boolean
+          apodo?: string | null
           auth_user_id?: string | null
           codigo?: number
           creado_en?: string
@@ -460,22 +765,31 @@ export type Database = {
           actualizado_en: string
           actualizado_por: string | null
           dia_vencimiento: number
+          impresion_directa: boolean
           org_id: string
+          precio_canon_ambulante: number
           precio_canon_camion: number
+          precio_canon_quintero_dia: number
         }
         Insert: {
           actualizado_en?: string
           actualizado_por?: string | null
           dia_vencimiento?: number
+          impresion_directa?: boolean
           org_id: string
+          precio_canon_ambulante?: number
           precio_canon_camion?: number
+          precio_canon_quintero_dia?: number
         }
         Update: {
           actualizado_en?: string
           actualizado_por?: string | null
           dia_vencimiento?: number
+          impresion_directa?: boolean
           org_id?: string
+          precio_canon_ambulante?: number
           precio_canon_camion?: number
+          precio_canon_quintero_dia?: number
         }
         Relationships: [
           {
@@ -538,9 +852,123 @@ export type Database = {
           },
         ]
       }
+      empleado_horarios: {
+        Row: {
+          dia_semana: number
+          empleado_id: string
+          hora_desde: string
+          hora_hasta: string
+          id: string
+          org_id: string
+        }
+        Insert: {
+          dia_semana: number
+          empleado_id: string
+          hora_desde: string
+          hora_hasta: string
+          id?: string
+          org_id: string
+        }
+        Update: {
+          dia_semana?: number
+          empleado_id?: string
+          hora_desde?: string
+          hora_hasta?: string
+          id?: string
+          org_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "empleado_horarios_empleado_id_fkey"
+            columns: ["empleado_id"]
+            isOneToOne: false
+            referencedRelation: "empleados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "empleado_horarios_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizaciones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      empleados: {
+        Row: {
+          activo: boolean
+          actualizado_en: string
+          apellido: string
+          cargo: string | null
+          contrato_path: string | null
+          creado_en: string
+          creado_por: string | null
+          cuil: string | null
+          dni: string
+          email: string | null
+          fecha_egreso: string | null
+          fecha_ingreso: string | null
+          id: string
+          nombre: string
+          observaciones: string | null
+          org_id: string
+          telefono: string | null
+          tipo_contrato: Database["public"]["Enums"]["tipo_contrato"]
+        }
+        Insert: {
+          activo?: boolean
+          actualizado_en?: string
+          apellido: string
+          cargo?: string | null
+          contrato_path?: string | null
+          creado_en?: string
+          creado_por?: string | null
+          cuil?: string | null
+          dni: string
+          email?: string | null
+          fecha_egreso?: string | null
+          fecha_ingreso?: string | null
+          id?: string
+          nombre: string
+          observaciones?: string | null
+          org_id: string
+          telefono?: string | null
+          tipo_contrato?: Database["public"]["Enums"]["tipo_contrato"]
+        }
+        Update: {
+          activo?: boolean
+          actualizado_en?: string
+          apellido?: string
+          cargo?: string | null
+          contrato_path?: string | null
+          creado_en?: string
+          creado_por?: string | null
+          cuil?: string | null
+          dni?: string
+          email?: string | null
+          fecha_egreso?: string | null
+          fecha_ingreso?: string | null
+          id?: string
+          nombre?: string
+          observaciones?: string | null
+          org_id?: string
+          telefono?: string | null
+          tipo_contrato?: Database["public"]["Enums"]["tipo_contrato"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "empleados_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizaciones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gastos: {
         Row: {
           caja_id: string | null
+          comprobante_validado: boolean
           creado_en: string
           creado_por: string | null
           descripcion: string
@@ -555,10 +983,13 @@ export type Database = {
           pagado_desde: string | null
           rubro_id: string
           tipo: Database["public"]["Enums"]["tipo_gasto"]
+          validado_en: string | null
+          validado_por: string | null
           vencimiento: string | null
         }
         Insert: {
           caja_id?: string | null
+          comprobante_validado?: boolean
           creado_en?: string
           creado_por?: string | null
           descripcion: string
@@ -573,10 +1004,13 @@ export type Database = {
           pagado_desde?: string | null
           rubro_id: string
           tipo?: Database["public"]["Enums"]["tipo_gasto"]
+          validado_en?: string | null
+          validado_por?: string | null
           vencimiento?: string | null
         }
         Update: {
           caja_id?: string | null
+          comprobante_validado?: boolean
           creado_en?: string
           creado_por?: string | null
           descripcion?: string
@@ -591,6 +1025,8 @@ export type Database = {
           pagado_desde?: string | null
           rubro_id?: string
           tipo?: Database["public"]["Enums"]["tipo_gasto"]
+          validado_en?: string | null
+          validado_por?: string | null
           vencimiento?: string | null
         }
         Relationships: [
@@ -663,6 +1099,66 @@ export type Database = {
           },
         ]
       }
+      ingresos_personal: {
+        Row: {
+          apellido: string
+          dni: string
+          egreso_en: string | null
+          empleado_id: string | null
+          firma_path: string
+          fuera_de_horario: boolean
+          id: string
+          ingreso_en: string
+          nombre: string
+          notas: string | null
+          org_id: string
+          registrado_por: string | null
+        }
+        Insert: {
+          apellido: string
+          dni: string
+          egreso_en?: string | null
+          empleado_id?: string | null
+          firma_path: string
+          fuera_de_horario?: boolean
+          id?: string
+          ingreso_en?: string
+          nombre: string
+          notas?: string | null
+          org_id: string
+          registrado_por?: string | null
+        }
+        Update: {
+          apellido?: string
+          dni?: string
+          egreso_en?: string | null
+          empleado_id?: string | null
+          firma_path?: string
+          fuera_de_horario?: boolean
+          id?: string
+          ingreso_en?: string
+          nombre?: string
+          notas?: string | null
+          org_id?: string
+          registrado_por?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ingresos_personal_empleado_id_fkey"
+            columns: ["empleado_id"]
+            isOneToOne: false
+            referencedRelation: "empleados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ingresos_personal_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizaciones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lecturas: {
         Row: {
           creado_en: string
@@ -716,6 +1212,54 @@ export type Database = {
           },
           {
             foreignKeyName: "lecturas_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizaciones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mapa_posiciones: {
+        Row: {
+          actualizado_en: string
+          actualizado_por: string | null
+          cliente_id: string
+          id: string
+          org_id: string
+          tipo: string
+          x: number
+          y: number
+        }
+        Insert: {
+          actualizado_en?: string
+          actualizado_por?: string | null
+          cliente_id: string
+          id?: string
+          org_id: string
+          tipo: string
+          x: number
+          y: number
+        }
+        Update: {
+          actualizado_en?: string
+          actualizado_por?: string | null
+          cliente_id?: string
+          id?: string
+          org_id?: string
+          tipo?: string
+          x?: number
+          y?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mapa_posiciones_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mapa_posiciones_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizaciones"
@@ -845,6 +1389,10 @@ export type Database = {
           caja_id: string
           cheque_id: string | null
           cliente_id: string
+          comprobante_path: string | null
+          conciliado: boolean
+          conciliado_en: string | null
+          conciliado_por: string | null
           fecha: string
           id: string
           medio: Database["public"]["Enums"]["medio_pago"]
@@ -854,6 +1402,7 @@ export type Database = {
           numero: number
           org_id: string
           recibido_por: string | null
+          titular_transferencia: string | null
         }
         Insert: {
           anulado?: boolean
@@ -862,6 +1411,10 @@ export type Database = {
           caja_id: string
           cheque_id?: string | null
           cliente_id: string
+          comprobante_path?: string | null
+          conciliado?: boolean
+          conciliado_en?: string | null
+          conciliado_por?: string | null
           fecha?: string
           id?: string
           medio: Database["public"]["Enums"]["medio_pago"]
@@ -871,6 +1424,7 @@ export type Database = {
           numero?: never
           org_id: string
           recibido_por?: string | null
+          titular_transferencia?: string | null
         }
         Update: {
           anulado?: boolean
@@ -879,6 +1433,10 @@ export type Database = {
           caja_id?: string
           cheque_id?: string | null
           cliente_id?: string
+          comprobante_path?: string | null
+          conciliado?: boolean
+          conciliado_en?: string | null
+          conciliado_por?: string | null
           fecha?: string
           id?: string
           medio?: Database["public"]["Enums"]["medio_pago"]
@@ -888,6 +1446,7 @@ export type Database = {
           numero?: never
           org_id?: string
           recibido_por?: string | null
+          titular_transferencia?: string | null
         }
         Relationships: [
           {
@@ -1114,6 +1673,203 @@ export type Database = {
           },
         ]
       }
+      solicitud_mensajes: {
+        Row: {
+          adjunto_path: string | null
+          autor_id: string | null
+          autor_nombre: string
+          autor_rol: Database["public"]["Enums"]["rol_usuario"]
+          creado_en: string
+          id: string
+          interno: boolean
+          mensaje: string
+          org_id: string
+          solicitud_id: string
+        }
+        Insert: {
+          adjunto_path?: string | null
+          autor_id?: string | null
+          autor_nombre: string
+          autor_rol: Database["public"]["Enums"]["rol_usuario"]
+          creado_en?: string
+          id?: string
+          interno?: boolean
+          mensaje: string
+          org_id: string
+          solicitud_id: string
+        }
+        Update: {
+          adjunto_path?: string | null
+          autor_id?: string | null
+          autor_nombre?: string
+          autor_rol?: Database["public"]["Enums"]["rol_usuario"]
+          creado_en?: string
+          id?: string
+          interno?: boolean
+          mensaje?: string
+          org_id?: string
+          solicitud_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "solicitud_mensajes_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizaciones"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solicitud_mensajes_solicitud_id_fkey"
+            columns: ["solicitud_id"]
+            isOneToOne: false
+            referencedRelation: "solicitudes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      solicitudes: {
+        Row: {
+          actualizada_en: string
+          adjunto_path: string | null
+          asignada_a: string | null
+          asignada_en: string | null
+          asunto: string
+          cerrada_en: string | null
+          cliente_id: string | null
+          creada_en: string
+          creada_por: string | null
+          derivada_consejo_en: string | null
+          detalle: string | null
+          ejecutada_en: string | null
+          ejecutada_por: string | null
+          estado: Database["public"]["Enums"]["estado_solicitud"]
+          id: string
+          nota_ejecucion: string | null
+          numero: number
+          org_id: string
+          origen: Database["public"]["Enums"]["origen_solicitud"]
+          referencia: string | null
+          resolucion: string | null
+          resuelta_en: string | null
+          resuelta_por: string | null
+          revisada_en: string | null
+          revisada_por: string | null
+          tipo: Database["public"]["Enums"]["tipo_solicitud"]
+        }
+        Insert: {
+          actualizada_en?: string
+          adjunto_path?: string | null
+          asignada_a?: string | null
+          asignada_en?: string | null
+          asunto: string
+          cerrada_en?: string | null
+          cliente_id?: string | null
+          creada_en?: string
+          creada_por?: string | null
+          derivada_consejo_en?: string | null
+          detalle?: string | null
+          ejecutada_en?: string | null
+          ejecutada_por?: string | null
+          estado?: Database["public"]["Enums"]["estado_solicitud"]
+          id?: string
+          nota_ejecucion?: string | null
+          numero?: never
+          org_id: string
+          origen: Database["public"]["Enums"]["origen_solicitud"]
+          referencia?: string | null
+          resolucion?: string | null
+          resuelta_en?: string | null
+          resuelta_por?: string | null
+          revisada_en?: string | null
+          revisada_por?: string | null
+          tipo?: Database["public"]["Enums"]["tipo_solicitud"]
+        }
+        Update: {
+          actualizada_en?: string
+          adjunto_path?: string | null
+          asignada_a?: string | null
+          asignada_en?: string | null
+          asunto?: string
+          cerrada_en?: string | null
+          cliente_id?: string | null
+          creada_en?: string
+          creada_por?: string | null
+          derivada_consejo_en?: string | null
+          detalle?: string | null
+          ejecutada_en?: string | null
+          ejecutada_por?: string | null
+          estado?: Database["public"]["Enums"]["estado_solicitud"]
+          id?: string
+          nota_ejecucion?: string | null
+          numero?: never
+          org_id?: string
+          origen?: Database["public"]["Enums"]["origen_solicitud"]
+          referencia?: string | null
+          resolucion?: string | null
+          resuelta_en?: string | null
+          resuelta_por?: string | null
+          revisada_en?: string | null
+          revisada_por?: string | null
+          tipo?: Database["public"]["Enums"]["tipo_solicitud"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "solicitudes_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solicitudes_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizaciones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      terminos: {
+        Row: {
+          contenido: string
+          creado_en: string
+          creado_por: string | null
+          id: string
+          org_id: string
+          titulo: string
+          version: number
+          vigente: boolean
+        }
+        Insert: {
+          contenido: string
+          creado_en?: string
+          creado_por?: string | null
+          id?: string
+          org_id: string
+          titulo?: string
+          version: number
+          vigente?: boolean
+        }
+        Update: {
+          contenido?: string
+          creado_en?: string
+          creado_por?: string | null
+          id?: string
+          org_id?: string
+          titulo?: string
+          version?: number
+          vigente?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "terminos_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizaciones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       v_deuda_clientes: {
@@ -1141,6 +1897,29 @@ export type Database = {
           },
         ]
       }
+      v_saldo_favor: {
+        Row: {
+          cliente_id: string | null
+          org_id: string | null
+          saldo_favor: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pagos_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pagos_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizaciones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       abrir_caja: {
@@ -1151,11 +1930,41 @@ export type Database = {
         Args: { p_motivo: string; p_pago: string }
         Returns: undefined
       }
+      aplicar_saldo_favor_cliente: {
+        Args: { p_cliente: string }
+        Returns: number
+      }
+      aprobar_cambio: { Args: { p_cambio: string }; Returns: Json }
+      avanzar_solicitud: {
+        Args: {
+          p_accion: string
+          p_solicitud: string
+          p_texto?: string
+          p_usuario?: string
+        }
+        Returns: Database["public"]["Enums"]["estado_solicitud"]
+      }
       cerrar_caja: { Args: { p_caja: string }; Returns: Json }
       flujo_caja: { Args: never; Returns: Json }
       generar_periodo: { Args: { p_periodo: string }; Returns: Json }
+      integrar_caja_porteria: {
+        Args: { p_caja: string; p_observaciones?: string }
+        Returns: Json
+      }
+      reabrir_caja: {
+        Args: { p_caja: string; p_motivo?: string }
+        Returns: undefined
+      }
+      rechazar_cambio: {
+        Args: { p_cambio: string; p_motivo: string }
+        Returns: undefined
+      }
       rechazar_cheque: {
         Args: { p_cheque: string; p_motivo?: string }
+        Returns: undefined
+      }
+      rechazar_reapertura_caja: {
+        Args: { p_caja: string; p_motivo?: string }
         Returns: undefined
       }
       registrar_lectura: {
@@ -1175,6 +1984,8 @@ export type Database = {
           p_medio: Database["public"]["Enums"]["medio_pago"]
           p_monto: number
           p_notas?: string
+          p_permitir_saldo_favor?: boolean
+          p_transferencia?: Json
         }
         Returns: Json
       }
@@ -1199,24 +2010,64 @@ export type Database = {
           tipo: Database["public"]["Enums"]["tipo_gasto"]
         }[]
       }
+      solicitar_cambio: {
+        Args: {
+          p_accion: string
+          p_cliente_id?: string
+          p_datos: Json
+          p_entidad: string
+          p_entidad_id: string
+          p_resumen: string
+        }
+        Returns: Json
+      }
+      solicitar_reapertura_caja: {
+        Args: { p_caja: string; p_motivo: string }
+        Returns: undefined
+      }
       validar_caja: {
         Args: { p_caja: string; p_observaciones?: string }
         Returns: undefined
       }
     }
     Enums: {
-      estado_caja: "abierta" | "cerrada" | "validada"
+      estado_caja: "abierta" | "cerrada" | "integrada" | "validada"
+      estado_cambio: "pendiente" | "aprobado" | "rechazado"
       estado_cargo: "pendiente" | "parcial" | "pagado" | "anulado"
       estado_cheque: "en_cartera" | "depositado" | "acreditado" | "rechazado"
       estado_gasto: "pendiente" | "pagado" | "anulado"
+      estado_solicitud:
+        | "nueva"
+        | "en_revision"
+        | "en_consejo"
+        | "resuelta"
+        | "asignada"
+        | "ejecutada"
+        | "rechazada"
+        | "cerrada"
       medio_pago: "efectivo" | "transferencia" | "cheque"
-      rol_usuario: "admin" | "guardia" | "tesoreria" | "consejo" | "socio"
+      origen_solicitud: "portal" | "porteria" | "administracion" | "lider"
+      rol_usuario:
+        | "admin"
+        | "guardia"
+        | "tesoreria"
+        | "consejo"
+        | "socio"
+        | "lider"
+        | "porteria"
       tipo_caja: "administracion" | "guardia"
       tipo_concepto: "recurrente" | "energia" | "canon_diario" | "deuda"
+      tipo_contrato:
+        | "planta_permanente"
+        | "contratado"
+        | "eventual"
+        | "monotributista"
+        | "pasantia"
       tipo_gasto: "fijo" | "variable"
-      tipo_mov_tesoreria: "impuesto" | "comision" | "ajuste"
+      tipo_mov_tesoreria: "impuesto" | "debito_fiscal" | "comision" | "ajuste"
       tipo_persona: "fisica" | "juridica"
-      tipo_sancion: "sancion" | "notificacion"
+      tipo_sancion: "sancion" | "notificacion" | "apercibimiento"
+      tipo_solicitud: "solicitud" | "informe" | "reclamo" | "consulta"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1344,18 +2195,46 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      estado_caja: ["abierta", "cerrada", "validada"],
+      estado_caja: ["abierta", "cerrada", "integrada", "validada"],
+      estado_cambio: ["pendiente", "aprobado", "rechazado"],
       estado_cargo: ["pendiente", "parcial", "pagado", "anulado"],
       estado_cheque: ["en_cartera", "depositado", "acreditado", "rechazado"],
       estado_gasto: ["pendiente", "pagado", "anulado"],
+      estado_solicitud: [
+        "nueva",
+        "en_revision",
+        "en_consejo",
+        "resuelta",
+        "asignada",
+        "ejecutada",
+        "rechazada",
+        "cerrada",
+      ],
       medio_pago: ["efectivo", "transferencia", "cheque"],
-      rol_usuario: ["admin", "guardia", "tesoreria", "consejo", "socio"],
+      origen_solicitud: ["portal", "porteria", "administracion", "lider"],
+      rol_usuario: [
+        "admin",
+        "guardia",
+        "tesoreria",
+        "consejo",
+        "socio",
+        "lider",
+        "porteria",
+      ],
       tipo_caja: ["administracion", "guardia"],
       tipo_concepto: ["recurrente", "energia", "canon_diario", "deuda"],
+      tipo_contrato: [
+        "planta_permanente",
+        "contratado",
+        "eventual",
+        "monotributista",
+        "pasantia",
+      ],
       tipo_gasto: ["fijo", "variable"],
-      tipo_mov_tesoreria: ["impuesto", "comision", "ajuste"],
+      tipo_mov_tesoreria: ["impuesto", "debito_fiscal", "comision", "ajuste"],
       tipo_persona: ["fisica", "juridica"],
-      tipo_sancion: ["sancion", "notificacion"],
+      tipo_sancion: ["sancion", "notificacion", "apercibimiento"],
+      tipo_solicitud: ["solicitud", "informe", "reclamo", "consulta"],
     },
   },
 } as const
