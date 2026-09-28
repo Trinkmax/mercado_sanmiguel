@@ -84,7 +84,7 @@ export async function iniciarSesion(
   const perfil = await getPerfil();
   if (!perfil) {
     // Contraseña correcta pero sin acceso (desactivado o Consejo): se cierra la sesión.
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: "local" });
     await completarDemora(inicio);
     return { error: "Tu usuario está desactivado. Consultá en Administración.", usuario };
   }
@@ -92,9 +92,14 @@ export async function iniciarSesion(
   redirect(rutaInicio(perfil.rol));
 }
 
+/**
+ * "Salir" cierra SOLO la sesión de este dispositivo (scope local). El default de
+ * Supabase es global: cerraba la misma cuenta en todas las tablets y PCs donde
+ * estuviera abierta, y a la otra persona le aparecía un error y después el login.
+ */
 export async function cerrarSesion(): Promise<void> {
   const supabase = await createClient();
-  await supabase.auth.signOut();
+  await supabase.auth.signOut({ scope: "local" });
   redirect("/login");
 }
 
@@ -120,7 +125,7 @@ export async function entrarComoDemo(rol: RolDemo): Promise<EstadoLogin> {
   if (!email) return { error: "Rol de demo desconocido." };
 
   const supabase = await createClient();
-  await supabase.auth.signOut();
+  await supabase.auth.signOut({ scope: "local" });
   const { error } = await supabase.auth.signInWithPassword({
     email,
     password: "SanMiguel2026",
@@ -131,7 +136,7 @@ export async function entrarComoDemo(rol: RolDemo): Promise<EstadoLogin> {
 
   const perfil = await getPerfil();
   if (!perfil) {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: "local" });
     return { error: "Ese usuario de demo está desactivado." };
   }
   redirect(rutaInicio(perfil.rol));

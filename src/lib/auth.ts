@@ -3,6 +3,7 @@ import { cache } from "react";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { Enums } from "@/lib/database.types";
+import { esFallaPasajera, SIN_CONEXION } from "@/lib/sesion";
 
 export type Rol = Enums<"rol_usuario">;
 
@@ -28,20 +29,30 @@ type Sesion = { hayUsuario: boolean; perfil: Perfil | null };
  */
 const leerSesion = cache(async (): Promise<Sesion> => {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { hayUsuario: false, perfil: null };
+  // getClaims valida la firma del token localmente (sin pedirle a Auth en cada render).
+  const { data, error } = await supabase.auth.getClaims();
+  const claims = data?.claims;
+  if (!claims?.sub) {
+    // Una falla pasajera (red, Supabase lento) NO es "no hay sesión": se lanza para que
+    // la pantalla de error reintente sola, en vez de mandar a la persona al login.
+    if (error && esFallaPasajera(error)) throw new Error(SIN_CONEXION);
+    return { hayUsuario: false, perfil: null };
+  }
 
-  const { data: perfil } = await supabase
+  const { data: perfil, error: errorPerfil } = await supabase
     .from("perfiles")
     .select("user_id, org_id, nombre, rol, dni")
-    .eq("user_id", user.id)
+    .eq("user_id", claims.sub)
     .eq("activo", true)
     .maybeSingle();
 
+  // Si la base no respondió, no se sabe si tiene acceso: reintentar, nunca "desactivado".
+  if (errorPerfil) throw new Error(SIN_CONEXION);
   if (!perfil || perfil.rol === "consejo") return { hayUsuario: true, perfil: null };
-  return { hayUsuario: true, perfil: { ...perfil, email: user.email ?? "" } };
+  return {
+    hayUsuario: true,
+    perfil: { ...perfil, email: typeof claims.email === "string" ? claims.email : "" },
+  };
 });
 
 /** Perfil del usuario logueado, cacheado por request. Null si no hay sesión o no tiene acceso. */

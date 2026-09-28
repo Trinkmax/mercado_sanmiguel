@@ -4,7 +4,7 @@ import { useId, useState, useTransition } from "react";
 import { ChevronDown, Minus, Plus, SlidersHorizontal, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { borrarAjusteCaja, registrarAjusteCaja } from "@/lib/actions/cajas";
-import { cn } from "@/lib/utils";
+import { cn, uuidV4 } from "@/lib/utils";
 import { formatARS, formatFechaHora } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,9 +36,7 @@ const ATAJOS: Record<Sentido, string[]> = {
 
 const LABEL_CUENTA: Record<Cuenta, string> = { efectivo: "en efectivo", banco: "en el banco" };
 
-function nuevoRef(): string {
-  return crypto.randomUUID();
-}
+const nuevoRef = uuidV4;
 
 function MontoAjuste({ monto }: { monto: number }) {
   return (

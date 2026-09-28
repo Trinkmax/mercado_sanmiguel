@@ -142,7 +142,8 @@ export function NavLinks({
         )}
       >
         <Icono className="size-[18px] shrink-0" strokeWidth={activo ? 2.2 : 1.8} />
-        <span className="flex-1 truncate">{label}</span>
+        {/* Etiquetas largas ("Quinteros y ambulantes") pasan a dos líneas en vez de cortarse. */}
+        <span className="line-clamp-2 min-w-0 flex-1 py-1.5 leading-tight">{label}</span>
         {pendientes > 0 ? <Badge n={pendientes} activo={activo} /> : null}
       </Link>
     );

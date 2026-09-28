@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import { redirect } from "next/navigation";
-import { UserX } from "lucide-react";
+import { LogIn, UserX } from "lucide-react";
 import { getPerfil, rutaInicio, sesionSinAcceso } from "@/lib/auth";
 import { Marca } from "@/components/shared/marca";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -23,6 +23,8 @@ export default async function LoginPage({
 
   const { motivo } = await searchParams;
   const desactivado = motivo === "inactivo" && (await sesionSinAcceso());
+  // La sesión se cerró (se venció o la cerraron): se explica, sin asustar.
+  const sesionCerrada = motivo === "sesion" && !desactivado;
 
   return (
     <div className="grid min-h-svh lg:grid-cols-2">
@@ -49,6 +51,14 @@ export default async function LoginPage({
                 </AlertTitle>
                 <AlertDescription className="text-sm">
                   Si tenés otro usuario, podés entrar con ese acá abajo.
+                </AlertDescription>
+              </Alert>
+            ) : sesionCerrada ? (
+              <Alert className="border-primary/30 bg-accent px-4 py-3 text-accent-foreground">
+                <LogIn strokeWidth={2} />
+                <AlertTitle className="text-sm">Tu sesión se cerró.</AlertTitle>
+                <AlertDescription className="text-sm">
+                  Entrá de nuevo con tu DNI y seguís donde estabas.
                 </AlertDescription>
               </Alert>
             ) : null}

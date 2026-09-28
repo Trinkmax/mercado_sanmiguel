@@ -1378,7 +1378,7 @@ exports nuevos (nunca renombrar, borrar ni volver obligatorio). Quien importa pr
 4. **Administración**: integra la caja de portería (ve Quintas · Ambulantes · Bono camioneros y "En mano / Por transferencia").
 5. **Tesorería (20333333)**: carga un ajuste de caja, valida con efectivo contado distinto desde `/caja`, vincula un cheque entregado con un gasto, deposita efectivo con comisión y ve el flujo.
 6. **Socio (20666666)**: abre Mi cuenta (semáforo), descarga un recibo, confirma una circular, presenta un descargo con foto.
-7. **Líder (20111111)**: ve las correcciones del día en el inicio, revisa el alta de ambulante, aprueba un cambio, ve `/cobranza` y `/caja` sin botones de cobro, y por API no puede cobrar.
+7. **Líder (20111111)**: ve las correcciones del día en el inicio, revisa el alta de ambulante, aprueba un cambio y opera como cualquier rol (§1.3): cobra a cualquier categoría en la caja de administración, registra canon y opera cajas, cheques, gastos y tesorería.
 
 ---
 

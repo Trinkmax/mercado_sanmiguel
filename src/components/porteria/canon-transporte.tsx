@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { CircleAlert, CircleCheck, Minus, Plus, TriangleAlert, Truck } from "lucide-react";
 import { anularCanon, registrarCanon } from "@/lib/actions/porteria";
 import { formatARS } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import { cn, uuidV4 } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,16 +36,7 @@ const SEGUNDOS_SELLO = 4;
 /** Un puesto del plano, tal como lo devuelve espacios_del_plano() (sin datos de clientes). */
 export type PuestoPlano = { numero: string; medio: boolean };
 
-/** Clave de idempotencia por intento. crypto.randomUUID no existe fuera de https (tablet por IP de la red). */
-function nuevoRef(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
-  const b = new Uint8Array(16);
-  crypto.getRandomValues(b);
-  b[6] = (b[6] & 0x0f) | 0x40;
-  b[8] = (b[8] & 0x3f) | 0x80;
-  const h = [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
-}
+const nuevoRef = uuidV4;
 
 type Exito = { id: string; numero: number; monto: number; texto: string };
 

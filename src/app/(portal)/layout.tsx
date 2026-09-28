@@ -3,6 +3,7 @@ import { requireRol } from "@/lib/auth";
 import { cerrarSesion } from "@/lib/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Marca } from "@/components/shared/marca";
+import { SesionViva } from "@/components/shared/sesion-viva";
 import { GateTerminos } from "@/components/portal/gate-terminos";
 import { GateCirculares } from "@/components/portal/gate-circulares";
 import { NavPortal } from "@/components/portal/nav-portal";
@@ -21,6 +22,7 @@ export default async function PortalLayout({
 
   return (
     <div className="flex min-h-svh flex-col">
+      <SesionViva />
       <header className="no-print bg-sidebar text-sidebar-foreground">
         <div className="mx-auto flex w-full max-w-2xl items-center justify-between px-4 py-3">
           <Marca compacta className="text-sidebar-foreground" />

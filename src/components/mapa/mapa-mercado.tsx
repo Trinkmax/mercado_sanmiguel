@@ -1034,10 +1034,12 @@ export function MapaMercado({
           ref={panelRef}
           className={cn(
             "@container absolute inset-x-2 bottom-2 z-30 max-h-[64%] overflow-y-auto overscroll-contain rounded-2xl bg-card shadow-[0_18px_40px_-12px_rgb(15_23_60/0.45)] ring-1 ring-foreground/10",
-            "md:inset-x-auto md:right-3 md:bottom-3 md:left-[9.5rem] md:max-h-[55%] md:max-w-[46rem] md:ml-auto",
+            // Desde tablet flota CENTRADO sobre el plano, sin tapar los botones de zoom
+            // (abajo a la izquierda): ancho hasta 46rem y 9,5rem libres a cada lado.
+            "md:inset-x-auto md:bottom-3 md:left-1/2 md:w-[min(46rem,calc(100%-19rem))] md:-translate-x-1/2 md:max-h-[55%]",
             // Asignando con el dedo hace falta ver más plano: el panel ocupa menos.
             modo === "asignar" &&
-              "max-md:max-h-[46%] lg:static lg:inset-auto lg:z-auto lg:max-h-none lg:w-[27rem] lg:max-w-none lg:shrink-0 lg:rounded-none lg:border-l lg:shadow-none lg:ring-0"
+              "max-md:max-h-[46%] lg:static lg:inset-auto lg:z-auto lg:max-h-none lg:w-[27rem] lg:max-w-none lg:translate-x-0 lg:shrink-0 lg:rounded-none lg:border-l lg:shadow-none lg:ring-0"
           )}
         >
           {modo === "asignar" ? (

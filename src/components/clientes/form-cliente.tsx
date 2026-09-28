@@ -18,7 +18,7 @@ import type { Rol } from "@/lib/auth";
 import { crearCliente, editarCliente } from "@/lib/actions/clientes";
 import { formatARS, formatDni, normalizarDni } from "@/lib/format";
 import { categoriasDeRol, LABEL_CATEGORIA, type CategoriaCliente } from "@/lib/segmentos";
-import { cn } from "@/lib/utils";
+import { cn, uuidV4 } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -148,7 +148,7 @@ export function FormCliente({
   const [error, setError] = useState<string | null>(null);
   const [altaHecha, setAltaHecha] = useState<AltaHecha | null>(null);
   // Un id por intento de alta: si el toque se repite o se corta la red, queda UNA sola alta.
-  const [ref, setRef] = useState(() => crypto.randomUUID());
+  const [ref, setRef] = useState(() => uuidV4());
 
   const esAmbulante = categoria === "ambulante";
   const esQuintero = categoria === "quintero";
@@ -187,7 +187,7 @@ export function FormCliente({
 
   function reiniciar() {
     setAltaHecha(null);
-    setRef(crypto.randomUUID());
+    setRef(uuidV4());
     setCampos({ nombre: "", apodo: "", cuit: "", telefono: "", email: "", direccion: "", notas: "" });
     setEsSocio(null);
     setCodigoAbierto(false);

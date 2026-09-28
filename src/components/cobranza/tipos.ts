@@ -1,3 +1,4 @@
+import { uuidV4 } from "@/lib/utils";
 /**
  * Tipos y helpers del cobro compartidos por FormCobro, CobroAmbulante y sus piezas.
  * Client-safe (sin datos): los números "de negocio" los calcula la base.
@@ -99,18 +100,8 @@ export function mascaraCuit(texto: string): string {
   return `${d.slice(0, 2)}-${d.slice(2, 10)}-${d.slice(10)}`;
 }
 
-/**
- * UUID v4 para el lote del cobro (idempotencia). crypto.randomUUID solo existe en contextos
- * seguros (https): en una tablet que entra por http a la red local se arma con getRandomValues.
- */
-export function uuidV4(): string {
-  if (typeof crypto.randomUUID === "function") return crypto.randomUUID();
-  const b = crypto.getRandomValues(new Uint8Array(16));
-  b[6] = (b[6] & 0x0f) | 0x40;
-  b[8] = (b[8] & 0x3f) | 0x80;
-  const h = Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
-}
+/** UUID v4 para el lote del cobro (idempotencia); ver `uuidV4` en `@/lib/utils`. */
+export { uuidV4 };
 
 export function nuevoId(): string {
   return uuidV4().replace(/-/g, "").slice(0, 16);

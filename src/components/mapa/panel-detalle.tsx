@@ -130,7 +130,7 @@ export function PanelDetalle({
     const quienGestiona =
       cliente.categoria === "puestero" ? "Administración" : cliente.categoria ? "el Jefe de Portería" : null;
     return (
-      <div className="relative flex flex-col gap-4 p-4 @2xl:flex-row @2xl:items-start @2xl:gap-6 @2xl:p-5">
+      <div className="relative flex flex-col gap-4 p-4 @2xl:flex-row @2xl:items-start @2xl:gap-6 @2xl:p-5 @2xl:pr-16">
         <BotonCerrar onCerrar={onCerrar} />
         <div className="min-w-0 space-y-1 @2xl:w-60 @2xl:shrink-0">
           <div className="flex flex-wrap items-center gap-2 pr-10 @2xl:pr-0">
@@ -164,7 +164,7 @@ export function PanelDetalle({
           ))}
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 @2xl:flex-col @2xl:items-end @2xl:pr-8">
+        <div className="flex flex-wrap items-center gap-3 @2xl:flex-col @2xl:items-end">
           <div className="@2xl:text-right">
             <p className="text-xs text-muted-foreground">Deuda</p>
             {cliente.deuda > 0 ? (
@@ -210,9 +210,9 @@ export function PanelDetalle({
     const titulo =
       espacio.tipo === "bar" ? "Bar" : `${NOMBRE_TIPO[espacio.tipo]} ${numeroVisible(espacio)}`;
     return (
-      <div className="relative flex flex-col gap-3 p-4 @xl:flex-row @xl:items-center @xl:gap-6 @xl:p-5">
+      <div className="relative flex flex-col gap-3 p-4 @xl:flex-row @xl:items-center @xl:gap-6 @xl:p-5 @xl:pr-16">
         <BotonCerrar onCerrar={onCerrar} />
-        <div className="min-w-0 flex-1 space-y-1 pr-10">
+        <div className="min-w-0 flex-1 space-y-1 pr-12 @xl:pr-0">
           <div className="flex flex-wrap items-center gap-2">
             <Sello estado="libre" texto="Libre" />
             {espacio.propio ? <Sello estado="propio" /> : null}

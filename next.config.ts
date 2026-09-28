@@ -7,6 +7,9 @@ const nextConfig: NextConfig = {
       // server action (FormData). El límite del negocio es 20 MB por archivo.
       bodySizeLimit: "25mb",
     },
+    // Con proxy (src/proxy.ts) Next guarda el cuerpo del pedido en memoria y por
+    // defecto lo corta en 10 MB: un adjunto más grande llegaba truncado.
+    proxyClientMaxBodySize: "25mb",
   },
 };
 

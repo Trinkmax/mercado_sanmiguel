@@ -9,6 +9,7 @@ import { NavLinks } from "@/components/shared/nav-links";
 import { BarraInferior } from "@/components/shared/barra-inferior";
 import { Principal } from "@/components/shared/principal";
 import { Marca } from "@/components/shared/marca";
+import { SesionViva } from "@/components/shared/sesion-viva";
 
 /** Salir: en la barra lateral (azul) o en la hoja del menú del celular (clara). */
 function BotonSalir({ claro = false }: { claro?: boolean }) {
@@ -42,6 +43,7 @@ export default async function PanelLayout({
 
   return (
     <div className="flex min-h-svh w-full">
+      <SesionViva />
       {/* Barra lateral (escritorio y tablet apaisada) */}
       <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-56 flex-col bg-sidebar text-sidebar-foreground lg:flex">
         <div className="border-b border-sidebar-border p-4">

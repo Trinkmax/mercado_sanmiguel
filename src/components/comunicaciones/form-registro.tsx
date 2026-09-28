@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { Camera, Check, Eye, MapPin, Search, Send, UserX, X } from "lucide-react";
 import { emitirRegistro } from "@/lib/actions/sanciones";
 import { formatARS, formatFecha } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import { cn, uuidV4 } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,16 +35,7 @@ export type ClienteOpcion = {
   tienePortal: boolean;
 };
 
-/** uuid v4 también fuera de https (tablet por la red local): crypto.randomUUID no siempre existe. */
-function nuevoRef(): string {
-  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
-  const b = new Uint8Array(16);
-  crypto.getRandomValues(b);
-  b[6] = (b[6] & 0x0f) | 0x40;
-  b[8] = (b[8] & 0x3f) | 0x80;
-  const h = Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
-}
+const nuevoRef = uuidV4;
 
 function sumarDias(iso: string, dias: number): string {
   const [y, m, d] = iso.split("-").map(Number);
