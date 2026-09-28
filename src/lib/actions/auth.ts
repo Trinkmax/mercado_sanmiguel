@@ -107,7 +107,7 @@ export async function cerrarSesion(): Promise<void> {
 
 /* ------------------------------------------------------------------ */
 /* Acceso rápido de demo: entrar con un toque a cualquier rol.         */
-/* Apagado salvo MODO_DEMO=1 en el servidor (src/lib/demo.ts).         */
+/* Prendido salvo MODO_DEMO=0 en el servidor (src/lib/demo.ts).        */
 /* El Consejo ya no tiene usuario (F5).                                */
 /* ------------------------------------------------------------------ */
 

@@ -2,15 +2,14 @@ import "server-only";
 
 /**
  * Acceso demo del login (tarjetas "Modo demo · entrá como…" con los usuarios de
- * prueba). Lo usa el dueño para mostrar el sistema. Queda APAGADO salvo que el
- * servidor tenga `MODO_DEMO=1` (falla cerrada: un deploy sin la variable no
- * muestra las tarjetas). Apagado, no se muestran las tarjetas y la acción
- * `entrarComoDemo` rechaza el pedido aunque alguien la llame a mano.
- * Para desarrollo va `MODO_DEMO=1` en `.env.local`; en Vercel se carga solo
- * mientras se muestre la demo.
- * Ojo: apagarlo no borra los usuarios demo. Antes de cargar datos reales,
- * cambiales la contraseña o quitales el acceso desde Configuración → Usuarios.
+ * prueba). Ignacio lo usa para entrar rápido a cada rol y mostrar el sistema, así
+ * que queda PRENDIDO salvo que el servidor tenga `MODO_DEMO=0`. Apagado, no se
+ * muestran las tarjetas y la acción `entrarComoDemo` rechaza el pedido aunque
+ * alguien la llame a mano.
+ * Antes de salir a producción con datos reales: cargar `MODO_DEMO=0` en Vercel y
+ * cambiarles la contraseña (o quitarles el acceso) a los usuarios demo desde
+ * Configuración → Usuarios.
  */
 export function modoDemoActivo(): boolean {
-  return process.env.MODO_DEMO?.trim() === "1";
+  return process.env.MODO_DEMO?.trim() !== "0";
 }
