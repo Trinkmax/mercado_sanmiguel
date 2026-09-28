@@ -7,7 +7,6 @@ import { toast } from "sonner";
 import {
   Camera,
   Check,
-  CircleAlert,
   ClipboardList,
   FileText,
   Pencil,
@@ -17,7 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { cargarNovedad, editarNovedad } from "@/lib/actions/novedades";
-import { cn } from "@/lib/utils";
+import { cn, uuidV4 } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -50,6 +49,14 @@ import {
   type TipoNovedad,
 } from "./constantes";
 import { llamarAccion } from "@/lib/llamar-accion";
+import { AlertaError } from "@/components/cobranza/alerta-error";
+import { ACCEPT_ADJUNTO } from "@/components/solicitudes/constantes";
+import {
+  adjuntoMuyPesado,
+  ERROR_PESO_ADJUNTO,
+  explicarFalloEnvio,
+  prepararAdjuntos,
+} from "@/components/comunicaciones/adjuntos";
 
 export type EmpleadoElegible = {
   id: string;
@@ -71,8 +78,6 @@ export type NovedadEditable = {
   tieneAdjunto: boolean;
   adjuntoUrl: string | null;
 };
-
-const ACCEPT = "image/*,application/pdf";
 
 function normalizar(t: string): string {
   return t.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
@@ -139,6 +144,10 @@ export function FormNovedad({
   const [quitarAdjunto, setQuitarAdjunto] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hecho, setHecho] = useState<{ estado: EstadoNovedad; frase: string; cantidad: number } | null>(null);
+  // Clave de idempotencia de la carga: la misma mientras no cambien los datos y hasta que se
+  // guarde (un corte de red no la renueva: el reintento devuelve lo ya guardado en vez de
+  // duplicarlo). Si cambian los empleados, el tipo o las fechas, es otra carga: otra clave.
+  const loteRef = useRef<{ lote: string; firma: string } | null>(null);
 
   const porId = useMemo(() => new Map(empleados.map((e) => [e.id, e])), [empleados]);
   const elegidosEmp = elegidos.map((id) => porId.get(id)).filter((e): e is EmpleadoElegible => Boolean(e));
@@ -224,8 +233,14 @@ export function FormNovedad({
     return null;
   }
 
+  function quitarArchivo() {
+    if (archivoRef.current) archivoRef.current.value = "";
+    setArchivo(null);
+  }
+
   function reiniciar(mismosEmpleados: boolean) {
     setHecho(null);
+    loteRef.current = null;
     setTipo(null);
     setFecha(hoy);
     setOtroDia(false);
@@ -249,6 +264,7 @@ export function FormNovedad({
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (pendiente) return;
     const falta = faltante();
     if (falta) {
       setError(falta);
@@ -264,19 +280,40 @@ export function FormNovedad({
     if (def.justificada && justificada !== null) fd.set("justificada", justificada ? "si" : "no");
     if (detalle.trim()) fd.set("detalle", detalle.trim());
     const file = archivoRef.current?.files?.[0];
-    if (file) fd.set("adjunto", file);
+    if (file) fd.set("adjunto", file, file.name);
     if (editar) {
       fd.set("id", editar.id);
       if (quitarAdjunto && !file) fd.set("quitarAdjunto", "true");
+    } else {
+      // El adjunto también entra en la firma: si después de un corte agregan la foto del
+      // certificado, es otra carga y no se devuelve la de antes (que quedó sin foto).
+      const firma = JSON.stringify([
+        [...elegidos].sort(),
+        def.valor,
+        fecha,
+        hastaFinal,
+        horasFinal,
+        justificada,
+        detalle.trim(),
+        file ? `${file.name}:${file.size}` : "",
+      ]);
+      if (loteRef.current?.firma !== firma) loteRef.current = { lote: uuidV4(), firma };
+      fd.set("lote", loteRef.current.lote);
     }
     const fraseFinal = frase ?? "";
+    setError(null);
 
     startTransition(async () => {
+      // La foto del certificado se achica antes de subir (una de la tablet pesa 3–8 MB).
+      const errorPeso = await prepararAdjuntos(fd, ["adjunto"]);
+      if (errorPeso) {
+        setError(errorPeso);
+        return;
+      }
       if (editar) {
         const res = await llamarAccion(() => editarNovedad(fd));
         if (!res.ok) {
-          setError(res.error);
-          toast.error(res.error);
+          setError(explicarFalloEnvio(res.error, fd, ["adjunto"]));
           return;
         }
         toast.success("Novedad corregida");
@@ -286,13 +323,16 @@ export function FormNovedad({
       }
       const res = await llamarAccion(() => cargarNovedad(fd));
       if (!res.ok) {
-        setError(res.error);
-        toast.error(res.error);
+        // Lo cargado queda en pantalla y el lote se conserva para el reintento.
+        setError(explicarFalloEnvio(res.error, fd, ["adjunto"]));
         return;
       }
       setError(null);
+      loteRef.current = null;
       toast.success(
-        res.data.estado === "pendiente"
+        res.data.repetido
+          ? "Ya se había guardado: no se cargó dos veces"
+          : res.data.estado === "pendiente"
           ? res.data.cantidad > 1
             ? `Enviadas a Administración para aprobar (${res.data.cantidad})`
             : "Enviada a Administración para aprobar"
@@ -697,10 +737,18 @@ export function FormNovedad({
               ref={archivoRef}
               id="nov-adjunto"
               type="file"
-              accept={ACCEPT}
+              accept={ACCEPT_ADJUNTO}
               className="sr-only"
               onChange={(e) => {
-                setArchivo(e.target.files?.[0]?.name ?? null);
+                const elegido = e.target.files?.[0] ?? null;
+                if (adjuntoMuyPesado(elegido)) {
+                  e.target.value = "";
+                  setArchivo(null);
+                  setError(ERROR_PESO_ADJUNTO);
+                  return;
+                }
+                setError(null);
+                setArchivo(elegido?.name ?? null);
                 setQuitarAdjunto(false);
               }}
             />
@@ -709,16 +757,23 @@ export function FormNovedad({
                 type="button"
                 variant="outline"
                 size="lg"
-                className="h-12 px-4 text-base"
+                className="h-auto min-h-12 max-w-full px-4 py-2 text-base whitespace-normal"
                 onClick={() => archivoRef.current?.click()}
               >
-                <Camera className="size-5" strokeWidth={2} />
-                {def.valor === "falta" || def.valor === "licencia" ? "Sacá una foto del certificado" : "Sacá una foto o elegí un PDF"}
+                <Camera className="size-5 shrink-0" strokeWidth={2} />
+                {archivo
+                  ? "Cambiar la foto o el PDF"
+                  : def.valor === "falta" || def.valor === "licencia"
+                    ? "Sacá una foto del certificado"
+                    : "Sacá una foto o elegí un PDF"}
               </Button>
               {archivo ? (
-                <span className="flex min-w-0 items-center gap-2 text-sm">
+                <span className="flex min-w-0 max-w-full items-center gap-2 text-sm">
                   <FileText className="size-4 shrink-0" strokeWidth={2} />
-                  <span className="truncate">{archivo}</span>
+                  <span className="min-w-0 truncate">{archivo}</span>
+                  <Button type="button" variant="ghost" className="h-11 shrink-0 px-3" onClick={quitarArchivo}>
+                    Quitar
+                  </Button>
                 </span>
               ) : editar?.tieneAdjunto && !quitarAdjunto ? (
                 <span className="flex flex-wrap items-center gap-2 text-sm">
@@ -734,7 +789,7 @@ export function FormNovedad({
                   </Button>
                 </span>
               ) : (
-                <span className="text-sm text-muted-foreground">Foto o PDF, hasta 20 MB.</span>
+                <span className="text-sm text-muted-foreground">Foto o PDF. Las fotos se achican solas.</span>
               )}
             </div>
           </div>
@@ -753,10 +808,10 @@ export function FormNovedad({
           </div>
 
           {error ? (
-            <p className="flex items-start gap-2 rounded-md bg-pendiente-suave px-4 py-3 font-medium text-pendiente" role="alert">
-              <CircleAlert className="mt-0.5 size-5 shrink-0" strokeWidth={2} />
-              {error}
-            </p>
+            <AlertaError
+              error={error}
+              titulo={error === faltante() ? "Falta completar" : esJefe && !editar ? "No se pudo enviar" : "No se pudo guardar"}
+            />
           ) : null}
 
           <Button
@@ -778,10 +833,7 @@ export function FormNovedad({
           </Button>
         </div>
       ) : error ? (
-        <p className="flex items-start gap-2 rounded-md bg-pendiente-suave px-4 py-3 font-medium text-pendiente" role="alert">
-          <CircleAlert className="mt-0.5 size-5 shrink-0" strokeWidth={2} />
-          {error}
-        </p>
+        <AlertaError error={error} titulo="Falta completar" />
       ) : null}
     </form>
   );

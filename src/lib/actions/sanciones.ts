@@ -27,7 +27,7 @@ const uuid = (msg: string) => z.string().regex(RE_UUID, msg);
 
 /**
  * Fila del hilo tal como la manda el cliente: el grant de INSERT es solo
- * (org_id, registro_id, mensaje, adjunto_path). autor_* y es_descargo los fijan los
+ * (org_id, registro_id, mensaje, adjunto_path, ref). autor_* y es_descargo los fijan los
  * triggers (fijar_autor_registro + registro_mensaje_descargo): por eso el cast.
  */
 function filaMensaje(f: {
@@ -35,8 +35,25 @@ function filaMensaje(f: {
   registro_id: string;
   mensaje: string;
   adjunto_path: string | null;
+  ref: string | null;
 }): TablesInsert<"registro_mensajes"> {
   return f as TablesInsert<"registro_mensajes">;
+}
+
+/**
+ * Inserta el mensaje del hilo. Con `ref` (uuid por intento, 0025) un reintento después de
+ * un corte de wifi choca con registro_mensajes_ref_unq: el mensaje ya había llegado, así
+ * que se toma como enviado y se borra el adjunto de este intento (sobra).
+ */
+async function insertarMensaje(
+  supabase: Supabase,
+  fila: Parameters<typeof filaMensaje>[0]
+): Promise<{ ok: true; repetido: boolean } | { ok: false; error: unknown }> {
+  const { error } = await supabase.from("registro_mensajes").insert(filaMensaje(fila));
+  if (!error) return { ok: true, repetido: false };
+  await borrarAdjunto(supabase, fila.adjunto_path);
+  if (error.code === "23505" && fila.ref) return { ok: true, repetido: true };
+  return { ok: false, error };
 }
 
 /** El cliente es de mi org y su categoría la gestiona mi rol (la base es la autoridad final). */
@@ -232,15 +249,29 @@ const schemaRespuesta = z.object({
     .trim()
     .min(1, "Escribí la respuesta antes de enviarla")
     .max(4000, "El mensaje es demasiado largo (hasta 4000 letras)"),
+  /** Clave de idempotencia por intento (opcional: sin ella, cada envío es un mensaje nuevo). */
+  ref: z
+    .string()
+    .optional()
+    .transform((v) => (v ? v : null))
+    .refine((v) => v === null || RE_UUID.test(v), "Recargá la página y probá de nuevo"),
 });
 
-/** Administración o el Líder responden en el hilo del registro (D5, D6). */
-export async function responderRegistro(formData: FormData): Promise<ActionResult> {
-  const perfil = await requireRol("admin", "lider");
-  const parsed = schemaRespuesta.safeParse({
+function leerRespuesta(formData: FormData) {
+  return schemaRespuesta.safeParse({
     registroId: formData.get("registroId"),
     mensaje: formData.get("mensaje"),
+    ref: formData.get("ref") ?? undefined,
   });
+}
+
+/** Resultado de un mensaje del hilo: `repetido` = ese intento ya había llegado (misma clave). */
+export type MensajeEnviado = { repetido: boolean };
+
+/** Administración o el Líder responden en el hilo del registro (D5, D6). */
+export async function responderRegistro(formData: FormData): Promise<ActionResult<MensajeEnviado>> {
+  const perfil = await requireRol("admin", "lider");
+  const parsed = leerRespuesta(formData);
   if (!parsed.success) return fallo(parsed.error.issues[0].message);
 
   const supabase = await createClient();
@@ -257,21 +288,17 @@ export async function responderRegistro(formData: FormData): Promise<ActionResul
   const subida = await subirAdjunto(supabase, perfil.org_id, reg.cliente_id, formData.get("adjunto"));
   if (!subida.ok) return fallo(subida.error);
 
-  const { error } = await supabase.from("registro_mensajes").insert(
-    filaMensaje({
-      org_id: perfil.org_id,
-      registro_id: reg.id,
-      mensaje: parsed.data.mensaje,
-      adjunto_path: subida.path,
-    })
-  );
-  if (error) {
-    await borrarAdjunto(supabase, subida.path);
-    return fallo(error);
-  }
+  const envio = await insertarMensaje(supabase, {
+    org_id: perfil.org_id,
+    registro_id: reg.id,
+    mensaje: parsed.data.mensaje,
+    adjunto_path: subida.path,
+    ref: parsed.data.ref,
+  });
+  if (!envio.ok) return fallo(envio.error);
 
   revalidarRegistro(reg.cliente_id, reg.id);
-  return ok(undefined);
+  return ok({ repetido: envio.repetido });
 }
 
 /** Deja sin efecto la multa de un registro (anula el cargo MULT si no tiene cobros). */
@@ -313,12 +340,9 @@ export async function dejarSinEfectoMulta(input: unknown): Promise<ActionResult>
 // ---------------------------------------------------------------------------
 
 /** El socio presenta su descargo (apercibimiento/sanción) o responde una notificación. */
-export async function presentarDescargo(formData: FormData): Promise<ActionResult> {
+export async function presentarDescargo(formData: FormData): Promise<ActionResult<MensajeEnviado>> {
   await requireRol("socio");
-  const parsed = schemaRespuesta.safeParse({
-    registroId: formData.get("registroId"),
-    mensaje: formData.get("mensaje"),
-  });
+  const parsed = leerRespuesta(formData);
   if (!parsed.success) {
     const msg = parsed.error.issues[0].message;
     return fallo(msg.startsWith("Escribí") ? "Escribí lo que querés contar antes de enviarlo" : msg);
@@ -336,30 +360,29 @@ export async function presentarDescargo(formData: FormData): Promise<ActionResul
   const subida = await subirAdjunto(supabase, reg.org_id, reg.cliente_id, formData.get("adjunto"));
   if (!subida.ok) return fallo(subida.error);
 
-  const { error } = await supabase.from("registro_mensajes").insert(
-    filaMensaje({
-      org_id: reg.org_id,
-      registro_id: reg.id,
-      mensaje: parsed.data.mensaje,
-      adjunto_path: subida.path,
-    })
-  );
-  if (error) {
-    await borrarAdjunto(supabase, subida.path);
-    if (error.message?.includes("Sin perfil activo"))
+  const envio = await insertarMensaje(supabase, {
+    org_id: reg.org_id,
+    registro_id: reg.id,
+    mensaje: parsed.data.mensaje,
+    adjunto_path: subida.path,
+    ref: parsed.data.ref,
+  });
+  if (!envio.ok) {
+    const e = envio.error as { message?: string } | null;
+    if (e?.message?.includes("Sin perfil activo"))
       return fallo("Tu acceso al portal está desactivado. Consultá en administración.");
-    return fallo(error);
+    return fallo(envio.error);
   }
 
   revalidatePath(`/mi-cuenta/comunicaciones/${reg.id}`);
   revalidatePath("/mi-cuenta", "layout");
   revalidatePath("/comunicaciones");
   revalidatePath(`/comunicaciones/registros/${reg.id}`);
-  return ok(undefined);
+  return ok({ repetido: envio.repetido });
 }
 
 /** Alias del contrato (§6 M5): la respuesta del socio a una notificación usa el mismo hilo. */
-export async function responderComoSocio(formData: FormData): Promise<ActionResult> {
+export async function responderComoSocio(formData: FormData): Promise<ActionResult<MensajeEnviado>> {
   return presentarDescargo(formData);
 }
 

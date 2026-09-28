@@ -17,7 +17,7 @@ import {
   BuscadorClientes,
   type FilaCliente,
 } from "@/components/cobranza/buscador-clientes";
-import { sumarDias } from "@/components/cobranza/tipos";
+import { AvisoCajaCerrada, type CajaDeHoy } from "@/components/cobranza/aviso-caja";
 
 export const metadata = { title: "Cobrar" };
 
@@ -60,18 +60,14 @@ export default async function CobranzaPage({ searchParams }: { searchParams: Sp 
             .select("cliente_id, total, pagado, falta, cuotas, cuotas_cubiertas, cuota_sugerida")
             .eq("periodo", periodo)
         : Promise.resolve({ data: null }),
-      // Último día pago de cada ambulante (cargos AMB vigentes de los últimos meses).
+      // Último día pago de cada ambulante: UNA fila por ambulante (0023). Traer los cargos
+      // sueltos chocaba con el tope de 1000 filas y "Pagó hoy" salía mal.
       cobraAmbulantes
-        ? supabase
-            .from("cargos")
-            .select("cliente_id, hasta")
-            .eq("origen", "diario")
-            .neq("estado", "anulado")
-            .gte("hasta", sumarDias(hoy, -180))
+        ? supabase.from("v_ultimo_pago_ambulante").select("cliente_id, pago_hasta")
         : Promise.resolve({ data: null }),
       supabase
         .from("cajas")
-        .select("id")
+        .select("id, estado, reapertura_solicitada_en")
         .eq("tipo", esJefe ? "guardia" : "administracion")
         .eq("fecha", hoy)
         .maybeSingle(),
@@ -136,10 +132,12 @@ export default async function CobranzaPage({ searchParams }: { searchParams: Sp 
 
   const pagoHastaPorCliente = new Map<string, string>();
   for (const c of diariosRes.data ?? []) {
-    if (!c.cliente_id || !c.hasta) continue;
-    const previo = pagoHastaPorCliente.get(c.cliente_id);
-    if (!previo || c.hasta > previo) pagoHastaPorCliente.set(c.cliente_id, c.hasta);
+    if (c.cliente_id && c.pago_hasta) pagoHastaPorCliente.set(c.cliente_id, c.pago_hasta);
   }
+
+  const cajaHoy: CajaDeHoy = cajaRes.data
+    ? { estado: cajaRes.data.estado, reaperturaPedida: Boolean(cajaRes.data.reapertura_solicitada_en) }
+    : null;
 
   const filas: FilaCliente[] = (clientesRes.data ?? []).map((c) => {
     const d = deudaPorCliente.get(c.id) ?? { deuda: 0, vencida: 0 };
@@ -194,6 +192,8 @@ export default async function CobranzaPage({ searchParams }: { searchParams: Sp 
           <BotonExportar dataset="pagos" periodo={periodo} label="Cobros del mes (.xlsx)" />
         ) : null}
       </PageHeader>
+
+      <AvisoCajaCerrada caja={cajaHoy} rol={perfil.rol} className="-mt-4" />
 
       {esJefe || hoyTotal > 0 ? (
         <div className="-mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-lg border bg-card px-4 py-3">

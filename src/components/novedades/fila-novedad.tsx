@@ -24,6 +24,7 @@ import {
   type NovedadVista,
 } from "./constantes";
 import { llamarAccion } from "@/lib/llamar-accion";
+import { AlertaError } from "@/components/cobranza/alerta-error";
 
 type Dialogo = "rechazar" | "anular" | "borrar" | null;
 
@@ -49,6 +50,7 @@ export function FilaNovedad({
   const router = useRouter();
   const [dialogo, setDialogo] = useState<Dialogo>(null);
   const [estado, setEstado] = useState<EstadoNovedad>(n.estado);
+  const [errorFila, setErrorFila] = useState<string | null>(null);
   const [pendiente, startTransition] = useTransition();
   const def = DEF_TIPO[n.tipo];
   const Icono = def.icono;
@@ -60,12 +62,13 @@ export function FilaNovedad({
   const puedeBorrar = esPendiente && esMia;
 
   function aprobar() {
+    setErrorFila(null);
     setEstado("aprobada"); // optimista: el sello cambia ya
     startTransition(async () => {
       const res = await llamarAccion(() => revisarNovedad({ id: n.id, aprobar: true }));
       if (!res.ok) {
         setEstado(n.estado);
-        toast.error(res.error);
+        setErrorFila(res.error);
         return;
       }
       toast.success(nombre ? `Aprobada la novedad de ${nombre}` : "Novedad aprobada");
@@ -106,105 +109,108 @@ export function FilaNovedad({
   const tachada = estado === "anulada" || estado === "rechazada";
 
   return (
-    <div className={cn("flex flex-col gap-3 py-3 sm:flex-row sm:items-start", className)}>
-      <div className="flex min-w-0 flex-1 gap-3">
-        <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-foreground/80">
-          <Icono className="size-4.5" strokeWidth={2} aria-hidden />
-        </span>
-        <div className="min-w-0 flex-1 space-y-1">
-          <div className="flex flex-wrap items-center gap-2">
-            {nombre ? <span className="font-semibold">{nombre}</span> : null}
-            <Sello estado={selloNovedad(estado)} />
-          </div>
-          <p className={cn("text-[15px] leading-snug", tachada && "text-muted-foreground line-through")}>
-            {frase}
-          </p>
-          {n.detalle && n.tipo !== "otra" ? (
-            <p className="text-sm text-muted-foreground">“{n.detalle}”</p>
-          ) : null}
-          <p className="text-xs text-muted-foreground">
-            Cargó {n.cargadaPor ?? "—"} · <span className="tabular">{formatFechaHora(n.cargada_en)}</span>
-            {n.revisadaPor && n.estado !== "pendiente" ? (
-              <>
-                {" · "}
-                {n.estado === "rechazada" ? "Rechazó" : "Aprobó"} {n.revisadaPor}
-              </>
+    <div className={cn("py-3", className)}>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+        <div className="flex min-w-0 flex-1 gap-3">
+          <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-foreground/80">
+            <Icono className="size-4.5" strokeWidth={2} aria-hidden />
+          </span>
+          <div className="min-w-0 flex-1 space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              {nombre ? <span className="font-semibold">{nombre}</span> : null}
+              <Sello estado={selloNovedad(estado)} />
+            </div>
+            <p className={cn("text-[15px] leading-snug", tachada && "text-muted-foreground line-through")}>
+              {frase}
+            </p>
+            {n.detalle && n.tipo !== "otra" ? (
+              <p className="text-sm text-muted-foreground">“{n.detalle}”</p>
             ) : null}
-          </p>
-          {estado === "rechazada" && n.motivo_rechazo ? (
-            <p className="rounded-md bg-pendiente-suave px-3 py-2 text-sm">
-              <span className="font-semibold">Motivo del rechazo:</span> {n.motivo_rechazo}
+            <p className="text-xs text-muted-foreground">
+              Cargó {n.cargadaPor ?? "—"} · <span className="tabular">{formatFechaHora(n.cargada_en)}</span>
+              {n.revisadaPor && n.estado !== "pendiente" ? (
+                <>
+                  {" · "}
+                  {n.estado === "rechazada" ? "Rechazó" : "Aprobó"} {n.revisadaPor}
+                </>
+              ) : null}
             </p>
+            {estado === "rechazada" && n.motivo_rechazo ? (
+              <p className="rounded-md bg-pendiente-suave px-3 py-2 text-sm">
+                <span className="font-semibold">Motivo del rechazo:</span> {n.motivo_rechazo}
+              </p>
+            ) : null}
+            {estado === "anulada" && n.motivo_anulacion ? (
+              <p className="rounded-md bg-muted px-3 py-2 text-sm">
+                <span className="font-semibold">Anulada{n.anuladaPor ? ` por ${n.anuladaPor}` : ""}:</span>{" "}
+                {n.motivo_anulacion}
+              </p>
+            ) : null}
+            {n.adjuntoUrl ? (
+              <a
+                href={n.adjuntoUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-h-11 items-center gap-1.5 rounded-md border bg-card px-3 text-sm font-medium hover:bg-muted"
+              >
+                <Paperclip className="size-4" strokeWidth={2} />
+                {n.tipo === "falta" || n.tipo === "licencia" ? "Ver certificado" : "Ver adjunto"}
+              </a>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap gap-2 sm:max-w-72 sm:justify-end">
+          {esPendiente && puedeRevisar ? (
+            <>
+              <Button size="lg" className="h-11 px-4 font-semibold" disabled={pendiente} onClick={aprobar}>
+                {pendiente ? <Spinner /> : <Check className="size-5" strokeWidth={2.2} />}
+                Aprobar
+              </Button>
+              <Button
+                variant="outline"
+                className="h-11 px-4 text-pendiente hover:text-pendiente"
+                disabled={pendiente}
+                onClick={() => setDialogo("rechazar")}
+              >
+                <X className="size-4" strokeWidth={2.2} />
+                Rechazar
+              </Button>
+            </>
           ) : null}
-          {estado === "anulada" && n.motivo_anulacion ? (
-            <p className="rounded-md bg-muted px-3 py-2 text-sm">
-              <span className="font-semibold">Anulada{n.anuladaPor ? ` por ${n.anuladaPor}` : ""}:</span>{" "}
-              {n.motivo_anulacion}
-            </p>
+          {puedeEditar ? (
+            <Button asChild variant="outline" className="h-11 px-4">
+              <Link href={`/novedades/editar/${n.id}`}>
+                <Pencil className="size-4" strokeWidth={2} />
+                Corregir
+              </Link>
+            </Button>
           ) : null}
-          {n.adjuntoUrl ? (
-            <a
-              href={n.adjuntoUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex min-h-11 items-center gap-1.5 rounded-md border bg-card px-3 text-sm font-medium hover:bg-muted"
+          {puedeBorrar ? (
+            <Button
+              variant="ghost"
+              className="h-11 px-3 text-muted-foreground"
+              disabled={pendiente}
+              onClick={() => setDialogo("borrar")}
             >
-              <Paperclip className="size-4" strokeWidth={2} />
-              {n.tipo === "falta" || n.tipo === "licencia" ? "Ver certificado" : "Ver adjunto"}
-            </a>
+              <Trash2 className="size-4" strokeWidth={2} />
+              Borrar
+            </Button>
+          ) : null}
+          {estado === "aprobada" && puedeRevisar ? (
+            <Button
+              variant="ghost"
+              className="h-11 px-3 text-muted-foreground"
+              disabled={pendiente}
+              onClick={() => setDialogo("anular")}
+            >
+              <Ban className="size-4" strokeWidth={2} />
+              Anular
+            </Button>
           ) : null}
         </div>
       </div>
-
-      <div className="flex flex-wrap gap-2 sm:max-w-72 sm:justify-end">
-        {esPendiente && puedeRevisar ? (
-          <>
-            <Button size="lg" className="h-11 px-4 font-semibold" disabled={pendiente} onClick={aprobar}>
-              {pendiente ? <Spinner /> : <Check className="size-5" strokeWidth={2.2} />}
-              Aprobar
-            </Button>
-            <Button
-              variant="outline"
-              className="h-11 px-4 text-pendiente hover:text-pendiente"
-              disabled={pendiente}
-              onClick={() => setDialogo("rechazar")}
-            >
-              <X className="size-4" strokeWidth={2.2} />
-              Rechazar
-            </Button>
-          </>
-        ) : null}
-        {puedeEditar ? (
-          <Button asChild variant="outline" className="h-11 px-4">
-            <Link href={`/novedades/editar/${n.id}`}>
-              <Pencil className="size-4" strokeWidth={2} />
-              Corregir
-            </Link>
-          </Button>
-        ) : null}
-        {puedeBorrar ? (
-          <Button
-            variant="ghost"
-            className="h-11 px-3 text-muted-foreground"
-            disabled={pendiente}
-            onClick={() => setDialogo("borrar")}
-          >
-            <Trash2 className="size-4" strokeWidth={2} />
-            Borrar
-          </Button>
-        ) : null}
-        {estado === "aprobada" && puedeRevisar ? (
-          <Button
-            variant="ghost"
-            className="h-11 px-3 text-muted-foreground"
-            disabled={pendiente}
-            onClick={() => setDialogo("anular")}
-          >
-            <Ban className="size-4" strokeWidth={2} />
-            Anular
-          </Button>
-        ) : null}
-      </div>
+      {errorFila ? <AlertaError error={errorFila} titulo="No se pudo aprobar" className="mt-2" /> : null}
 
       <DialogoMotivo
         abierto={dialogo === "rechazar"}

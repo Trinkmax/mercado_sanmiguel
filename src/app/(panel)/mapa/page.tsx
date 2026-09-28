@@ -5,7 +5,7 @@ import { categoriasDeRol, type AvanceMes, type CategoriaCliente } from "@/lib/se
 import { createClient } from "@/lib/supabase/server";
 import { periodoActual } from "@/lib/format";
 import { EmptyState } from "@/components/shared/empty-state";
-import { MapaMercado } from "@/components/mapa/mapa-mercado";
+import { MapaOrientable } from "@/components/mapa/mapa-orientable";
 import { cargarPlano } from "@/components/mapa/datos-plano";
 import type {
   AvisoPuestoPrevio,
@@ -203,7 +203,7 @@ export default async function MapaPage({ searchParams }: Props) {
           />
         </div>
       ) : (
-        <MapaMercado
+        <MapaOrientable
           espacios={espacios}
           elementos={elementos}
           clientes={clientes}

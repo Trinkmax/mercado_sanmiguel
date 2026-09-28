@@ -8,6 +8,15 @@ import { ArrowRight, Gauge, MapPin, Pencil, Plus, Power, Save, X, Zap } from "lu
 import { crearMedidor, editarMedidor, eximirAbono } from "@/lib/actions/clientes";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
@@ -23,6 +32,7 @@ import {
   type UbicacionElegida,
 } from "@/components/clientes/ubicacion-medidor";
 import { TOAST_ENVIADO_APROBACION, aplicaDirectoRol } from "@/components/clientes/constantes";
+import { AlertaError } from "@/components/cobranza/alerta-error";
 import { llamarAccion } from "@/lib/llamar-accion";
 
 export type MedidorConLectura = {
@@ -61,6 +71,7 @@ export function MedidoresCliente({
   espaciosCliente,
   abono,
   rol,
+  ambulante = false,
 }: {
   clienteId: string;
   medidores: MedidorConLectura[];
@@ -68,6 +79,8 @@ export function MedidoresCliente({
   espaciosCliente: string[];
   abono: AbonoEnergia;
   rol: string;
+  /** Es ambulante: no paga abono (se le cobra por día; private.generar_abonos_energia, 0024). */
+  ambulante?: boolean;
 }) {
   const router = useRouter();
   const [pendiente, startTransition] = useTransition();
@@ -103,25 +116,33 @@ export function MedidoresCliente({
     });
   }
 
-  function cambiarActivo(m: MedidorConLectura) {
+  function reactivar(m: MedidorConLectura) {
     startTransition(async () => {
-      const res = await llamarAccion(() => editarMedidor({ id: m.id, clienteId, activo: !m.activo }));
+      const res = await llamarAccion(() => editarMedidor({ id: m.id, clienteId, activo: true }));
       if (!res.ok) {
         toast.error(res.error);
         return;
       }
-      toast.success(
-        m.activo
-          ? `Medidor ${m.numero} desactivado: no entra más en la planilla`
-          : `Medidor ${m.numero} activado de nuevo`
-      );
+      toast.success(`Medidor ${m.numero} activado de nuevo`);
       router.refresh();
     });
   }
 
   return (
     <div className="space-y-6">
-      <BloqueAbono clienteId={clienteId} abono={abono} hayActivo={hayActivo} rol={rol} />
+      {ambulante ? (
+        <div className="flex items-start gap-4 rounded-lg border bg-card px-4 py-4">
+          <Zap className="size-6 shrink-0 text-muted-foreground" strokeWidth={1.8} />
+          <div className="min-w-0 space-y-1">
+            <p className="font-semibold">Es ambulante: no paga abono de energía</p>
+            <p className="text-sm text-muted-foreground">
+              Se le cobra por día. Si tiene un medidor activo, paga solo la luz que consume (kWh).
+            </p>
+          </div>
+        </div>
+      ) : (
+        <BloqueAbono clienteId={clienteId} abono={abono} hayActivo={hayActivo} rol={rol} />
+      )}
 
       <Card className="text-base">
         <CardHeader>
@@ -175,15 +196,18 @@ export function MedidoresCliente({
                       <Pencil className="size-4" />
                       Editar
                     </Button>
-                    <Button
-                      variant="ghost"
-                      className={cn("h-11 px-3", m.activo && "text-destructive hover:text-destructive")}
-                      onClick={() => cambiarActivo(m)}
-                      disabled={pendiente}
-                    >
-                      <Power className="size-4" />
-                      {m.activo ? "Desactivar" : "Reactivar"}
-                    </Button>
+                    {m.activo ? (
+                      <DesactivarMedidor
+                        medidor={m}
+                        clienteId={clienteId}
+                        unicoActivo={medidores.filter((x) => x.activo).length === 1}
+                      />
+                    ) : (
+                      <Button variant="ghost" className="h-11 px-3" onClick={() => reactivar(m)} disabled={pendiente}>
+                        <Power className="size-4" />
+                        Reactivar
+                      </Button>
+                    )}
                   </div>
                 )
               )}
@@ -227,6 +251,77 @@ export function MedidoresCliente({
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+/** "Desactivar" pide confirmación: saca el medidor de la planilla y puede sacarle el abono. */
+function DesactivarMedidor({
+  medidor,
+  clienteId,
+  unicoActivo,
+}: {
+  medidor: MedidorConLectura;
+  clienteId: string;
+  /** Es su único medidor activo: al desactivarlo deja de pagar el abono. */
+  unicoActivo: boolean;
+}) {
+  const router = useRouter();
+  const [abierto, setAbierto] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [pendiente, startTransition] = useTransition();
+
+  function desactivar() {
+    setError(null);
+    startTransition(async () => {
+      const res = await llamarAccion(() => editarMedidor({ id: medidor.id, clienteId, activo: false }));
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      toast.success(`Medidor ${medidor.numero} desactivado: no entra más en la planilla`);
+      setAbierto(false);
+      router.refresh();
+    });
+  }
+
+  return (
+    <Dialog
+      open={abierto}
+      onOpenChange={(v) => {
+        if (pendiente) return;
+        setAbierto(v);
+        if (!v) setError(null);
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button variant="ghost" className="h-11 px-3 text-destructive hover:text-destructive">
+          <Power className="size-4" />
+          Desactivar
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader className="pr-8">
+          <DialogTitle className="text-lg font-semibold break-words">
+            ¿Desactivar el medidor {medidor.numero}?
+          </DialogTitle>
+          <DialogDescription className="text-base">
+            Deja de salir en la planilla del electricista
+            {unicoActivo ? " y, como es su único medidor, no paga más el abono de energía" : ""}. Lo
+            podés reactivar cuando quieras.
+          </DialogDescription>
+        </DialogHeader>
+        {error ? <AlertaError error={error} titulo="No se pudo desactivar" /> : null}
+        <DialogFooter className="gap-2">
+          <Button variant="outline" className="h-12 px-5 text-base" onClick={() => setAbierto(false)} disabled={pendiente}>
+            No, dejarlo
+          </Button>
+          <Button variant="destructive" className="h-12 px-5 text-base font-semibold" onClick={desactivar} disabled={pendiente}>
+            {pendiente ? <Spinner className="size-5" /> : <Power className="size-5" />}
+            Sí, desactivar
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

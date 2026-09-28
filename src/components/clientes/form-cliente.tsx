@@ -12,6 +12,7 @@ import {
   Plus,
   Save,
   Send,
+  TriangleAlert,
   UserPlus,
 } from "lucide-react";
 import type { Rol } from "@/lib/auth";
@@ -35,6 +36,7 @@ import { ICONO_CATEGORIA } from "@/components/clientes/chip-categoria";
 import {
   TOAST_ENVIADO_APROBACION,
   aplicaDirectoRol,
+  conceptoSigueConCategoria,
   cuotasDeCategoria,
   totalMensual,
 } from "@/components/clientes/constantes";
@@ -75,6 +77,9 @@ type Campos = {
 
 type AltaHecha = { id: string; nombre: string; codigo?: number; revisaLider: boolean };
 
+/** Lo mensual que factura hoy (edición): para avisar qué deja de facturarse si cambia de categoría. */
+export type ConceptoActivo = { codigo: string; nombre: string; segmento: string | null };
+
 /**
  * Formulario de datos del cliente: sirve para el alta y para la edición.
  * El alta se adapta a lo que es (¿Qué es?): el ambulante lleva nombre, apodo, DNI y
@@ -91,6 +96,9 @@ export function FormCliente({
   categoriaInicial,
   cuotasQuintero = 4,
   precioAmbulante,
+  conceptosActivos = [],
+  lugaresTexto = null,
+  medidoresActivos = [],
   alGuardar,
 }: {
   cliente?: DatosCliente;
@@ -104,6 +112,12 @@ export function FormCliente({
   cuotasQuintero?: number;
   /** Precio por día del concepto AMB, para contarlo en el alta del ambulante. */
   precioAmbulante?: number | null;
+  /** Edición: lo mensual que factura hoy (qué deja de facturarse al cambiar de categoría). */
+  conceptosActivos?: ConceptoActivo[];
+  /** Edición: sus lugares en el plano ("Puestos 58 · 60"), que se liberan si pasa a ambulante. */
+  lugaresTexto?: string | null;
+  /** Edición: N° de sus medidores activos, que se desactivan si pasa a ambulante. */
+  medidoresActivos?: string[];
   alGuardar?: () => void;
 }) {
   const router = useRouter();
@@ -400,11 +414,13 @@ export function FormCliente({
             })}
           </div>
           {!esAlta && categoria !== cliente?.categoria ? (
-            <p className="text-sm font-medium text-parcial">
-              {categoria === "ambulante"
-                ? "Como ambulante se le cobra por día: deja de pagar en cuotas y no es socio."
-                : `Pasa a ser ${LABEL_CATEGORIA[categoria].toLowerCase()}. Lo que paga cada mes se ajusta desde "Qué paga".`}
-            </p>
+            <AvisoCambioCategoria
+              categoria={categoria}
+              dejaDe={conceptosActivos.filter((c) => !conceptoSigueConCategoria(c.segmento, categoria))}
+              lugaresTexto={categoria === "ambulante" ? lugaresTexto : null}
+              medidores={categoria === "ambulante" ? medidoresActivos : []}
+              directo={directo}
+            />
           ) : null}
         </fieldset>
       ) : null}
@@ -743,6 +759,59 @@ function articulo(categoria: CategoriaCliente): string {
     : categoria === "quintero"
       ? "al quintero"
       : "al ambulante";
+}
+
+/**
+ * Qué pasa al cambiar de categoría (lo aplica private.aplicar_cambio, 0024): lo mensual que
+ * la categoría nueva no tiene deja de facturarse y, si pasa a ambulante, se liberan sus
+ * lugares del plano y se desactivan sus medidores (abono y consumo de luz). Se dice ANTES
+ * de guardar, con los códigos, para que no sorprenda.
+ */
+function AvisoCambioCategoria({
+  categoria,
+  dejaDe,
+  lugaresTexto,
+  medidores,
+  directo,
+}: {
+  categoria: CategoriaCliente;
+  dejaDe: ConceptoActivo[];
+  lugaresTexto: string | null;
+  medidores: string[];
+  directo: boolean;
+}) {
+  const cuando = directo ? "Al guardar" : "Cuando el Líder lo apruebe";
+  return (
+    <div
+      role="status"
+      className="flex items-start gap-2.5 rounded-lg border border-parcial/40 bg-parcial-suave px-3.5 py-3 text-sm"
+    >
+      <TriangleAlert className="mt-0.5 size-4 shrink-0 text-parcial" strokeWidth={2} />
+      <div className="min-w-0 space-y-1">
+        <p className="font-medium">
+          {categoria === "ambulante"
+            ? "Como ambulante se le cobra por día: no paga por mes, ni en cuotas, y no es socio."
+            : `Pasa a ser ${LABEL_CATEGORIA[categoria].toLowerCase()}.`}
+        </p>
+        {dejaDe.length > 0 ? (
+          <p className="break-words">
+            {cuando} deja de facturarse: {dejaDe.map((c) => `${c.codigo} (${c.nombre})`).join(", ")}.
+          </p>
+        ) : null}
+        {lugaresTexto ? <p className="break-words">También se libera en el plano: {lugaresTexto}.</p> : null}
+        {medidores.length > 0 ? (
+          <p className="break-words">
+            {medidores.length === 1
+              ? `Se desactiva su medidor N° ${medidores[0]}: deja de pagar el abono y la luz que consuma.`
+              : `Se desactivan sus medidores N° ${medidores.join(", ")}: deja de pagar el abono y la luz que consuma.`}
+          </p>
+        ) : null}
+        {categoria !== "ambulante" ? (
+          <p className="text-muted-foreground">Lo que tenga que pagar como {LABEL_CATEGORIA[categoria].toLowerCase()} se agrega desde “Qué paga”.</p>
+        ) : null}
+      </div>
+    </div>
+  );
 }
 
 function ErrorCampo({ texto }: { texto: string }) {

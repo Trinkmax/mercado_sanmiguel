@@ -70,10 +70,17 @@ function errorPerfil(error: { code?: string; message?: string }): string {
   return error.message?.replace(/^.*?: /, "") || "No pudimos guardar el usuario. Probá de nuevo.";
 }
 
-/** ¿El DNI ya tiene usuario? Se mira con el cliente admin (la RLS esconde socios al Jefe). */
+/**
+ * ¿El DNI ya tiene usuario? Se mira con el cliente admin (la RLS esconde socios al Jefe).
+ * `rolNuevo` es el rol del usuario que se está creando o editando: un mismo DNI no
+ * puede tener dos usuarios (perfiles_dni_unq), así que alguien del equipo no puede
+ * tener además el portal de socio (ni al revés): se explica en vez de mandar a
+ * "devolverle el acceso", que no le daría lo que busca.
+ */
 async function dniOcupado(
   dni: string,
   perfil: Perfil,
+  rolNuevo: Rol,
   excluirUserId?: string
 ): Promise<string | null> {
   const admin = createAdminClient();
@@ -83,11 +90,29 @@ async function dniOcupado(
     .eq("dni", dni)
     .maybeSingle();
   if (!data || data.user_id === excluirUserId) return null;
-  // El nombre solo si es alguien que este rol ve y gestiona (no filtra socios al Jefe).
-  const visible = data.org_id === perfil.org_id && puedeGestionarRol(perfil.rol, data.rol);
-  return visible
-    ? `Ya hay un usuario con el DNI ${formatDni(dni)}: ${data.nombre}. Si es la misma persona, devolvele el acceso o dale una contraseña nueva.`
-    : `Ya hay un usuario con el DNI ${formatDni(dni)}.`;
+  const dniTexto = formatDni(dni);
+
+  if (data.org_id !== perfil.org_id) return `Ya hay un usuario con el DNI ${dniTexto}.`;
+
+  // Socio contra equipo: con el mismo DNI no puede haber otro usuario.
+  // Solo el Líder ve quién es y con qué rol entra. A Administración y al Jefe no se
+  // les dice ni el rol ni el tipo (equipo o portal): probando DNIs podrían averiguar
+  // quién es socio o qué rol tiene alguien del equipo. Reciben el mismo texto que
+  // cuando el DNI es de alguien que no gestionan.
+  if ((data.rol === "socio") !== (rolNuevo === "socio")) {
+    if (perfil.rol !== "lider") {
+      return `Ya hay un usuario con el DNI ${dniTexto}. Un mismo DNI no puede tener dos usuarios: consultalo con el Líder de Procesos.`;
+    }
+    const loQueFalta = rolNuevo === "socio" ? "el acceso al portal" : "un usuario del equipo";
+    return `${data.nombre} ya entra al sistema como ${LABEL_ROL[data.rol]} con el DNI ${dniTexto}. Un mismo DNI no puede tener dos usuarios: por ahora no se le puede dar ${loQueFalta}.`;
+  }
+
+  // Mismo tipo: el nombre solo si es alguien que este rol ve y gestiona (no filtra socios al Jefe).
+  return puedeGestionarRol(perfil.rol, data.rol)
+    ? `Ya hay un usuario con el DNI ${dniTexto}: ${data.nombre}. Si es la misma persona, devolvele el acceso o dale una contraseña nueva.`
+    : perfil.rol === "lider"
+      ? `Ya hay un usuario con el DNI ${dniTexto}.`
+      : `Ya hay un usuario con el DNI ${dniTexto}. Un mismo DNI no puede tener dos usuarios: consultalo con el Líder de Procesos.`;
 }
 
 /** Crea el usuario de Auth (email real o técnico). Devuelve el id o un error legible. */
@@ -172,7 +197,7 @@ export async function crearUsuario(input: unknown): Promise<ActionResult<Usuario
   }
   if (!hayClaveAdmin()) return fallo(SIN_CLAVE);
 
-  const ocupado = await dniOcupado(dni, perfil);
+  const ocupado = await dniOcupado(dni, perfil, rol);
   if (ocupado) return fallo(ocupado);
 
   const auth = await crearUsuarioAuth(dni, nombre, password, email);
@@ -234,7 +259,7 @@ export async function crearAccesoSocio(input: unknown): Promise<ActionResult<Usu
   if (!cliente.activo) return fallo("Ese cliente está dado de baja.");
   if (cliente.auth_user_id) return fallo(`${cliente.nombre} ya tiene acceso al portal.`);
 
-  const ocupado = await dniOcupado(dni, perfil);
+  const ocupado = await dniOcupado(dni, perfil, "socio");
   if (ocupado) return fallo(ocupado);
 
   const auth = await crearUsuarioAuth(dni, nombre, password, email);
@@ -358,11 +383,18 @@ export async function restablecerContrasena(
     );
   }
 
+  // Rastro para el Líder (Correcciones): quién le cambió la contraseña a quién. Con el
+  // cliente del USUARIO (la base vuelve a controlar el permiso y firma con auth.uid()).
+  // La contraseña ya cambió: si el rastro falla no se deshace, solo se avisa en el log.
+  const { error: errRastro } = await supabase.rpc("registrar_contrasena_nueva", { p_user: user_id });
+  if (errRastro) console.error("registrar_contrasena_nueva", errRastro.message);
+
   const { data: objetivo } = await admin
     .from("perfiles")
     .select("nombre, dni")
     .eq("user_id", user_id)
     .maybeSingle();
+  revalidatePath("/inicio");
   return ok({ nombre: objetivo?.nombre ?? "", dni: objetivo?.dni ?? null });
 }
 
@@ -407,7 +439,7 @@ export async function editarUsuario(input: unknown): Promise<ActionResult> {
 
   if (cambios.dni) {
     if (!hayClaveAdmin()) return fallo(SIN_CLAVE);
-    const ocupado = await dniOcupado(cambios.dni, perfil, user_id);
+    const ocupado = await dniOcupado(cambios.dni, perfil, cambios.rol ?? actual.rol, user_id);
     if (ocupado) return fallo(ocupado);
   }
 

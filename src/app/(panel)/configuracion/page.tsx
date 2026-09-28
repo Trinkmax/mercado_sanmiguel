@@ -318,7 +318,8 @@ async function Usuarios(supabase: Supabase, perfil: Perfil, ver: "equipo" | "soc
         {(
           [
             { valor: "equipo", label: "Equipo", n: todos.filter((p) => p.rol !== "socio").length },
-            { valor: "socios", label: "Socios", n: todos.filter((p) => p.rol === "socio").length },
+            // Socios que hoy pueden entrar (los que se quedaron sin acceso por una baja no están en la lista).
+            { valor: "socios", label: "Socios", n: todos.filter((p) => p.rol === "socio" && p.activo).length },
           ] as const
         ).map((o) => (
           <Link
@@ -339,14 +340,20 @@ async function Usuarios(supabase: Supabase, perfil: Perfil, ver: "equipo" | "soc
 
   if (alcance === "socios") {
     const categorias = perfil.rol === "lider" ? ["puestero", "quintero"] : ["puestero"];
-    const { data: clientes } = await supabase
+    const { data: clientesRes } = await supabase
       .from("clientes")
-      .select("id, codigo, nombre, apodo, cuit, tipo_persona, auth_user_id")
+      .select("id, codigo, nombre, apodo, cuit, tipo_persona, auth_user_id, activo")
       .eq("org_id", perfil.org_id)
-      .eq("activo", true)
+      // Los dados de baja solo si todavía tienen usuario del portal: la base se lo
+      // corta al aprobar la baja (0028), pero si quedó alguno activo, que se vea.
+      .or("activo.eq.true,auth_user_id.not.is.null")
       .in("categoria", categorias as ("puestero" | "quintero")[])
       .order("codigo");
-    const ids = (clientes ?? []).map((c) => c.id);
+    const perfilPorId = new Map(todos.map((p) => [p.user_id, p]));
+    const clientes = (clientesRes ?? []).filter(
+      (c) => c.activo || (c.auth_user_id !== null && perfilPorId.get(c.auth_user_id)?.activo === true)
+    );
+    const ids = clientes.map((c) => c.id);
     const { data: espacios } =
       ids.length > 0
         ? await supabase.from("espacios").select("cliente_id, tipo, numero, medio").in("cliente_id", ids)
@@ -357,8 +364,7 @@ async function Usuarios(supabase: Supabase, perfil: Perfil, ver: "equipo" | "soc
       if (!espaciosPorCliente.has(e.cliente_id)) espaciosPorCliente.set(e.cliente_id, []);
       espaciosPorCliente.get(e.cliente_id)!.push(e);
     }
-    const perfilPorId = new Map(todos.map((p) => [p.user_id, p]));
-    const lista: ClienteAcceso[] = (clientes ?? []).map((c) => {
+    const lista: ClienteAcceso[] = clientes.map((c) => {
       const socio = c.auth_user_id ? perfilPorId.get(c.auth_user_id) : undefined;
       return {
         id: c.id,
@@ -369,6 +375,7 @@ async function Usuarios(supabase: Supabase, perfil: Perfil, ver: "equipo" | "soc
         tipoPersona: c.tipo_persona,
         lugares: lugaresDe(espaciosPorCliente.get(c.id) ?? []),
         acceso: socio ? aFila(socio) : null,
+        dadoDeBaja: !c.activo,
       };
     });
     return (

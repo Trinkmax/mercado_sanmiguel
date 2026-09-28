@@ -13,16 +13,25 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { FormCliente, type DatosCliente } from "./form-cliente";
+import { FormCliente, type ConceptoActivo, type DatosCliente } from "./form-cliente";
 import { aplicaDirectoRol } from "./constantes";
 
 /** Botón "Editar" de la ficha: abre el formulario de datos en un diálogo. */
 export function EditarClienteDialog({
   cliente,
   rol,
+  conceptosActivos,
+  lugaresTexto,
+  medidoresActivos,
 }: {
   cliente: DatosCliente;
   rol: Rol;
+  /** Lo mensual que factura hoy (para avisar qué deja de facturarse si cambia de categoría). */
+  conceptosActivos?: ConceptoActivo[];
+  /** Sus lugares del plano (se liberan si pasa a ambulante). */
+  lugaresTexto?: string | null;
+  /** N° de sus medidores activos (se desactivan si pasa a ambulante). */
+  medidoresActivos?: string[];
 }) {
   const [abierto, setAbierto] = useState(false);
   const que = LABEL_CATEGORIA[cliente.categoria].toLowerCase();
@@ -36,7 +45,7 @@ export function EditarClienteDialog({
         </Button>
       </DialogTrigger>
       <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader>
+        <DialogHeader className="pr-8">
           <DialogTitle>Editar datos del {que}</DialogTitle>
           <DialogDescription>
             {aplicaDirectoRol(rol)
@@ -44,7 +53,14 @@ export function EditarClienteDialog({
               : "Corregí los datos de la carpeta y envialos: el Líder de Procesos los aprueba."}
           </DialogDescription>
         </DialogHeader>
-        <FormCliente cliente={cliente} rol={rol} alGuardar={() => setAbierto(false)} />
+        <FormCliente
+          cliente={cliente}
+          rol={rol}
+          conceptosActivos={conceptosActivos}
+          lugaresTexto={lugaresTexto}
+          medidoresActivos={medidoresActivos}
+          alGuardar={() => setAbierto(false)}
+        />
       </DialogContent>
     </Dialog>
   );

@@ -4,7 +4,16 @@ import { uuidV4 } from "@/lib/utils";
  * Client-safe (sin datos): los números "de negocio" los calcula la base.
  */
 import { Banknote, FileText, Landmark, type LucideIcon } from "lucide-react";
-import { DIAS_SEMANA, fechaLocal, formatFecha, hoyISO } from "@/lib/format";
+import {
+  DIAS_SEMANA,
+  fechaLocal,
+  formatFecha,
+  hoyISO,
+  montoATexto,
+  parseMonto,
+  redondear2,
+  sanitizarMonto,
+} from "@/lib/format";
 import type { MedioPago } from "@/lib/actions/cobranza";
 
 export type { MedioPago };
@@ -28,31 +37,18 @@ export const ICONO_MEDIO: Record<MedioPago, LucideIcon> = {
 };
 
 export const ACCEPT_COMPROBANTE = "image/*,application/pdf";
-export const MAX_COMPROBANTE = 20 * 1024 * 1024;
+/**
+ * Tope de los comprobantes de UN cobro (todos juntos). En producción (Vercel) un pedido no
+ * puede pasar de 4,5 MB: si pasa, el servidor lo corta y la pantalla diría "Se cortó la
+ * conexión", y el operador reintentaría creyendo que es el wifi. Las fotos ya se achican a
+ * ~400 KB (comprimirImagen); lo que puede pasarse es un PDF o una foto que no se pudo achicar.
+ */
+export const MAX_COMPROBANTE = 4 * 1024 * 1024;
+export const MENSAJE_COMPROBANTE_PESADO =
+  "El archivo pesa más de 4 MB y no se puede subir. Si es un PDF, mandá una captura de pantalla (foto) del comprobante. También podés cobrar sin la foto.";
 
-/** "12345,5" → 12345.5 (coma decimal, es-AR). Vacío → 0. */
-export function parseMonto(texto: string): number {
-  if (!texto) return 0;
-  const n = Number(texto.replace(",", "."));
-  return Number.isFinite(n) ? n : 0;
-}
-
-/** Deja solo dígitos y una única coma decimal (hasta 2 decimales). */
-export function sanitizarMonto(texto: string): string {
-  const limpio = texto.replace(/[^\d,]/g, "");
-  const [entero, ...resto] = limpio.split(",");
-  return resto.length > 0 ? `${entero},${resto.join("").slice(0, 2)}` : entero;
-}
-
-/** Número → texto del input (coma decimal). 0 → "". */
-export function montoATexto(n: number): string {
-  if (!(n > 0)) return "";
-  return String(redondear2(n)).replace(".", ",");
-}
-
-export function redondear2(n: number): number {
-  return Math.round(n * 100) / 100;
-}
+// Montos tipeados: viven en @/lib/format (los usan también Gastos y Tesorería).
+export { parseMonto, sanitizarMonto, montoATexto, redondear2 };
 
 /** "YYYY-MM-DD" + n días (huso de negocio: las fechas son puras, sin hora). */
 export function sumarDias(iso: string, dias: number): string {

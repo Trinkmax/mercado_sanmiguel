@@ -13,7 +13,7 @@ import { Sello } from "@/components/shared/sello";
 import { BarraRecepcion } from "@/components/comunicaciones/barra-recepcion";
 import { DesactivarCircular } from "@/components/comunicaciones/desactivar-circular";
 import { ListaLectores } from "@/components/comunicaciones/lista-lectores";
-import { cargarClientesPublico } from "@/components/comunicaciones/datos";
+import { cargarClientesPublico, cargarRecepciones } from "@/components/comunicaciones/datos";
 import { resumenLectura } from "@/components/comunicaciones/publico";
 
 export const metadata = { title: "Circular" };
@@ -34,16 +34,16 @@ export default async function CircularPage({
     .maybeSingle();
   if (!c) notFound();
 
-  const [clientes, recepcionesRes, autorRes] = await Promise.all([
+  const [clientes, recepcionesDe, autorRes] = await Promise.all([
     cargarClientesPublico(supabase),
-    supabase.from("circular_recepciones").select("cliente_id, recibida_en").eq("circular_id", c.id),
+    cargarRecepciones(supabase, { circularId: c.id }),
     c.creada_por
       ? supabase.from("perfiles").select("nombre").eq("user_id", c.creada_por).maybeSingle()
       : Promise.resolve({ data: null }),
   ]);
 
   const recepciones = new Map<string, string>();
-  for (const r of recepcionesRes.data ?? []) recepciones.set(r.cliente_id, r.recibida_en);
+  for (const r of recepcionesDe) recepciones.set(r.cliente_id, r.recibida_en);
   const res = resumenLectura(c.publico, clientes, recepciones);
   const faltan = res.total - res.vieron;
 
@@ -134,8 +134,10 @@ export default async function CircularPage({
           <div className="border-t pt-4">
             {c.detalle ? (
               <p className="whitespace-pre-line text-[15px] leading-relaxed">{c.detalle}</p>
-            ) : (
+            ) : c.storage_path ? (
               <p className="text-sm text-muted-foreground">Sin texto: el contenido está en el PDF adjunto.</p>
+            ) : (
+              <p className="text-sm text-muted-foreground">Sin texto ni PDF: el socio ve solo el título.</p>
             )}
           </div>
           <p className="flex items-center gap-2 rounded-lg bg-muted/60 px-3 py-2 text-sm text-muted-foreground">

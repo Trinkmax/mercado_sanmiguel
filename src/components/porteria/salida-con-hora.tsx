@@ -19,6 +19,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
+import { AlertaError } from "@/components/cobranza/alerta-error";
 import { llamarAccion } from "@/lib/llamar-accion";
 
 /** "YYYY-MM-DD" del día argentino de un timestamptz. */
@@ -85,6 +86,8 @@ export function SalidaConHora({
   const [dia, setDia] = useState(diaIngreso);
   const [hora, setHora] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // Lo que contestó el servidor (o el corte de red): va en un cartel, con lo cargado a la vista.
+  const [errorServidor, setErrorServidor] = useState<string | null>(null);
   const [enviando, startTransition] = useTransition();
 
   const iso = hora ? isoAR(dia, hora) : null;
@@ -92,8 +95,10 @@ export function SalidaConHora({
   const estuvo = iso && !antesDeEntrar ? duracion(ingresoEn, iso) : null;
 
   function abrir(v: boolean) {
+    if (enviando) return;
     setAbierto(v);
     setError(null);
+    setErrorServidor(null);
     if (!v) return;
     if (egresoEn) {
       setDia(diaAR(egresoEn));
@@ -120,16 +125,12 @@ export function SalidaConHora({
       setError("Esa hora todavía no pasó: la salida no puede ser futura.");
       return;
     }
+    setErrorServidor(null);
     startTransition(async () => {
-      let res: Awaited<ReturnType<typeof marcarEgreso>>;
-      try {
-        res = await llamarAccion(() => marcarEgreso({ id: ingresoId, egresoEn: iso }));
-      } catch {
-        setError("No se pudo guardar. Revisá la conexión y probá de nuevo.");
-        return;
-      }
+      // Reintentar es seguro: si la salida ya quedó con esa hora, el servidor la devuelve.
+      const res = await llamarAccion(() => marcarEgreso({ id: ingresoId, egresoEn: iso }));
       if (!res.ok) {
-        setError(res.error);
+        setErrorServidor(res.error);
         return;
       }
       toast.success(
@@ -167,8 +168,8 @@ export function SalidaConHora({
           </Button>
         )}
       </DialogTrigger>
-      <DialogContent className="gap-5 p-6 sm:max-w-md">
-        <DialogHeader>
+      <DialogContent className="max-h-[92dvh] gap-5 overflow-y-auto p-6 sm:max-w-md">
+        <DialogHeader className="pr-8">
           <DialogTitle className="text-xl">{titulo}</DialogTitle>
           <DialogDescription className="text-base">
             Entró el {formatFechaLarga(diaIngreso)} a las {formatSoloHora(ingresoEn)}.
@@ -191,6 +192,7 @@ export function SalidaConHora({
                   onClick={() => {
                     setDia(d);
                     setError(null);
+                    setErrorServidor(null);
                   }}
                   className={cn(
                     "flex min-h-14 flex-col items-center justify-center rounded-lg border-2 px-2 text-center transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/40",
@@ -216,6 +218,7 @@ export function SalidaConHora({
             onChange={(e) => {
               setHora(e.target.value);
               setError(null);
+              setErrorServidor(null);
             }}
             className="h-14 w-44 text-2xl font-semibold tabular md:text-2xl"
           />
@@ -233,6 +236,7 @@ export function SalidaConHora({
             {error}
           </p>
         ) : null}
+        {errorServidor ? <AlertaError error={errorServidor} titulo="No se pudo guardar la salida" /> : null}
 
         <DialogFooter>
           <Button

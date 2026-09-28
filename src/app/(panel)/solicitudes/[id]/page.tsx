@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, MapPin, Paperclip, Printer, Store } from "lucide-react";
 import { requireRol, type Rol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { SIN_CONEXION } from "@/lib/sesion";
 import { formatFechaHora } from "@/lib/format";
 import { LABEL_ROL } from "@/lib/roles";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ import { LineaEstado } from "@/components/solicitudes/linea-estado";
 import { HiloMensajes, type MensajeHilo } from "@/components/solicitudes/hilo-mensajes";
 import { CajaMensaje } from "@/components/solicitudes/caja-mensaje";
 import { AccionesSolicitud, type UsuarioAsignable } from "@/components/solicitudes/acciones-solicitud";
+import { MarcarSolicitudVista } from "@/components/solicitudes/marcar-vista";
 import {
   LABEL_ORIGEN,
   quienLaTiene,
@@ -32,13 +34,15 @@ export default async function SolicitudPage({ params }: Props) {
   const { id } = await params;
   const supabase = await createClient();
 
-  const { data: s } = await supabase
+  const { data: s, error: errorSolicitud } = await supabase
     .from("solicitudes")
     .select(
       "id, numero, tipo, asunto, detalle, origen, estado, referencia, espacio_id, adjunto_path, resolucion, resolucion_de, nota_ejecucion, creada_por, creada_en, revisada_por, revisada_en, elevada_por, elevada_en, derivada_consejo_en, resuelta_por, resuelta_en, asignada_a, asignada_en, ejecutada_por, ejecutada_en, cerrada_en, actualizada_en, cliente:clientes(id, nombre, codigo, apodo)"
     )
     .eq("id", id)
     .maybeSingle();
+  // Si la base no respondió no se muestra "no existe": la pantalla de error reintenta sola.
+  if (errorSolicitud && errorSolicitud.code !== "22P02") throw new Error(SIN_CONEXION); // 22P02: id inválido → 404
   if (!s) notFound();
 
   const usuariosIds = [s.creada_por, s.revisada_por, s.elevada_por, s.resuelta_por, s.asignada_a, s.ejecutada_por].filter(
@@ -99,6 +103,8 @@ export default async function SolicitudPage({ params }: Props) {
 
   return (
     <div className="space-y-8">
+      {/* Quien la cargó la está viendo: se apaga "Respuesta nueva". */}
+      {s.creada_por === perfil.user_id ? <MarcarSolicitudVista solicitudId={s.id} /> : null}
       <PageHeader titulo={`Solicitud N° ${s.numero}`} descripcion={s.asunto}>
         <Sello estado={selloSolicitud(s)} className="text-sm" />
         <Button asChild variant="outline" className="min-h-11">
@@ -345,7 +351,9 @@ function notaSinAcciones(rol: Rol, estado: EstadoSolicitud, origen: OrigenSolici
   if (rol === "admin")
     return estado === "con_jefe"
       ? "Está con el Jefe de Portería."
-      : "La está revisando el Líder de Procesos o el Consejo. Cuando te la asignen, vas a poder marcarla ejecutada.";
+      : estado === "nueva"
+        ? "Le llegó al Líder de Procesos. Si te la asigna, vas a poder marcarla ejecutada."
+        : "La está revisando el Líder de Procesos o el Consejo. Cuando te la asignen, vas a poder marcarla ejecutada.";
   return "No hay acciones disponibles en este estado.";
 }
 

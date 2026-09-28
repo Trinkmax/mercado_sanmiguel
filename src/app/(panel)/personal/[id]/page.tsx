@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, ClipboardList, DoorOpen, FileText, Pencil, Plus } from "lucide-react";
 import { requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { SIN_CONEXION } from "@/lib/sesion";
 import { formatFecha, formatFechaTS, hoyISO, labelPeriodo, periodoActual } from "@/lib/format";
 import { fechaHoraAR, horaAR } from "@/components/porteria/fechas";
 import { Button } from "@/components/ui/button";
@@ -61,7 +62,7 @@ export default async function FichaEmpleadoPage({ params }: Props) {
   if (!empleado) notFound();
 
   const periodo = periodoActual();
-  const [horariosRes, ingresosRes, resumenRes, novedadesMes] = await Promise.all([
+  const [horariosRes, ingresosRes, resumenRes, novedadesMes, bajasRes] = await Promise.all([
     supabase
       .from("empleado_horarios")
       .select("dia_semana, hora_desde, hora_hasta")
@@ -76,9 +77,17 @@ export default async function FichaEmpleadoPage({ params }: Props) {
       .limit(8),
     supabase.rpc("resumen_novedades", { p_periodo: periodo }),
     novedadesDelMes(supabase, periodo, id),
+    supabase
+      .from("empleado_bajas")
+      .select("id, desde, hasta")
+      .eq("empleado_id", id)
+      .order("desde"),
   ]);
+  const bajas = bajasRes.data ?? [];
   const horarios = horariosRes.data ?? [];
   const ingresos = ingresosRes.data ?? [];
+  // Sin respuesta de la base no se dice "no figura como vigente": la pantalla de error reintenta.
+  if (resumenRes.error) throw new Error(SIN_CONEXION);
   const delMes = (resumenRes.data ?? []).find((r) => r.empleado_id === id) ?? null;
   const vistas = await armarVistas(supabase, novedadesMes);
   const segunHorario = horasSemanalesDeFranjas(horarios);
@@ -125,7 +134,13 @@ export default async function FichaEmpleadoPage({ params }: Props) {
               Editar datos
             </Link>
           </Button>
-          <DarDeBaja empleadoId={empleado.id} nombre={nombre} activo={empleado.activo} />
+          <DarDeBaja
+            empleadoId={empleado.id}
+            nombre={nombre}
+            activo={empleado.activo}
+            fechaIngreso={empleado.fecha_ingreso}
+            fechaEgreso={empleado.fecha_egreso}
+          />
         </PageHeader>
       </div>
 
@@ -161,8 +176,28 @@ export default async function FichaEmpleadoPage({ params }: Props) {
               <Dato label="Fecha de ingreso" valor={formatFecha(empleado.fecha_ingreso)} />
               <Dato
                 label="Fecha de egreso"
-                valor={empleado.fecha_egreso ? formatFecha(empleado.fecha_egreso) : "Sigue trabajando"}
+                valor={
+                  empleado.fecha_egreso
+                    ? formatFecha(empleado.fecha_egreso)
+                    : empleado.activo
+                      ? "Sigue trabajando"
+                      : "Dado de baja (sin fecha)"
+                }
               />
+              {bajas.length > 0 ? (
+                <Dato
+                  label="Estuvo de baja"
+                  valor={
+                    <span className="block space-y-0.5 tabular">
+                      {bajas.map((b) => (
+                        <span key={b.id} className="block">
+                          Del {formatFecha(b.desde)} al {formatFecha(b.hasta)}
+                        </span>
+                      ))}
+                    </span>
+                  }
+                />
+              ) : null}
               <Dato
                 label="Horas por semana"
                 valor={

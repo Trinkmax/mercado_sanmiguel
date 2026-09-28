@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   CircleCheck,
   FilePen,
@@ -83,6 +83,8 @@ export function PanelAsignacion({
   onFacturar,
   puedeFacturar,
   facturando = null,
+  pedidoSalirEditor = false,
+  onEditorSucio,
 }: {
   clientes: ClienteMapa[];
   clientePorId: Map<string, ClienteMapa>;
@@ -110,6 +112,11 @@ export function PanelAsignacion({
   puedeFacturar?: (cliente: ClienteMapa) => boolean;
   /** Clave "clienteId:tipo" de la propuesta que se está enviando. */
   facturando?: string | null;
+  /** Se quiso salir del editor por otro lado (Escape, el fondo, otro puesto) con número o
+   * nota sin guardar: el editor muestra el aviso "Salir sin guardar / Guardar y salir". */
+  pedidoSalirEditor?: boolean;
+  /** El editor avisa si tiene número o nota sin guardar. */
+  onEditorSucio?: (sucio: boolean) => void;
 }) {
   const cliPincel = pincel ? clientePorId.get(pincel) ?? null : null;
   const espacioPorId = new Map(espacios.map((e) => [e.id, e]));
@@ -148,7 +155,7 @@ export function PanelAsignacion({
           />
         ) : espacioSel ? (
           <EditorEspacio
-            key={`${espacioSel.id}:${espacioSel.numero}:${espacioSel.medio}:${espacioSel.nota}:${espacioSel.propio}`}
+            key={espacioSel.id}
             espacio={espacioSel}
             duenio={espacioSel.clienteId ? clientePorId.get(espacioSel.clienteId) ?? null : null}
             clientes={clientes}
@@ -160,6 +167,8 @@ export function PanelAsignacion({
             }}
             onEditar={(datos) => onEditar(espacioSel, datos)}
             onCerrar={onCerrarEspacio}
+            pedidoSalir={pedidoSalirEditor}
+            onSucio={onEditorSucio}
           />
         ) : (
           <div className="space-y-3">
@@ -400,6 +409,8 @@ function EditorEspacio({
   onAsignar,
   onEditar,
   onCerrar,
+  pedidoSalir = false,
+  onSucio,
 }: {
   espacio: Espacio;
   duenio: ClienteMapa | null;
@@ -409,53 +420,114 @@ function EditorEspacio({
   onAsignar: (clienteId: string | null) => void;
   onEditar: (datos: DatosEspacio) => void;
   onCerrar: () => void;
+  /** Se quiso salir por fuera del editor (Escape, el fondo, otro puesto) con cambios. */
+  pedidoSalir?: boolean;
+  onSucio?: (sucio: boolean) => void;
 }) {
+  // Número y nota se tipean y van con "Guardar". Medio puesto y puesto propio se guardan
+  // solos al tocar el switch (C3): se muestran tal cual está el espacio (optimista).
   const [numero, setNumero] = useState(espacio.numero ?? "");
-  const [medio, setMedio] = useState(espacio.medio);
   const [nota, setNota] = useState(espacio.nota ?? "");
-  const [propio, setPropio] = useState(Boolean(espacio.propio));
-  const cambio =
-    numero.trim() !== (espacio.numero ?? "") ||
-    medio !== espacio.medio ||
-    nota.trim() !== (espacio.nota ?? "") ||
-    propio !== Boolean(espacio.propio);
+  const [avisoSinGuardar, setAvisoSinGuardar] = useState(false);
+  const cambio = numero.trim() !== (espacio.numero ?? "") || nota.trim() !== (espacio.nota ?? "");
+  // El mapa pregunta antes de cerrar el editor por fuera (Escape, el fondo, otro puesto).
+  useEffect(() => {
+    onSucio?.(cambio);
+  }, [cambio, onSucio]);
+  useEffect(() => () => onSucio?.(false), [onSucio]);
+  const mostrarAviso = cambio && (avisoSinGuardar || pedidoSalir);
+  const esPuesto = espacio.tipo === "puesto";
+  const propio = Boolean(espacio.propio);
   const titulo =
     espacio.tipo === "bar" ? "Bar" : `${NOMBRE_TIPO[espacio.tipo]} ${numeroVisible(espacio)}`;
+
+  function guardarTexto() {
+    if (!cambio) return;
+    setAvisoSinGuardar(false);
+    onEditar({ numero: numero.trim() || null, medio: esPuesto ? espacio.medio : false, nota: nota.trim() || null });
+  }
+
+  /** Switch: guarda ese dato solo, con el número y la nota que ya están guardados. */
+  function guardarSwitch(datos: { medio?: boolean; propio?: boolean }) {
+    onEditar({
+      numero: espacio.numero,
+      medio: datos.medio ?? espacio.medio,
+      nota: espacio.nota,
+      ...(datos.propio !== undefined ? { propio: datos.propio } : {}),
+    });
+  }
+
+  function cerrar() {
+    if (cambio && !avisoSinGuardar) {
+      setAvisoSinGuardar(true);
+      return;
+    }
+    onCerrar();
+  }
 
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <p className="flex flex-wrap items-center gap-2 font-display text-lg font-bold">
             {titulo}
             {espacio.propio ? <Sello estado="propio" /> : null}
           </p>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm break-words text-muted-foreground">
             {duenio ? (
               <>
                 Lo ocupa <strong className="text-foreground">{duenio.nombre}</strong> (carpeta N° {duenio.codigo}).
               </>
+            ) : espacio.clienteId ? (
+              "A nombre de alguien que ya no está en el mapa."
             ) : (
               "Libre."
             )}
           </p>
         </div>
-        <Button type="button" variant="ghost" size="icon-lg" className="size-11" onClick={onCerrar} aria-label="Cerrar">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-lg"
+          className="size-11 shrink-0"
+          onClick={cerrar}
+          aria-label="Cerrar"
+        >
           <X className="size-5" strokeWidth={2} />
         </Button>
       </div>
+
+      {mostrarAviso ? (
+        <div
+          role="alertdialog"
+          aria-label="Cambios sin guardar"
+          className="flex flex-col gap-3 rounded-lg border border-parcial/40 bg-parcial-suave px-4 py-3 sm:flex-row sm:items-center"
+        >
+          <p className="flex-1 text-sm">Cambiaste el número o la nota y todavía no lo guardaste.</p>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" className={cn(BOTON, "bg-card")} onClick={onCerrar}>
+              Salir sin guardar
+            </Button>
+            <Button
+              type="button"
+              className={BOTON}
+              onClick={() => {
+                guardarTexto();
+                onCerrar();
+              }}
+              disabled={guardando}
+            >
+              Guardar y salir
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       <form
         className="grid gap-3 sm:grid-cols-[8rem_minmax(0,1fr)_auto] sm:items-end"
         onSubmit={(ev) => {
           ev.preventDefault();
-          if (!cambio) return;
-          onEditar({
-            numero: numero.trim() || null,
-            medio: espacio.tipo === "puesto" ? medio : false,
-            nota: nota.trim() || null,
-            ...(espacio.tipo === "puesto" && propio !== Boolean(espacio.propio) ? { propio } : {}),
-          });
+          guardarTexto();
         }}
       >
         <div className="space-y-1.5">
@@ -484,31 +556,43 @@ function EditorEspacio({
         <Button type="submit" className={BOTON} disabled={!cambio || guardando}>
           Guardar
         </Button>
-        {espacio.tipo === "puesto" ? (
-          <label className="flex min-h-11 cursor-pointer items-center gap-3 sm:col-span-3">
-            <Switch checked={medio} onCheckedChange={setMedio} aria-label="Medio puesto" />
+      </form>
+
+      {esPuesto ? (
+        <div className="space-y-2">
+          <label className="flex min-h-11 cursor-pointer items-center gap-3">
+            <Switch
+              checked={espacio.medio}
+              disabled={guardando}
+              onCheckedChange={(v) => guardarSwitch({ medio: v })}
+              aria-label="Medio puesto"
+            />
             <span className="text-sm">
               Medio puesto{" "}
               <span className="text-muted-foreground">(cuenta ½ en la expensa: EXME, o EXPP si es propio)</span>
             </span>
           </label>
-        ) : null}
-        {espacio.tipo === "puesto" ? (
           <label
             className={cn(
-              "flex min-h-12 cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 sm:col-span-3",
+              "flex min-h-12 cursor-pointer items-center gap-3 rounded-lg border px-3 py-2",
               propio ? "border-primary/40 bg-accent/60" : "bg-card"
             )}
           >
-            <Switch checked={propio} onCheckedChange={setPropio} aria-label="Puesto propio de la cooperativa" />
+            <Switch
+              checked={propio}
+              disabled={guardando}
+              onCheckedChange={(v) => guardarSwitch({ propio: v })}
+              aria-label="Puesto propio de la cooperativa"
+            />
             <Flag className={cn("size-4 shrink-0", propio ? "text-primary" : "text-muted-foreground")} strokeWidth={2} />
             <span className="text-sm">
               <span className="font-medium">Puesto propio de la cooperativa</span>{" "}
               <span className="text-muted-foreground">· paga EXPP (Expensas Puestos Propios)</span>
             </span>
           </label>
-        ) : null}
-      </form>
+          <p className="text-xs text-muted-foreground">Los dos interruptores se guardan solos al tocarlos.</p>
+        </div>
+      ) : null}
 
       <div className="space-y-2 border-t pt-4">
         <p className="text-sm font-medium">{duenio ? "Pasárselo a otro puestero" : "Asignárselo a un puestero"}</p>
@@ -521,7 +605,7 @@ function EditorEspacio({
             onElegir={(r) => r.tipo === "cliente" && onAsignar(r.id)}
             className="flex-1"
           />
-          {duenio ? (
+          {espacio.clienteId ? (
             <Button type="button" variant="outline" className={BOTON} onClick={() => onAsignar(null)}>
               <Unlink className="size-4" strokeWidth={2} />
               Liberar

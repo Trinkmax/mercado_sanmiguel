@@ -206,8 +206,8 @@ export function EscanerDni({
         Escanear DNI
       </Button>
       <Dialog open={abierto} onOpenChange={setAbierto}>
-        <DialogContent className="sm:max-w-lg">
-          <DialogHeader>
+        <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader className="pr-8">
             <DialogTitle className="text-lg">Escanear DNI</DialogTitle>
             <DialogDescription className="text-sm">
               Apuntá la cámara al código de barras del frente del DNI. Se completa solo.

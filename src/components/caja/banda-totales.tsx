@@ -74,6 +74,9 @@ export function BandaTotales({
   const hayDescuentos =
     a.gastos_pagados > CENTAVO || Math.abs(a.ajustes) > CENTAVO || a.cheques_entregados > CENTAVO;
   const otros = porteria ? otrosCobrosPorteria(a) : 0;
+  // Lo rendido ya viene neto de los ajustes de la caja de portería (faltantes al recibirla o de
+  // Tesorería); las piezas son brutas. Sin esta pieza "Caja de portería $X" no daría la suma.
+  const ajustesPorteria = a.rendido - a.rendido_quintas - a.rendido_ambulantes - a.rendido_canon;
 
   return (
     <section
@@ -146,6 +149,18 @@ export function BandaTotales({
             <Pieza icono={Footprints} etiqueta="Ambulantes" monto={a.rendido_ambulantes} />
             <Separador />
             <Pieza icono={Truck} etiqueta="Bono camioneros" monto={a.rendido_canon} />
+            {Math.abs(ajustesPorteria) > CENTAVO ? (
+              <>
+                <Separador />
+                <span className="inline-flex items-baseline gap-1.5 whitespace-nowrap">
+                  <span className="text-muted-foreground">Ajustes</span>
+                  <span className="tabular font-semibold text-foreground">
+                    {ajustesPorteria < 0 ? "−" : "+"}
+                    {formatARS(Math.abs(ajustesPorteria))}
+                  </span>
+                </span>
+              </>
+            ) : null}
           </p>
           <p className="text-muted-foreground">
             En mano <Money monto={a.rendido_efectivo} className="font-medium text-foreground" /> · Por

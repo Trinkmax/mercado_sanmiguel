@@ -39,7 +39,11 @@ import {
   ordenarRegistros,
   type FiltroRegistros,
 } from "@/components/comunicaciones/lista-registros";
-import { cargarClientesPublico, cargarRegistros } from "@/components/comunicaciones/datos";
+import {
+  cargarClientesPublico,
+  cargarRecepciones,
+  cargarRegistros,
+} from "@/components/comunicaciones/datos";
 import { resumenLectura } from "@/components/comunicaciones/publico";
 import {
   infoTipoRegistro,
@@ -148,12 +152,13 @@ export default async function ComunicacionesPage({
 
 async function PestanaCirculares() {
   const supabase = await createClient();
-  const [circularesRes, recepcionesRes, clientes] = await Promise.all([
+  const [circularesRes, recepcionesTodas, clientes] = await Promise.all([
     supabase
       .from("circulares")
       .select("id, numero, titulo, fecha, obligatoria, activa, publico")
       .order("numero", { ascending: false }),
-    supabase.from("circular_recepciones").select("circular_id, cliente_id, recibida_en"),
+    // Paginado: la tabla crece una fila por socio y circular (pasa las 1000 enseguida).
+    cargarRecepciones(supabase),
     cargarClientesPublico(supabase),
   ]);
   const circulares = circularesRes.data ?? [];
@@ -176,7 +181,7 @@ async function PestanaCirculares() {
   }
 
   const recepciones = new Map<string, Map<string, string>>();
-  for (const r of recepcionesRes.data ?? []) {
+  for (const r of recepcionesTodas) {
     const m = recepciones.get(r.circular_id) ?? new Map<string, string>();
     m.set(r.cliente_id, r.recibida_en);
     recepciones.set(r.circular_id, m);

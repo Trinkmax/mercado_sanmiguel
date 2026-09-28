@@ -18,8 +18,8 @@ export type CambioDeCliente = {
 
 /**
  * Bloque de la ficha: cambios de este cliente que esperan la aprobación del
- * Líder de Procesos, y los rechazados hace poco (con su motivo) para que
- * quien los pidió sepa qué pasó.
+ * Líder de Procesos, y los rechazados en los últimos 15 días (con su motivo)
+ * para que quien los pidió sepa qué pasó. Los más viejos ya no se muestran.
  */
 export function CambiosPendientesCliente({
   pendientes,
@@ -53,7 +53,7 @@ export function CambiosPendientesCliente({
                 className="flex flex-wrap items-center gap-x-4 gap-y-1 py-3"
               >
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium">{c.resumen}</p>
+                  <p className="font-medium break-words">{c.resumen}</p>
                   <p className="text-sm text-muted-foreground">
                     Pidió {c.solicitadoPor} · {formatFechaHora(c.solicitadoEn)}
                   </p>
@@ -86,7 +86,7 @@ export function CambiosPendientesCliente({
         {rechazados.length > 0 ? (
           <div className="space-y-2">
             <p className="text-sm font-medium text-muted-foreground">
-              Rechazados hace poco
+              Rechazados en los últimos 15 días
             </p>
             <div className="divide-y rounded-lg border">
               {rechazados.map((c) => (
@@ -95,7 +95,7 @@ export function CambiosPendientesCliente({
                   className="flex flex-wrap items-start gap-x-4 gap-y-1 px-3 py-3"
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="font-medium">{c.resumen}</p>
+                    <p className="font-medium break-words">{c.resumen}</p>
                     {c.motivoRechazo ? (
                       <p className="text-sm text-pendiente">
                         Motivo: {c.motivoRechazo}

@@ -10,7 +10,8 @@ import {
   MIME_PERMITIDOS,
   TAMANO_MAX_BYTES,
 } from "@/lib/storage";
-import { hoyISO } from "@/lib/format";
+import { formatFecha, hoyISO } from "@/lib/format";
+import { erroresDeFranjas } from "@/components/personal/constantes";
 
 const TIPOS_CONTRATO = [
   "planta_permanente",
@@ -131,6 +132,13 @@ function esDuplicadoDni(error: { code?: string; message?: string }): boolean {
 
 const MENSAJE_DNI_DUPLICADO = "Ya hay un empleado con ese DNI";
 
+/** "Ya hay un empleado con ese DNI: Aguirre, Luis. Buscalo en Personal." (también sirve si se
+ * cortó la red y el alta ya se había guardado: no se crea dos veces). */
+function mensajeDniDuplicado(e: { apellido: string; nombre: string; activo: boolean } | null): string {
+  if (!e) return MENSAJE_DNI_DUPLICADO;
+  return `${MENSAJE_DNI_DUPLICADO}: ${e.apellido}, ${e.nombre}${e.activo ? "" : " (dado de baja)"}. Buscalo en Personal.`;
+}
+
 /** Alta de empleado (solo Líder de Procesos). Contrato opcional como PDF/imagen. */
 export async function crearEmpleado(
   formData: FormData
@@ -149,11 +157,25 @@ export async function crearEmpleado(
 
   const { data: existente } = await supabase
     .from("empleados")
-    .select("id")
+    .select("id, apellido, nombre, activo, creado_por, creado_en")
     .eq("org_id", perfil.org_id)
     .eq("dni", datos.dni)
     .maybeSingle();
-  if (existente) return fallo(MENSAJE_DNI_DUPLICADO);
+  if (existente) {
+    // Reintento tras un corte: el alta ya se había guardado (lo creó esta misma persona hace
+    // un momento, con el mismo nombre). Se sigue como si hubiera salido bien.
+    const mismo = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+    const recien = Date.now() - Date.parse(existente.creado_en) < 15 * 60 * 1000;
+    if (
+      existente.creado_por === perfil.user_id &&
+      recien &&
+      mismo(existente.apellido, datos.apellido) &&
+      mismo(existente.nombre, datos.nombre)
+    ) {
+      return ok({ id: existente.id });
+    }
+    return fallo(mensajeDniDuplicado(existente));
+  }
 
   let contratoPath: string | null = null;
   if (contrato) {
@@ -219,20 +241,26 @@ export async function editarEmpleado(
   const supabase = await createClient();
   const { data: actual } = await supabase
     .from("empleados")
-    .select("id, contrato_path")
+    .select("id, contrato_path, activo")
     .eq("id", id)
     .eq("org_id", perfil.org_id)
     .maybeSingle();
   if (!actual) return fallo("Empleado inexistente.");
+  // Dado de baja y sin fecha de egreso quedaría fuera de todas las planillas: para que vuelva
+  // está "Reincorporar" (que guarda desde cuándo).
+  if (!actual.activo && !datos.fecha_egreso)
+    return fallo(
+      "Está dado de baja: poné la fecha de egreso (el último día que trabajó). Si vuelve a trabajar, usá «Reincorporar» en su ficha."
+    );
 
   const { data: otro } = await supabase
     .from("empleados")
-    .select("id")
+    .select("id, apellido, nombre, activo")
     .eq("org_id", perfil.org_id)
     .eq("dni", datos.dni)
     .neq("id", id)
     .maybeSingle();
-  if (otro) return fallo(MENSAJE_DNI_DUPLICADO);
+  if (otro) return fallo(mensajeDniDuplicado(otro));
 
   let contratoPath = actual.contrato_path;
   if (contrato) {
@@ -260,6 +288,9 @@ export async function editarEmpleado(
       fecha_egreso: datos.fecha_egreso,
       observaciones: datos.observaciones,
       contrato_path: contratoPath,
+      // Igual que en el alta: con una fecha de egreso ya pasada deja de figurar como activo
+      // (no aparece para cargarle novedades ni en la búsqueda de Portería). No reactiva.
+      ...(datos.fecha_egreso && datos.fecha_egreso <= hoyISO() ? { activo: false } : {}),
     })
     .eq("id", id)
     .eq("org_id", perfil.org_id);
@@ -298,8 +329,8 @@ const schemaHorarios = z.object({
 const NOMBRE_DIA = ["", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"];
 
 /** Reemplaza TODOS los horarios del empleado por las franjas recibidas
- * (borra e inserta). Valida que cada franja termine después de empezar y que
- * no se pisen dentro del mismo día. */
+ * (borra e inserta). Una franja con salida anterior a la entrada es un turno de noche;
+ * valida que ninguna franja tenga entrada = salida y que no se pisen (tampoco entre días). */
 export async function guardarHorarios(
   input: unknown
 ): Promise<ActionResult<{ cantidad: number }>> {
@@ -314,21 +345,10 @@ export async function guardarHorarios(
     hora_hasta: f.hora_hasta.slice(0, 5),
   }));
 
-  for (const f of normalizadas) {
-    if (f.hora_hasta <= f.hora_desde)
-      return fallo(
-        `El ${NOMBRE_DIA[f.dia_semana]}: la hora de salida tiene que ser después de la de entrada`
-      );
-  }
-  for (let d = 1; d <= 7; d++) {
-    const delDia = normalizadas
-      .filter((f) => f.dia_semana === d)
-      .sort((a, b) => a.hora_desde.localeCompare(b.hora_desde));
-    for (let i = 1; i < delDia.length; i++) {
-      if (delDia[i].hora_desde < delDia[i - 1].hora_hasta)
-        return fallo(`El ${NOMBRE_DIA[d]} tiene dos franjas que se pisan`);
-    }
-  }
+  // Salida ≤ entrada = turno de noche (termina al día siguiente). Mismas reglas que el editor.
+  const errores = erroresDeFranjas(normalizadas);
+  const diaConError = Object.keys(errores).map(Number).sort((a, b) => a - b)[0];
+  if (diaConError) return fallo(`El ${NOMBRE_DIA[diaConError]}: ${errores[diaConError].toLowerCase()}`);
 
   const supabase = await createClient();
   const { data: empleado } = await supabase
@@ -382,6 +402,27 @@ export async function darDeBaja(input: unknown): Promise<ActionResult<void>> {
   if (!parsed.success) return fallo(parsed.error.issues[0].message);
 
   const supabase = await createClient();
+  const [{ data: empleado }, { data: bajas }] = await Promise.all([
+    supabase
+      .from("empleados")
+      .select("id, fecha_ingreso")
+      .eq("id", parsed.data.id)
+      .eq("org_id", perfil.org_id)
+      .maybeSingle(),
+    supabase
+      .from("empleado_bajas")
+      .select("hasta")
+      .eq("empleado_id", parsed.data.id)
+      .order("hasta", { ascending: false })
+      .limit(1),
+  ]);
+  if (!empleado) return fallo("Empleado inexistente.");
+  if (empleado.fecha_ingreso && parsed.data.fecha_egreso < empleado.fecha_ingreso)
+    return fallo(`La fecha de egreso no puede ser anterior al ingreso (${formatFecha(empleado.fecha_ingreso)})`);
+  const vuelta = bajas?.[0]?.hasta;
+  if (vuelta && parsed.data.fecha_egreso <= vuelta)
+    return fallo(`Revisá la fecha: volvió a trabajar después del ${formatFecha(vuelta)}`);
+
   const { error } = await supabase
     .from("empleados")
     .update({ activo: false, fecha_egreso: parsed.data.fecha_egreso })
@@ -395,18 +436,34 @@ export async function darDeBaja(input: unknown): Promise<ActionResult<void>> {
   return ok(undefined);
 }
 
-/** Vuelve a dar de alta a un empleado dado de baja. */
+/**
+ * Vuelve a dar de alta a un empleado dado de baja (RPC reincorporar_empleado):
+ *  - `desde` = día en que vuelve a trabajar: los días entre la baja y la vuelta no cuentan en
+ *    la planilla de novedades (ni figura en los meses que estuvo entero afuera);
+ *  - sin `desde` = "fue un error": se deshace la baja como si no se hubiera ido.
+ * Si ya estaba activo (reintento tras un corte), no hace nada.
+ */
 export async function reincorporar(input: unknown): Promise<ActionResult<void>> {
-  const perfil = await requireRol("lider");
-  const parsed = z.object({ id: z.string().min(1) }).safeParse(input);
+  await requireRol("lider");
+  const parsed = z
+    .object({
+      id: z.string().min(1),
+      desde: z
+        .string()
+        .trim()
+        .optional()
+        .nullable()
+        .transform((v) => (v ? v : null))
+        .refine((v) => v === null || REGEX_FECHA.test(v), "Elegí desde qué día vuelve"),
+    })
+    .safeParse(input);
   if (!parsed.success) return fallo(parsed.error.issues[0].message);
 
   const supabase = await createClient();
-  const { error } = await supabase
-    .from("empleados")
-    .update({ activo: true, fecha_egreso: null })
-    .eq("id", parsed.data.id)
-    .eq("org_id", perfil.org_id);
+  const { error } = await supabase.rpc("reincorporar_empleado", {
+    p_empleado: parsed.data.id,
+    p_desde: parsed.data.desde ?? undefined,
+  });
   if (error) return fallo(error);
 
   revalidatePath("/personal");

@@ -174,7 +174,7 @@ export function BuscadorClientes({
                   {c.codigo}
                 </span>
                 <span className="min-w-0 flex-1 space-y-1">
-                  <span className="block truncate text-[15px] font-medium">
+                  <span className="block truncate text-base font-medium">
                     {c.nombre}
                     {c.apodo ? (
                       <span className="font-normal text-muted-foreground"> · {c.apodo}</span>
@@ -187,7 +187,7 @@ export function BuscadorClientes({
                     <Money
                       monto={c.deuda}
                       className={cn(
-                        "text-sm font-semibold",
+                        "text-base font-semibold",
                         c.nivel === "al_dia" ? "text-pagado" : c.nivel === "vencido" ? "text-pendiente" : "text-parcial"
                       )}
                     />
@@ -207,14 +207,15 @@ export function BuscadorClientes({
 function DetalleFila({ c, hoy }: { c: FilaCliente; hoy: string }) {
   if (c.categoria === "quintero") {
     if (!c.avance) {
-      return <span className="block text-xs text-muted-foreground">El mes todavía no se generó</span>;
+      return <span className="block text-sm text-muted-foreground">El mes todavía no se generó</span>;
     }
+    // El dato para decidir a quién cobrar: en su propia línea, con letra legible.
     return (
-      <span className="flex items-center gap-2">
+      <span className="block space-y-1">
         {Number(c.avance.cuotas) > 1 ? (
-          <BarraAvance avance={c.avance} alta="h-2" className="max-w-28" />
+          <BarraAvance avance={c.avance} alta="h-2" className="max-w-40" />
         ) : null}
-        <span className="truncate text-xs font-medium text-muted-foreground tabular">
+        <span className="block text-sm font-medium text-muted-foreground tabular">
           {textoAvance(c.avance)}
         </span>
       </span>
@@ -225,7 +226,7 @@ function DetalleFila({ c, hoy }: { c: FilaCliente; hoy: string }) {
     return (
       <span className="flex flex-wrap items-center gap-2">
         <Sello estado={pagoHoy ? "pago_hoy" : "no_pago_hoy"} />
-        <span className="text-xs text-muted-foreground tabular">
+        <span className="text-sm text-muted-foreground tabular">
           {c.pagoHasta === null
             ? "Todavía no pagó nunca"
             : pagoHoy
@@ -239,7 +240,7 @@ function DetalleFila({ c, hoy }: { c: FilaCliente; hoy: string }) {
   }
   if (c.puestos.length === 0) return null;
   return (
-    <span className="block truncate text-xs text-muted-foreground tabular">
+    <span className="block truncate text-sm text-muted-foreground tabular">
       {c.puestos.length > 1 ? "Puestos" : "Puesto"} {c.puestos.map((p) => p.etiqueta).join(" · ")}
     </span>
   );

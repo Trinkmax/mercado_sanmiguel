@@ -103,6 +103,23 @@ function soloDigitos(valor: string): string {
   return valor.replace(/\D+/g, "");
 }
 
+/** Beneficio mientras se tipea: números y UNA coma (el punto también vale), hasta 3 enteros y 2 decimales ("12,5"). */
+function porcentajeTipeado(valor: string): string {
+  const [entero = "", ...resto] = valor.replace(/\./g, ",").replace(/[^0-9,]/g, "").split(",");
+  const ent = entero.slice(0, 3);
+  return resto.length === 0 ? ent : `${ent},${resto.join("").slice(0, 2)}`;
+}
+
+/** 12.5 → "12,5" (así se lee en castellano y así se precarga). */
+function porcentajeTexto(n: number): string {
+  return String(Number(n)).replace(".", ",");
+}
+
+/** "12,5" → 12.5 ("" = 0). */
+function porcentajeNumero(texto: string): number {
+  return Number((texto || "0").replace(",", "."));
+}
+
 export function TablaConceptos({
   conceptos,
   pendientes,
@@ -128,7 +145,7 @@ export function TablaConceptos({
   function abrirEdicion(concepto: ConceptoFila) {
     setEditando(concepto);
     setPrecio(String(Math.round(concepto.precio)));
-    setDescuento(String(concepto.descuento_pronto_pago));
+    setDescuento(porcentajeTexto(concepto.descuento_pronto_pago));
     setOrden(String(concepto.orden_imputacion));
   }
 
@@ -148,7 +165,7 @@ export function TablaConceptos({
       const res = await llamarAccion(() => actualizarConcepto({
         id: editando.id,
         precio: Number(precio || 0),
-        descuento_pronto_pago: Number(descuento || 0),
+        descuento_pronto_pago: porcentajeNumero(descuento),
         orden_imputacion: Number(orden || 0),
       }));
       if (!res.ok) {
@@ -182,6 +199,7 @@ export function TablaConceptos({
   })).filter((g) => g.items.length > 0);
 
   const sinPrecioEditando = editando ? SIN_PRECIO.includes(editando.tipo) : false;
+  const descuentoFuera = porcentajeNumero(descuento) > 100;
 
   return (
     <div className="space-y-6">
@@ -231,7 +249,7 @@ export function TablaConceptos({
                     <p className="text-sm text-muted-foreground">
                       {LABEL_TIPO[concepto.tipo]}
                       {Number(concepto.descuento_pronto_pago) > 0
-                        ? ` · ${concepto.descuento_pronto_pago} % de beneficio pagando en término`
+                        ? ` · ${porcentajeTexto(concepto.descuento_pronto_pago)} % de beneficio pagando en término`
                         : ""}
                       {` · orden ${concepto.orden_imputacion}`}
                     </p>
@@ -334,16 +352,21 @@ export function TablaConceptos({
               </Label>
               <Input
                 id="descuento-concepto"
-                inputMode="numeric"
+                inputMode="decimal"
                 autoComplete="off"
+                aria-invalid={descuentoFuera || undefined}
+                aria-describedby="descuento-ayuda"
                 className="h-12 text-base md:text-base"
                 value={descuento}
-                onChange={(e) =>
-                  setDescuento(soloDigitos(e.target.value).slice(0, 3))
-                }
+                onChange={(e) => setDescuento(porcentajeTipeado(e.target.value))}
               />
-              <p className="text-sm text-muted-foreground">
-                0 si no tiene beneficio.
+              <p
+                id="descuento-ayuda"
+                className={cn("text-sm", descuentoFuera ? "font-medium text-destructive" : "text-muted-foreground")}
+              >
+                {descuentoFuera
+                  ? "Tiene que ser de 0 a 100 %."
+                  : "0 si no tiene beneficio. Con coma si tiene decimales: 12,5."}
               </p>
             </div>
 
@@ -369,7 +392,7 @@ export function TablaConceptos({
             <Button
               size="lg"
               className="h-12 w-full text-base font-semibold"
-              disabled={guardando || (!sinPrecioEditando && !precio) || !orden}
+              disabled={guardando || (!sinPrecioEditando && !precio) || !orden || descuentoFuera}
               onClick={guardar}
             >
               {aplicaDirecto ? null : <Send className="size-5" strokeWidth={2} />}

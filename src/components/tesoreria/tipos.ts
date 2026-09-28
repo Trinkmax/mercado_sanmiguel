@@ -102,6 +102,12 @@ export type Movimiento = {
   cuentaDestino: Cuenta | null;
   grupoId: string | null;
   cajaFecha: string | null;
+  /** Nombre de quien lo cargó. */
+  cargadoPor: string | null;
+  /** Anulado (no cuenta en el flujo; queda a la vista con el rastro). */
+  anulado: { por: string; en: string; motivo: string } | null;
+  /** Es el vuelto en efectivo de este cheque (N°): se corrige desde Cheques, no se anula suelto. */
+  vueltoDeCheque: string | null;
 };
 
 /**

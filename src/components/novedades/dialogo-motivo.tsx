@@ -13,6 +13,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
+import { AlertaError } from "@/components/cobranza/alerta-error";
 
 /**
  * Diálogo corto para lo que necesita un motivo (rechazar, anular) o una confirmación
@@ -89,7 +90,10 @@ export function DialogoMotivo({
                   <button
                     key={s}
                     type="button"
-                    onClick={() => setMotivo(s)}
+                    onClick={() => {
+                      setMotivo(s);
+                      setError(null);
+                    }}
                     className="inline-flex min-h-11 items-center rounded-full border bg-card px-4 text-sm font-medium hover:bg-accent"
                   >
                     {s}
@@ -109,7 +113,7 @@ export function DialogoMotivo({
             />
           </div>
         ) : null}
-        {error ? <p className="text-sm font-medium text-pendiente">{error}</p> : null}
+        {error ? <AlertaError error={error} titulo={conMotivo && !motivo.trim() ? "Falta el motivo" : "No se pudo hacer"} /> : null}
 
         <DialogFooter className="gap-2">
           <Button variant="outline" className="h-12" disabled={pendiente} onClick={cerrar}>

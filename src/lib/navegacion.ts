@@ -132,5 +132,28 @@ export function navParaRol(rol: Rol): ItemNav[] {
   });
 }
 
+/** Documentos imprimibles (§7.2): no están en el menú pero se abren por link. */
+const RUTAS_IMPRESION: { href: string; roles: Rol[] }[] = [
+  { href: "/recibos", roles: ["admin", "guardia", "tesoreria", "lider", "socio"] },
+  { href: "/cierre-caja", roles: ["admin", "guardia", "tesoreria", "lider"] },
+  { href: "/libre-deuda", roles: ["admin", "guardia", "lider"] },
+  { href: "/planilla-lecturas", roles: ["admin", "lider"] },
+  { href: "/reporte-mensual", roles: ["lider"] },
+];
+
+/**
+ * ¿Ese rol puede ver esa pantalla? (ruta relativa, con o sin query). Sirve para
+ * volver adonde estaba después de entrar: si no le corresponde, va a su inicio.
+ * Las páginas igual lo controlan con requireRol.
+ */
+export function puedeVerRuta(rol: Rol, ruta: string): boolean {
+  const pathname = ruta.split(/[?#]/)[0];
+  return [...NAVEGACION, ...NAVEGACION_SOCIO, ...RUTAS_IMPRESION].some(
+    (item) =>
+      (pathname === item.href || pathname.startsWith(`${item.href}/`)) &&
+      item.roles.includes(rol)
+  );
+}
+
 /** Contadores de pendientes por ruta (badge en la navegación). */
 export type BadgesNav = Partial<Record<string, number>>;

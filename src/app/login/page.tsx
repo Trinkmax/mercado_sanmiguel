@@ -2,7 +2,9 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import { redirect } from "next/navigation";
 import { LogIn, UserX } from "lucide-react";
-import { getPerfil, rutaInicio, sesionSinAcceso } from "@/lib/auth";
+import { destinoTrasEntrar, getPerfil, sesionSinAcceso } from "@/lib/auth";
+import { modoDemoActivo } from "@/lib/demo";
+import { rutaVolverSegura } from "@/lib/volver";
 import { Marca } from "@/components/shared/marca";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { FormLogin } from "./form-login";
@@ -14,14 +16,18 @@ export const metadata: Metadata = { title: "Entrar" };
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ motivo?: string | string[] }>;
+  searchParams: Promise<{ motivo?: string | string[]; volver?: string | string[] }>;
 }) {
-  // Con sesión y acceso, el login no tiene sentido: a su inicio. Con sesión pero
-  // SIN acceso (desactivado, Consejo) se queda acá con el aviso: nada de bucles.
-  const perfil = await getPerfil();
-  if (perfil) redirect(rutaInicio(perfil.rol));
+  const { motivo, volver: volverParam } = await searchParams;
+  // Pantalla donde estaba cuando se le cerró la sesión (la pone el proxy).
+  const volver = rutaVolverSegura(volverParam);
 
-  const { motivo } = await searchParams;
+  // Con sesión y acceso, el login no tiene sentido: a su inicio (o adonde estaba).
+  // Con sesión pero SIN acceso (desactivado, Consejo) se queda acá con el aviso:
+  // nada de bucles.
+  const perfil = await getPerfil();
+  if (perfil) redirect(destinoTrasEntrar(perfil.rol, volver));
+
   const desactivado = motivo === "inactivo" && (await sesionSinAcceso());
   // La sesión se cerró (se venció o la cerraron): se explica, sin asustar.
   const sesionCerrada = motivo === "sesion" && !desactivado;
@@ -58,14 +64,16 @@ export default async function LoginPage({
                 <LogIn strokeWidth={2} />
                 <AlertTitle className="text-sm">Tu sesión se cerró.</AlertTitle>
                 <AlertDescription className="text-sm">
-                  Entrá de nuevo con tu DNI y seguís donde estabas.
+                  {volver
+                    ? "Entrá de nuevo con tu DNI y seguís donde estabas."
+                    : "Entrá de nuevo con tu DNI."}
                 </AlertDescription>
               </Alert>
             ) : null}
 
-            <FormLogin />
+            <FormLogin volver={volver} />
 
-            <AccesoDemo />
+            {modoDemoActivo() ? <AccesoDemo /> : null}
           </div>
         </div>
 

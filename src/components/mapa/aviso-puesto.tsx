@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -14,7 +14,7 @@ import {
   Zap,
   type LucideIcon,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, uuidV4 } from "@/lib/utils";
 import { formatFechaTS } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -26,6 +26,7 @@ import { selloEstado, type EstadoSolicitud } from "@/components/solicitudes/cons
 import { etiquetaEspacio } from "./geometria";
 import type { AvisoPuestoPrevio, Espacio } from "./tipos";
 import { llamarAccion } from "@/lib/llamar-accion";
+import { AlertaError } from "@/components/cobranza/alerta-error";
 
 const MOTIVOS: { valor: string; icono: LucideIcon }[] = [
   { valor: "Luz / electricidad", icono: Zap },
@@ -55,6 +56,9 @@ export function AvisoPuesto({
   const [detalle, setDetalle] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [enviando, startTransition] = useTransition();
+  // Clave de idempotencia: la misma hasta que el aviso se guarde (un corte no lo duplica);
+  // otro puesto u otro texto es otro aviso: otra clave.
+  const claveRef = useRef<{ firma: string; ref: string } | null>(null);
   const lugar = etiquetaEspacio(espacio);
   const numero = lugar.replace(/^(Puesto propio|Puesto|Local|Contéiner)\s+/, "");
   const sujeto = espacio.tipo === "puesto" ? `el puesto ${numero}` : lugar.toLowerCase();
@@ -66,16 +70,21 @@ export function AvisoPuesto({
       return;
     }
     setError(null);
+    const firma = JSON.stringify([espacio.id, motivo, detalle.trim()]);
+    if (claveRef.current?.firma !== firma) claveRef.current = { firma, ref: uuidV4() };
+    const ref = claveRef.current.ref;
     startTransition(async () => {
       const res = await llamarAccion(() => avisarSobrePuesto({
         espacioId: espacio.id,
         motivo,
         detalle: detalle.trim() || undefined,
+        ref,
       }));
       if (!res.ok) {
         setError(res.error);
         return;
       }
+      claveRef.current = null;
       setMotivo(null);
       setDetalle("");
       toast.success(`Listo: el Líder recibió tu aviso (solicitud N° ${res.data.numero})`, {
@@ -149,11 +158,7 @@ export function AvisoPuesto({
             />
           </div>
 
-          {error ? (
-            <p role="alert" className="text-sm font-medium text-pendiente">
-              {error}
-            </p>
-          ) : null}
+          {error ? <AlertaError error={error} titulo="No se pudo avisar" /> : null}
 
           <Button
             type="button"

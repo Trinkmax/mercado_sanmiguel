@@ -3,8 +3,9 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient, hayClaveAdmin } from "@/lib/supabase/admin";
-import { getPerfil, rutaInicio } from "@/lib/auth";
+import { destinoTrasEntrar, getPerfil, rutaInicio } from "@/lib/auth";
 import { esDniValido, normalizarDni } from "@/lib/format";
+import { modoDemoActivo } from "@/lib/demo";
 
 /** `usuario` vuelve al formulario para no hacerle tipear el DNI de nuevo. */
 export type EstadoLogin = { error: string; usuario?: string } | null;
@@ -34,6 +35,7 @@ export async function iniciarSesion(
   const inicio = Date.now();
   const usuario = String(formData.get("usuario") ?? formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
+  const volver = formData.get("volver");
 
   if (!usuario) return { error: "Poné tu DNI.", usuario };
   if (!password) return { error: "Poné tu contraseña.", usuario };
@@ -89,7 +91,7 @@ export async function iniciarSesion(
     return { error: "Tu usuario está desactivado. Consultá en Administración.", usuario };
   }
 
-  redirect(rutaInicio(perfil.rol));
+  redirect(destinoTrasEntrar(perfil.rol, volver));
 }
 
 /**
@@ -105,7 +107,7 @@ export async function cerrarSesion(): Promise<void> {
 
 /* ------------------------------------------------------------------ */
 /* Acceso rápido de demo: entrar con un toque a cualquier rol.         */
-/* Sacar esto (y los usuarios demo) antes de pasar a producción.       */
+/* Apagado salvo MODO_DEMO=1 en el servidor (src/lib/demo.ts).         */
 /* El Consejo ya no tiene usuario (F5).                                */
 /* ------------------------------------------------------------------ */
 
@@ -121,6 +123,10 @@ const USUARIOS_DEMO = {
 export type RolDemo = keyof typeof USUARIOS_DEMO;
 
 export async function entrarComoDemo(rol: RolDemo): Promise<EstadoLogin> {
+  // No alcanza con esconder las tarjetas: la acción se puede llamar a mano.
+  if (!modoDemoActivo()) {
+    return { error: "El acceso de demo está apagado. Entrá con tu DNI y tu contraseña." };
+  }
   const email = USUARIOS_DEMO[rol];
   if (!email) return { error: "Rol de demo desconocido." };
 

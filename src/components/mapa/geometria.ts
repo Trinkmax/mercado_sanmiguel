@@ -4,18 +4,30 @@ import type { ClienteMapa, ElementoPlano, Espacio, EstadoCobro, Rect, TipoEspaci
 /** Dos puestos de la misma fila con menos de esto entre sí se tocan. */
 const TOLERANCIA_CONTIGUO = 8;
 
+/** Eje de las filas de puestos: "x" en el plano tal cual (filas este-oeste); "y" en
+ * el plano girado para una pantalla vertical (orientacion.ts: las filas quedan
+ * norte-sur, en columnas). */
+export type Eje = "x" | "y";
+
 /** Bloque del plano: uno o varios espacios contiguos que se dibujan como una
  * sola pieza (los puestos seguidos de un mismo puestero, o un grupo del plano
- * original que sigue libre). Espacios de izquierda a derecha. */
+ * original que sigue libre). Espacios de izquierda a derecha (eje "x") o de
+ * arriba a abajo (eje "y"). */
 export type Bloque = {
   clave: string;
   tipo: TipoEspacio;
   espacios: Espacio[];
   rect: Rect;
   clienteId: string | null;
+  /** Eje de la fila del plano: en "y" los puestos del bloque van uno debajo del otro. */
+  eje: Eje;
 };
 
-function contiguos(a: Espacio, b: Espacio): boolean {
+function contiguos(a: Espacio, b: Espacio, eje: Eje): boolean {
+  if (eje === "y") {
+    const hueco = b.y - (a.y + a.h);
+    return a.x === b.x && a.w === b.w && hueco >= 0 && hueco <= TOLERANCIA_CONTIGUO;
+  }
   return (
     a.y === b.y &&
     a.h === b.h &&
@@ -24,11 +36,29 @@ function contiguos(a: Espacio, b: Espacio): boolean {
   );
 }
 
-function seFunden(a: Espacio, b: Espacio): boolean {
-  if (a.tipo !== "puesto" || b.tipo !== "puesto" || !contiguos(a, b)) return false;
+function seFunden(a: Espacio, b: Espacio, eje: Eje): boolean {
+  if (a.tipo !== "puesto" || b.tipo !== "puesto" || !contiguos(a, b, eje)) return false;
   if (a.clienteId || b.clienteId) return a.clienteId === b.clienteId;
   // Libres: se muestran juntos si el plano original los dibuja como grupo.
   return a.grupo !== null && a.grupo === b.grupo;
+}
+
+/** Orden de recorrido: fila por fila de norte a sur (eje "x"), o columna por columna
+ * de derecha a izquierda y de arriba a abajo (eje "y": la imagen girada del mismo
+ * orden, así los bloques salen iguales en las dos orientaciones). */
+function ordenar(espacios: Espacio[], eje: Eje): Espacio[] {
+  return eje === "y"
+    ? [...espacios].sort((a, b) => b.x + b.w - (a.x + a.w) || a.y - b.y)
+    : [...espacios].sort((a, b) => a.y - b.y || a.x - b.x);
+}
+
+/** Hacia dónde corren las filas de puestos: el eje en el que hay más puestos
+ * pegados uno al lado del otro (el plano girado tiene sus filas en "y"). */
+function ejeDeFilas(espacios: Espacio[]): Eje {
+  const puestos = espacios.filter((e) => e.tipo === "puesto");
+  const pegados = (eje: Eje) =>
+    ordenar(puestos, eje).reduce((n, e, i, lista) => (i > 0 && contiguos(lista[i - 1], e, eje) ? n + 1 : n), 0);
+  return pegados("y") > pegados("x") ? "y" : "x";
 }
 
 export function unir(rects: Rect[]): Rect {
@@ -39,9 +69,12 @@ export function unir(rects: Rect[]): Rect {
   return { x, y, w: x2 - x, h: y2 - y };
 }
 
-/** Arma los bloques del plano a partir de los espacios (ya con su cliente). */
+/** Arma los bloques del plano a partir de los espacios (ya con su cliente). Se
+ * funden los puestos contiguos a lo largo de la fila: en horizontal (misma y y h)
+ * con el plano tal cual, en vertical (misma x y w) con el plano girado. */
 export function armarBloques(espacios: Espacio[]): Bloque[] {
-  const orden = [...espacios].sort((a, b) => a.y - b.y || a.x - b.x);
+  const eje = ejeDeFilas(espacios);
+  const orden = ordenar(espacios, eje);
   const bloques: Bloque[] = [];
   let actual: Espacio[] = [];
   const cerrar = () => {
@@ -52,12 +85,13 @@ export function armarBloques(espacios: Espacio[]): Bloque[] {
       espacios: actual,
       rect: unir(actual),
       clienteId: actual[0].clienteId,
+      eje,
     });
     actual = [];
   };
   for (const e of orden) {
     const previo = actual[actual.length - 1];
-    if (previo && seFunden(previo, e)) {
+    if (previo && seFunden(previo, e, eje)) {
       actual.push(e);
     } else {
       cerrar();
@@ -74,6 +108,11 @@ export function limitesPlano(elementos: ElementoPlano[], espacios: Espacio[]): R
   if (todo.length === 0) return { x: 0, y: 0, w: 1000, h: 500 };
   const r = unir(todo);
   const m = 28;
+  // El muro norte de la nave y sus cabriadas se levantan sobre la placa: en el plano
+  // girado la nave toca el borde de arriba y hay que dejarles lugar.
+  const naves = elementos.filter((e) => e.tipo === "nave");
+  const tope = Math.min(...naves.map((n) => n.y - (ALT.muroNorte + ALT.cabriada)));
+  if (tope < r.y) return { x: r.x - m, y: tope - m, w: r.w + 2 * m, h: r.y + r.h - tope + 2 * m };
   return { x: r.x - m, y: r.y - m, w: r.w + 2 * m, h: r.h + 2 * m };
 }
 

@@ -127,7 +127,7 @@ export function CobrosDia({
                       />
                       <span className="text-xs text-muted-foreground tabular">Recibo N° {r.numero}</span>
                     </div>
-                    <div className="flex w-full items-center justify-end gap-1 sm:w-auto">
+                    <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
                       <Link
                         href={`/recibos/${r.pagoId}`}
                         className="inline-flex min-h-11 items-center gap-1.5 rounded-md px-3 text-sm font-medium text-primary hover:bg-muted"

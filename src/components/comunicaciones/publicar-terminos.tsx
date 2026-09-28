@@ -11,7 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
-import { llamarAccion } from "@/lib/llamar-accion";
+import { llamarAccion, SIN_RESPUESTA } from "@/lib/llamar-accion";
+import { AvisoError } from "./aviso-error";
 
 /**
  * Publicar nueva versión de los términos (solo Líder de Procesos). Es una
@@ -40,8 +41,14 @@ export function PublicarTerminos({
     startTransition(async () => {
       const res = await llamarAccion(() => publicarTerminos({ titulo, contenido }));
       if (!res.ok) {
-        setError(res.error);
-        toast.error(res.error);
+        // Un solo aviso, fijo junto al botón (lo escrito queda para reintentar). Publicar no
+        // tiene clave de idempotencia: cada envío es una versión nueva y los socios tendrían
+        // que aceptar dos veces. Ante un corte, que se fije antes de repetir.
+        setError(
+          res.error === SIN_RESPUESTA
+            ? "Se cortó la conexión y no sabemos si se publicó. Cuando vuelva internet, actualizá la página y fijate qué versión está vigente antes de publicar de nuevo."
+            : res.error
+        );
         return;
       }
       toast.success(`Versión ${res.data.version} publicada`);
@@ -116,11 +123,7 @@ export function PublicarTerminos({
             </span>
           </p>
 
-          {error ? (
-            <p className="rounded-md bg-pendiente-suave px-4 py-3 text-sm font-medium text-pendiente">
-              {error}
-            </p>
-          ) : null}
+          {error ? <AvisoError mensaje={error} /> : null}
 
           <div className="flex flex-wrap gap-2">
             <Button

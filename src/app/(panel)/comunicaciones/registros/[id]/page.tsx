@@ -44,7 +44,7 @@ export default async function RegistroPage({
   const { data: r } = await supabase
     .from("sanciones")
     .select(
-      "id, numero, tipo, titulo, detalle, fecha, storage_path, estado, visto_en, socio_leyo_en, ultimo_mensaje_en, multa, multa_vencimiento, multa_sin_efecto_en, multa_sin_efecto_por, multa_sin_efecto_motivo, creado_en, creado_por, cliente_id, clientes(id, codigo, nombre, apodo, categoria), espacios(tipo, numero, medio), cargos(estado, monto, monto_pagado)"
+      "id, numero, tipo, titulo, detalle, fecha, storage_path, estado, visto_en, socio_leyo_en, ultimo_mensaje_en, multa, multa_vencimiento, multa_sin_efecto_en, multa_sin_efecto_por, multa_sin_efecto_motivo, creado_en, creado_por, cliente_id, clientes(id, codigo, nombre, apodo, categoria), espacios(tipo, numero, medio), cargos(id, estado, monto, monto_pagado, creado_en)"
     )
     .eq("id", id)
     .maybeSingle();
@@ -90,6 +90,25 @@ export default async function RegistroPage({
   const cargo = cargoRaw
     ? { estado: cargoRaw.estado, monto: Number(cargoRaw.monto), monto_pagado: Number(cargoRaw.monto_pagado) }
     : null;
+  // Lo que se descontó solo de su saldo a favor: no bloquea "Dejar sin efecto" y vuelve a su
+  // cuenta. Mismo criterio que dejar_sin_efecto_multa (0025): lo que imputó
+  // aplicar_saldo_favor (origen 'saldo_favor') o, en filas viejas (de antes de 0023, sin
+  // creado_en), pagos ANTERIORES a la multa. Una imputación nueva con origen 'cobro' es un
+  // cobro de caja para la multa aunque el pago tenga fecha apenas anterior.
+  let pagadoConSaldo = 0;
+  if (cargoRaw && Number(cargoRaw.monto_pagado) > 0 && cargoRaw.estado !== "anulado") {
+    const { data: imps } = await supabase
+      .from("imputaciones")
+      .select("monto, origen, creado_en, pagos!inner(fecha)")
+      .eq("cargo_id", cargoRaw.id);
+    const creado = new Date(cargoRaw.creado_en).getTime();
+    for (const i of imps ?? []) {
+      const pago = Array.isArray(i.pagos) ? i.pagos[0] : i.pagos;
+      const filaVieja = i.creado_en === null;
+      const anterior = filaVieja && pago ? new Date(pago.fecha).getTime() < creado : false;
+      if (i.origen === "saldo_favor" || anterior) pagadoConSaldo += Number(i.monto);
+    }
+  }
   const multa = r.multa === null ? null : Number(r.multa);
   const eMulta = estadoMulta({ multa, multa_sin_efecto_en: r.multa_sin_efecto_en, cargo });
   const quienSinEfecto = r.multa_sin_efecto_por ? (nombres.get(r.multa_sin_efecto_por) ?? null) : null;
@@ -230,6 +249,7 @@ export default async function RegistroPage({
               registroId={r.id}
               monto={multa}
               pagado={cargo?.monto_pagado ?? 0}
+              pagadoConSaldo={pagadoConSaldo}
               vencimiento={r.multa_vencimiento}
               estado={eMulta}
               sinEfecto={

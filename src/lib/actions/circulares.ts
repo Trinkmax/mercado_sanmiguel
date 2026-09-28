@@ -7,6 +7,7 @@ import { requireRol } from "@/lib/auth";
 import { ok, fallo, type ActionResult } from "@/lib/actions/result";
 import { rutaCircular, TAMANO_MAX_BYTES } from "@/lib/storage";
 import { hoyISO } from "@/lib/format";
+import { todasLasFilasOError } from "@/components/comunicaciones/datos";
 import {
   armarPublico,
   clienteEnPublico,
@@ -40,7 +41,21 @@ const schemaCircular = z.object({
   todos: z.boolean(),
   segmentos: z.array(z.enum(VALORES_SEGMENTO, { error: "Elegí a quién le llega" })),
   soloSocios: z.boolean(),
+  /** Clave de idempotencia por intento (0025): un reintento no duplica la circular. */
+  ref: z
+    .string()
+    .optional()
+    .transform((v) => (v ? v : null))
+    .refine((v) => v === null || RE_UUID.test(v), "Recargá la página y probá de nuevo"),
 });
+
+export type CircularPublicada = {
+  id: string;
+  numero: number;
+  destinatarios: number;
+  /** Ya estaba publicada con esa clave (reintento después de un corte). */
+  repetido: boolean;
+};
 
 function leerSegmentos(v: FormDataEntryValue | null): unknown {
   if (typeof v !== "string" || !v) return [];
@@ -57,7 +72,7 @@ function leerSegmentos(v: FormDataEntryValue | null): unknown {
  */
 export async function crearCircular(
   formData: FormData
-): Promise<ActionResult<{ id: string; numero: number; destinatarios: number }>> {
+): Promise<ActionResult<CircularPublicada>> {
   const perfil = await requireRol("admin", "lider");
 
   const parsed = schemaCircular.safeParse({
@@ -68,35 +83,60 @@ export async function crearCircular(
     todos: formData.get("todos") === "true",
     segmentos: leerSegmentos(formData.get("segmentos")),
     soloSocios: formData.get("soloSocios") === "true",
+    ref: formData.get("ref") ?? undefined,
   });
   if (!parsed.success) return fallo(parsed.error.issues[0].message);
   const d = parsed.data;
   if (!d.todos && d.segmentos.length === 0)
     return fallo("Elegí a quién le llega: Todos o al menos un grupo");
 
+  // Sin texto ni PDF el socio vería (y tendría que confirmar) una circular vacía.
+  const archivo = formData.get("archivo");
+  const conPdf = archivo instanceof File && archivo.size > 0;
+  if (!d.detalle && !conPdf) return fallo("Escribí qué dice la circular o adjuntá el PDF");
+
   const publico = armarPublico({ todos: d.todos, segmentos: d.segmentos, soloSocios: d.soloSocios });
 
   const supabase = await createClient();
 
   // Nadie en el público = una circular que no le llega a nadie: se avisa antes de publicar.
-  const { data: clientes, error: errorClientes } = await supabase
-    .from("v_clientes_segmentos")
-    .select("cliente_id, categoria, segmentos, activo")
-    .eq("activo", true);
+  // Paginado: la vista puede pasar las 1000 filas (tope de PostgREST).
+  // Si la lectura falla (corte, timeout) se avisa: contar 0 diría "nadie entra" y es falso.
+  const { filas: clientes, error: errorClientes } = await todasLasFilasOError((desde, hasta) =>
+    supabase
+      .from("v_clientes_segmentos")
+      .select("cliente_id, categoria, segmentos, activo")
+      .eq("activo", true)
+      .order("cliente_id")
+      .range(desde, hasta)
+  );
   if (errorClientes) return fallo(errorClientes);
-  const destinatarios = (clientes ?? []).filter((c) =>
-    c.categoria
-      ? clienteEnPublico(
-          { categoria: c.categoria as CategoriaCliente, segmentos: c.segmentos ?? [] },
-          publico
-        )
-      : false
-  ).length;
+  const contar = (p: string[] | null) =>
+    clientes.filter((c) =>
+      c.categoria
+        ? clienteEnPublico({ categoria: c.categoria as CategoriaCliente, segmentos: c.segmentos ?? [] }, p)
+        : false
+    ).length;
+
+  // Reintento después de un corte: si ya se publicó con esta clave, se devuelve esa.
+  const yaPublicada = async (): Promise<ActionResult<CircularPublicada> | null> => {
+    if (!d.ref) return null;
+    const { data: ya } = await supabase
+      .from("circulares")
+      .select("id, numero, publico")
+      .eq("org_id", perfil.org_id)
+      .eq("ref", d.ref)
+      .maybeSingle();
+    return ya ? ok({ id: ya.id, numero: ya.numero, destinatarios: contar(ya.publico), repetido: true }) : null;
+  };
+  const previa = await yaPublicada();
+  if (previa) return previa;
+
+  const destinatarios = contar(publico);
   if (destinatarios === 0) return fallo("Nadie entra en ese público: elegí otros grupos");
 
   let storagePath: string | null = null;
-  const archivo = formData.get("archivo");
-  if (archivo instanceof File && archivo.size > 0) {
+  if (conPdf) {
     if (archivo.type !== "application/pdf")
       return fallo("La circular adjunta tiene que ser un PDF.");
     if (archivo.size > TAMANO_MAX_BYTES)
@@ -119,18 +159,24 @@ export async function crearCircular(
       storage_path: storagePath,
       creada_por: perfil.user_id,
       publico,
+      ref: d.ref,
     })
     .select("id, numero")
     .single();
 
   if (error) {
     if (storagePath) await supabase.storage.from("documentos").remove([storagePath]);
+    // Dos toques a la vez con la misma clave: ganó el otro, se devuelve esa circular.
+    if (error.code === "23505") {
+      const otra = await yaPublicada();
+      if (otra) return otra;
+    }
     return fallo(error);
   }
 
   revalidatePath("/comunicaciones");
   revalidatePath("/mi-cuenta", "layout");
-  return ok({ id: data.id, numero: data.numero, destinatarios });
+  return ok({ id: data.id, numero: data.numero, destinatarios, repetido: false });
 }
 
 /** Da de baja una circular: deja de mostrarse en el portal y de bloquear. */

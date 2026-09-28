@@ -32,6 +32,8 @@ export type GastoFila = {
   facturaUrl: string | null;
   comprobanteValidado: boolean;
   revertido: { por: string; en: string; motivo: string } | null;
+  /** "Agosto 2026" cuando se lista fuera de su mes (impagos de meses anteriores). */
+  mes?: string | null;
 };
 
 /** "Caja del 25/09 · Efectivo" / "Tesorería · Banco" / "Cheque N° 123 a Frutas del Sur". */
@@ -94,7 +96,7 @@ export function FilaGasto({
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
             {g.rubroCodigo ? <Codigo codigo={g.rubroCodigo} /> : null}
-            <p className={cn("text-base font-semibold", g.estado === "anulado" && "text-muted-foreground line-through")}>
+            <p className={cn("min-w-0 text-base font-semibold break-words", g.estado === "anulado" && "text-muted-foreground line-through")}>
               {g.etiqueta}
             </p>
             <Badge variant="outline" className="h-6 text-xs">
@@ -107,6 +109,9 @@ export function FilaGasto({
           />
         </div>
         <p className="text-sm md:hidden">{vencimiento}</p>
+        {g.mes ? (
+          <p className="text-sm font-medium text-pendiente">Gasto de {g.mes.toLowerCase()}</p>
+        ) : null}
         {g.notas ? <p className="line-clamp-2 text-sm text-muted-foreground">{g.notas}</p> : null}
         {g.estado === "pagado" ? (
           <p className="text-sm text-muted-foreground">

@@ -4,7 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { CircleAlert, FileText, Paperclip, Save, UserPlus } from "lucide-react";
+import { FileText, Paperclip, Save, UserPlus, X } from "lucide-react";
 import { crearEmpleado, editarEmpleado } from "@/lib/actions/personal";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -23,6 +23,14 @@ import {
   type TipoContrato,
 } from "@/components/personal/constantes";
 import { llamarAccion } from "@/lib/llamar-accion";
+import { AlertaError } from "@/components/cobranza/alerta-error";
+import { ACCEPT_ADJUNTO } from "@/components/solicitudes/constantes";
+import {
+  adjuntoMuyPesado,
+  ERROR_PESO_ADJUNTO,
+  explicarFalloEnvio,
+  prepararAdjuntos,
+} from "@/components/comunicaciones/adjuntos";
 
 export type DatosEmpleado = {
   id: string;
@@ -92,8 +100,14 @@ export function FormEmpleado({
   const [nombreArchivo, setNombreArchivo] = useState<string | null>(null);
   const inputArchivo = useRef<HTMLInputElement>(null);
 
+  function quitarArchivo() {
+    if (inputArchivo.current) inputArchivo.current.value = "";
+    setNombreArchivo(null);
+  }
+
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (pendiente) return;
     if (!sector) {
       setError("Elegí el sector donde trabaja: define quién carga sus novedades.");
       return;
@@ -106,12 +120,19 @@ export function FormEmpleado({
     // El DNI va sin puntos ni espacios, pase lo que pase.
     fd.set("dni", String(fd.get("dni") ?? "").replace(/\D/g, ""));
     if (empleado) fd.set("id", empleado.id);
+    setError(null);
 
     startTransition(async () => {
+      // La foto del contrato se achica antes de subir (una de la tablet pesa 3–8 MB).
+      const errorPeso = await prepararAdjuntos(fd, ["contrato"]);
+      if (errorPeso) {
+        setError(errorPeso);
+        return;
+      }
+      // Si se corta la red, lo cargado queda; reintentar no duplica (el DNI no se repite).
       const res = empleado ? await llamarAccion(() => editarEmpleado(fd)) : await llamarAccion(() => crearEmpleado(fd));
       if (!res.ok) {
-        setError(res.error);
-        toast.error(res.error);
+        setError(explicarFalloEnvio(res.error, fd, ["contrato"]));
         return;
       }
       setError(null);
@@ -384,9 +405,14 @@ export function FormEmpleado({
               type="date"
               defaultValue={empleado?.fecha_egreso ?? ""}
               className="h-12 text-base md:text-base"
+              aria-describedby="egreso-ayuda"
             />
           </div>
         </div>
+        <p id="egreso-ayuda" className="-mt-2 text-sm text-muted-foreground">
+          Con una fecha de egreso que ya pasó deja de figurar como activo. Si vuelve a trabajar, usá
+          «Reincorporar» en su ficha.
+        </p>
 
         <div className="space-y-2">
           <Label htmlFor="contrato" className="text-base">
@@ -397,9 +423,19 @@ export function FormEmpleado({
             id="contrato"
             name="contrato"
             type="file"
-            accept="application/pdf,image/jpeg,image/png,image/webp"
+            accept={ACCEPT_ADJUNTO}
             className="sr-only"
-            onChange={(e) => setNombreArchivo(e.target.files?.[0]?.name ?? null)}
+            onChange={(e) => {
+              const archivo = e.target.files?.[0] ?? null;
+              if (adjuntoMuyPesado(archivo)) {
+                e.target.value = "";
+                setNombreArchivo(null);
+                setError(ERROR_PESO_ADJUNTO);
+                return;
+              }
+              setError(null);
+              setNombreArchivo(archivo?.name ?? null);
+            }}
           />
           <div className="flex flex-wrap items-center gap-3">
             <Button
@@ -412,18 +448,22 @@ export function FormEmpleado({
               <Paperclip className="size-5" strokeWidth={2} />
               {empleado?.contrato_path ? "Reemplazar contrato" : "Elegir archivo"}
             </Button>
-            <p className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
+            <div className="flex min-w-0 max-w-full items-center gap-2 text-sm text-muted-foreground">
               {nombreArchivo ? (
                 <>
                   <FileText className="size-4 shrink-0" strokeWidth={2} />
-                  <span className="truncate">{nombreArchivo}</span>
+                  <span className="min-w-0 truncate">{nombreArchivo}</span>
+                  <Button type="button" variant="ghost" className="h-11 shrink-0 px-3" onClick={quitarArchivo}>
+                    <X className="size-4" strokeWidth={2} />
+                    Quitar
+                  </Button>
                 </>
               ) : empleado?.contrato_path ? (
-                "Ya hay un contrato cargado. Si elegís otro, lo reemplaza."
+                <p>Ya hay un contrato cargado. Si elegís otro, lo reemplaza.</p>
               ) : (
-                "PDF o imagen, hasta 20 MB. Se puede cargar después."
+                <p>PDF o foto. Las fotos se achican solas. Se puede cargar después.</p>
               )}
-            </p>
+            </div>
           </div>
         </div>
 
@@ -442,12 +482,7 @@ export function FormEmpleado({
         </div>
       </Bloque>
 
-      {error ? (
-        <p className="flex items-center gap-2 font-medium text-pendiente">
-          <CircleAlert className="size-5 shrink-0" strokeWidth={2} />
-          {error}
-        </p>
-      ) : null}
+      {error ? <AlertaError error={error} titulo={empleado ? "No se guardaron los cambios" : "No se pudo crear"} /> : null}
 
       <div className="flex flex-col-reverse gap-3 sm:flex-row">
         {cancelarHref ? (

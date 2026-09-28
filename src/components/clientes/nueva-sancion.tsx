@@ -14,6 +14,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Sello } from "@/components/shared/sello";
 import { cn } from "@/lib/utils";
 import { ACCEPT_ARCHIVOS, TIPOS_REGISTRO, type TipoRegistro } from "./constantes";
+import { explicarFalloEnvio, prepararAdjuntos } from "@/components/comunicaciones/adjuntos";
+import { AlertaError } from "@/components/cobranza/alerta-error";
 import { llamarAccion } from "@/lib/llamar-accion";
 
 const TOAST_POR_TIPO: Record<TipoRegistro, string> = {
@@ -35,16 +37,33 @@ export function NuevaSancion({
   const formRef = useRef<HTMLFormElement>(null);
   const [pendiente, startTransition] = useTransition();
   const [tipo, setTipo] = useState<TipoRegistro>("notificacion");
+  const [error, setError] = useState<string | null>(null);
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
     fd.set("clienteId", clienteId);
     fd.set("tipo", tipo);
+    setError(null);
     startTransition(async () => {
+      // Las fotos se achican antes de subir; el total no puede pasar de 20 MB.
+      const errorPeso = await prepararAdjuntos(fd, ["archivo"]);
+      if (errorPeso) {
+        setError(errorPeso);
+        return;
+      }
       const res = await llamarAccion(() => crearSancion(fd));
       if (!res.ok) {
-        toast.error(res.error);
+        // Lo cargado queda en el formulario. Sin respuesta: que revise antes de repetir y, si
+        // el archivo es pesado, que puede ser eso.
+        setError(
+          explicarFalloEnvio(
+            res.error,
+            fd,
+            ["archivo"],
+            "Se cortó la conexión y no sabemos si se guardó. Revisá internet y fijate en la lista de registros antes de cargarlo de nuevo."
+          )
+        );
         return;
       }
       toast.success(TOAST_POR_TIPO[tipo]);
@@ -150,6 +169,8 @@ export function NuevaSancion({
               PDF o foto (JPG, PNG, WEBP), hasta 20 MB.
             </p>
           </div>
+
+          {error ? <AlertaError error={error} titulo="No se pudo registrar" /> : null}
 
           <Button
             type="submit"

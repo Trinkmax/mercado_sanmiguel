@@ -1,6 +1,7 @@
 import "server-only";
 import type { createClient } from "@/lib/supabase/server";
 import type { Tables } from "@/lib/database.types";
+import { SIN_CONEXION } from "@/lib/sesion";
 import { finDeMes, type NovedadVista } from "./constantes";
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
@@ -45,7 +46,10 @@ export async function novedadesDelMes(
     .order("fecha_desde")
     .order("cargada_en");
   if (empleadoId) q = q.eq("empleado_id", empleadoId);
-  const { data } = await q;
+  const { data, error } = await q;
+  // Sin respuesta de la base no se devuelve "ninguna novedad" (la planilla saldría vacía):
+  // la pantalla de error reintenta sola.
+  if (error) throw new Error(SIN_CONEXION);
   return (data ?? []) as FilaNovedadBD[];
 }
 

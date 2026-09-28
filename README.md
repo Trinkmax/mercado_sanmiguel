@@ -71,6 +71,12 @@ confirmar y los términos y condiciones v1 sin aceptar por el socio.
 
 - `SUPABASE_SECRET_KEY` en `.env.local` (solo servidor) para crear accesos de
   socios desde Configuración → Usuarios.
+- `MODO_DEMO=1` (solo servidor, sin `NEXT_PUBLIC_`) prende el acceso demo del
+  login: las tarjetas "entrá como…" y la acción `entrarComoDemo`. **Sin la
+  variable (o con cualquier otro valor) queda apagado**: en producción no se
+  define. En desarrollo va en `.env.local`; en Vercel cargala solo mientras se
+  muestre la demo y sacala después. Apagarlo no borra los usuarios demo: antes
+  de cargar datos reales, cambiales la contraseña o quitales el acceso.
 - Revisar los **supuestos declarados** al final de `PRODUCT.md` con Franco
   (precios reales, regla exacta del descuento, orden de imputación).
 - Cargar los clientes reales y los saldos iniciales de tesorería.

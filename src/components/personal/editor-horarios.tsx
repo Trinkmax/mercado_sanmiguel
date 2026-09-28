@@ -3,15 +3,21 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { CircleAlert, Copy, Plus, Save, X } from "lucide-react";
+import { CircleAlert, Copy, Moon, Plus, Save, X } from "lucide-react";
 import { guardarHorarios } from "@/lib/actions/personal";
 import { DIAS_SEMANA } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
-import type { Franja } from "@/components/personal/constantes";
+import {
+  cruzaMedianoche,
+  diaSiguiente,
+  erroresDeFranjas,
+  type Franja,
+} from "@/components/personal/constantes";
 import { llamarAccion } from "@/lib/llamar-accion";
+import { AlertaError } from "@/components/cobranza/alerta-error";
 
 type FranjaEditable = { clave: number; desde: string; hasta: string };
 type Semana = Record<number, FranjaEditable[]>;
@@ -45,17 +51,23 @@ function firmaSemana(semana: Semana): string {
   ).join("|");
 }
 
-/** Error de validación de un día, o null si está bien. */
-function errorDia(franjas: FranjaEditable[]): string | null {
-  for (const f of franjas) {
-    if (!f.desde || !f.hasta) return "Completá la hora de entrada y de salida";
-    if (f.hasta <= f.desde) return "La salida tiene que ser después de la entrada";
+/**
+ * Errores de validación por día (null = bien). Una salida anterior a la entrada es un turno de
+ * noche (termina al día siguiente); se controla que no se pise con la franja del otro día.
+ */
+function erroresSemana(semana: Semana): Record<number, string | null> {
+  const e: Record<number, string | null> = {};
+  const completas: Franja[] = [];
+  for (let d = 1; d <= 7; d++) {
+    e[d] = null;
+    for (const f of semana[d]) {
+      if (!f.desde || !f.hasta) e[d] ??= "Completá la hora de entrada y de salida";
+      else completas.push({ dia_semana: d, hora_desde: f.desde, hora_hasta: f.hasta });
+    }
   }
-  const ordenadas = [...franjas].sort((a, b) => a.desde.localeCompare(b.desde));
-  for (let i = 1; i < ordenadas.length; i++) {
-    if (ordenadas[i].desde < ordenadas[i - 1].hasta) return "Dos franjas se pisan";
-  }
-  return null;
+  const cruzadas = erroresDeFranjas(completas);
+  for (let d = 1; d <= 7; d++) e[d] ??= cruzadas[d] ?? null;
+  return e;
 }
 
 /**
@@ -75,11 +87,7 @@ export function EditorHorarios({
   const [pendiente, startTransition] = useTransition();
   const [errorServidor, setErrorServidor] = useState<string | null>(null);
 
-  const errores = useMemo(() => {
-    const e: Record<number, string | null> = {};
-    for (let d = 1; d <= 7; d++) e[d] = errorDia(semana[d]);
-    return e;
-  }, [semana]);
+  const errores = useMemo(() => erroresSemana(semana), [semana]);
   const hayErrores = Object.values(errores).some(Boolean);
   const hayCambios = firmaSemana(semana) !== guardada;
   const lunesVacio = semana[1].length === 0;
@@ -132,8 +140,8 @@ export function EditorHorarios({
     startTransition(async () => {
       const res = await llamarAccion(() => guardarHorarios({ empleadoId, franjas }));
       if (!res.ok) {
+        // Lo cargado queda en pantalla para volver a tocar "Guardar horarios".
         setErrorServidor(res.error);
-        toast.error(res.error);
         return;
       }
       setGuardada(firmaSemana(semana));
@@ -149,11 +157,20 @@ export function EditorHorarios({
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
-          Cargá la entrada y la salida de cada día. Portería compara el ingreso
-          con estas franjas. «Copiar lunes» completa de martes a sábado; el
-          domingo se carga aparte.
-        </p>
+        <div className="max-w-2xl space-y-1 text-sm text-muted-foreground">
+          <p>
+            Cargá la entrada y la salida de cada día. Portería compara el ingreso
+            con estas franjas. «Copiar lunes» completa de martes a sábado; el
+            domingo se carga aparte.
+          </p>
+          <p className="flex items-start gap-1.5">
+            <Moon className="mt-0.5 size-4 shrink-0" strokeWidth={2} aria-hidden />
+            <span>
+              Turno de noche (por ejemplo de 22:00 a 06:00): cargalo en el día que entra; la
+              salida queda para el día siguiente.
+            </span>
+          </p>
+        </div>
         <Button
           type="button"
           variant="outline"
@@ -214,6 +231,12 @@ export function EditorHorarios({
                       <X className="size-5" strokeWidth={2} />
                       Quitar
                     </Button>
+                    {f.desde && f.hasta && f.desde !== f.hasta && cruzaMedianoche({ hora_desde: f.desde, hora_hasta: f.hasta }) ? (
+                      <span className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground">
+                        <Moon className="size-4 shrink-0" strokeWidth={2} aria-hidden />
+                        Sale el {diaSiguiente(dia.valor)}
+                      </span>
+                    ) : null}
                   </div>
                 ))}
                 <div className="flex flex-wrap items-center gap-3">
@@ -243,12 +266,7 @@ export function EditorHorarios({
         })}
       </div>
 
-      {errorServidor ? (
-        <p className="flex items-center gap-2 font-medium text-pendiente">
-          <CircleAlert className="size-5 shrink-0" strokeWidth={2} />
-          {errorServidor}
-        </p>
-      ) : null}
+      {errorServidor ? <AlertaError error={errorServidor} titulo="No se guardaron los horarios" /> : null}
 
       <div className="flex flex-wrap items-center gap-3">
         <Button

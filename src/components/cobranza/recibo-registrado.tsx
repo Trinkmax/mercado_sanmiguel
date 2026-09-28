@@ -63,14 +63,18 @@ export function ReciboRegistrado({
                 <Codigo codigo={imp.codigo} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-medium">{imp.descripcion}</p>
-                  <p className="text-sm text-muted-foreground">{labelPeriodo(imp.periodo)}</p>
+                  {/* "Saldado" va debajo, junto al período: en un celular angosto no le come
+                      el lugar a la descripción. */}
+                  <p className="flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
+                    {labelPeriodo(imp.periodo)}
+                    {imp.saldado ? (
+                      <span className="inline-flex items-center gap-1 font-medium text-pagado">
+                        <Check className="size-4" strokeWidth={2.2} />
+                        Saldado
+                      </span>
+                    ) : null}
+                  </p>
                 </div>
-                {imp.saldado ? (
-                  <span className="flex shrink-0 items-center gap-1 text-sm font-medium text-pagado">
-                    <Check className="size-4" strokeWidth={2.2} />
-                    Saldado
-                  </span>
-                ) : null}
                 <Money monto={imp.monto} className="shrink-0 font-semibold" />
               </div>
             ))}

@@ -121,13 +121,73 @@ function aMinutos(hora: string): number {
   return h * 60 + (m || 0);
 }
 
+/**
+ * ¿La franja termina al día siguiente? (turno de noche: entra 22:00, sale 06:00). Una salida
+ * anterior o igual a la entrada se toma así; entrada = salida no es válida (ver errorFranjas).
+ */
+export function cruzaMedianoche(f: Pick<Franja, "hora_desde" | "hora_hasta">): boolean {
+  return aMinutos(f.hora_hasta.slice(0, 5)) <= aMinutos(f.hora_desde.slice(0, 5));
+}
+
+/** Minutos que dura una franja (22:00 a 06:00 = 480). */
+export function minutosDeFranja(f: Pick<Franja, "hora_desde" | "hora_hasta">): number {
+  const d = aMinutos(f.hora_hasta.slice(0, 5)) - aMinutos(f.hora_desde.slice(0, 5));
+  return d > 0 ? d : d + 24 * 60;
+}
+
 /** Horas por semana que suman sus franjas horarias (lo que usa la planilla si no hay contrato). */
 export function horasSemanalesDeFranjas(franjas: Franja[]): number {
   const minutos = franjas.reduce(
-    (acc, f) => acc + Math.max(aMinutos(f.hora_hasta) - aMinutos(f.hora_desde), 0),
+    (acc, f) => acc + (f.hora_desde.slice(0, 5) === f.hora_hasta.slice(0, 5) ? 0 : minutosDeFranja(f)),
     0
   );
   return Math.round((minutos / 60) * 100) / 100;
+}
+
+const MIN_DIA = 24 * 60;
+const MIN_SEMANA = 7 * MIN_DIA;
+const NOMBRE_DIA = ["", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado", "domingo"];
+
+/**
+ * Errores de las franjas de la semana, por día (el del día en que empieza la franja que falla).
+ * Espejo de lo que valida guardarHorarios. Detecta: entrada = salida, y franjas que se pisan
+ * (también un turno de noche con la franja del día siguiente, y el del domingo con el lunes).
+ */
+export function erroresDeFranjas(franjas: Franja[]): Record<number, string> {
+  const errores: Record<number, string> = {};
+  const tramos: { dia: number; ini: number; fin: number }[] = [];
+  for (const f of franjas) {
+    if (f.hora_desde.slice(0, 5) === f.hora_hasta.slice(0, 5)) {
+      errores[f.dia_semana] ??= "La salida no puede ser a la misma hora que la entrada";
+      continue;
+    }
+    const ini = (f.dia_semana - 1) * MIN_DIA + aMinutos(f.hora_desde.slice(0, 5));
+    tramos.push({ dia: f.dia_semana, ini, fin: ini + minutosDeFranja(f) });
+  }
+  tramos.sort((a, b) => a.ini - b.ini);
+  const pisada = (antes: { dia: number }, despues: { dia: number }) => {
+    if (errores[despues.dia]) return;
+    errores[despues.dia] =
+      antes.dia === despues.dia
+        ? "Dos franjas se pisan"
+        : `Se pisa con el turno de noche del ${NOMBRE_DIA[antes.dia]}`;
+  };
+  let largo = tramos[0]; // el que termina más tarde de los anteriores
+  for (let i = 1; i < tramos.length; i++) {
+    if (tramos[i].ini < largo.fin) pisada(largo, tramos[i]);
+    if (tramos[i].fin > largo.fin) largo = tramos[i];
+  }
+  // El turno de noche del domingo sigue el lunes a la mañana.
+  const ultimo = tramos[tramos.length - 1];
+  if (ultimo && tramos.length > 1 && ultimo.fin > MIN_SEMANA && tramos[0].ini < ultimo.fin - MIN_SEMANA) {
+    pisada(ultimo, tramos[0]);
+  }
+  return errores;
+}
+
+/** Nombre del día siguiente ("martes" para el lunes; "lunes" para el domingo). */
+export function diaSiguiente(dia: number): string {
+  return NOMBRE_DIA[dia === 7 ? 1 : dia + 1];
 }
 
 /** 44 → "44", 37.5 → "37,5" (horas sin ceros de más). */

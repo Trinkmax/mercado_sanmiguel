@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Ban } from "lucide-react";
 import { toast } from "sonner";
 import { anularCobro } from "@/lib/actions/cajas";
@@ -18,7 +19,8 @@ import {
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
-import { llamarAccion } from "@/lib/llamar-accion";
+import { AlertaError } from "@/components/cobranza/alerta-error";
+import { llamarAccion, SIN_RESPUESTA } from "@/lib/llamar-accion";
 
 const ATAJOS = ["Se cargó dos veces", "Monto equivocado", "Cliente equivocado", "Medio de pago equivocado"];
 
@@ -40,27 +42,45 @@ export function BotonAnularCobro({
   /** "efectivo + transferencia" */
   medios: string;
 }) {
+  const router = useRouter();
   const [abierto, setAbierto] = useState(false);
   const [motivo, setMotivo] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [faltaMotivo, setFaltaMotivo] = useState(false);
   const [enviando, startTransition] = useTransition();
+  // Un intento anterior se quedó sin respuesta (corte de red): si ahora la base dice que ya
+  // estaba anulado, fue ese intento el que lo anuló. No es un error para quien lo pidió.
+  const huboCorte = useRef(false);
+
+  function terminar() {
+    huboCorte.current = false;
+    setAbierto(false);
+    setMotivo("");
+    setError(null);
+  }
 
   function confirmar() {
     const limpio = motivo.trim();
     if (!limpio) {
-      setError("Contá por qué anulás el recibo.");
+      setFaltaMotivo(true);
       return;
     }
+    setError(null);
     startTransition(async () => {
       const res = await llamarAccion(() => anularCobro(pagoId, limpio));
       if (!res.ok) {
+        if (huboCorte.current && res.error.startsWith("El cobro ya está anulado")) {
+          toast.info(`Ya había quedado anulado: ${cliente} vuelve a deber ${formatARS(total)}.`);
+          terminar();
+          router.refresh();
+          return;
+        }
+        if (res.error === SIN_RESPUESTA) huboCorte.current = true;
         setError(res.error);
         return;
       }
       toast.success(`Recibo N° ${numero} anulado. ${cliente} vuelve a deber ${formatARS(total)}.`);
-      setAbierto(false);
-      setMotivo("");
-      setError(null);
+      terminar();
     });
   }
 
@@ -73,21 +93,23 @@ export function BotonAnularCobro({
         if (!v) {
           setMotivo("");
           setError(null);
+          setFaltaMotivo(false);
         }
       }}
     >
       <DialogTrigger asChild>
         <Button
-          variant="ghost"
-          size="icon-lg"
-          className="size-11 text-destructive hover:bg-destructive/10 hover:text-destructive"
+          type="button"
+          variant="outline"
+          className="h-11 px-3 text-sm font-semibold text-destructive hover:bg-destructive/10 hover:text-destructive"
           aria-label={`Anular el recibo N° ${numero}`}
         >
-          <Ban className="size-5" strokeWidth={2} />
+          <Ban className="size-4" strokeWidth={2} />
+          Anular
         </Button>
       </DialogTrigger>
-      <DialogContent className="gap-5 p-6 sm:max-w-md">
-        <DialogHeader>
+      <DialogContent className="max-h-[92dvh] gap-5 overflow-y-auto p-6 sm:max-w-md">
+        <DialogHeader className="pr-8">
           <DialogTitle className="text-xl">Anular el recibo N° {numero}</DialogTitle>
           <DialogDescription className="text-base">
             Se anula el recibo completo N° {numero} ({medios}) por {formatARS(total)}. Se revierte lo imputado
@@ -108,6 +130,7 @@ export function BotonAnularCobro({
                 onClick={() => {
                   setMotivo(a);
                   setError(null);
+                  setFaltaMotivo(false);
                 }}
               >
                 {a}
@@ -120,12 +143,16 @@ export function BotonAnularCobro({
             onChange={(e) => {
               setMotivo(e.target.value);
               if (error) setError(null);
+              setFaltaMotivo(false);
             }}
             placeholder="O escribilo con tus palabras"
-            aria-invalid={Boolean(error)}
+            aria-invalid={faltaMotivo}
             className="min-h-20 text-base md:text-base"
           />
-          {error ? <p className="text-sm text-destructive">{error}</p> : null}
+          {faltaMotivo ? (
+            <p className="text-sm font-medium text-destructive">Contá por qué anulás el recibo.</p>
+          ) : null}
+          {error ? <AlertaError error={error} titulo="No se pudo anular" /> : null}
         </div>
         <DialogFooter className="gap-2 sm:gap-2">
           <Button

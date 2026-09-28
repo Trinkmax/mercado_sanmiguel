@@ -91,8 +91,9 @@ export function TarjetaAviso({ aviso }: { aviso: Aviso }) {
   }
   return (
     <Card className="border-parcial bg-parcial-suave">
-      <CardContent className="flex items-center justify-between gap-3 pt-6">
-        <div>
+      {/* Si no entra al lado (columna angosta, celular), el botón baja: nunca aprieta el texto. */}
+      <CardContent className="flex flex-wrap items-center justify-between gap-3 pt-6">
+        <div className="min-w-40 flex-1">
           <p className="font-semibold">
             <span className="tabular">{aviso.n}</span> {titulo}
           </p>

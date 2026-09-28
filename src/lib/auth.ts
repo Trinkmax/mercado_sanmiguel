@@ -4,6 +4,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import type { Enums } from "@/lib/database.types";
 import { esFallaPasajera, SIN_CONEXION } from "@/lib/sesion";
+import { puedeVerRuta } from "@/lib/navegacion";
+import { rutaVolverSegura } from "@/lib/volver";
 
 export type Rol = Enums<"rol_usuario">;
 
@@ -74,6 +76,16 @@ export function rutaInicio(rol: Rol): string {
   if (rol === "socio") return "/mi-cuenta";
   if (rol === "porteria") return "/porteria";
   return "/inicio";
+}
+
+/**
+ * Adónde ir después de entrar: la pantalla donde estaba cuando se le cerró la
+ * sesión (`volver`, solo rutas relativas de esta app) si su rol la puede ver;
+ * si no, el inicio de su rol.
+ */
+export function destinoTrasEntrar(rol: Rol, volver: unknown): string {
+  const ruta = rutaVolverSegura(volver);
+  return ruta && puedeVerRuta(rol, ruta) ? ruta : rutaInicio(rol);
 }
 
 /**

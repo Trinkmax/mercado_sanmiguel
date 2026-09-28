@@ -3,8 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { fechaLocal, hoyISO } from "@/lib/format";
 import type { Arqueo } from "@/components/caja/arqueo-tipos";
 import {
-  armarSerieDiaria,
   rangoUltimosDias,
+  serieDesdeTotales,
   type PuntoCobranza,
 } from "@/components/charts/serie-cobranza";
 
@@ -108,24 +108,13 @@ export async function resumenDelMes(supabase: Supabase, periodo: string): Promis
   }));
 }
 
-/** Cobranza por día de los últimos 14 días (cobros + bono camioneros, sin anulados). */
-export async function serieUltimos14(supabase: Supabase, org: string): Promise<PuntoCobranza[]> {
+/** Cobranza por día de los últimos 14 días (cobros + bono camioneros, sin anulados).
+ * Sumada en SQL (cobranza_diaria, 0024): traer las filas se cortaba en 1000. La RPC ya
+ * filtra por la organización del usuario. */
+export async function serieUltimos14(supabase: Supabase): Promise<PuntoCobranza[]> {
   const rango = rangoUltimosDias(14);
-  const [pagosRes, canonRes] = await Promise.all([
-    supabase
-      .from("pagos")
-      .select("fecha, monto")
-      .eq("org_id", org)
-      .eq("anulado", false)
-      .gte("fecha", `${rango.desde}T00:00:00-03:00`),
-    supabase
-      .from("canon_camiones")
-      .select("fecha, monto")
-      .eq("org_id", org)
-      .eq("anulado", false)
-      .gte("fecha", rango.desde),
-  ]);
-  return armarSerieDiaria(rango.desde, rango.hasta, pagosRes.data ?? [], canonRes.data ?? []);
+  const { data } = await supabase.rpc("cobranza_diaria", { p_desde: rango.desde, p_hasta: rango.hasta });
+  return serieDesdeTotales(rango.desde, rango.hasta, data ?? []);
 }
 
 /** Inicio del día argentino de hace `dias` días, como timestamptz ("2026-09-21T00:00:00-03:00"). */
@@ -134,6 +123,32 @@ export function desdeHaceDias(dias: number): string {
   d.setDate(d.getDate() - dias);
   const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   return `${iso}T00:00:00-03:00`;
+}
+
+/**
+ * Cajas que Tesorería puede validar: las de Administración cerradas, de cualquier día
+ * (la de portería se valida junto con la de Administración que la recibió; sin
+ * recibir, validar_caja la rechaza). Con una sola, el link abre esa caja; con más,
+ * la lista de Tesorería → Hoy ("/caja" solo muestra la de hoy).
+ */
+export async function cajasParaValidar(
+  supabase: Supabase,
+  org: string
+): Promise<{ n: number; href: string }> {
+  const { data, count } = await supabase
+    .from("cajas")
+    .select("fecha", { count: "exact" })
+    .eq("org_id", org)
+    .eq("tipo", "administracion")
+    .eq("estado", "cerrada")
+    .order("fecha", { ascending: true })
+    .limit(1);
+  const n = count ?? 0;
+  const unica = n === 1 ? data?.[0]?.fecha : undefined;
+  return {
+    n,
+    href: unica ? `/caja?fecha=${unica}&tipo=administracion` : "/tesoreria#cajas-para-validar",
+  };
 }
 
 /** count con head: cuántas filas, sin traerlas. */

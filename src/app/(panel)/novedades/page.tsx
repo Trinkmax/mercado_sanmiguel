@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { ClipboardList, Plus, Printer, RotateCcw, UserPlus } from "lucide-react";
+import { ClipboardList, Plus, Printer, UserPlus } from "lucide-react";
 import { requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { SIN_CONEXION } from "@/lib/sesion";
 import { hoyISO, labelPeriodo, periodoActual } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -12,6 +13,7 @@ import { LABEL_SECTOR, esSector } from "@/components/personal/constantes";
 import { SelectorMes } from "@/components/novedades/selector-mes";
 import { BandejaAprobacion, type PendienteBandeja } from "@/components/novedades/bandeja-aprobacion";
 import { PlanillaMes, type FilaPlanilla } from "@/components/novedades/planilla-mes";
+import { AvisoRechazadas, type RechazadaAviso } from "@/components/novedades/aviso-rechazadas";
 import {
   COLUMNAS_NOVEDAD,
   armarVistas,
@@ -50,7 +52,8 @@ export default async function NovedadesPage({ searchParams }: Props) {
   const supabase = await createClient();
   const hace15 = sumarDias(hoyISO(), -15);
 
-  const [resumenRes, delMes, pendientesRes, rechazadasRes] = await Promise.all([
+  const esJefe = perfil.rol === "guardia";
+  const [resumenRes, delMes, pendientesRes, rechazadasRes, recargadasRes] = await Promise.all([
     supabase.rpc("resumen_novedades", { p_periodo: periodo }),
     novedadesDelMes(supabase, periodo),
     puedeRevisar
@@ -59,22 +62,52 @@ export default async function NovedadesPage({ searchParams }: Props) {
           .select(`${COLUMNAS_NOVEDAD}, empleado:empleados(nombre, apellido)`)
           .eq("estado", "pendiente")
           .order("fecha_desde")
-      : Promise.resolve({ data: [] }),
-    perfil.rol === "guardia"
+      : Promise.resolve({ data: [], error: null }),
+    esJefe
       ? supabase
           .from("novedades_personal")
           .select(`${COLUMNAS_NOVEDAD}, empleado:empleados(nombre, apellido)`)
           .eq("estado", "rechazada")
           .eq("cargada_por", perfil.user_id)
+          .is("rechazo_visto_en", null)
           .gte("revisada_en", hace15)
           .order("revisada_en", { ascending: false })
-      : Promise.resolve({ data: [] }),
+      : Promise.resolve({ data: [], error: null }),
+    // Lo que el Jefe volvió a cargar después de un rechazo (para sacar ese aviso).
+    esJefe
+      ? supabase
+          .from("novedades_personal")
+          .select("empleado_id, tipo, cargada_en")
+          .eq("cargada_por", perfil.user_id)
+          .in("estado", ["pendiente", "aprobada"])
+          .gte("cargada_en", hace15)
+      : Promise.resolve({ data: [], error: null }),
   ]);
+  // Si la base no respondió, NO se muestra "No hay empleados" (parecería que se borraron):
+  // la pantalla de error reintenta sola.
+  if (resumenRes.error || pendientesRes.error || rechazadasRes.error || recargadasRes.error) {
+    throw new Error(SIN_CONEXION);
+  }
 
   const resumen = resumenRes.data ?? [];
   type ConEmpleado = FilaNovedadBD & { empleado: { nombre: string; apellido: string } | null };
   const pendientesBD = (pendientesRes.data ?? []) as ConEmpleado[];
-  const rechazadasBD = (rechazadasRes.data ?? []) as ConEmpleado[];
+  const recargadas = recargadasRes.data ?? [];
+  const rechazadasBD = ((rechazadasRes.data ?? []) as ConEmpleado[]).filter(
+    (r) =>
+      !recargadas.some(
+        (o) =>
+          o.empleado_id === r.empleado_id &&
+          o.tipo === r.tipo &&
+          (!r.revisada_en || Date.parse(o.cargada_en) > Date.parse(r.revisada_en))
+      )
+  );
+  const rechazadas: RechazadaAviso[] = rechazadasBD.map((r) => ({
+    id: r.id,
+    frase: fraseNovedad({ ...r, horas: r.horas === null ? null : Number(r.horas) }, r.empleado ? nombrePila(r.empleado) : "Empleado"),
+    motivo: r.motivo_rechazo,
+    href: `/novedades/nueva?empleado=${r.empleado_id}&tipo=${r.tipo}`,
+  }));
 
   const [vistasMes, vistasPendientes] = await Promise.all([
     armarVistas(supabase, delMes),
@@ -137,36 +170,7 @@ export default async function NovedadesPage({ searchParams }: Props) {
 
       {puedeRevisar ? <BandejaAprobacion pendientes={pendientes} miUserId={perfil.user_id} /> : null}
 
-      {rechazadasBD.length > 0 ? (
-        <section className="space-y-3 rounded-xl border border-pendiente/30 bg-pendiente-suave/70 p-4 sm:p-5" aria-label="Novedades rechazadas">
-          <h2 className="font-display text-lg font-bold tracking-tight">
-            {rechazadasBD.length === 1
-              ? "Administración rechazó 1 novedad que cargaste"
-              : `Administración rechazó ${rechazadasBD.length} novedades que cargaste`}
-          </h2>
-          <ul className="divide-y rounded-lg border bg-card px-4">
-            {rechazadasBD.map((r) => {
-              const nombre = r.empleado ? nombrePila(r.empleado) : "Empleado";
-              return (
-                <li key={r.id} className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="min-w-0 space-y-0.5">
-                    <p className="text-[15px] font-medium">{fraseNovedad({ ...r, horas: r.horas === null ? null : Number(r.horas) }, nombre)}</p>
-                    <p className="text-sm">
-                      <span className="font-semibold">Motivo:</span> {r.motivo_rechazo}
-                    </p>
-                  </div>
-                  <Button asChild variant="outline" className="h-11 shrink-0 px-4">
-                    <Link href={`/novedades/nueva?empleado=${r.empleado_id}&tipo=${r.tipo}`}>
-                      <RotateCcw className="size-4" strokeWidth={2} />
-                      Cargarla de nuevo
-                    </Link>
-                  </Button>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      ) : null}
+      {rechazadas.length > 0 ? <AvisoRechazadas rechazadas={rechazadas} /> : null}
 
       <div className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">

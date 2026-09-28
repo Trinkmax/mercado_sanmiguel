@@ -38,7 +38,7 @@ export default async function TesoreriaPage({
   const hoy = hoyISO();
 
   const supabase = await createClient();
-  const [saldos, transferenciasRes, facturasRes] = await Promise.all([
+  const [saldos, transferenciasRes, facturasRes, canonRes] = await Promise.all([
     cargarSaldosIniciales(supabase),
     supabase
       .from("pagos")
@@ -52,10 +52,16 @@ export default async function TesoreriaPage({
       .eq("estado", "pagado")
       .eq("comprobante_validado", false)
       .not("factura_path", "is", null),
+    supabase
+      .from("canon_camiones")
+      .select("id", { count: "exact", head: true })
+      .eq("medio", "transferencia")
+      .eq("anulado", false)
+      .eq("conciliado", false),
   ]);
 
   const pendientes = {
-    conciliar: (transferenciasRes.count ?? 0) + (facturasRes.count ?? 0),
+    conciliar: (transferenciasRes.count ?? 0) + (facturasRes.count ?? 0) + (canonRes.count ?? 0),
     saldos: 4 - saldos.length,
   };
 

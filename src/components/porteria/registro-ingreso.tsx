@@ -10,7 +10,7 @@ import {
   type EmpleadoBusqueda,
   type IngresoRegistrado,
 } from "@/lib/actions/porteria";
-import { cn } from "@/lib/utils";
+import { cn, uuidV4 } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,6 +19,7 @@ import { Sello } from "@/components/shared/sello";
 import { FirmaPad, type FirmaPadHandle } from "@/components/porteria/firma-pad";
 import { EscanerDni, type DatosDni } from "@/components/porteria/escaner-dni";
 import { horaAR } from "@/components/porteria/fechas";
+import { AlertaError } from "@/components/cobranza/alerta-error";
 import { llamarAccion } from "@/lib/llamar-accion";
 
 const SEGUNDOS_CONFIRMACION = 8;
@@ -47,6 +48,9 @@ export function RegistroIngreso() {
   const firmaRef = useRef<FirmaPadHandle>(null);
   const dniRef = useRef<HTMLInputElement>(null);
   const ultimaBusqueda = useRef(0);
+  // Idempotencia: la misma clave hasta que el ingreso quede registrado (un corte de red no la
+  // renueva: si el primer intento sí entró, el reintento devuelve ese ingreso sin duplicarlo).
+  const refIntento = useRef<string | null>(null);
 
   const dniValido = /^\d{7,8}$/.test(dni);
   const listo = dniValido && apellido.trim().length > 0 && nombre.trim().length > 0 && tieneFirma;
@@ -152,6 +156,7 @@ export function RegistroIngreso() {
     setError(null);
     firmaRef.current?.limpiar();
     setTieneFirma(false);
+    refIntento.current = null;
   }
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -178,17 +183,32 @@ export function RegistroIngreso() {
       fd.set("nombre", nombre.trim());
       if (empleado) fd.set("empleado_id", empleado.id);
       fd.set("firma", firma, "firma.png");
+      refIntento.current ??= uuidV4();
+      fd.set("ref", refIntento.current);
 
       const res = await llamarAccion(() => registrarIngreso(fd));
       if (!res.ok) {
+        // Se conserva lo cargado (y la firma) y la misma clave: tocar de nuevo no lo duplica.
         setError(res.error);
-        toast.error(res.error);
+        return;
+      }
+      if (res.data.repetido && res.data.dni !== fd.get("dni")) {
+        // El intento anterior (de OTRA persona) sí había entrado. Lo que está en pantalla es otro
+        // ingreso: queda cargado, con la firma, y con una clave nueva para registrarlo.
+        refIntento.current = null;
+        toast.info(`El ingreso de ${res.data.apellido}, ${res.data.nombre} ya había quedado registrado.`);
+        setError(`Falta registrar a ${apellido.trim()}, ${nombre.trim()}: tocá "Registrar ingreso" de nuevo.`);
+        router.refresh();
         return;
       }
       setError(null);
-      toast.success(
-        `Ingreso registrado: ${res.data.apellido}, ${res.data.nombre} · ${horaAR(res.data.ingreso_en)}`
-      );
+      if (res.data.repetido) {
+        toast.info(`Ese ingreso ya estaba registrado: ${res.data.apellido}, ${res.data.nombre}`);
+      } else {
+        toast.success(
+          `Ingreso registrado: ${res.data.apellido}, ${res.data.nombre} · ${horaAR(res.data.ingreso_en)}`
+        );
+      }
       setResultado(res.data);
       reiniciar();
       router.refresh();
@@ -362,12 +382,7 @@ export function RegistroIngreso() {
           <FirmaPad ref={firmaRef} onCambio={setTieneFirma} disabled={pendiente} />
         </div>
 
-        {error ? (
-          <p className="flex items-center gap-2 font-medium text-pendiente" role="alert">
-            <CircleAlert className="size-5 shrink-0" strokeWidth={2} />
-            {error}
-          </p>
-        ) : null}
+        {error ? <AlertaError error={error} titulo="No se pudo registrar el ingreso" /> : null}
 
         <div className="flex flex-wrap gap-3">
           <Button

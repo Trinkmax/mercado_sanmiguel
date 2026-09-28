@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ChevronDown, Plus } from "lucide-react";
-import { formatARS, labelPeriodo } from "@/lib/format";
+import { formatARS, labelPeriodo, parseMonto, sanitizarMonto } from "@/lib/format";
 import { crearGasto } from "@/lib/actions/gastos";
-import { cn } from "@/lib/utils";
+import { comprimirImagen } from "@/lib/imagen";
+import { MIME_PERMITIDOS, TAMANO_MAX_BYTES } from "@/lib/storage";
+import { cn, uuidV4 } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   Collapsible,
@@ -33,7 +35,8 @@ import {
   origenInicial,
 } from "@/components/gastos/selector-origen";
 import { avisarPago } from "@/components/gastos/acciones-gasto";
-import type { CajaElegible, OrigenPago, Rubro } from "@/components/gastos/tipos";
+import { AlertaError } from "@/components/cobranza/alerta-error";
+import { delDia, type CajaElegible, type OrigenPago, type Rubro } from "@/components/gastos/tipos";
 import { llamarAccion } from "@/lib/llamar-accion";
 
 const AYUDA_TIPO = {
@@ -49,6 +52,7 @@ export function DialogNuevoGasto({
   cajas,
   hoy,
   preferirCaja,
+  cajaPreseleccionadaId = null,
 }: {
   rubros: Rubro[];
   frecuentes: string[];
@@ -57,28 +61,37 @@ export function DialogNuevoGasto({
   cajas: CajaElegible[];
   hoy: string;
   preferirCaja: boolean;
+  /** Viene de la caja (`/gastos?caja=…`): arranca en "¿Ya lo pagaste? Sí" con esa caja elegida. */
+  cajaPreseleccionadaId?: string | null;
 }) {
   const router = useRouter();
+  const cajaElegida = cajaPreseleccionadaId
+    ? cajas.find((c) => c.id === cajaPreseleccionadaId) ?? null
+    : null;
   const [abierto, setAbierto] = useState(false);
   const [rubro, setRubro] = useState<Rubro | null>(null);
   const [tipo, setTipo] = useState<"fijo" | "variable" | null>(null);
   const [monto, setMonto] = useState("");
-  const [yaPagado, setYaPagado] = useState(false);
+  const [yaPagado, setYaPagado] = useState(Boolean(cajaElegida));
   const [origen, setOrigen] = useState<OrigenPago>(() =>
-    origenInicial({ cajas, preferirCaja, hoy })
+    origenInicial({ cajas, preferirCaja, cajaPreseleccionadaId, hoy })
   );
   const [error, setError] = useState<string | null>(null);
   const [pendiente, startTransition] = useTransition();
+  // Clave del formulario: la MISMA hasta que se guarde bien (un corte de red no la
+  // renueva, así el reintento no carga el gasto dos veces).
+  const refForm = useRef<string | null>(null);
 
-  const montoNumero = Number(monto || 0);
+  const montoNumero = parseMonto(monto);
 
   function reiniciar() {
     setRubro(null);
     setTipo(null);
     setMonto("");
-    setYaPagado(false);
-    setOrigen(origenInicial({ cajas, preferirCaja, hoy }));
+    setYaPagado(Boolean(cajaElegida));
+    setOrigen(origenInicial({ cajas, preferirCaja, cajaPreseleccionadaId, hoy }));
     setError(null);
+    refForm.current = null;
   }
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -96,9 +109,16 @@ export function DialogNuevoGasto({
       return;
     }
     const fd = new FormData(e.currentTarget);
+    const factura = fd.get("factura");
+    if (factura instanceof File && factura.size > 0 && !MIME_PERMITIDOS.includes(factura.type)) {
+      setError("La factura tiene que ser un PDF o una foto (JPG, PNG o WEBP). Elegí otro archivo.");
+      return;
+    }
+    refForm.current ??= uuidV4();
+    fd.set("ref", refForm.current);
     fd.set("rubro_id", rubro.id);
     fd.set("tipo", tipo);
-    fd.set("monto", monto);
+    fd.set("monto", String(montoNumero));
     fd.set("periodo", periodo);
     if (yaPagado) {
       fd.set("pagar_origen", origen.origen);
@@ -108,8 +128,20 @@ export function DialogNuevoGasto({
     }
     setError(null);
     startTransition(async () => {
+      // La foto de la factura se achica antes de mandarla (una foto de tablet pesa 3–8 MB).
+      if (factura instanceof File && factura.size > 0) {
+        const chica = await comprimirImagen(factura);
+        if (chica.size > TAMANO_MAX_BYTES) {
+          setError("La factura pesa más de 20 MB. Sacale una foto o elegí un archivo más liviano.");
+          return;
+        }
+        fd.set("factura", chica, chica.name);
+      } else {
+        fd.delete("factura");
+      }
       const res = await llamarAccion(() => crearGasto(fd));
       if (!res.ok) {
+        // Se queda todo como estaba (y con la misma clave) para tocar de nuevo.
         setError(res.error);
         return;
       }
@@ -119,6 +151,12 @@ export function DialogNuevoGasto({
         toast.warning(`El gasto quedó cargado, pero no se pudo pagar: ${res.data.errorPago}`);
       } else if (res.data.pago) {
         avisarPago(res.data.pago, hoy, (href) => router.push(href));
+      } else if (res.data.repetido) {
+        toast.info(
+          res.data.estado === "pagado"
+            ? "Ese gasto ya estaba cargado y pagado (del intento anterior): no se repitió."
+            : "Ese gasto ya estaba cargado (del intento anterior): no se cargó dos veces."
+        );
       } else {
         toast.success(`Cargaste ${formatARS(montoNumero)} en ${labelPeriodo(periodo)}.`);
       }
@@ -133,6 +171,14 @@ export function DialogNuevoGasto({
       open={abierto}
       onOpenChange={(v) => {
         if (pendiente) return;
+        if (v) {
+          // La caja elegida sale de la URL (?caja=) y Next conserva este estado al cambiar solo
+          // la URL: al abrir se vuelve a tomar la de ahora, para no pagar desde una caja que
+          // ya se dejó (la clave del formulario no se toca).
+          setYaPagado(Boolean(cajaElegida));
+          setOrigen(origenInicial({ cajas, preferirCaja, cajaPreseleccionadaId, hoy }));
+          setError(null);
+        }
         setAbierto(v);
         if (!v) reiniciar();
       }}
@@ -144,10 +190,12 @@ export function DialogNuevoGasto({
         </Button>
       </DialogTrigger>
       <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader>
+        <DialogHeader className="pr-8">
           <DialogTitle className="text-lg">Cargar gasto de {labelPeriodo(periodo)}</DialogTitle>
           <DialogDescription className="text-sm">
-            Anotalo una sola vez. Si todavía no lo pagaste, lo pagás después desde la lista.
+            {cajaElegida
+              ? `Si salió del cajón, queda pagado con la caja ${delDia(cajaElegida.fecha, hoy)}.`
+              : "Anotalo una sola vez. Si todavía no lo pagaste, lo pagás después desde la lista."}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="space-y-6">
@@ -170,15 +218,18 @@ export function DialogNuevoGasto({
             </Label>
             <Input
               id="gasto-monto"
-              inputMode="numeric"
+              inputMode="decimal"
               autoComplete="off"
               className="h-13 text-xl font-semibold tabular"
               placeholder="0"
               value={monto}
-              onChange={(e) => setMonto(e.target.value.replace(/\D/g, "").slice(0, 12))}
+              onChange={(e) => {
+                setMonto(sanitizarMonto(e.target.value).slice(0, 15));
+                setError(null);
+              }}
             />
             <p className="min-h-5 text-base font-semibold tabular text-muted-foreground">
-              {montoNumero > 0 ? formatARS(montoNumero) : ""}
+              {montoNumero > 0 ? formatARS(montoNumero) : "Los centavos van con coma: 1234,50"}
             </p>
           </div>
 
@@ -237,7 +288,9 @@ export function DialogNuevoGasto({
                 type="file"
                 accept="application/pdf,image/jpeg,image/png,image/webp"
                 className="h-12 pt-3 text-sm"
+                onChange={() => setError(null)}
               />
+              <p className="text-sm text-muted-foreground">PDF o foto, hasta 20 MB.</p>
             </div>
           </div>
 
@@ -271,16 +324,12 @@ export function DialogNuevoGasto({
             ) : null}
           </div>
 
-          {error ? (
-            <p role="alert" className="rounded-lg bg-pendiente-suave px-4 py-3 text-sm font-medium text-pendiente">
-              {error}
-            </p>
-          ) : null}
+          {error ? <AlertaError error={error} titulo="No se pudo cargar el gasto" /> : null}
 
           <Button
             type="submit"
             size="lg"
-            className="h-13 w-full text-base font-semibold"
+            className="h-auto min-h-13 w-full py-2.5 text-base leading-snug font-semibold whitespace-normal"
             disabled={pendiente || !listo}
           >
             {pendiente ? <Spinner className="size-5" /> : null}

@@ -23,6 +23,8 @@ export type FilaMedidor = {
   id: string;
   numero: string;
   cliente: string;
+  /** Para ir a su ficha (pestaña Medidores): abono, exención y ubicación. */
+  clienteId?: string | null;
   /** "Puesto 58" (desde el plano) o el texto libre del medidor. */
   ubicacion: string | null;
   /** Lugar del plano: la ubicación se ve como chip con link a /mapa?espacio= (C8). */
@@ -314,7 +316,17 @@ export function CargaRapida({
                     {fila.numero}
                   </TableCell>
                   <TableCell className="max-w-48 font-medium">
-                    <span className="block truncate">{fila.cliente}</span>
+                    {fila.clienteId ? (
+                      <Link
+                        href={`/clientes/${fila.clienteId}?tab=medidores`}
+                        className="flex min-h-11 max-w-full items-center underline-offset-4 hover:text-primary hover:underline"
+                        title="Ver sus medidores y el abono"
+                      >
+                        <span className="truncate">{fila.cliente}</span>
+                      </Link>
+                    ) : (
+                      <span className="block truncate">{fila.cliente}</span>
+                    )}
                     {fila.abono === "exento" ? (
                       <Sello estado="exento" texto="Exento de abono" className="mt-0.5" />
                     ) : fila.abono ? (

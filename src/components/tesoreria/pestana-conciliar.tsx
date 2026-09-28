@@ -1,4 +1,4 @@
-import { ArrowLeftRight, FileCheck2, FileWarning, Landmark } from "lucide-react";
+import { ArrowLeftRight, FileCheck2, FileWarning, Landmark, Truck } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { formatARS, formatFecha, formatFechaHora } from "@/lib/format";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -10,6 +10,11 @@ import {
   type FilaTransferencia,
 } from "@/components/tesoreria/conciliacion-transferencias";
 import { BotonDesconciliar } from "@/components/tesoreria/boton-desconciliar";
+import {
+  BotonDesconciliarCanon,
+  ConciliacionCanon,
+  type FilaCanon,
+} from "@/components/tesoreria/conciliacion-canon";
 import { ValidarComprobanteGasto } from "@/components/tesoreria/validar-comprobante-gasto";
 import { SelloComprobante } from "@/components/gastos/sello-comprobante";
 import { etiquetaGasto, LABEL_MEDIO_GASTO } from "@/components/gastos/tipos";
@@ -36,10 +41,19 @@ function comoSePago(g: { pagado_desde: string | null; medio_pago: string | null;
   return `Tesorería · ${g.medio_pago ? LABEL_MEDIO_GASTO[g.medio_pago] ?? g.medio_pago : ""}`;
 }
 
-/** Pestaña Conciliar: transferencias contra el banco y facturas de gastos pagados. */
+/** "Camión grande × 2" · "Bono camioneros". */
+function detalleCanon(c: { tarifa_nombre: string | null; cantidad: number; tipo: string }): string {
+  const nombre = c.tarifa_nombre ?? (c.tipo === "camion" ? "Bono camioneros" : "Ingreso de transporte");
+  return c.cantidad > 1 ? `${nombre} × ${c.cantidad}` : nombre;
+}
+
+/**
+ * Pestaña Conciliar: transferencias de cobros y de bono camioneros contra el banco
+ * (J2), y facturas de gastos pagados.
+ */
 export async function PestanaConciliar({ puedeOperar }: { puedeOperar: boolean }) {
   const supabase = await createClient();
-  const [transferenciasRes, conciliadasRes, gastosRes, perfilesRes] = await Promise.all([
+  const [transferenciasRes, conciliadasRes, gastosRes, perfilesRes, canonRes, canonConciliadosRes] = await Promise.all([
     supabase
       .from("pagos")
       .select("id, numero, fecha, monto, titular_transferencia, comprobante_path, cliente:clientes(nombre, codigo)")
@@ -62,6 +76,22 @@ export async function PestanaConciliar({ puedeOperar }: { puedeOperar: boolean }
       .eq("comprobante_validado", false)
       .order("fecha_pago", { ascending: false }),
     supabase.from("perfiles").select("user_id, nombre"),
+    supabase
+      .from("canon_camiones")
+      .select("id, numero, fecha, tarifa_nombre, tipo, cantidad, patente, monto, creado_por")
+      .eq("medio", "transferencia")
+      .eq("anulado", false)
+      .eq("conciliado", false)
+      .order("fecha", { ascending: true })
+      .order("numero", { ascending: true }),
+    supabase
+      .from("canon_camiones")
+      .select("id, numero, tarifa_nombre, tipo, cantidad, monto, conciliado_por, conciliado_en")
+      .eq("medio", "transferencia")
+      .eq("anulado", false)
+      .eq("conciliado", true)
+      .order("conciliado_en", { ascending: false })
+      .limit(5),
   ]);
 
   const transferencias = transferenciasRes.data ?? [];
@@ -91,6 +121,17 @@ export async function PestanaConciliar({ puedeOperar }: { puedeOperar: boolean }
     comprobanteEsImagen: t.comprobante_path ? esImagen(t.comprobante_path) : false,
   }));
   const totalSinConciliar = filas.reduce((acc, t) => acc + t.monto, 0);
+  const filasCanon: FilaCanon[] = (canonRes.data ?? []).map((c) => ({
+    id: c.id,
+    numero: c.numero,
+    fecha: c.fecha,
+    detalle: detalleCanon(c),
+    patente: c.patente,
+    cobro: c.creado_por ? nombres.get(c.creado_por) ?? null : null,
+    monto: Number(c.monto),
+  }));
+  const totalCanon = filasCanon.reduce((acc, c) => acc + c.monto, 0);
+  const canonConciliados = canonConciliadosRes.data ?? [];
   const conFactura = gastos.filter((g) => g.factura_path);
   const sinFactura = gastos.filter((g) => !g.factura_path);
   const totalSinFactura = sinFactura.reduce((acc, g) => acc + Number(g.monto), 0);
@@ -140,6 +181,56 @@ export async function PestanaConciliar({ puedeOperar }: { puedeOperar: boolean }
                     <Money monto={t.monto} className="font-semibold" />
                     <Sello estado="conciliado" />
                     {puedeOperar ? <BotonDesconciliar id={t.id} numero={t.numero} /> : null}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </section>
+
+      <section className="space-y-4" aria-label="Bono camioneros por transferencia">
+        <Titulo
+          titulo="Bono camioneros por transferencia"
+          descripcion="Lo que Portería cobró por transferencia: marcalo cuando lo veas en el resumen del banco."
+        >
+          {filasCanon.length > 0 ? (
+            <p className="flex items-center gap-2 rounded-lg bg-parcial-suave px-3 py-2 text-sm font-semibold text-parcial">
+              <Truck className="size-4 shrink-0" strokeWidth={2} />
+              {filasCanon.length === 1
+                ? `1 cobro por ${formatARS(totalCanon)} sin conciliar`
+                : `${filasCanon.length} cobros por ${formatARS(totalCanon)} sin conciliar`}
+            </p>
+          ) : null}
+        </Titulo>
+        {filasCanon.length === 0 ? (
+          <EmptyState
+            icono={Truck}
+            titulo="No hay bono camioneros por transferencia sin conciliar"
+            descripcion="Cada vez que Portería cobre el bono por transferencia, aparece acá hasta que lo cruces con el banco."
+          />
+        ) : puedeOperar ? (
+          <ConciliacionCanon filas={filasCanon} />
+        ) : null}
+
+        {canonConciliados.length > 0 ? (
+          <div className="space-y-2">
+            <h3 className="text-base font-semibold">Últimos conciliados</h3>
+            <ul className="divide-y overflow-hidden rounded-xl border bg-card">
+              {canonConciliados.map((c) => (
+                <li key={c.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
+                  <div className="min-w-0 text-sm">
+                    <p className="font-medium break-words">
+                      Bono N° {c.numero} · {detalleCanon(c)}
+                    </p>
+                    <p className="text-muted-foreground">
+                      {formatFechaHora(c.conciliado_en)} · {(c.conciliado_por && nombres.get(c.conciliado_por)) || "—"}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Money monto={c.monto} className="font-semibold" />
+                    <Sello estado="conciliado" texto="Conciliado" />
+                    {puedeOperar ? <BotonDesconciliarCanon id={c.id} numero={c.numero} /> : null}
                   </div>
                 </li>
               ))}

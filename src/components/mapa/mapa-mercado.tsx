@@ -201,12 +201,31 @@ export function MapaMercado({
   const [seleccion, setSeleccion] = useState<Seleccion>(() => {
     if (clienteInicial && !(inicial.editar && puedeEditar)) return { tipo: "cliente", id: clienteInicial };
     if (espacioInicial) {
-      return espacioInicial.clienteId
+      return espacioInicial.clienteId && clientePorId.has(espacioInicial.clienteId)
         ? { tipo: "cliente", id: espacioInicial.clienteId }
         : { tipo: "espacio", id: espacioInicial.id };
     }
     return null;
   });
+  /** El editor de un espacio se abrió desde el panel de consulta: al cerrarlo se vuelve ahí. */
+  const [volverAVer, setVolverAVer] = useState<{ seleccion: Seleccion } | null>(null);
+  /** El editor de un espacio tiene número o nota sin guardar (lo avisa él mismo). */
+  const editorSucio = useRef(false);
+  /** Lo que se quiso hacer mientras el editor tenía cambios (Escape, tocar el fondo, otro
+   * puesto, la búsqueda…): espera a "Salir sin guardar" o "Guardar y salir". */
+  const [salidaPendiente, setSalidaPendiente] = useState<(() => void) | null>(null);
+  const alEditorSucio = useCallback((sucio: boolean) => {
+    editorSucio.current = sucio;
+    if (!sucio) setSalidaPendiente(null);
+  }, []);
+  /** Todo lo que cierra o cambia el editor pasa por acá: con cambios sin guardar, pregunta. */
+  const salirDelEditor = useCallback((accion: () => void) => {
+    if (editorSucio.current) {
+      setSalidaPendiente(() => accion);
+      return;
+    }
+    accion();
+  }, []);
   const [filtro, setFiltro] = useState<Filtro | null>(null);
   const [confirmacion, setConfirmacion] = useState<Confirmacion | null>(null);
   const [sugerencia, setSugerencia] = useState<Sugerencia | null>(null);
@@ -420,7 +439,9 @@ export function MapaMercado({
         totalPuestos += u;
         if (e.propio) propios += u;
         const est = estadoDe(e.clienteId);
-        puestos[est === "ocupado" ? "al_dia" : est] += u;
+        // "ocupado" = a nombre de alguien que no está en el mapa: cuenta como ocupado
+        // (total − libres) pero no como "al día".
+        if (est !== "ocupado") puestos[est] += u;
       } else if (e.tipo === "local") {
         locales++;
         if (e.clienteId) localesOcupados++;
@@ -615,20 +636,23 @@ export function MapaMercado({
           tocarConPincel(e, pincel);
           return;
         }
-        setConfirmacion(null);
-        setSugerencia(null);
-        setSeleccion((s) => (s?.tipo === "espacio" && s.id === e.id ? null : { tipo: "espacio", id: e.id }));
+        salirDelEditor(() => {
+          setConfirmacion(null);
+          setSugerencia(null);
+          setSeleccion((s) => (s?.tipo === "espacio" && s.id === e.id ? null : { tipo: "espacio", id: e.id }));
+        });
         return;
       }
       setFiltro(null);
-      if (e.clienteId) {
+      if (e.clienteId && clientePorId.has(e.clienteId)) {
         const id = e.clienteId;
         setSeleccion((s) => (s?.tipo === "cliente" && s.id === id ? null : { tipo: "cliente", id }));
       } else {
+        // Libre, o a nombre de alguien que no está en el mapa: se muestra el espacio.
         setSeleccion((s) => (s?.tipo === "espacio" && s.id === e.id ? null : { tipo: "espacio", id: e.id }));
       }
     },
-    [modo, pincel, tocarConPincel, esPorteria]
+    [modo, pincel, tocarConPincel, esPorteria, clientePorId, salirDelEditor]
   );
 
   const describir = useCallback(
@@ -658,14 +682,16 @@ export function MapaMercado({
   const tocarFicha = useCallback(
     (clienteId: string) => {
       if (modo === "asignar") {
-        setPincel(clienteId);
-        setSeleccion(null);
+        salirDelEditor(() => {
+          setPincel(clienteId);
+          setSeleccion(null);
+        });
         return;
       }
       setFiltro(null);
       setSeleccion((s) => (s?.tipo === "cliente" && s.id === clienteId ? null : { tipo: "cliente", id: clienteId }));
     },
-    [modo]
+    [modo, salirDelEditor]
   );
 
   const limpiar = useCallback(() => {
@@ -675,6 +701,7 @@ export function MapaMercado({
   }, []);
 
   const entrarAsignar = (opciones: { pincel?: string | null; espacio?: string | null } = {}) => {
+    setVolverAVer(null);
     setModo("asignar");
     setFiltro(null);
     setConfirmacion(null);
@@ -685,15 +712,19 @@ export function MapaMercado({
     setSeleccion(opciones.espacio ? { tipo: "espacio", id: opciones.espacio } : null);
   };
 
-  const salirAsignar = () => {
-    setModo("ver");
-    setPincel(null);
-    setConfirmacion(null);
-    setSugerencia(null);
-    setSeleccion(pincel ? { tipo: "cliente", id: pincel } : null);
-  };
+  const salirAsignar = () =>
+    salirDelEditor(() => {
+      setVolverAVer(null);
+      setModo("ver");
+      setPincel(null);
+      setConfirmacion(null);
+      setSugerencia(null);
+      setSeleccion(pincel ? { tipo: "cliente", id: pincel } : null);
+    });
 
-  const elegirBusqueda = (r: ResultadoBusqueda) => {
+  const elegirBusqueda = (r: ResultadoBusqueda) => salirDelEditor(() => elegirBusquedaYa(r));
+
+  const elegirBusquedaYa = (r: ResultadoBusqueda) => {
     if (r.tipo === "cliente") {
       if (modo === "asignar") {
         setPincel(r.id);
@@ -709,7 +740,8 @@ export function MapaMercado({
     }
     const e = espacioPorId.get(r.id);
     if (!e) return;
-    if (modo === "ver" && e.clienteId) setSeleccion({ tipo: "cliente", id: e.clienteId });
+    if (modo === "ver" && e.clienteId && clientePorId.has(e.clienteId))
+      setSeleccion({ tipo: "cliente", id: e.clienteId });
     else {
       if (modo === "asignar") setPincel(null);
       setSeleccion({ tipo: "espacio", id: e.id });
@@ -722,7 +754,7 @@ export function MapaMercado({
     startTransition(async () => {
       cambiarPlano({ tipo: "editar", id: e.id, ...datos });
       const res = await llamarAccion(() => editarEspacio({ id: e.id, ...datos }));
-      if (!res.ok) toast.error(res.error);
+      if (!res.ok) toast.error(res.error, { id: `espacio-${e.id}` });
       else if (datos.propio !== undefined) {
         const n = datos.numero ?? e.numero ?? "?";
         // Si está ocupado, la carpeta de quien lo ocupa tiene que acompañar (EXME ↔ EXPP):
@@ -737,9 +769,15 @@ export function MapaMercado({
               : datos.propio
                 ? "Paga EXPP (Expensas Puestos Propios)."
                 : "Paga EXME como un puesto común.",
+            id: `espacio-${e.id}`,
           }
         );
-      } else toast.success("Listo, quedó corregido.");
+      } else if (datos.medio !== e.medio) {
+        const n = datos.numero ?? e.numero ?? "?";
+        toast.success(datos.medio ? `Listo: el ${n} quedó como medio puesto` : `Listo: el ${n} ya es un puesto entero`, {
+          id: `espacio-${e.id}`,
+        });
+      } else toast.success("Listo, quedó corregido.", { id: `espacio-${e.id}` });
     });
   };
 
@@ -788,6 +826,18 @@ export function MapaMercado({
     });
   };
 
+  /** Cierra el editor de un espacio. Si se abrió con "Editar puesto" desde el panel de
+   * consulta, se vuelve ahí (modo ver, con lo que estaba elegido). */
+  const cerrarEditor = useCallback(() => {
+    if (volverAVer) {
+      setModo("ver");
+      setSeleccion(volverAVer.seleccion);
+      setVolverAVer(null);
+      return;
+    }
+    setSeleccion(null);
+  }, [volverAVer]);
+
   // Escape: cierra lo último que se abrió.
   useEffect(() => {
     const alTeclado = (ev: KeyboardEvent) => {
@@ -796,13 +846,14 @@ export function MapaMercado({
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA")) return;
       if (confirmacion) setConfirmacion(null);
       else if (sugerencia) setSugerencia(null);
+      else if (seleccion?.tipo === "espacio" && modo === "asignar") salirDelEditor(cerrarEditor);
       else if (seleccion) setSeleccion(null);
       else if (pincel) setPincel(null);
       else if (pantallaCompleta) setPantallaCompleta(false);
     };
     window.addEventListener("keydown", alTeclado);
     return () => window.removeEventListener("keydown", alTeclado);
-  }, [confirmacion, sugerencia, seleccion, pincel, pantallaCompleta]);
+  }, [confirmacion, sugerencia, seleccion, pincel, pantallaCompleta, modo, cerrarEditor, salirDelEditor]);
 
   // Asignando con el dedo (tablet): el plano se acerca hasta que cada puesto
   // sea un blanco cómodo, centrado en los puestos del elegido si ya tiene.
@@ -1003,7 +1054,11 @@ export function MapaMercado({
           describirFicha={describirFicha}
           onTocarFondo={() => {
             if (modo === "asignar" && pincel) return;
-            limpiar();
+            if (modo === "asignar" && volverAVer) {
+              salirDelEditor(cerrarEditor);
+              return;
+            }
+            salirDelEditor(limpiar);
           }}
           tooltip={tooltip}
           enfoqueInicial={enfoqueInicial}
@@ -1057,13 +1112,16 @@ export function MapaMercado({
               sugerencia={sugerencia}
               revisiones={revisiones}
               guardando={guardando}
-              onPincel={(id) => {
-                setPincel(id);
-                setSeleccion(null);
-                setConfirmacion(null);
-                setSugerencia(null);
-                if (id) enfocarCliente(id);
-              }}
+              onPincel={(id) =>
+                salirDelEditor(() => {
+                  setVolverAVer(null);
+                  setPincel(id);
+                  setSeleccion(null);
+                  setConfirmacion(null);
+                  setSugerencia(null);
+                  if (id) enfocarCliente(id);
+                })
+              }
               onAsignar={asignar}
               onEditar={editar}
               onConfirmar={() => {
@@ -1078,15 +1136,26 @@ export function MapaMercado({
                 setSugerencia(null);
               }}
               onDescartarSugerencia={() => setSugerencia(null)}
-              onSeleccionarEspacio={(id) => {
-                setPincel(null);
-                setConfirmacion(null);
-                setSugerencia(null);
-                setSeleccion({ tipo: "espacio", id });
-                const e = espacioPorId.get(id);
-                if (e) lienzo.current?.enfocar(e);
+              onSeleccionarEspacio={(id) =>
+                salirDelEditor(() => {
+                  setPincel(null);
+                  setConfirmacion(null);
+                  setSugerencia(null);
+                  setSeleccion({ tipo: "espacio", id });
+                  const e = espacioPorId.get(id);
+                  if (e) lienzo.current?.enfocar(e);
+                })
+              }
+              onCerrarEspacio={() => {
+                // "Salir sin guardar" / "Guardar y salir" (o la X): sigue con lo que se quiso
+                // hacer (tocar otro puesto, Escape…) o, si no había nada, cierra el editor.
+                const accion = salidaPendiente;
+                setSalidaPendiente(null);
+                editorSucio.current = false;
+                (accion ?? cerrarEditor)();
               }}
-              onCerrarEspacio={() => setSeleccion(null)}
+              pedidoSalirEditor={salidaPendiente !== null}
+              onEditorSucio={alEditorSucio}
               onEnfocar={(r) => lienzo.current?.enfocar(r)}
               onFacturar={facturarEnCarpeta}
               puedeFacturar={(c) => gestiona(c) && !esQuintero(c)}
@@ -1094,6 +1163,7 @@ export function MapaMercado({
             />
           ) : (
             <PanelDetalle
+              key={clienteSel ?? espacioSel?.id ?? "nada"}
               cliente={clienteDetalle}
               suyos={clienteSel ? porCliente.get(clienteSel) ?? [] : []}
               espacio={espacioSel}
@@ -1102,6 +1172,15 @@ export function MapaMercado({
               puedeEditar={puedeEditar}
               onAsignarCliente={(id) => entrarAsignar({ pincel: id })}
               onAsignarEspacio={(id) => entrarAsignar({ pincel: null, espacio: id })}
+              onEditarEspacio={(id) => {
+                const previa = seleccion;
+                entrarAsignar({ pincel: null, espacio: id });
+                setVolverAVer({ seleccion: previa });
+              }}
+              onLiberar={(id) => {
+                asignar([id], null);
+                setSeleccion(null);
+              }}
               onEnfocar={(r) => lienzo.current?.enfocar(r)}
               onCerrar={limpiar}
               vista={vista}

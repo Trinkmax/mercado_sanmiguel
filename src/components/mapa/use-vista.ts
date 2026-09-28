@@ -18,6 +18,11 @@ const UMBRAL_ARRASTRE = 6;
 const ZOOM_MAXIMO = 7;
 /** Enfocar a alguien acerca como mucho esto (se sigue viendo el contexto). */
 const ZOOM_ENFOQUE = 2.6;
+/** Desde esta proporción (pantalla más ancha que el plano, en proporción) se
+ * arranca llenando el ancho. Con el plano girado un celular parado queda en
+ * ~1,5 (lienzo de 390×620) y con pantalla completa en ~1,3: con 1,6, como en
+ * el caso angosto, el celular arrancaría con el predio entero a 0,3 px/u. */
+const PROPORCION_ALTA = 1.2;
 
 const acotar = (v: number, min: number, max: number) => Math.min(Math.max(v, min), max);
 
@@ -29,13 +34,21 @@ function encuadre(lim: Rect, tam: Tam): Camara {
   };
 }
 
-/** Encuadre al abrir: todo el predio; en pantallas angostas (celular
- * vertical) el plano entero quedaría como una tira, así que se arranca más
- * cerca, centrado en la nave, llenando el alto disponible. */
-function encuadreInicial(lim: Rect, tam: Tam): Camara {
+/** Encuadre al abrir: todo el predio; en pantallas angostas (el plano mucho
+ * más ancho que la pantalla) el plano entero quedaría como una tira, así que se
+ * arranca más cerca, centrado en la nave, llenando el alto disponible. Al revés,
+ * con el plano girado en una pantalla parada (el plano bastante más alto que la
+ * pantalla, en proporción), se arranca llenando el ANCHO desde la parte de
+ * arriba: en un celular el predio entero se vería con números de 6 px. */
+export function encuadreInicial(lim: Rect, tam: Tam): Camara {
   const todo = encuadre(lim, tam);
   const angosta = tam.w / tam.h < lim.w / lim.h / 1.6;
-  if (!angosta) return todo;
+  if (!angosta) {
+    const alta = tam.w / tam.h > (lim.w / lim.h) * PROPORCION_ALTA;
+    if (!alta) return todo;
+    const k = Math.min(tam.w / lim.w, todo.k * 2.6);
+    return { cx: todo.cx, cy: lim.y + tam.h / (2 * k), k };
+  }
   const llenarAlto = tam.h / lim.h;
   return { ...todo, k: Math.min(llenarAlto, todo.k * 2.6) };
 }

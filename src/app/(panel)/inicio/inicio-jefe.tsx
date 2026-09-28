@@ -131,7 +131,7 @@ export async function InicioJefe({ perfil, supabase }: { perfil: Perfil; supabas
           )}
 
           <Button asChild size="lg" className="h-12 w-full px-5 text-base font-semibold sm:w-auto">
-            <Link href="/cobranza">
+            <Link href="/cobranza?cat=quintero">
               <HandCoins className="size-5" strokeWidth={2} />
               Cobrar a un quintero
             </Link>
@@ -148,7 +148,7 @@ export async function InicioJefe({ perfil, supabase }: { perfil: Perfil; supabas
               </div>
             </div>
             <Button asChild size="lg" variant="outline" className="h-12 px-5 text-base">
-              <Link href="/cobranza">
+              <Link href="/cobranza?cat=ambulante">
                 <Footprints className="size-5" strokeWidth={2} />
                 Cobrar a un ambulante
               </Link>

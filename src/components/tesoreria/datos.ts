@@ -24,7 +24,39 @@ export function saldosDesdeFlujo(f: Flujo): SaldosCuentas {
 }
 
 export async function cargarSaldosIniciales(supabase: Supabase): Promise<SaldoInicial[]> {
-  const { data } = await supabase.from("saldos_iniciales").select("medio, moneda, monto, fecha, notas");
+  const [{ data }, { data: correcciones }] = await Promise.all([
+    supabase.from("saldos_iniciales").select("medio, moneda, monto, fecha, notas"),
+    supabase
+      .from("tesoreria_eventos")
+      .select("moneda, valor_nuevo, motivo, hecho_por, hecho_en")
+      .eq("tipo", "saldo_inicial_corregido")
+      .order("hecho_en", { ascending: false })
+      .limit(40),
+  ]);
+  const usuarios = [
+    ...new Set((correcciones ?? []).map((c) => c.hecho_por).filter((x): x is string => Boolean(x))),
+  ];
+  const { data: perfiles } = usuarios.length
+    ? await supabase.from("perfiles").select("user_id, nombre").in("user_id", usuarios)
+    : { data: [] as { user_id: string; nombre: string }[] };
+  const nombre = new Map((perfiles ?? []).map((p) => [p.user_id, p.nombre]));
+  const ultima = (medio: string, moneda: string) => {
+    const c = (correcciones ?? []).find(
+      (e) =>
+        e.moneda === moneda &&
+        typeof e.valor_nuevo === "object" &&
+        e.valor_nuevo !== null &&
+        !Array.isArray(e.valor_nuevo) &&
+        e.valor_nuevo.medio === medio
+    );
+    return c
+      ? {
+          por: (c.hecho_por && nombre.get(c.hecho_por)) || "alguien del equipo",
+          en: c.hecho_en,
+          motivo: c.motivo ?? "",
+        }
+      : null;
+  };
   return (data ?? [])
     .filter((s) => s.medio === "efectivo" || s.medio === "transferencia")
     .map((s) => ({
@@ -33,6 +65,7 @@ export async function cargarSaldosIniciales(supabase: Supabase): Promise<SaldoIn
       monto: n(s.monto),
       fecha: s.fecha,
       notas: s.notas,
+      corregido: ultima(s.medio, s.moneda),
     }));
 }
 
@@ -89,12 +122,36 @@ export async function cargarCajasPendientes(supabase: Supabase): Promise<CajaPen
 export async function cargarMovimientos(supabase: Supabase, mes: string, mesSiguiente: string): Promise<Movimiento[]> {
   const { data } = await supabase
     .from("movimientos_tesoreria")
-    .select("id, fecha, tipo, descripcion, monto, moneda, cuenta, cuenta_destino, grupo_id, caja:cajas(fecha)")
+    .select(
+      "id, fecha, tipo, descripcion, monto, moneda, cuenta, cuenta_destino, grupo_id, creado_por, anulado_en, anulado_por, motivo_anulacion, caja:cajas(fecha)"
+    )
     .gte("fecha", mes)
     .lt("fecha", mesSiguiente)
     .order("fecha", { ascending: false })
     .order("creado_en", { ascending: false });
-  return (data ?? []).map((m) => ({
+  const filas = data ?? [];
+  const usuarios = [
+    ...new Set(filas.flatMap((m) => [m.creado_por, m.anulado_por]).filter((x): x is string => Boolean(x))),
+  ];
+  // Ingresos que son el vuelto de un cheque entregado (se deshacen desde Cheques).
+  const ingresos = filas.filter((m) => m.tipo === "ingreso" && !m.caja && !m.anulado_en).map((m) => m.id);
+  const [{ data: perfiles }, { data: vueltos }] = await Promise.all([
+    usuarios.length
+      ? supabase.from("perfiles").select("user_id, nombre").in("user_id", usuarios)
+      : Promise.resolve({ data: [] as { user_id: string; nombre: string }[] }),
+    ingresos.length
+      ? supabase
+          .from("cheques")
+          .select("numero, vuelto_movimiento_id")
+          .in("vuelto_movimiento_id", ingresos)
+          .neq("estado", "rechazado")
+      : Promise.resolve({ data: [] as { numero: string; vuelto_movimiento_id: string | null }[] }),
+  ]);
+  const nombre = new Map((perfiles ?? []).map((p) => [p.user_id, p.nombre]));
+  const chequeDelVuelto = new Map(
+    (vueltos ?? []).flatMap((c) => (c.vuelto_movimiento_id ? [[c.vuelto_movimiento_id, c.numero] as const] : []))
+  );
+  return filas.map((m) => ({
     id: m.id,
     fecha: m.fecha,
     tipo: m.tipo as TipoMovimiento,
@@ -105,5 +162,14 @@ export async function cargarMovimientos(supabase: Supabase, mes: string, mesSigu
     cuentaDestino: (m.cuenta_destino as Cuenta | null) ?? null,
     grupoId: m.grupo_id,
     cajaFecha: m.caja?.fecha ?? null,
+    cargadoPor: m.creado_por ? nombre.get(m.creado_por) ?? null : null,
+    anulado: m.anulado_en
+      ? {
+          por: (m.anulado_por && nombre.get(m.anulado_por)) || "alguien del equipo",
+          en: m.anulado_en,
+          motivo: m.motivo_anulacion ?? "",
+        }
+      : null,
+    vueltoDeCheque: chequeDelVuelto.get(m.id) ?? null,
   }));
 }

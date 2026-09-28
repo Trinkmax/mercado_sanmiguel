@@ -13,6 +13,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
 import { EmptyState } from "@/components/shared/empty-state";
+import { AlertaError } from "@/components/cobranza/alerta-error";
 import { DibujoTarifa } from "@/components/porteria/dibujo-tarifa";
 import {
   DESTINOS,
@@ -150,26 +151,20 @@ export function CanonTransporte({
     const texto = textoEntrada({ tarifa_nombre: tarifa.nombre, unidad: tarifa.unidad, cantidad });
 
     startTransition(async () => {
-      let res: Awaited<ReturnType<typeof registrarCanon>>;
-      try {
-        res = await llamarAccion(() => registrarCanon({
-          tarifaId: tarifa.id,
-          cantidad,
-          medio,
-          patente: patenteNorm || undefined,
-          destino,
-          puesto: destino === "puesto" && puestoNorm ? puestoNorm : undefined,
-          ref,
-        }));
-      } catch {
-        // Sin red: no se sabe si llegó. Se conserva TODO (y el mismo ref: si ya había entrado,
-        // el reintento devuelve el mismo cobro en vez de cobrar dos veces).
-        setError("No se pudo cobrar. Revisá la conexión y tocá de nuevo.");
-        return;
-      }
+      const res = await llamarAccion(() => registrarCanon({
+        tarifaId: tarifa.id,
+        cantidad,
+        medio,
+        patente: patenteNorm || undefined,
+        destino,
+        puesto: destino === "puesto" && puestoNorm ? puestoNorm : undefined,
+        ref,
+      }));
       if (!res.ok) {
-        // La base respondió que no: no se guardó nada con este intento.
-        refIntento.current = null;
+        // Se conserva TODO y el MISMO ref (también si se cortó la red: si el primer intento sí
+        // entró, el reintento devuelve ese cobro en vez de cobrar dos veces). Solo si la base
+        // dice que con este ref ya se cobró OTRA cosa, el próximo intento es un cobro nuevo.
+        if (res.error.startsWith("Ese cobro ya se registró")) refIntento.current = null;
         setError(res.error);
         return;
       }
@@ -498,12 +493,7 @@ export function CanonTransporte({
             )}
           </div>
 
-          {error ? (
-            <p className="flex items-start gap-2 font-medium text-pendiente" role="alert">
-              <CircleAlert className="mt-0.5 size-5 shrink-0" strokeWidth={2} />
-              {error}
-            </p>
-          ) : null}
+          {error ? <AlertaError error={error} titulo="No se pudo cobrar" /> : null}
 
           <Button
             type="submit"

@@ -16,15 +16,15 @@ export type FiltroSolicitud = {
   label: string;
   /** null = todas las que el rol ve. */
   estados: EstadoSolicitud[] | null;
-  /** Condición extra (además de los estados). */
-  predicado?: (s: SolicitudFiltrable) => boolean;
+  /** Solo las de ese origen (además de los estados). Se filtra en la consulta. */
+  origen?: OrigenSolicitud;
   vacio: { titulo: string; descripcion: string };
 };
 
 /** ¿La solicitud entra en la pestaña? */
 export function cumpleFiltro(f: FiltroSolicitud, s: SolicitudFiltrable): boolean {
   if (f.estados && !f.estados.includes(s.estado)) return false;
-  return f.predicado ? f.predicado(s) : true;
+  return f.origen ? s.origen === f.origen : true;
 }
 
 const F = {
@@ -32,7 +32,7 @@ const F = {
     valor: "para_resolver",
     label: "Para resolver",
     estados: ["con_jefe"],
-    predicado: (s) => s.origen === "porteria",
+    origen: "porteria",
     vacio: {
       titulo: "No hay solicitudes de Portería esperando",
       descripcion: "Cuando un portero cargue una, aparece acá para que la resuelvas o la eleves al Líder.",

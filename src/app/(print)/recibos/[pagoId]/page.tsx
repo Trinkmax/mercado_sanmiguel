@@ -5,9 +5,11 @@ import { Banknote, FileText, Landmark, Paperclip } from "lucide-react";
 import { requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import {
+  formatARS,
   formatCuit,
   formatFecha,
   formatFechaHora,
+  formatFechaTS,
   labelPeriodo,
 } from "@/lib/format";
 import { Money } from "@/components/shared/money";
@@ -22,6 +24,8 @@ type LineaRecibo = {
   medio: Medio;
   monto: number;
   anulado: boolean;
+  /** 0023 (puede faltar con la base vieja). */
+  anulado_en?: string | null;
   motivo_anulacion: string | null;
   titular_transferencia: string | null;
   tiene_comprobante: boolean;
@@ -59,6 +63,17 @@ type DatosRecibo = {
     beneficio: number;
   }[];
   saldo_favor: number;
+  /** 0023: lo que decía el recibo antes de anularse (con la base vieja, se suma de las líneas). */
+  total_original?: number;
+  /** 0023: a qué fue DESPUÉS el saldo a favor de este recibo (el detalle de arriba no cambia). */
+  aplicado_despues?: {
+    cargo_id: string;
+    codigo: string;
+    descripcion: string;
+    periodo: string;
+    monto: number;
+    fecha: string | null;
+  }[];
 };
 
 const ICONO: Record<Medio, typeof Banknote> = {
@@ -143,6 +158,12 @@ export default async function ReciboPage({
   const anuladas = recibo.lineas.filter((l) => l.anulado);
   const parcialmenteAnulado = !recibo.anulado && anuladas.length > 0;
   const beneficio = recibo.imputaciones.reduce((acc, i) => acc + Number(i.beneficio ?? 0), 0);
+  // Un recibo anulado entero no dice "Total $ 0": muestra lo que decía, tachado.
+  const totalOriginal = Number(
+    recibo.total_original ?? recibo.lineas.reduce((acc, l) => acc + Number(l.monto), 0)
+  );
+  const anuladoEn = recibo.lineas.find((l) => l.anulado && l.anulado_en)?.anulado_en ?? null;
+  const aplicadoDespues = recibo.aplicado_despues ?? [];
   const autoImprimir = !esSocio && Boolean(configRes.data?.impresion_directa) && !recibo.anulado;
 
   return (
@@ -267,6 +288,17 @@ export default async function ReciboPage({
                     <td className="py-2" colSpan={2}>
                       Saldo a favor{" "}
                       <span className="text-muted-foreground">(se aplica a lo próximo que deba)</span>
+                      {aplicadoDespues.length > 0 ? (
+                        <span className="block text-xs text-muted-foreground">
+                          Luego aplicado a:{" "}
+                          {aplicadoDespues
+                            .map(
+                              (a) =>
+                                `${a.descripcion} · ${labelPeriodo(a.periodo)} ${formatARS(Number(a.monto))}${a.fecha ? ` (el ${formatFechaTS(a.fecha)})` : ""}`
+                            )
+                            .join(" — ")}
+                        </span>
+                      ) : null}
                     </td>
                     <td className="py-2 text-right tabular">
                       <Money monto={recibo.saldo_favor} />
@@ -279,10 +311,21 @@ export default async function ReciboPage({
 
           {/* Total (líneas vigentes) */}
           <div className="space-y-1">
-            <div className="flex items-baseline justify-between border-t-2 border-foreground pt-3">
-              <p className="font-display font-semibold uppercase tracking-wide">Total</p>
-              <Money monto={recibo.total} className="text-3xl font-bold" />
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 border-t-2 border-foreground pt-3">
+              <p className="font-display font-semibold uppercase tracking-wide">
+                {recibo.anulado ? "Total (anulado)" : "Total"}
+              </p>
+              {recibo.anulado ? (
+                <Money monto={totalOriginal} className="text-3xl font-bold text-muted-foreground line-through" />
+              ) : (
+                <Money monto={recibo.total} className="text-3xl font-bold" />
+              )}
             </div>
+            {recibo.anulado ? (
+              <p className="text-right text-sm font-medium">
+                Anulado{anuladoEn ? ` el ${formatFechaHora(anuladoEn)}` : ""}: no vale como pago.
+              </p>
+            ) : null}
             {beneficio > 0.009 ? (
               <p className="text-right text-sm text-muted-foreground">
                 Incluye beneficio por pago en término de{" "}

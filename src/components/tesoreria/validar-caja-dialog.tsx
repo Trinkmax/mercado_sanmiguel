@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { ChevronDown, Stamp } from "lucide-react";
 import { validarCaja } from "@/lib/actions/tesoreria";
-import { formatARS, formatFecha } from "@/lib/format";
+import { formatARS, formatFecha, parseMonto, sanitizarMonto } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -115,7 +115,8 @@ export function ValidarCajaDialog({
   // Una caja de portería integrada ya se contó dentro de la de administración.
   const pideConteo = !(esPorteria && caja.estado === "integrada");
 
-  const contadoNum = contado === "" ? null : Number(contado);
+  // Acepta centavos con coma: si el arqueo tiene centavos, se puede cargar "Coincide".
+  const contadoNum = contado === "" ? null : parseMonto(contado);
   const diferencia = contadoNum === null ? null : Math.round((contadoNum - tieneQueHaber) * 100) / 100;
 
   function validar() {
@@ -243,12 +244,12 @@ export function ValidarCajaDialog({
                 </Label>
                 <Input
                   id={`contado-${caja.id}`}
-                  inputMode="numeric"
+                  inputMode="decimal"
                   autoComplete="off"
                   placeholder="0"
                   value={contado}
                   onChange={(e) => {
-                    setContado(e.target.value.replace(/\D/g, "").slice(0, 12));
+                    setContado(sanitizarMonto(e.target.value).slice(0, 15));
                     setError(null);
                   }}
                   className="h-14 text-2xl font-bold tabular"

@@ -115,19 +115,24 @@ function minutos(hhmm: string): number {
  * - Con horarios pero ninguno para hoy: vino en un día que no trabaja → true.
  * - Con franjas hoy: en horario si la hora actual está entre
  *   (hora_desde − tolerancia) y hora_hasta de alguna franja.
+ * - Turno de noche (salida ≤ entrada, ej. 22 a 06): la franja sigue hasta la salida del día
+ *   siguiente (entrar a las 00:30 del martes es el turno del lunes).
  */
 function calcularFueraDeHorario(
   franjas: { dia_semana: number; hora_desde: string; hora_hasta: string }[]
 ): boolean {
   if (franjas.length === 0) return false;
   const { diaSemana, hora } = ahoraAR();
+  const ahora = minutos(hora);
+  const nocturna = (f: { hora_desde: string; hora_hasta: string }) => minutos(f.hora_hasta) <= minutos(f.hora_desde);
+  const ayer = diaSemana === 1 ? 7 : diaSemana - 1;
+  if (franjas.some((f) => f.dia_semana === ayer && nocturna(f) && ahora <= minutos(f.hora_hasta))) return false;
   const hoy = franjas.filter((f) => f.dia_semana === diaSemana);
   if (hoy.length === 0) return true;
-  const ahora = minutos(hora);
   return !hoy.some(
     (f) =>
       ahora >= minutos(f.hora_desde) - TOLERANCIA_ANTES_MIN &&
-      ahora <= minutos(f.hora_hasta)
+      (nocturna(f) || ahora <= minutos(f.hora_hasta))
   );
 }
 
@@ -157,6 +162,8 @@ const schemaIngreso = z.object({
     .max(500, "La nota es demasiado larga")
     .optional()
     .transform((v) => (v ? v : null)),
+  /** Clave de idempotencia del formulario (id del ingreso): un reintento no lo duplica. */
+  ref: z.uuid("No pudimos preparar el ingreso. Recargá la página y probá de nuevo.").optional(),
 });
 
 export type IngresoRegistrado = {
@@ -168,7 +175,41 @@ export type IngresoRegistrado = {
   ingreso_en: string;
   fuera_de_horario: boolean;
   en_padron: boolean;
+  /** Ya estaba registrado con esa clave (reintento tras un corte de red): no se duplicó. */
+  repetido?: boolean;
 };
+
+type Supabase = Awaited<ReturnType<typeof createClient>>;
+
+/** Un ingreso ya guardado, con la forma que devuelve registrarIngreso. */
+async function leerIngreso(supabase: Supabase, id: string): Promise<IngresoRegistrado | null> {
+  const { data } = await supabase
+    .from("ingresos_personal")
+    .select("id, nombre, apellido, dni, ingreso_en, fuera_de_horario, empleado_id")
+    .eq("id", id)
+    .maybeSingle();
+  if (!data) return null;
+  let cargo: string | null = null;
+  if (data.empleado_id) {
+    const { data: e } = await supabase
+      .from("empleados")
+      .select("cargo")
+      .eq("id", data.empleado_id)
+      .maybeSingle();
+    cargo = e?.cargo ?? null;
+  }
+  return {
+    id: data.id,
+    nombre: data.nombre,
+    apellido: data.apellido,
+    dni: data.dni,
+    cargo,
+    ingreso_en: data.ingreso_en,
+    fuera_de_horario: Boolean(data.fuera_de_horario),
+    en_padron: Boolean(data.empleado_id),
+    repetido: true,
+  };
+}
 
 /**
  * Registra el ingreso de una persona por portería: sube la firma (PNG del
@@ -192,6 +233,7 @@ export async function registrarIngreso(
     apellido: get("apellido"),
     empleado_id: get("empleado_id"),
     notas: get("notas"),
+    ref: get("ref") || undefined,
   });
   if (!parsed.success) return fallo(parsed.error.issues[0].message);
 
@@ -205,6 +247,12 @@ export async function registrarIngreso(
 
   const supabase = await createClient();
   const datos = parsed.data;
+
+  // Reintento de un ingreso que ya había entrado (se cortó la red y no llegó la respuesta).
+  if (datos.ref) {
+    const previo = await leerIngreso(supabase, datos.ref);
+    if (previo) return ok(previo);
+  }
 
   // Empleado del padrón: el elegido en el autocompletado o, si no, el que
   // tenga ese DNI (por si tipearon el número completo sin elegir).
@@ -249,6 +297,7 @@ export async function registrarIngreso(
   const { data, error } = await supabase
     .from("ingresos_personal")
     .insert({
+      ...(datos.ref ? { id: datos.ref } : {}),
       org_id: perfil.org_id,
       empleado_id: empleado?.id ?? null,
       dni: datos.dni,
@@ -263,6 +312,11 @@ export async function registrarIngreso(
 
   if (error) {
     await supabase.storage.from("documentos").remove([ruta]);
+    // Dos intentos a la vez con la misma clave: gana uno y el otro devuelve ese mismo ingreso.
+    if (error.code === "23505" && datos.ref) {
+      const previo = await leerIngreso(supabase, datos.ref);
+      if (previo) return ok(previo);
+    }
     return fallo(mensajeBase(error));
   }
 
@@ -308,10 +362,20 @@ export async function marcarEgreso(
     .eq("org_id", perfil.org_id)
     .maybeSingle();
   if (!ingreso) return fallo("Ese ingreso ya no existe.");
+
+  const egreso = parsed.data.egresoEn ? new Date(parsed.data.egresoEn) : new Date();
+  // Reintento tras un corte de red (el primer intento sí la marcó) o doble toque: "Marcar salida"
+  // sin hora, o la misma hora que ya quedó, devuelve la salida guardada en vez de un error.
+  if (
+    ingreso.egreso_en &&
+    (!parsed.data.egresoEn ||
+      Math.abs(new Date(ingreso.egreso_en).getTime() - egreso.getTime()) < 60_000)
+  ) {
+    return ok({ egreso_en: ingreso.egreso_en });
+  }
   if (ingreso.egreso_en && perfil.rol !== "lider")
     return fallo("La salida ya estaba marcada: pedile al Líder de Procesos que la corrija");
 
-  const egreso = parsed.data.egresoEn ? new Date(parsed.data.egresoEn) : new Date();
   if (egreso.getTime() > Date.now() + TOLERANCIA_FUTURO_MS)
     return fallo("La hora de salida no puede ser futura");
   if (egreso.getTime() < new Date(ingreso.ingreso_en).getTime())

@@ -21,7 +21,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { LABEL_ESTADO, type EstadoSolicitud, type OrigenSolicitud } from "./constantes";
 import { accionesPara, type DefAccion } from "./acciones";
-import { llamarAccion } from "@/lib/llamar-accion";
+import { llamarAccion, SIN_RESPUESTA } from "@/lib/llamar-accion";
+import { AlertaError } from "@/components/cobranza/alerta-error";
 
 export type UsuarioAsignable = { user_id: string; nombre: string };
 
@@ -50,12 +51,15 @@ export function AccionesSolicitud({
   const [texto, setTexto] = useState("");
   const [usuarioId, setUsuarioId] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
+  // Error de una acción sin diálogo ("Tomar para revisar"): se ve debajo de los botones.
+  const [errorPanel, setErrorPanel] = useState<string | null>(null);
   const [pendiente, startTransition] = useTransition();
 
   const acciones = accionesPara(rol, { estado, origen });
   if (acciones.length === 0) return null;
 
   function ejecutar(def: DefAccion, conTexto?: string, conUsuario?: string) {
+    setErrorPanel(null);
     startTransition(async () => {
       const res = await llamarAccion(() => avanzarSolicitud({
         solicitudId,
@@ -65,7 +69,10 @@ export function AccionesSolicitud({
       }));
       if (!res.ok) {
         if (abierta) setError(res.error);
-        else toast.error(res.error);
+        else setErrorPanel(res.error);
+        // Si no fue un corte, puede que otro ya la haya movido (o que el primer intento sí
+        // llegó): se actualiza la pantalla para mostrar cómo está ahora.
+        if (res.error !== SIN_RESPUESTA) router.refresh();
         return;
       }
       toast.success(
@@ -135,6 +142,7 @@ export function AccionesSolicitud({
           );
         })}
       </div>
+      {errorPanel ? <AlertaError error={errorPanel} titulo="No se pudo hacer" className="mt-3" /> : null}
 
       <Dialog open={abierta !== null} onOpenChange={(o) => !o && !pendiente && cerrarDialogo()}>
         <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-lg">
@@ -177,7 +185,7 @@ export function AccionesSolicitud({
                     className="min-h-28 text-base md:text-base"
                     autoFocus
                   />
-                  {error ? <p className="text-sm font-medium text-pendiente">{error}</p> : null}
+                  {error ? <AlertaError error={error} titulo="No se pudo hacer" /> : null}
                 </div>
 
                 {abierta.accion === "asignar" && admins.length > 0 ? (

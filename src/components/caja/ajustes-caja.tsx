@@ -25,7 +25,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { Arqueo } from "@/components/caja/arqueo-tipos";
 import type { AjusteCaja } from "@/components/caja/datos";
-import { llamarAccion } from "@/lib/llamar-accion";
+import { AlertaError } from "@/components/cobranza/alerta-error";
+import { llamarAccion, SIN_RESPUESTA } from "@/lib/llamar-accion";
 
 type Sentido = "falta" | "sobra";
 type Cuenta = "efectivo" | "banco";
@@ -96,8 +97,8 @@ function BotonBorrarAjuste({ ajuste }: { ajuste: AjusteCaja }) {
           <Trash2 className="size-5" strokeWidth={2} />
         </Button>
       </DialogTrigger>
-      <DialogContent className="gap-5 p-6 sm:max-w-md">
-        <DialogHeader>
+      <DialogContent className="max-h-[92dvh] gap-5 overflow-y-auto p-6 sm:max-w-md">
+        <DialogHeader className="pr-8">
           <DialogTitle className="text-xl">Borrar el ajuste</DialogTitle>
           <DialogDescription className="text-base">
             {ajuste.monto < 0 ? "Faltante" : "Sobrante"} de {formatARS(Math.abs(ajuste.monto))}{" "}
@@ -121,7 +122,7 @@ function BotonBorrarAjuste({ ajuste }: { ajuste: AjusteCaja }) {
             aria-invalid={Boolean(error)}
             className="min-h-20 text-base md:text-base"
           />
-          {error ? <p className="text-sm text-destructive">{error}</p> : null}
+          {error ? <AlertaError error={error} titulo="No se pudo borrar el ajuste" /> : null}
         </div>
         <DialogFooter className="gap-2 sm:gap-2">
           <Button variant="outline" size="lg" className="h-12 px-5 text-base" onClick={() => setAbierto(false)} disabled={enviando}>
@@ -145,6 +146,8 @@ function FormAjuste({ cajaId, arqueo, onListo }: { cajaId: string; arqueo: Arque
   const [motivo, setMotivo] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [ref, setRef] = useState(nuevoRef);
+  // Hubo un corte de red con este `ref`: puede que ya se haya anotado lo del primer intento.
+  const [huboCorte, setHuboCorte] = useState(false);
   const [enviando, startTransition] = useTransition();
   const idMonto = useId();
   const idMotivo = useId();
@@ -175,12 +178,17 @@ function FormAjuste({ cajaId, arqueo, onListo }: { cajaId: string; arqueo: Arque
     startTransition(async () => {
       const res = await llamarAccion(() => registrarAjusteCaja({ cajaId, cuenta, monto: firmado, motivo: motivo.trim(), ref }));
       if (!res.ok) {
+        // Mismo `ref` al reintentar: si el primer intento sí llegó, no se anota dos veces.
+        if (res.error === SIN_RESPUESTA) setHuboCorte(true);
         setError(res.error);
         return;
       }
       toast.success(
-        `${palabra === "faltante" ? "Faltante" : "Sobrante"} de ${formatARS(monto)} anotado. Ahora tiene que haber ${formatARS(despues)} ${LABEL_CUENTA[cuenta]}.`
+        huboCorte
+          ? "Ajuste anotado (una sola vez). Revisalo en la lista de ajustes."
+          : `${palabra === "faltante" ? "Faltante" : "Sobrante"} de ${formatARS(monto)} anotado. Ahora tiene que haber ${formatARS(despues)} ${LABEL_CUENTA[cuenta]}.`
       );
+      setHuboCorte(false);
       setMontoTexto("");
       setMotivo("");
       setError(null);
@@ -289,15 +297,11 @@ function FormAjuste({ cajaId, arqueo, onListo }: { cajaId: string; arqueo: Arque
         />
       </div>
 
-      {error ? (
-        <p role="alert" className="text-sm text-destructive">
-          {error}
-        </p>
-      ) : null}
+      {error ? <AlertaError error={error} titulo="No se pudo anotar el ajuste" /> : null}
 
       <Button
         size="lg"
-        className="h-12 w-full text-base font-semibold sm:w-auto sm:px-8"
+        className="h-auto min-h-12 w-full py-2 text-base font-semibold whitespace-normal sm:w-auto sm:px-8"
         onClick={registrar}
         disabled={enviando || !listo}
       >

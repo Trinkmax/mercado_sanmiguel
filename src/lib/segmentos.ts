@@ -236,13 +236,18 @@ export function registroSinVer(r: { visto_en: string | null }): boolean {
   return r.visto_en === null;
 }
 
-/** Administración o el Líder respondieron después de la última vez que el socio lo abrió. */
+/**
+ * Administración o el Líder escribieron después de la última vez que el socio lo abrió
+ * (respuesta a su descargo, o un mensaje del staff aunque el socio todavía no haya escrito).
+ * No depende del estado: cuando escribe el socio, el trigger iguala socio_leyo_en con su
+ * mensaje, así que solo un mensaje del staff posterior lo prende.
+ */
 export function respuestaNueva(r: {
   estado: string;
   ultimo_mensaje_en: string | null;
   socio_leyo_en: string | null;
 }): boolean {
-  if (r.estado !== "respondido" || !r.ultimo_mensaje_en) return false;
+  if (!r.ultimo_mensaje_en) return false;
   if (!r.socio_leyo_en) return true;
   return new Date(r.ultimo_mensaje_en).getTime() > new Date(r.socio_leyo_en).getTime();
 }

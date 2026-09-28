@@ -227,10 +227,10 @@ export function accionesPara(rol: Rol, s: EstadoSolicitud | SolicitudAcciones): 
     }
   }
 
+  // Administración no toma las nuevas: en fase 3 son del Líder de Procesos (si las tomara,
+  // quedarían "en revisión" a su nombre sin que pueda hacer nada más). Actúa cuando se las asignan.
   if (rol === "admin") {
     switch (estado) {
-      case "nueva":
-        return [d("tomar", true)];
       case "asignada":
         return [d("ejecutar", true)];
       case "ejecutada":

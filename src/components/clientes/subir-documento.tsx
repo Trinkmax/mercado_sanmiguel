@@ -3,7 +3,7 @@
 import { useId, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { CircleAlert, Plus, Upload } from "lucide-react";
+import { Plus, Upload } from "lucide-react";
 import { subirDocumento } from "@/lib/actions/documentos";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,6 +17,12 @@ import {
   CATEGORIAS_DOCUMENTO,
   normalizarCategoriaDocumento,
 } from "./constantes";
+import {
+  adjuntoMuyPesado,
+  explicarFalloEnvio,
+  prepararAdjuntos,
+} from "@/components/comunicaciones/adjuntos";
+import { AlertaError } from "@/components/cobranza/alerta-error";
 import { llamarAccion } from "@/lib/llamar-accion";
 
 /**
@@ -54,14 +60,39 @@ export function SubirDocumento({
       return;
     }
     const fd = new FormData(e.currentTarget);
+    const archivo = fd.get("archivo");
+    if (!String(fd.get("titulo") ?? "").trim()) {
+      setError("Poné un título para el documento (ej.: Habilitación 2026).");
+      document.getElementById("doc-titulo")?.focus();
+      return;
+    }
+    if (!(archivo instanceof File) || archivo.size === 0) {
+      setError("Elegí el archivo: tocá “Archivo” y sacá una foto o elegí un PDF.");
+      document.getElementById("doc-archivo")?.focus();
+      return;
+    }
     fd.set("clienteId", clienteId);
     fd.set("categoria", categoriaFinal);
     setError(null);
     startTransition(async () => {
+      // Las fotos se achican (~400 KB) antes de subir; el total no puede pasar de 20 MB.
+      const errorPeso = await prepararAdjuntos(fd, ["archivo"]);
+      if (errorPeso) {
+        setError(errorPeso);
+        return;
+      }
       const res = await llamarAccion(() => subirDocumento(fd));
       if (!res.ok) {
-        setError(res.error);
-        toast.error(res.error);
+        // Lo cargado queda en el formulario. Sin respuesta, que se fije antes de repetir; y si el
+        // archivo es pesado, que puede ser eso (el servidor corta pedidos grandes sin avisar).
+        setError(
+          explicarFalloEnvio(
+            res.error,
+            fd,
+            ["archivo"],
+            "Se cortó la conexión y no sabemos si se subió. Revisá internet y fijate en la lista de documentos antes de subirlo de nuevo."
+          )
+        );
         return;
       }
       toast.success(`Documento guardado en "${res.data.categoria}"`);
@@ -178,6 +209,14 @@ export function SubirDocumento({
                 accept={ACCEPT_ARCHIVOS}
                 className="h-12 pt-2.5 text-base"
                 required
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  setError(
+                    adjuntoMuyPesado(f)
+                      ? "Ese archivo pesa más de 20 MB. Elegí uno más liviano o sacale una foto."
+                      : null
+                  );
+                }}
               />
               <p className="text-sm text-muted-foreground">
                 PDF o foto (JPG, PNG, WEBP), hasta 20 MB. En la tablet podés sacarle una foto.
@@ -185,12 +224,7 @@ export function SubirDocumento({
             </div>
           </div>
 
-          {error ? (
-            <p className="flex items-center gap-2 font-medium text-pendiente" role="alert">
-              <CircleAlert className="size-5 shrink-0" strokeWidth={2} />
-              {error}
-            </p>
-          ) : null}
+          {error ? <AlertaError error={error} titulo="No se pudo subir" /> : null}
 
           <Button
             type="submit"

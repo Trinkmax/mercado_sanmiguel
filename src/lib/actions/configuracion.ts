@@ -102,7 +102,7 @@ export async function actualizarConcepto(
     datos.descuento_pronto_pago = nuevos.descuento_pronto_pago;
     partes.push({
       campo: "beneficio por pago en término",
-      valor: `${nuevos.descuento_pronto_pago} %`,
+      valor: `${String(nuevos.descuento_pronto_pago).replace(".", ",")} %`,
     });
   }
   if (

@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { KeyRound, Loader2, Search, Store, UserPlus } from "lucide-react";
+import { KeyRound, Loader2, Search, Store, TriangleAlert, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { crearAccesoSocio } from "@/lib/actions/usuarios";
 import type { Rol } from "@/lib/auth";
@@ -46,8 +46,14 @@ export function AccesosSocios({
   nombresPorId: Record<string, string>;
   hayClaveAdmin: boolean;
 }) {
-  const sinAcceso = clientes.filter((c) => !c.acceso);
-  const conAcceso = clientes.filter((c) => c.acceso);
+  // "Con acceso" = pueden entrar hoy. A quien se le quitó el acceso va en "Sin acceso"
+  // (con "Devolver acceso", sin crear otro usuario con el mismo DNI).
+  const activos = clientes.filter((c) => !c.dadoDeBaja);
+  const conAcceso = activos.filter((c) => c.acceso?.activo);
+  const sinAcceso = activos.filter((c) => !c.acceso?.activo);
+  // Ya no son clientes pero su usuario del portal sigue andando: se muestran aparte.
+  const dadosDeBaja = clientes.filter((c) => c.dadoDeBaja && c.acceso?.activo);
+  const puedeGestionar = puedeGestionarRol(miRol, "socio");
   const [vista, setVista] = useState<Vista>(sinAcceso.length > 0 ? "sin" : "con");
   const [busqueda, setBusqueda] = useState("");
   const [abierto, setAbierto] = useState<string | null>(null);
@@ -87,6 +93,42 @@ export function AccesosSocios({
         />
       ) : null}
 
+      {dadosDeBaja.length > 0 ? (
+        <section
+          aria-label="Dados de baja que todavía pueden entrar"
+          className="space-y-3 rounded-xl border border-parcial bg-parcial-suave p-4 sm:p-5"
+        >
+          <div className="flex items-start gap-3">
+            <TriangleAlert className="mt-0.5 size-5 shrink-0 text-parcial" strokeWidth={2.2} />
+            <div className="min-w-0">
+              <h3 className="font-display text-base font-bold">
+                {dadosDeBaja.length === 1
+                  ? "1 cliente dado de baja todavía puede entrar al portal"
+                  : `${dadosDeBaja.length} clientes dados de baja todavía pueden entrar al portal`}
+              </h3>
+              <p className="text-sm">
+                Ya no son clientes: tocá &ldquo;Quitar acceso&rdquo; para que no vean más la cuenta.
+              </p>
+            </div>
+          </div>
+          <ul className="divide-y overflow-hidden rounded-xl border bg-card">
+            {dadosDeBaja.map((c) =>
+              c.acceso ? (
+                <FilaUsuario
+                  key={c.id}
+                  usuario={c.acceso}
+                  soyYo={c.acceso.user_id === miUserId}
+                  puedeGestionar={puedeGestionar}
+                  nombresPorId={nombresPorId}
+                  mostrarRol={false}
+                  detalle={<Referencia cliente={c} />}
+                />
+              ) : null
+            )}
+          </ul>
+        </section>
+      ) : null}
+
       <div className="flex flex-col gap-3 md:flex-row md:items-center">
         <ToggleGroup
           type="single"
@@ -120,10 +162,12 @@ export function AccesosSocios({
         </div>
       </div>
 
-      {clientes.length === 0 ? (
+      {activos.length === 0 ? (
+        // Si solo quedan dados de baja con acceso (bloque de arriba), no decir que
+        // "no hay clientes": no hay clientes activos.
         <EmptyState
           icono={Store}
-          titulo="Todavía no hay clientes"
+          titulo={dadosDeBaja.length > 0 ? "No hay clientes activos" : "Todavía no hay clientes"}
           descripcion="Cuando se carguen clientes van a aparecer acá para darles acceso al portal."
         />
       ) : visibles.length === 0 ? (
@@ -138,37 +182,35 @@ export function AccesosSocios({
                 : "Pasá a \"Sin acceso\" y tocá \"Dar acceso\" en el cliente."
           }
         />
-      ) : vista === "sin" ? (
-        <ul className="divide-y overflow-hidden rounded-xl border bg-card">
-          {visibles.map((c) => (
-            <FilaSinAcceso
-              key={c.id}
-              cliente={c}
-              abierto={abierto === c.id}
-              onAbrir={() => setAbierto(abierto === c.id ? null : c.id)}
-              onCreado={(datos) => {
-                setAbierto(null);
-                setCredencial(datos);
-                window.scrollTo({ top: 0, behavior: "smooth" });
-              }}
-              hayClaveAdmin={hayClaveAdmin}
-            />
-          ))}
-        </ul>
       ) : (
         <ul className="divide-y overflow-hidden rounded-xl border bg-card">
           {visibles.map((c) =>
+            // Tiene usuario (activo en "Con acceso", quitado en "Sin acceso"): su fila
+            // con Quitar / Devolver acceso. Sin usuario: "Dar acceso".
             c.acceso ? (
               <FilaUsuario
                 key={c.id}
                 usuario={c.acceso}
                 soyYo={c.acceso.user_id === miUserId}
-                puedeGestionar={puedeGestionarRol(miRol, "socio")}
+                puedeGestionar={puedeGestionar}
                 nombresPorId={nombresPorId}
                 mostrarRol={false}
                 detalle={<Referencia cliente={c} />}
               />
-            ) : null
+            ) : (
+              <FilaSinAcceso
+                key={c.id}
+                cliente={c}
+                abierto={abierto === c.id}
+                onAbrir={() => setAbierto(abierto === c.id ? null : c.id)}
+                onCreado={(datos) => {
+                  setAbierto(null);
+                  setCredencial(datos);
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+                hayClaveAdmin={hayClaveAdmin}
+              />
+            )
           )}
         </ul>
       )}
@@ -181,7 +223,13 @@ function Referencia({ cliente }: { cliente: ClienteAcceso }) {
     <span>
       <span className="font-medium text-foreground tabular">N° {cliente.codigo}</span> · {cliente.nombre}
       {cliente.apodo ? ` (${cliente.apodo})` : ""}
-      {cliente.lugares ? ` · ${cliente.lugares}` : ""}
+      {cliente.dadoDeBaja ? (
+        <span className="font-medium text-parcial"> · Dado de baja</span>
+      ) : cliente.lugares ? (
+        ` · ${cliente.lugares}`
+      ) : (
+        ""
+      )}
     </span>
   );
 }

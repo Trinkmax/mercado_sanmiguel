@@ -716,6 +716,8 @@ async function movimientosTesoreria({ supabase, perfil, periodo }: ContextoExpor
       .from("movimientos_tesoreria")
       .select("id, fecha, tipo, moneda, cuenta, cuenta_destino, descripcion, monto, caja_id, creado_por, creado_en")
       .eq("org_id", perfil.org_id)
+      // Los anulados (0026) no suman: quedan a la vista en Tesorería y en Correcciones.
+      .is("anulado_en", null)
       .gte("fecha", r.desde)
       .lt("fecha", r.hasta)
       .order("fecha")

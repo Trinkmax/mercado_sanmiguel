@@ -20,6 +20,11 @@ export type ResultadoIntegracion = {
   quintas: number;
   ambulantes: number;
   ajustes: number;
+  /** Contado − rendido al recibirla (0 si coincide o no se contó). Queda como ajuste de la caja de portería.
+   * En un reintento (`repetido`) es la que anotó la primera recepción. */
+  diferencia: number;
+  /** El mismo usuario ya la había recibido (reintento tras un corte de red). */
+  repetido: boolean;
 };
 
 const tipoCajaSchema = z.enum(["administracion", "guardia"]);
@@ -78,24 +83,37 @@ export async function cerrarCaja(cajaId: string): Promise<ActionResult<Arqueo>> 
   return ok(parsearArqueo(data));
 }
 
+const efectivoRecibidoSchema = z
+  .number({ error: "Poné cuánto efectivo te entregó." })
+  .min(0, "El efectivo recibido no puede ser negativo.")
+  .max(100_000_000_000, "Revisá el monto: es demasiado grande.")
+  .optional();
+
 /**
  * Administración recibe la caja de portería rendida: pasa a `integrada` dentro
- * de la caja de administración de hoy.
+ * de la caja de administración de hoy. `efectivoRecibido` = lo que contó al recibirla: si no
+ * coincide con lo rendido, la base anota la diferencia como ajuste de la CAJA DE PORTERÍA
+ * (con las observaciones como motivo, obligatorias en ese caso).
  */
 export async function integrarCajaPorteria(
   cajaId: string,
-  observaciones?: string
+  observaciones?: string,
+  efectivoRecibido?: number
 ): Promise<ActionResult<ResultadoIntegracion>> {
   await requireRol("admin", "tesoreria", "lider");
   const parsedId = uuidSchema.safeParse(cajaId);
   if (!parsedId.success) return fallo("La caja no es válida.");
   const parsedObs = motivoOpcionalSchema.safeParse(observaciones);
   if (!parsedObs.success) return fallo(parsedObs.error.issues[0].message);
+  const parsedEfectivo = efectivoRecibidoSchema.safeParse(efectivoRecibido);
+  if (!parsedEfectivo.success) return fallo(parsedEfectivo.error.issues[0].message);
 
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("integrar_caja_porteria", {
     p_caja: parsedId.data,
     p_observaciones: parsedObs.data || undefined,
+    p_efectivo_recibido:
+      parsedEfectivo.data === undefined ? undefined : Math.round(parsedEfectivo.data * 100) / 100,
   });
   if (error) return fallo(error);
 
@@ -109,6 +127,8 @@ export async function integrarCajaPorteria(
     quintas: Number(r.quintas ?? 0),
     ambulantes: Number(r.ambulantes ?? 0),
     ajustes: Number(r.ajustes ?? 0),
+    diferencia: Number(r.diferencia ?? 0),
+    repetido: Boolean(r.repetido),
   });
 }
 

@@ -25,6 +25,7 @@ import { Sello } from "@/components/shared/sello";
 import { ChartCobranzaDiaria } from "@/components/charts/chart-cobranza-diaria";
 import {
   cajaDeHoy,
+  cajasParaValidar,
   contar,
   resumenDelMes,
   serieUltimos14,
@@ -61,20 +62,13 @@ export async function InicioGestion({ perfil, supabase }: { perfil: Perfil; supa
     cambiosPorAprobar,
     altasJefe,
     solicitudesRes,
+    conceptosPorteriaRes,
   ] = await Promise.all([
     resumenDelMes(supabase, periodo),
-    serieUltimos14(supabase, org),
+    serieUltimos14(supabase),
     esLider ? Promise.resolve(null) : cajaDeHoy(supabase, org, "administracion"),
     supabase.from("v_deuda_clientes").select("cliente_id").eq("org_id", org).gt("deuda_vencida", 0),
-    esLider
-      ? contar(
-          supabase
-            .from("cajas")
-            .select("id", { count: "exact", head: true })
-            .eq("org_id", org)
-            .in("estado", ["cerrada", "integrada"])
-        )
-      : cero,
+    esLider ? cajasParaValidar(supabase, org) : Promise.resolve({ n: 0, href: "/tesoreria" }),
     contar(
       supabase
         .from("cajas")
@@ -126,6 +120,15 @@ export async function InicioGestion({ perfil, supabase }: { perfil: Perfil; supa
       .select("estado")
       .eq("org_id", org)
       .in("estado", ["nueva", "en_revision", "en_consejo", "resuelta", "asignada"]),
+    // Quintas y ambulantes los cobra el Jefe de Portería (G8): no van en la cobranza
+    // ni en el "por cobrar" de Administración.
+    rol === "admin"
+      ? supabase
+          .from("conceptos")
+          .select("codigo")
+          .eq("org_id", org)
+          .in("segmento", ["quinteros", "ambulantes"])
+      : Promise.resolve({ data: [] as { codigo: string }[] }),
   ]);
 
   // Clientes con deuda vencida: Administración ve solo los puesteros (los demás son de Portería).
@@ -152,7 +155,9 @@ export async function InicioGestion({ perfil, supabase }: { perfil: Perfil; supa
   const solAsignadas = porEstado.get("asignada") ?? 0;
   const solPorRevisar = solNuevas + solEnRevision + solResueltas;
 
-  const conceptos = resumen.filter((f) => f.codigo !== "BC");
+  // BC (bono camioneros) va aparte; para Administración tampoco quintas ni ambulantes.
+  const deOtraCaja = new Set(["BC", ...(conceptosPorteriaRes.data ?? []).map((c) => c.codigo)]);
+  const conceptos = resumen.filter((f) => !deOtraCaja.has(f.codigo));
   const bono = resumen.find((f) => f.codigo === "BC");
   const totalCobrado = conceptos.reduce((a, f) => a + f.cobrado, 0);
   const totalPendiente = conceptos.reduce((a, f) => a + f.pendiente, 0);
@@ -211,12 +216,12 @@ export async function InicioGestion({ perfil, supabase }: { perfil: Perfil; supa
     avisos.push(
       {
         clave: "validar",
-        n: cajasSinValidar,
+        n: cajasSinValidar.n,
         singular: "caja sin validar",
         plural: "cajas sin validar",
         descripcion: "Tesorería todavía no les dio el OK (o validalas vos).",
-        href: "/caja",
-        cta: "Ver cajas",
+        href: cajasSinValidar.href,
+        cta: cajasSinValidar.n === 1 ? "Ver la caja" : "Ver cajas",
         icono: Landmark,
         tono: "parcial",
       },
@@ -320,6 +325,11 @@ export async function InicioGestion({ perfil, supabase }: { perfil: Perfil; supa
         <Card>
           <CardHeader>
             <CardTitle className="text-lg">Cobranza de {labelPeriodo(periodo)}</CardTitle>
+            {rol === "admin" ? (
+              <CardDescription>
+                Lo de los puesteros. Quintas y ambulantes los cobra el Jefe de Portería.
+              </CardDescription>
+            ) : null}
             {esLider ? (
               <CardAction>
                 <Link

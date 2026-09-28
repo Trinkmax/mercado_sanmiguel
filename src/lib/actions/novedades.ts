@@ -35,6 +35,7 @@ const TIPOS = [
 ] as const;
 
 const REGEX_FECHA = /^\d{4}-\d{2}-\d{2}$/;
+const RE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Datos de la novedad (mismos campos al cargar y al editar). La base vuelve a validar todo. */
 const schemaDatos = z
@@ -164,6 +165,11 @@ async function buscarChoque(
   return choque ? { empleado_id: choque.empleado_id, fecha_desde: choque.fecha_desde } : null;
 }
 
+async function estadoActual(supabase: Supabase, id: string): Promise<EstadoNovedad | null> {
+  const { data } = await supabase.from("novedades_personal").select("estado").eq("id", id).maybeSingle();
+  return data?.estado ?? null;
+}
+
 function revalidarNovedades(empleadoIds: string[]) {
   revalidatePath("/novedades", "layout");
   revalidatePath("/inicio");
@@ -204,15 +210,33 @@ function mensajeChoque(choque: Choque, empleados: EmpleadoAlcance[], tipo: TipoN
   return `${quien} ya tiene ${tipo === "vacaciones" || tipo === "horas_extra" ? que : `una ${que}`} cargada el ${formatFechaLarga(choque.fecha_desde)}. Revisala en la planilla.`;
 }
 
+type NovedadCargada = { cantidad: number; estado: EstadoNovedad; ids: string[]; repetido: boolean };
+
+/** Reintento después de un corte: lo que ya se guardó con este lote (o null). */
+async function cargaConLote(supabase: Supabase, orgId: string, lote: string | null): Promise<NovedadCargada | null> {
+  if (!lote) return null;
+  const { data } = await supabase
+    .from("novedades_personal")
+    .select("id, estado")
+    .eq("org_id", orgId)
+    .eq("lote", lote);
+  if (!data || data.length === 0) return null;
+  return { cantidad: data.length, estado: data[0].estado, ids: data.map((d) => d.id), repetido: true };
+}
+
 /**
  * Carga una novedad para uno o varios empleados (un feriado que trabajaron varios = una fila por
  * empleado, en un solo insert: entran todas o ninguna). Lo del Jefe queda "Esperando aprobación";
  * lo de Administración y el Líder, aprobado (lo decide el trigger).
+ * Con `lote` (clave del formulario) un reintento tras un corte devuelve lo ya guardado
+ * (`repetido: true`) en vez de duplicarlo o chocar con "ya hay una novedad igual".
  */
 export async function cargarNovedad(
   formData: FormData
-): Promise<ActionResult<{ cantidad: number; estado: EstadoNovedad; ids: string[] }>> {
+): Promise<ActionResult<NovedadCargada>> {
   const perfil = await requireRol("admin", "guardia", "lider");
+  const loteCrudo = formData.get("lote");
+  const lote = typeof loteCrudo === "string" && RE_UUID.test(loteCrudo) ? loteCrudo : null;
 
   const empleadoIds = Array.from(
     new Set(formData.getAll("empleadoId").filter((v): v is string => typeof v === "string" && v.length > 0))
@@ -226,6 +250,9 @@ export async function cargarNovedad(
   if (adjunto && "error" in adjunto) return fallo(adjunto.error);
 
   const supabase = await createClient();
+  const previa = await cargaConLote(supabase, perfil.org_id, lote);
+  if (previa) return ok(previa);
+
   const empleados = await empleadosEnAlcance(supabase, perfil, empleadoIds);
   if (!empleados.ok) return fallo(empleados.error);
 
@@ -245,6 +272,7 @@ export async function cargarNovedad(
     empleado_id,
     ...parsed.data,
     adjunto_path: ruta,
+    lote,
   })) as TablesInsert<"novedades_personal">[];
 
   const { data, error } = await supabase
@@ -254,12 +282,16 @@ export async function cargarNovedad(
 
   if (error) {
     if (ruta) await supabase.storage.from("documentos").remove([ruta]);
+    // Dos toques a la vez con el mismo lote: ganó el otro (choca con el índice o con
+    // "ya hay una novedad igual"). Se devuelve lo que guardó.
+    const otra = await cargaConLote(supabase, perfil.org_id, lote);
+    if (otra) return ok(otra);
     return fallo(error);
   }
 
   revalidarNovedades(empleadoIds);
   const estado: EstadoNovedad = data?.[0]?.estado ?? (perfil.rol === "guardia" ? "pendiente" : "aprobada");
-  return ok({ cantidad: data?.length ?? filas.length, estado, ids: (data ?? []).map((d) => d.id) });
+  return ok({ cantidad: data?.length ?? filas.length, estado, ids: (data ?? []).map((d) => d.id), repetido: false });
 }
 
 /**
@@ -352,8 +384,19 @@ export async function borrarNovedad(input: unknown): Promise<ActionResult<void>>
     .select("id, empleado_id, adjunto_path")
     .maybeSingle();
   if (error) return fallo(error);
-  if (!borrada)
+  if (!borrada) {
+    // Reintento tras un corte: si ya no existe, el primer intento la borró.
+    const { data: sigue } = await supabase
+      .from("novedades_personal")
+      .select("id")
+      .eq("id", parsed.data.id)
+      .maybeSingle();
+    if (!sigue) {
+      revalidarNovedades([]);
+      return ok(undefined);
+    }
     return fallo("No se pudo borrar: ya la revisaron o no la cargaste vos. Actualizá la página.");
+  }
 
   await borrarAdjuntoSiHuerfano(supabase, borrada.adjunto_path);
   revalidarNovedades([borrada.empleado_id]);
@@ -384,7 +427,15 @@ export async function revisarNovedad(input: unknown): Promise<ActionResult<{ est
     p_aprobar: parsed.data.aprobar,
     p_motivo: parsed.data.motivo,
   });
-  if (error) return fallo(error);
+  if (error) {
+    // Reintento tras un corte: si ya quedó como se pidió, no es un error.
+    const buscado: EstadoNovedad = parsed.data.aprobar ? "aprobada" : "rechazada";
+    if (await estadoActual(supabase, parsed.data.id) === buscado) {
+      revalidarNovedades([]);
+      return ok({ estado: buscado });
+    }
+    return fallo(error);
+  }
 
   revalidarNovedades([]);
   return ok({ estado: data });
@@ -424,8 +475,31 @@ export async function anularNovedad(input: unknown): Promise<ActionResult<void>>
     p_novedad: parsed.data.id,
     p_motivo: parsed.data.motivo,
   });
-  if (error) return fallo(error);
+  if (error) {
+    if ((await estadoActual(supabase, parsed.data.id)) === "anulada") {
+      revalidarNovedades([]);
+      return ok(undefined);
+    }
+    return fallo(error);
+  }
 
   revalidarNovedades([]);
+  return ok(undefined);
+}
+
+/**
+ * "Entendido" en el aviso de novedades rechazadas del Jefe de Portería: deja de mostrarse.
+ * Solo quien la cargó. Silencioso si ya estaba oculta.
+ */
+export async function ocultarRechazoNovedad(input: unknown): Promise<ActionResult<void>> {
+  await requireRol("admin", "guardia", "lider");
+  const parsed = schemaId.safeParse(input);
+  if (!parsed.success) return fallo(parsed.error.issues[0].message);
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("ocultar_rechazo_novedad", { p_novedad: parsed.data.id });
+  if (error) return fallo(error);
+
+  revalidatePath("/novedades", "layout");
   return ok(undefined);
 }

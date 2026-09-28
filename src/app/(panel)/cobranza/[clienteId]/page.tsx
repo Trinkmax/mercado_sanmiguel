@@ -19,7 +19,12 @@ import { FormCobro, type PlanDelMes } from "@/components/cobranza/form-cobro";
 import { AvisoDeuda } from "@/components/cobranza/aviso-deuda";
 import { CobroAmbulante } from "@/components/cobranza/cobro-ambulante";
 import { OtrasDeudas } from "@/components/cobranza/otras-deudas";
-import type { MedioPago } from "@/components/cobranza/tipos";
+import {
+  AvisoCajaCerrada,
+  cajaNoDejaCobrar,
+  type CajaDeHoy,
+} from "@/components/cobranza/aviso-caja";
+import { sumarDias, type MedioPago } from "@/components/cobranza/tipos";
 
 export const metadata = { title: "Cobrar" };
 
@@ -109,15 +114,19 @@ export default async function CobrarClientePage({
   const recibeCheques = !esJefe;
   const conPlan = !esAmbulante && cliente.cuotas_mes > 1;
 
-  const [cargosRes, saldoFavorRes, avanceRes, espaciosRes, proveedoresRes, ambRes] =
+  const [cargosRes, saldoFavorRes, avanceRes, espaciosRes, proveedoresRes, ambRes, cajaRes, ultimoPagoRes] =
     await Promise.all([
+      // Los días pagados de un ambulante (un cargo por cobro) crecen sin techo: de esos se traen
+      // solo los de los últimos dos meses (la tira y los choques miran ±30 días), así la consulta
+      // nunca llega al tope de 1000 filas. Lo que se debe y los cargos mensuales van todos.
       supabase
         .from("cargos")
         .select(
           "id, codigo, descripcion, periodo, vencimiento, estado, monto, monto_pagado, descuento_pronto_pago, origen, desde, hasta, conceptos(orden_imputacion)"
         )
         .eq("cliente_id", clienteId)
-        .neq("estado", "anulado"),
+        .neq("estado", "anulado")
+        .or(`origen.neq.diario,estado.in.(pendiente,parcial),hasta.gte.${sumarDias(hoy, -62)}`),
       supabase.from("v_saldo_favor").select("saldo_favor").eq("cliente_id", clienteId).maybeSingle(),
       conPlan
         ? supabase
@@ -148,6 +157,21 @@ export default async function CobrarClientePage({
             .select("precio")
             .eq("codigo", "AMB")
             .eq("activo", true)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+      // La caja de hoy de quien cobra: si ya está cerrada, se avisa ANTES de cargar el cobro.
+      supabase
+        .from("cajas")
+        .select("estado, reapertura_solicitada_en")
+        .eq("tipo", esJefe ? "guardia" : "administracion")
+        .eq("fecha", hoy)
+        .maybeSingle(),
+      // Último día pago del ambulante aunque sea de hace más de dos meses ("Último día pago: …").
+      esAmbulante
+        ? supabase
+            .from("v_ultimo_pago_ambulante")
+            .select("pago_hasta")
+            .eq("cliente_id", clienteId)
             .maybeSingle()
         : Promise.resolve({ data: null }),
     ]);
@@ -229,6 +253,15 @@ export default async function CobrarClientePage({
     };
   }
 
+  const cajaHoy: CajaDeHoy = cajaRes.data
+    ? {
+        estado: cajaRes.data.estado,
+        reaperturaPedida: Boolean(cajaRes.data.reapertura_solicitada_en),
+      }
+    : null;
+  const cajaCerrada = cajaNoDejaCobrar(cajaHoy);
+  const irACaja = perfil.rol === "lider" ? "/caja?tipo=administracion" : "/caja";
+
   const volverA = `/cobranza?cat=${categoria}`;
   const descripcion = [
     `Carpeta N° ${cliente.codigo}`,
@@ -263,9 +296,12 @@ export default async function CobrarClientePage({
               <Codigo codigo={c.codigo} />
               <div className="min-w-0 flex-1">
                 <p className="truncate font-medium">{c.descripcion}</p>
-                <p className="text-sm text-muted-foreground">{labelPeriodo(c.periodo)}</p>
+                {/* El sello va debajo, junto al período: en un celular no le come el lugar al nombre. */}
+                <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+                  {labelPeriodo(c.periodo)}
+                  {c.vencido ? <Sello estado="vencido" /> : null}
+                </p>
               </div>
-              {c.vencido ? <Sello estado="vencido" className="shrink-0" /> : null}
               <Money monto={c.saldo} className="shrink-0 font-semibold" />
             </div>
           ))}
@@ -306,6 +342,8 @@ export default async function CobrarClientePage({
       proveedores={proveedores}
       plan={plan}
       volverA={volverA}
+      cajaCerrada={cajaCerrada}
+      irACaja={irACaja}
     />
   );
 
@@ -327,6 +365,8 @@ export default async function CobrarClientePage({
         <PageHeader titulo={cliente.nombre} descripcion={descripcion} className="pb-0" />
       </div>
 
+      <AvisoCajaCerrada caja={cajaHoy} rol={perfil.rol} />
+
       {esAmbulante ? (
         <>
           <CobroAmbulante
@@ -334,7 +374,10 @@ export default async function CobrarClientePage({
             clienteNombre={cliente.nombre}
             precioDia={ambRes.data ? Number(ambRes.data.precio) : null}
             pagados={pagados}
+            ultimoPagoHasta={ultimoPagoRes.data?.pago_hasta ?? null}
             volverA={volverA}
+            cajaCerrada={cajaCerrada}
+            irACaja={irACaja}
           />
           {tieneOtrosCargos || deudaTotal > 0 ? (
             <OtrasDeudas deuda={deudaNeta}>

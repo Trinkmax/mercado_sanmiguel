@@ -1,5 +1,6 @@
 import Link from "next/link";
 import {
+  Ban,
   Banknote,
   Calculator,
   ChevronDown,
@@ -7,16 +8,23 @@ import {
   ClipboardX,
   Eraser,
   Gavel,
+  IdCard,
+  KeyRound,
+  Link2Off,
   Lock,
   Receipt,
+  RotateCcw,
   Scale,
   ShieldCheck,
   Truck,
   Undo2,
+  UserCheck,
+  UserCog,
   UserX,
+  Wallet,
   type LucideIcon,
 } from "lucide-react";
-import { formatDni, formatFecha, formatFechaHora } from "@/lib/format";
+import { formatDni, formatFecha, formatFechaHora, formatMoneda, type Moneda } from "@/lib/format";
 import { LABEL_ROL } from "@/lib/roles";
 import type { Rol } from "@/lib/auth";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -46,6 +54,53 @@ const DEF_EVENTO: Record<EventoCaja, { titulo: string; icono: LucideIcon }> = {
   cierre_forzado: { titulo: "Caja cerrada por Tesorería", icono: Lock },
 };
 
+/** Rastro de accesos (perfiles_eventos, 0028): no se borra al devolver el acceso. */
+type AccionAcceso = "quitar" | "devolver" | "rol" | "contrasena" | "dni";
+
+const DEF_ACCESO: Record<AccionAcceso, { titulo: string; icono: LucideIcon }> = {
+  quitar: { titulo: "Acceso quitado", icono: UserX },
+  devolver: { titulo: "Acceso devuelto", icono: UserCheck },
+  rol: { titulo: "Rol cambiado", icono: UserCog },
+  contrasena: { titulo: "Contraseña nueva", icono: KeyRound },
+  dni: { titulo: "DNI cambiado", icono: IdCard },
+};
+
+/** Rastro de Tesorería (tesoreria_eventos, 0026): lo que se anula o deshace fuera de una caja. */
+type EventoTesoreria =
+  | "movimiento_anulado"
+  | "saldo_inicial_corregido"
+  | "cheque_a_cartera"
+  | "cheque_desvinculado"
+  | "acreditacion_deshecha"
+  | "deposito_deshecho";
+
+const DEF_TESORERIA: Record<EventoTesoreria, { titulo: string; icono: LucideIcon }> = {
+  movimiento_anulado: { titulo: "Movimiento de Tesorería anulado", icono: Ban },
+  saldo_inicial_corregido: { titulo: "Saldo inicial corregido", icono: Wallet },
+  cheque_a_cartera: { titulo: "Cheque devuelto a la cartera", icono: RotateCcw },
+  cheque_desvinculado: { titulo: "Se cambió el gasto que pagó un cheque", icono: Link2Off },
+  acreditacion_deshecha: { titulo: "Acreditación de cheque deshecha", icono: Undo2 },
+  deposito_deshecho: { titulo: "Depósito de cheque deshecho", icono: Undo2 },
+};
+
+function hrefTesoreria(tipo: EventoTesoreria, numeroCheque: string | null, valorAnterior: unknown): string {
+  if (tipo === "saldo_inicial_corregido") return "/tesoreria?tab=saldos";
+  if (tipo === "movimiento_anulado") {
+    const fecha =
+      valorAnterior && typeof valorAnterior === "object" && "fecha" in valorAnterior
+        ? String((valorAnterior as { fecha: unknown }).fecha ?? "")
+        : "";
+    return /^\d{4}-\d{2}-\d{2}$/.test(fecha)
+      ? `/tesoreria?tab=movimientos&mes=${fecha.slice(0, 8)}01`
+      : "/tesoreria?tab=movimientos";
+  }
+  return numeroCheque ? `/cheques?estado=todos&q=${encodeURIComponent(numeroCheque)}` : "/cheques?estado=todos";
+}
+
+function labelRol(rol: string | null): string {
+  return rol && rol in LABEL_ROL ? LABEL_ROL[rol as Rol] : (rol ?? "");
+}
+
 type Correccion = {
   id: string;
   cuando: string;
@@ -54,6 +109,8 @@ type Correccion = {
   donde: string | null;
   detalle: string | null;
   monto: number | null;
+  /** Dólares (movimientos y saldos de Tesorería): se muestran en US$, nunca con "$". */
+  moneda?: Moneda;
   quien: string | null;
   href: string;
 };
@@ -64,12 +121,14 @@ const VISIBLES = 6;
  * "Correcciones de los últimos 7 días" (control del dueño): todo lo que anuló,
  * deshizo o corrigió plata o accesos, con quién, cuándo, monto y motivo.
  * Fuentes: caja_eventos, multas sin efecto, cheques rechazados, novedades
- * anuladas y accesos quitados.
+ * anuladas, el rastro de accesos (quitados, devueltos, roles, DNI y
+ * contraseñas nuevas: perfiles_eventos) y el de Tesorería (movimientos
+ * anulados, saldos iniciales corregidos, cheques deshechos: tesoreria_eventos).
  */
 export async function Correcciones({ org, supabase }: { org: string; supabase: Supabase }) {
   const desde = desdeHaceDias(7);
 
-  const [eventosRes, multasRes, chequesRes, novedadesRes, accesosRes, perfilesRes] =
+  const [eventosRes, multasRes, chequesRes, novedadesRes, accesosRes, perfilesRes, tesoreriaRes] =
     await Promise.all([
       supabase
         .from("caja_eventos")
@@ -99,18 +158,25 @@ export async function Correcciones({ org, supabase }: { org: string; supabase: S
         .gte("anulada_en", desde)
         .limit(30),
       supabase
-        .from("perfiles")
-        .select("user_id, nombre, rol, dni, desactivado_en, desactivado_por")
+        .from("perfiles_eventos")
+        .select("id, user_id, accion, valor_anterior, valor_nuevo, detalle, hecho_por, hecho_en")
         .eq("org_id", org)
-        // El Consejo lo desactivó la migración de fase 3 (F5): no es una corrección de nadie.
-        .neq("rol", "consejo")
-        .gte("desactivado_en", desde)
-        .limit(30),
-      supabase.from("perfiles").select("user_id, nombre").eq("org_id", org),
+        .gte("hecho_en", desde)
+        .order("hecho_en", { ascending: false })
+        .limit(60),
+      supabase.from("perfiles").select("user_id, nombre, rol, dni").eq("org_id", org),
+      supabase
+        .from("tesoreria_eventos")
+        .select("id, tipo, detalle, motivo, monto, moneda, valor_anterior, hecho_por, hecho_en, cheque:cheques(numero)")
+        .eq("org_id", org)
+        .in("tipo", Object.keys(DEF_TESORERIA))
+        .gte("hecho_en", desde)
+        .order("hecho_en", { ascending: false })
+        .limit(60),
     ]);
 
-  const nombre = new Map((perfilesRes.data ?? []).map((p) => [p.user_id, p.nombre]));
-  const quien = (id: string | null) => (id ? (nombre.get(id) ?? null) : null);
+  const perfilPorId = new Map((perfilesRes.data ?? []).map((p) => [p.user_id, p]));
+  const quien = (id: string | null) => (id ? (perfilPorId.get(id)?.nombre ?? null) : null);
   const lista: Correccion[] = [];
 
   for (const e of eventosRes.data ?? []) {
@@ -175,18 +241,46 @@ export async function Correcciones({ org, supabase }: { org: string; supabase: S
       href: "/novedades",
     });
   }
-  for (const p of accesosRes.data ?? []) {
-    if (!p.desactivado_en) continue;
+  for (const a of accesosRes.data ?? []) {
+    const def = DEF_ACCESO[a.accion as AccionAcceso];
+    if (!def) continue;
+    const persona = perfilPorId.get(a.user_id);
+    const cambio =
+      a.accion === "rol"
+        ? `De ${labelRol(a.valor_anterior)} a ${labelRol(a.valor_nuevo)}`
+        : a.accion === "dni"
+          ? `De ${a.valor_anterior ? formatDni(a.valor_anterior) : "sin DNI"} a ${a.valor_nuevo ? formatDni(a.valor_nuevo) : "sin DNI"}`
+          : null;
     lista.push({
-      id: `ac-${p.user_id}`,
-      cuando: p.desactivado_en,
-      titulo: "Acceso quitado",
-      icono: UserX,
-      donde: `${p.nombre} · ${LABEL_ROL[p.rol as Rol]}${p.dni ? ` · DNI ${formatDni(p.dni)}` : ""}`,
-      detalle: null,
+      id: `ac-${a.id}`,
+      cuando: a.hecho_en,
+      titulo: def.titulo,
+      icono: def.icono,
+      donde: persona
+        ? `${persona.nombre} · ${labelRol(persona.rol)}${persona.dni ? ` · DNI ${formatDni(persona.dni)}` : ""}`
+        : null,
+      detalle: [cambio, a.detalle].filter(Boolean).join(" · ") || null,
       monto: null,
-      quien: quien(p.desactivado_por),
-      href: p.rol === "socio" ? "/configuracion?tab=usuarios&ver=socios" : "/configuracion?tab=usuarios",
+      quien: quien(a.hecho_por),
+      href:
+        persona?.rol === "socio" ? "/configuracion?tab=usuarios&ver=socios" : "/configuracion?tab=usuarios",
+    });
+  }
+
+  for (const t of tesoreriaRes.data ?? []) {
+    const def = DEF_TESORERIA[t.tipo as EventoTesoreria];
+    if (!def) continue;
+    lista.push({
+      id: `te-${t.id}`,
+      cuando: t.hecho_en,
+      titulo: def.titulo,
+      icono: def.icono,
+      donde: t.detalle,
+      detalle: t.motivo,
+      monto: t.monto !== null ? Number(t.monto) : null,
+      moneda: t.moneda as Moneda,
+      quien: quien(t.hecho_por),
+      href: hrefTesoreria(t.tipo as EventoTesoreria, t.cheque?.numero ?? null, t.valor_anterior),
     });
   }
 
@@ -202,8 +296,9 @@ export async function Correcciones({ org, supabase }: { org: string; supabase: S
           <span className="tabular text-muted-foreground">({lista.length})</span>
         </CardTitle>
         <CardDescription>
-          Cobros anulados, ajustes, gastos deshechos, cheques rechazados, multas sin efecto y accesos
-          quitados: quién, cuándo y por qué.
+          Cobros anulados, ajustes, gastos deshechos, movimientos de Tesorería anulados, saldos
+          corregidos, cheques rechazados o deshechos, multas sin efecto y cambios de accesos: quién,
+          cuándo y por qué.
         </CardDescription>
         {lista.length === 0 ? (
           <CardAction>
@@ -260,7 +355,11 @@ function FilaCorreccion({ c }: { c: Correccion }) {
         <div className="min-w-0 flex-1">
           <p className="flex flex-wrap items-baseline justify-between gap-x-3">
             <span className="font-semibold">{c.titulo}</span>
-            {c.monto !== null ? <Money monto={c.monto} className="font-semibold" /> : null}
+            {c.monto === null ? null : c.moneda === "USD" ? (
+              <span className="tabular font-semibold">{formatMoneda(c.monto, "USD")}</span>
+            ) : (
+              <Money monto={c.monto} className="font-semibold" />
+            )}
           </p>
           {c.donde ? <p className="text-sm">{c.donde}</p> : null}
           {c.detalle ? <p className="text-sm text-muted-foreground">{c.detalle}</p> : null}

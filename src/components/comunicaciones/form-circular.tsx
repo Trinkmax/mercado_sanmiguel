@@ -1,16 +1,16 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Check, FileText, Megaphone, Users, UserX } from "lucide-react";
+import { Check, FileText, Megaphone, Users, UserX, X } from "lucide-react";
 import { crearCircular } from "@/lib/actions/circulares";
 import {
   armarPublico,
   OPCIONES_PUBLICO,
   type SegmentoPublico,
 } from "@/lib/segmentos";
-import { cn } from "@/lib/utils";
+import { cn, uuidV4 } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,10 +19,14 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { contarPublico, type ClientePublico } from "./publico";
 import { llamarAccion } from "@/lib/llamar-accion";
+import { adjuntoMuyPesado, ERROR_PESO_ADJUNTO, explicarFalloEnvio, prepararAdjuntos } from "./adjuntos";
+import { AvisoError, irAlCampo } from "./aviso-error";
 
 /**
  * Alta de circular (D2): qué dice, a quién le llega ("Todos" o grupos que se suman + filtro
  * "¿Solo a los socios?") con el conteo en vivo, y si hay que confirmarla.
+ * `ref` por intento (0025): si se corta el wifi y se toca "Publicar" de nuevo, no sale una
+ * segunda circular (la acción devuelve la que ya estaba). Si falla, queda todo lo escrito.
  */
 export function FormCircular({
   fechaHoy,
@@ -32,13 +36,17 @@ export function FormCircular({
   clientes: ClientePublico[];
 }) {
   const router = useRouter();
+  const archivoRef = useRef<HTMLInputElement>(null);
   const [pendiente, startTransition] = useTransition();
+  const [ref] = useState(uuidV4);
   const [todos, setTodos] = useState(true);
   const [segmentos, setSegmentos] = useState<SegmentoPublico[]>([]);
   const [soloSocios, setSoloSocios] = useState(false);
   const [obligatoria, setObligatoria] = useState(true);
   const [nombrePdf, setNombrePdf] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Campo al que corresponde el error (el aviso va debajo de ese campo); null = junto al botón. */
+  const [campoError, setCampoError] = useState<string | null>(null);
 
   const cuenta = useMemo(
     () => contarPublico(armarPublico({ todos, segmentos, soloSocios }), clientes),
@@ -68,29 +76,78 @@ export function FormCircular({
     setTodos(siguiente.length === 0);
   }
 
+  function quitarPdf() {
+    if (archivoRef.current) archivoRef.current.value = "";
+    setNombrePdf(null);
+  }
+
+  function mostrarError(mensaje: string | null, campo: string | null = null) {
+    setError(mensaje);
+    setCampoError(mensaje ? campo : null);
+  }
+
+  /** Al corregir el campo marcado, el aviso se va. */
+  function corrigio(...campos: string[]) {
+    if (campoError && campos.includes(campoError)) mostrarError(null);
+  }
+
+  /** Error de validación: el aviso va debajo del campo que falta y se lleva la pantalla ahí. */
+  function falta(mensaje: string, campoId: string) {
+    mostrarError(mensaje, campoId);
+    irAlCampo(campoId);
+  }
+
+  /** Aviso debajo de un campo, si el error es de ese campo. */
+  function avisoDe(campo: string) {
+    return error && campoError === campo ? <AvisoError mensaje={error} /> : null;
+  }
+
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setError(null);
-    if (cuenta.total === 0) {
-      setError("Nadie entra en ese público: elegí otros grupos.");
+    if (pendiente) return;
+    mostrarError(null);
+    const fd = new FormData(e.currentTarget);
+    const archivo = fd.get("archivo");
+    const conPdf = archivo instanceof File && archivo.size > 0;
+    if (!String(fd.get("titulo") ?? "").trim()) {
+      falta("Poné el título de la circular (ej.: Horario de ingreso de camiones).", "circ-titulo");
       return;
     }
-    const fd = new FormData(e.currentTarget);
+    if (!String(fd.get("detalle") ?? "").trim() && !conPdf) {
+      falta("Escribí qué dice la circular o adjuntá el PDF: si no, el socio no tiene nada para leer.", "circ-detalle");
+      return;
+    }
+    if (!String(fd.get("fecha") ?? "").trim()) {
+      falta("Poné la fecha de la circular.", "circ-fecha");
+      return;
+    }
+    if (cuenta.total === 0) {
+      mostrarError("Nadie entra en ese público: elegí otros grupos.");
+      return;
+    }
     fd.set("obligatoria", obligatoria ? "true" : "false");
     fd.set("todos", todos ? "true" : "false");
     fd.set("segmentos", JSON.stringify(segmentos));
     fd.set("soloSocios", soloSocios ? "true" : "false");
+    fd.set("ref", ref);
     startTransition(async () => {
-      const res = await llamarAccion(() => crearCircular(fd));
-      if (!res.ok) {
-        setError(res.error);
+      const errorPeso = await prepararAdjuntos(fd, ["archivo"]);
+      if (errorPeso) {
+        mostrarError(errorPeso);
         return;
       }
-      toast.success(
-        `Circular N° ${res.data.numero} publicada para ${res.data.destinatarios} ${
-          res.data.destinatarios === 1 ? "cliente" : "clientes"
-        }`
-      );
+      const res = await llamarAccion(() => crearCircular(fd));
+      if (!res.ok) {
+        // Queda todo lo escrito y la misma clave: tocar de nuevo no la publica dos veces.
+        mostrarError(explicarFalloEnvio(res.error, fd, ["archivo"]));
+        return;
+      }
+      const para = `${res.data.destinatarios} ${res.data.destinatarios === 1 ? "cliente" : "clientes"}`;
+      if (res.data.repetido) {
+        toast.info(`La circular N° ${res.data.numero} ya estaba publicada para ${para}`);
+      } else {
+        toast.success(`Circular N° ${res.data.numero} publicada para ${para}`);
+      }
       router.push(`/comunicaciones/${res.data.id}`);
     });
   }
@@ -102,7 +159,7 @@ export function FormCircular({
         .join(" y ");
 
   return (
-    <form onSubmit={onSubmit} className="space-y-8">
+    <form onSubmit={onSubmit} noValidate className="space-y-8">
       {/* ¿Qué dice? */}
       <section className="space-y-5" aria-label="Contenido">
         <div className="space-y-2">
@@ -112,17 +169,19 @@ export function FormCircular({
           <Input
             id="circ-titulo"
             name="titulo"
-            required
             maxLength={200}
             autoComplete="off"
             placeholder="Ej.: Horario de ingreso de camiones — temporada alta"
             className="h-12 text-base md:text-base"
+            onChange={() => corrigio("circ-titulo")}
           />
+          {avisoDe("circ-titulo")}
         </div>
 
         <div className="space-y-2">
           <Label htmlFor="circ-detalle" className="text-base">
-            Qué dice
+            Qué dice{" "}
+            <span className="font-normal text-muted-foreground">(o adjuntá el PDF)</span>
           </Label>
           <Textarea
             id="circ-detalle"
@@ -131,7 +190,9 @@ export function FormCircular({
             maxLength={8000}
             placeholder="El texto que va a leer cada socio en el portal."
             className="min-h-36 text-base md:text-base"
+            onChange={() => corrigio("circ-detalle")}
           />
+          {avisoDe("circ-detalle")}
         </div>
 
         <div className="grid gap-5 sm:grid-cols-2">
@@ -146,27 +207,48 @@ export function FormCircular({
               defaultValue={fechaHoy}
               required
               className="h-12 text-base md:text-base"
+              onChange={() => corrigio("circ-fecha")}
             />
+            {avisoDe("circ-fecha")}
           </div>
           <div className="space-y-2">
             <Label htmlFor="circ-archivo" className="text-base">
               PDF adjunto (opcional)
             </Label>
-            <Label
-              htmlFor="circ-archivo"
-              className="inline-flex h-12 w-full cursor-pointer items-center gap-2 rounded-md border bg-card px-4 text-sm font-medium hover:bg-muted"
-            >
-              <FileText className="size-4" strokeWidth={2} />
-              <span className="truncate">{nombrePdf ?? "Elegir PDF"}</span>
-            </Label>
+            <div className="flex gap-2">
+              <Label
+                htmlFor="circ-archivo"
+                className="inline-flex h-12 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md border bg-card px-4 text-sm font-medium hover:bg-muted"
+              >
+                <FileText className="size-4 shrink-0" strokeWidth={2} />
+                <span className="truncate">{nombrePdf ?? "Elegir PDF"}</span>
+              </Label>
+              {nombrePdf ? (
+                <Button type="button" variant="ghost" className="h-12" onClick={quitarPdf} aria-label="Quitar el PDF">
+                  <X className="size-4" strokeWidth={2} />
+                </Button>
+              ) : null}
+            </div>
             <Input
+              ref={archivoRef}
               id="circ-archivo"
               name="archivo"
               type="file"
               accept="application/pdf,.pdf"
               className="sr-only"
-              onChange={(e) => setNombrePdf(e.target.files?.[0]?.name ?? null)}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (adjuntoMuyPesado(f)) {
+                  quitarPdf();
+                  mostrarError(ERROR_PESO_ADJUNTO, "circ-archivo");
+                  return;
+                }
+                setNombrePdf(f?.name ?? null);
+                // Con el PDF ya hay algo para leer: se va el aviso de "sin texto ni PDF".
+                if (f) corrigio("circ-archivo", "circ-detalle");
+              }}
             />
+            {avisoDe("circ-archivo")}
           </div>
         </div>
       </section>
@@ -270,11 +352,7 @@ export function FormCircular({
         </span>
       </label>
 
-      {error ? (
-        <p role="alert" className="rounded-md bg-pendiente-suave px-4 py-3 text-sm font-medium text-pendiente">
-          {error}
-        </p>
-      ) : null}
+      {error && !campoError ? <AvisoError mensaje={error} /> : null}
 
       <Button
         type="submit"

@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
 import { ArrowDown, ArrowUp, CopyPlus } from "lucide-react";
-import { formatARS, labelPeriodo } from "@/lib/format";
+import { formatARS, labelPeriodo, montoATexto, parseMonto, sanitizarMonto } from "@/lib/format";
 import { traerGastosFijos } from "@/lib/actions/gastos";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { Codigo } from "@/components/shared/codigo";
+import { AlertaError } from "@/components/cobranza/alerta-error";
 import { llamarAccion } from "@/lib/llamar-accion";
 
 export type FijoParaTraer = {
@@ -52,7 +53,7 @@ export function TraerFijos({
     Object.fromEntries(
       items.map((i) => [
         i.id,
-        { incluir: true, monto: String(Math.round(i.monto)), vencimiento: i.vencimientoSugerido ?? "" },
+        { incluir: true, monto: montoATexto(i.monto), vencimiento: i.vencimientoSugerido ?? "" },
       ])
     )
   );
@@ -62,7 +63,7 @@ export function TraerFijos({
   const filaDe = (i: FijoParaTraer): Fila =>
     filas[i.id] ?? {
       incluir: true,
-      monto: String(Math.round(i.monto)),
+      monto: montoATexto(i.monto),
       vencimiento: i.vencimientoSugerido ?? "",
     };
 
@@ -70,8 +71,8 @@ export function TraerFijos({
   const destino = mesMinuscula(mesDestino);
 
   const elegidos = items.filter((i) => filaDe(i).incluir);
-  const total = elegidos.reduce((acc, i) => acc + Number(filaDe(i).monto || 0), 0);
-  const hayMontoInvalido = elegidos.some((i) => Number(filaDe(i).monto || 0) <= 0);
+  const total = elegidos.reduce((acc, i) => acc + parseMonto(filaDe(i).monto), 0);
+  const hayMontoInvalido = elegidos.some((i) => parseMonto(filaDe(i).monto) <= 0);
   const todos = elegidos.length === items.length;
 
   function cambiar(i: FijoParaTraer, cambio: Partial<Fila>) {
@@ -87,7 +88,7 @@ export function TraerFijos({
         hasta: mesDestino,
         items: elegidos.map((i) => ({
           origenId: i.id,
-          monto: Number(filaDe(i).monto),
+          monto: parseMonto(filaDe(i).monto),
           vencimiento: filaDe(i).vencimiento || null,
           descripcion: i.descripcion,
         })),
@@ -121,7 +122,10 @@ export function TraerFijos({
             </p>
           </div>
         </div>
-        <Button className="h-12 px-5 text-base font-semibold" onClick={() => setAbierto(true)}>
+        <Button
+          className="h-auto min-h-12 px-5 py-2.5 text-base leading-snug font-semibold whitespace-normal"
+          onClick={() => setAbierto(true)}
+        >
           {items.length === 1 ? `Traer el gasto fijo de ${origen}` : `Traer los ${items.length} gastos fijos de ${origen}`}
         </Button>
       </div>
@@ -157,9 +161,9 @@ export function TraerFijos({
       <ul className="divide-y">
         {items.map((i) => {
           const fila = filaDe(i);
-          const nuevo = Number(fila.monto || 0);
+          const nuevo = parseMonto(fila.monto);
           const diferencia = nuevo - i.monto;
-          const cambio = fila.monto !== "" && Math.abs(diferencia) >= 0.5;
+          const cambio = fila.monto !== "" && Math.abs(diferencia) >= 0.005;
           return (
             <li
               key={i.id}
@@ -180,7 +184,7 @@ export function TraerFijos({
               </label>
 
               <div className="flex items-center gap-3 pl-8 md:pl-0">
-                <div className="w-24 text-right text-sm leading-tight tabular">
+                <div className="min-w-24 text-right text-sm leading-tight tabular">
                   <span className={cn("block text-muted-foreground", cambio && "line-through")}>
                     {formatARS(i.monto)}
                   </span>
@@ -201,11 +205,11 @@ export function TraerFijos({
                   ) : null}
                 </div>
                 <Input
-                  inputMode="numeric"
+                  inputMode="decimal"
                   aria-label={`Monto de ${i.etiqueta} en ${destino}`}
                   value={fila.monto}
                   disabled={!fila.incluir}
-                  onChange={(e) => cambiar(i, { monto: e.target.value.replace(/\D/g, "").slice(0, 12) })}
+                  onChange={(e) => cambiar(i, { monto: sanitizarMonto(e.target.value).slice(0, 15) })}
                   className={cn(
                     "h-12 w-36 text-right text-base font-semibold tabular",
                     fila.incluir && nuevo <= 0 && "border-pendiente"
@@ -231,9 +235,7 @@ export function TraerFijos({
 
       <div className="sticky bottom-0 space-y-2 border-t bg-card/95 px-4 py-3 backdrop-blur">
         {error ? (
-          <p role="alert" className="text-sm font-medium text-pendiente">
-            {error}
-          </p>
+          <AlertaError error={error} titulo="No se pudieron traer los gastos" />
         ) : hayMontoInvalido ? (
           <p className="text-sm font-medium text-pendiente">Hay un gasto tildado sin monto: completalo o destildalo.</p>
         ) : null}
@@ -247,7 +249,7 @@ export function TraerFijos({
             Ahora no
           </Button>
           <Button
-            className="h-13 flex-1 px-5 text-base font-semibold sm:flex-none"
+            className="h-auto min-h-13 flex-1 px-5 py-2.5 text-base leading-snug font-semibold whitespace-normal sm:flex-none"
             disabled={pendiente || elegidos.length === 0 || hayMontoInvalido}
             onClick={traer}
           >

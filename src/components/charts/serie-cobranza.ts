@@ -42,6 +42,21 @@ export function rangoUltimosDias(dias: number): { desde: string; hasta: string }
   return { desde: isoDe(d), hasta: hoy };
 }
 
+/** Serie ya sumada por día en SQL (RPC `cobranza_diaria`, 0024: sin el tope de 1000 filas
+ * de PostgREST). Completa el rango con 0 por si falta algún día. */
+export function serieDesdeTotales(
+  desde: string,
+  hasta: string,
+  filas: { fecha: string; monto: number | string }[]
+): PuntoCobranza[] {
+  return armarSerieDiaria(
+    desde,
+    hasta,
+    [],
+    filas.map((f) => ({ fecha: f.fecha, monto: Number(f.monto) || 0 }))
+  );
+}
+
 /** Suma pagos (timestamptz) + canon (date) por día argentino, con días en 0.
  * Lo anulado no suma (canon anulado, pago anulado), aunque la consulta lo traiga. */
 export function armarSerieDiaria(

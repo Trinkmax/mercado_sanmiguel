@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Check, Paperclip, Send } from "lucide-react";
+import { Check, Paperclip, Send, X } from "lucide-react";
 import { crearSolicitudSocio } from "@/lib/actions/portal";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,13 @@ import {
   TIPOS_SOLICITUD,
   type TipoSolicitud,
 } from "@/components/solicitudes/constantes";
+import {
+  adjuntoMuyPesado,
+  ERROR_PESO_ADJUNTO,
+  explicarFalloEnvio,
+  prepararAdjuntos,
+} from "@/components/comunicaciones/adjuntos";
+import { AvisoError, irAlCampo } from "@/components/comunicaciones/aviso-error";
 import { llamarAccion } from "@/lib/llamar-accion";
 
 /** Alta de solicitud del socio: tipo → asunto → detalle → foto opcional → enviar. */
@@ -23,19 +30,47 @@ export function FormSolicitudSocio() {
   const router = useRouter();
   const [pendiente, startTransition] = useTransition();
   const [tipo, setTipo] = useState<TipoSolicitud>("solicitud");
+  const archivoRef = useRef<HTMLInputElement>(null);
   const [nombreAdjunto, setNombreAdjunto] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** El aviso de "falta el asunto" va debajo del asunto; los demás, junto al botón. */
+  const [faltaAsunto, setFaltaAsunto] = useState(false);
+
+  function quitarAdjunto() {
+    if (archivoRef.current) archivoRef.current.value = "";
+    setNombreAdjunto(null);
+  }
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (pendiente) return;
     setError(null);
+    setFaltaAsunto(false);
     const fd = new FormData(e.currentTarget);
+    if (!String(fd.get("asunto") ?? "").trim()) {
+      setFaltaAsunto(true);
+      irAlCampo("soc-asunto");
+      return;
+    }
     fd.set("tipo", tipo);
     startTransition(async () => {
+      const errorPeso = await prepararAdjuntos(fd, ["adjunto"]);
+      if (errorPeso) {
+        setError(errorPeso);
+        return;
+      }
       const res = await llamarAccion(() => crearSolicitudSocio(fd));
       if (!res.ok) {
-        setError(res.error);
-        toast.error(res.error);
+        // Lo escrito queda en el formulario. La solicitud no tiene clave de idempotencia:
+        // si se cortó la conexión, antes de mandarla de nuevo que se fije si llegó.
+        setError(
+          explicarFalloEnvio(
+            res.error,
+            fd,
+            ["adjunto"],
+            "Se cortó la conexión y no sabemos si llegó. Revisá internet y fijate en “Tus solicitudes” (en Mi cuenta) antes de mandarla de nuevo."
+          )
+        );
         return;
       }
       toast.success(`Solicitud N° ${res.data.numero} enviada`);
@@ -44,7 +79,7 @@ export function FormSolicitudSocio() {
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-7">
+    <form onSubmit={onSubmit} noValidate className="space-y-7">
       <fieldset className="space-y-2">
         <legend className="text-base font-medium">¿Qué querés hacer?</legend>
         <div className="grid grid-cols-2 gap-2">
@@ -81,12 +116,13 @@ export function FormSolicitudSocio() {
         <Input
           id="soc-asunto"
           name="asunto"
-          required
           maxLength={200}
           autoComplete="off"
           placeholder="En pocas palabras, ¿de qué se trata?"
           className="h-12 text-base md:text-base"
+          onChange={() => faltaAsunto && setFaltaAsunto(false)}
         />
+        {faltaAsunto ? <AvisoError mensaje="Poné el asunto: en pocas palabras, de qué se trata." /> : null}
       </div>
 
       <div className="space-y-2">
@@ -107,29 +143,47 @@ export function FormSolicitudSocio() {
         <Label htmlFor="soc-adjunto" className="text-base">
           Foto o PDF (opcional)
         </Label>
-        <Label
-          htmlFor="soc-adjunto"
-          className="inline-flex min-h-12 w-full cursor-pointer items-center gap-2 rounded-md border bg-card px-4 text-sm font-medium hover:bg-muted"
-        >
-          <Paperclip className="size-4" strokeWidth={2} />
-          <span className="truncate">{nombreAdjunto ?? "Sacar una foto o elegir archivo"}</span>
-        </Label>
+        <div className="flex gap-2">
+          <Label
+            htmlFor="soc-adjunto"
+            className="inline-flex min-h-12 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md border bg-card px-4 text-sm font-medium hover:bg-muted"
+          >
+            <Paperclip className="size-4 shrink-0" strokeWidth={2} />
+            <span className="truncate">{nombreAdjunto ?? "Sacar una foto o elegir archivo"}</span>
+          </Label>
+          {nombreAdjunto ? (
+            <Button
+              type="button"
+              variant="ghost"
+              className="min-h-12"
+              onClick={quitarAdjunto}
+              aria-label="Quitar el archivo"
+            >
+              <X className="size-4" strokeWidth={2} />
+            </Button>
+          ) : null}
+        </div>
         <Input
+          ref={archivoRef}
           id="soc-adjunto"
           name="adjunto"
           type="file"
           accept={ACCEPT_ADJUNTO}
           className="sr-only"
-          onChange={(e) => setNombreAdjunto(e.target.files?.[0]?.name ?? null)}
+          onChange={(e) => {
+            const f = e.target.files?.[0];
+            if (adjuntoMuyPesado(f)) {
+              quitarAdjunto();
+              setError(ERROR_PESO_ADJUNTO);
+              return;
+            }
+            setNombreAdjunto(f?.name ?? null);
+          }}
         />
         <p className="text-sm text-muted-foreground">Hasta 20 MB.</p>
       </div>
 
-      {error ? (
-        <p className="rounded-md bg-pendiente-suave px-4 py-3 text-sm font-medium text-pendiente">
-          {error}
-        </p>
-      ) : null}
+      {error ? <AvisoError mensaje={error} /> : null}
 
       <Button
         type="submit"

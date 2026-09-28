@@ -19,7 +19,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
-import { llamarAccion } from "@/lib/llamar-accion";
+import { AlertaError } from "@/components/cobranza/alerta-error";
+import { llamarAccion, SIN_RESPUESTA } from "@/lib/llamar-accion";
 
 /**
  * Reconocimiento de deuda (RD): deuda anterior al sistema.
@@ -41,6 +42,7 @@ export function DeudaAnterior({
   const [detalle, setDetalle] = useState("");
   const [fecha, setFecha] = useState(fechaHoy);
   const [tocoFecha, setTocoFecha] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [pendiente, startTransition] = useTransition();
 
   const montoNumero = Number(monto.replace(/\./g, "").replace(",", "."));
@@ -57,11 +59,13 @@ export function DeudaAnterior({
     setDetalle("");
     setFecha(fechaHoy);
     setTocoFecha(false);
+    setError(null);
   }
 
   function guardar() {
     setTocoFecha(true);
     if (!fechaValida) return;
+    setError(null);
     startTransition(async () => {
       const res = await llamarAccion(() => registrarDeudaAnterior({
         clienteId,
@@ -70,13 +74,20 @@ export function DeudaAnterior({
         fecha,
       }));
       if (!res.ok) {
-        toast.error(res.error);
+        // Lo cargado queda en el diálogo. Sin respuesta no sabemos si se registró: que se fije
+        // antes de repetirla (si quedó dos veces, se anula desde la cuenta).
+        setError(
+          res.error === SIN_RESPUESTA
+            ? "Se cortó la conexión y no sabemos si se registró. Cerrá esta ventana y fijate en la cuenta antes de cargarla de nuevo; si quedó dos veces, anulá una."
+            : res.error
+        );
         return;
       }
       toast.success(
         yaVencida
           ? "Deuda anterior registrada como vencida. Ya se puede cobrar."
-          : "Deuda anterior registrada. Ya se puede cobrar."
+          : "Deuda anterior registrada. Ya se puede cobrar.",
+        { description: "Si hubo un error, anulala desde la cuenta con “Anular (cargado por error)”." }
       );
       setAbierto(false);
       limpiar();
@@ -88,6 +99,7 @@ export function DeudaAnterior({
     <Dialog
       open={abierto}
       onOpenChange={(v) => {
+        if (pendiente) return;
         setAbierto(v);
         if (!v) limpiar();
       }}
@@ -99,7 +111,7 @@ export function DeudaAnterior({
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader>
+        <DialogHeader className="pr-8">
           <DialogTitle>Registrar deuda anterior</DialogTitle>
           <DialogDescription>
             Deuda de antes de usar el sistema (Reconocimiento de Deuda). Queda
@@ -170,6 +182,7 @@ export function DeudaAnterior({
             ) : null}
           </div>
         </div>
+        {error ? <AlertaError error={error} titulo="No se pudo registrar" /> : null}
         <DialogFooter>
           <Button
             size="lg"

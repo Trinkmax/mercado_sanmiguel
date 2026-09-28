@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { esFallaPasajera } from "@/lib/sesion";
+import { rutaDelPedido } from "@/lib/volver";
 
 const RUTAS_PUBLICAS = ["/login"];
 
@@ -47,11 +48,16 @@ export async function proxy(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     url.search = "";
-    // Tenía sesión y se venció o la cerraron: el login explica qué pasó.
+    // Tenía sesión y se venció o la cerraron: el login explica qué pasó y,
+    // después de entrar, la persona vuelve a la pantalla donde estaba.
     const teniaSesion = request.cookies
       .getAll()
       .some((c) => c.name.startsWith("sb-") && c.name.includes("-auth-token"));
-    if (teniaSesion) url.searchParams.set("motivo", "sesion");
+    if (teniaSesion) {
+      url.searchParams.set("motivo", "sesion");
+      const volver = rutaDelPedido(request.nextUrl);
+      if (volver) url.searchParams.set("volver", volver);
+    }
     return NextResponse.redirect(url);
   }
 

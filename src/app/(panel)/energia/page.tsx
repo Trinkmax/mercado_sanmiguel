@@ -11,7 +11,8 @@ import { BotonExportar } from "@/components/shared/boton-exportar";
 import { PrecioConcepto, PrecioKwh } from "@/components/energia/precio-kwh";
 import { SelectorPeriodo } from "@/components/energia/selector-periodo";
 import { CargaRapida, type FilaMedidor } from "@/components/energia/carga-rapida";
-import { SumarAbonos } from "@/components/energia/sumar-abonos";
+import { SumarAbonos, type AbonoFaltante } from "@/components/energia/sumar-abonos";
+import { AgregarMedidor, type ClienteParaMedidor } from "@/components/energia/agregar-medidor";
 import { etiquetaEspacio } from "@/components/mapa/geometria";
 
 export const metadata = { title: "Energía" };
@@ -54,6 +55,7 @@ export default async function EnergiaPage({
     abenClientesRes,
     periodoRes,
     abonosCargadosRes,
+    clientesRes,
   ] = await Promise.all([
       supabase
         .from("conceptos")
@@ -63,7 +65,7 @@ export default async function EnergiaPage({
       supabase
         .from("medidores")
         .select(
-          "id, numero, ubicacion, cliente_id, espacio:espacios(id, tipo, numero, medio, propio, x, y), cliente:clientes(nombre, activo)"
+          "id, numero, ubicacion, cliente_id, espacio:espacios(id, tipo, numero, medio, propio, x, y), cliente:clientes(nombre, activo, categoria)"
         )
         .eq("org_id", perfil.org_id)
         .eq("activo", true),
@@ -72,13 +74,9 @@ export default async function EnergiaPage({
         .select("medidor_id, lectura_anterior, lectura_actual, kwh, monto, precio_kwh")
         .eq("org_id", perfil.org_id)
         .eq("periodo", periodo),
-      // Última lectura conocida de cada medidor ANTES del período elegido.
-      supabase
-        .from("lecturas")
-        .select("medidor_id, lectura_actual")
-        .eq("org_id", perfil.org_id)
-        .lt("periodo", periodo)
-        .order("periodo", { ascending: false }),
+      // Última lectura conocida de cada medidor ANTES del período elegido: una fila por
+      // medidor, calculada en SQL (el historial entero pasaba el tope de 1000 filas).
+      supabase.rpc("ultimas_lecturas", { p_antes: periodo }),
       // Cambios de conceptos que esperan la aprobación del Líder (buscamos ENER y ABEN).
       supabase
         .from("cambios_pendientes")
@@ -108,6 +106,15 @@ export default async function EnergiaPage({
         .eq("codigo", "ABEN")
         .eq("origen", "generacion")
         .neq("estado", "anulado"),
+      // "Agregar un medidor": puesteros y quinteros activos (Energía es de Administración
+      // para todas las categorías, §4.7). Los ambulantes no tienen medidor.
+      supabase
+        .from("clientes")
+        .select("id, codigo, nombre, apodo, categoria")
+        .eq("org_id", perfil.org_id)
+        .eq("activo", true)
+        .neq("categoria", "ambulante")
+        .order("nombre"),
     ]);
 
   const conceptos = conceptosRes.data ?? [];
@@ -136,7 +143,8 @@ export default async function EnergiaPage({
   }
 
   // Abono por cliente: misma regla que private.generar_abonos_energia (cliente activo con
-  // medidor activo, salvo que tenga la fila ABEN inactiva; cantidad de su fila activa o 1).
+  // medidor activo, salvo que tenga la fila ABEN inactiva; cantidad de su fila activa o 1;
+  // nunca a un ambulante, que paga por día).
   const filaAben = new Map((abenClientesRes.data ?? []).map((f) => [f.cliente_id, f]));
   const abonoDe = (clienteId: string): { monto: number } | "exento" | null => {
     const fila = filaAben.get(clienteId);
@@ -160,13 +168,14 @@ export default async function EnergiaPage({
   // pasada aparte (sin acumular dentro del render de las filas).
   const conAbonoGenerado = new Set((abonosCargadosRes.data ?? []).map((c) => c.cliente_id));
   const abonoPorMedidor = new Map<string, NonNullable<FilaMedidor["abono"]>>();
-  const sinAbonoGenerado: string[] = [];
+  const sinAbonoGenerado: AbonoFaltante[] = [];
   let clientesConAbono = 0;
   let totalAbonos = 0;
   {
     const clientesVistos = new Set<string>();
     for (const m of medidores) {
-      if (m.cliente?.activo === false || clientesVistos.has(m.cliente_id)) continue;
+      if (m.cliente?.activo === false || m.cliente?.categoria === "ambulante" || clientesVistos.has(m.cliente_id))
+        continue;
       clientesVistos.add(m.cliente_id);
       const abono = abonoDe(m.cliente_id);
       if (!abono) continue;
@@ -174,7 +183,8 @@ export default async function EnergiaPage({
       if (abono === "exento") continue;
       clientesConAbono += 1;
       totalAbonos += abono.monto;
-      if (!conAbonoGenerado.has(m.cliente_id)) sinAbonoGenerado.push(m.cliente?.nombre ?? "Sin nombre");
+      if (!conAbonoGenerado.has(m.cliente_id))
+        sinAbonoGenerado.push({ nombre: m.cliente?.nombre ?? "Sin nombre", monto: abono.monto });
     }
   }
 
@@ -187,6 +197,7 @@ export default async function EnergiaPage({
       id: m.id,
       numero: m.numero,
       cliente: m.cliente?.nombre ?? "—",
+      clienteId: m.cliente_id,
       ubicacion: espacio ? etiquetaEspacio(espacio) : m.ubicacion,
       espacioId: espacio?.id ?? null,
       abono,
@@ -216,6 +227,13 @@ export default async function EnergiaPage({
   // Solo el mes en curso: sumarle el abono a un mes viejo sería cobrarlo retroactivo (§1.2-11).
   const esMesActual = periodo === actual;
   const abonosFaltantes = esMesActual && mesGenerado ? sinAbonoGenerado : [];
+  const clientesParaMedidor: ClienteParaMedidor[] = (clientesRes.data ?? []).map((c) => ({
+    id: c.id,
+    codigo: c.codigo,
+    nombre: c.nombre,
+    apodo: c.apodo,
+    categoria: c.categoria as ClienteParaMedidor["categoria"],
+  }));
 
   return (
     <div className="space-y-8">
@@ -235,6 +253,7 @@ export default async function EnergiaPage({
           </Link>
         </Button>
         <BotonExportar dataset="lecturas" periodo={periodo} label="Exportar lecturas" />
+        <AgregarMedidor clientes={clientesParaMedidor} />
       </PageHeader>
 
       <SelectorPeriodo periodo={periodo} />
@@ -277,15 +296,17 @@ export default async function EnergiaPage({
       </section>
 
       {abonosFaltantes.length > 0 ? (
-        <SumarAbonos periodo={periodo} mes={mes} clientes={abonosFaltantes} />
+        <SumarAbonos periodo={periodo} mes={mes} faltantes={abonosFaltantes} />
       ) : null}
 
       {filas.length === 0 ? (
         <EmptyState
           icono={Gauge}
           titulo="No hay medidores activos"
-          descripcion="Cuando asocies medidores a los clientes desde su ficha (pestaña Medidores), van a aparecer acá para cargarles la lectura."
-        />
+          descripcion="Tocá “Agregar un medidor”, elegí el cliente y cargá el número. Después aparece acá para cargarle la lectura."
+        >
+          <AgregarMedidor clientes={clientesParaMedidor} />
+        </EmptyState>
       ) : (
         <CargaRapida key={periodo} filas={filas} periodo={periodo} precioKwh={precioKwh} />
       )}
@@ -297,10 +318,8 @@ export default async function EnergiaPage({
         </p>
         {mesGenerado ? (
           <p>
-            Si agregaste medidores después de generar el mes, volvé a generarlo: solo suma lo que
-            falta, sin duplicar nada.{" "}
             {esMesActual
-              ? "Cuando pase, acá arriba aparece el botón para sumarles el abono."
+              ? "Si agregás un medidor después de generar el mes, acá arriba aparece el botón para sumarle el abono (solo el abono, sin duplicar nada)."
               : "En los meses que ya pasaron no se agregan abonos."}
           </p>
         ) : (

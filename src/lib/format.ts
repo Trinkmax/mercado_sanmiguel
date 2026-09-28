@@ -28,6 +28,52 @@ export function formatNumero(n: number | string | null | undefined): string {
   return new Intl.NumberFormat("es-AR").format(Number(n ?? 0));
 }
 
+// ---------------------------------------------------------------------------
+// Montos tipeados en un input (coma decimal, es-AR). El texto queda como se tipeó
+// (con sus puntos) y parseMonto lo interpreta:
+//   "1234,56" · "1.234,56" → 1234.56   (con coma, los puntos son de miles)
+//   "1.500" · "1.234.567"  → 1500 · 1234567   (punto seguido de 3 dígitos: miles)
+//   "1234.5" · "1234.50"   → 1234.5   (sin coma, un punto final con 1 o 2 dígitos es
+//                                      la coma decimal: el teclado de la tablet a veces
+//                                      solo ofrece el punto)
+// Debajo del campo siempre se muestra el monto ya interpretado ("$ 1.234,50").
+
+/** Texto tipeado → número (ver arriba). Vacío o inválido → 0. */
+export function parseMonto(texto: string): number {
+  if (!texto) return 0;
+  const limpio = texto.replace(/[^\d.,]/g, "");
+  let normal: string;
+  const coma = limpio.indexOf(",");
+  if (coma >= 0) {
+    normal = `${limpio.slice(0, coma).replace(/\./g, "") || "0"}.${limpio.slice(coma + 1).replace(/\D/g, "")}`;
+  } else {
+    const decimal = /^(.*)\.(\d{1,2})$/.exec(limpio);
+    normal = decimal ? `${decimal[1].replace(/\./g, "") || "0"}.${decimal[2]}` : limpio.replace(/\./g, "");
+  }
+  const n = Number(normal);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/**
+ * Deja dígitos, puntos y una única coma decimal (hasta 2 decimales después de la coma).
+ * Los puntos se conservan para que parseMonto decida si son de miles o la coma decimal.
+ */
+export function sanitizarMonto(texto: string): string {
+  const limpio = texto.replace(/[^\d.,]/g, "");
+  const [entero, ...resto] = limpio.split(",");
+  return resto.length > 0 ? `${entero},${resto.join("").replace(/\D/g, "").slice(0, 2)}` : entero;
+}
+
+/** Número → texto del input (coma decimal). 0 → "". */
+export function montoATexto(n: number): string {
+  if (!(n > 0)) return "";
+  return String(redondear2(n)).replace(".", ",");
+}
+
+export function redondear2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
 /** Interpreta "YYYY-MM-DD" como fecha local (sin corrimiento de zona horaria). */
 export function fechaLocal(iso: string): Date {
   const [y, m, d] = iso.slice(0, 10).split("-").map(Number);

@@ -1,12 +1,12 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Check, CircleAlert, MapPin, Paperclip, Printer, Search, Store, X } from "lucide-react";
+import { Check, MapPin, Paperclip, Printer, Search, Store, X } from "lucide-react";
 import type { Rol } from "@/lib/auth";
 import { crearSolicitud } from "@/lib/actions/solicitudes";
-import { cn } from "@/lib/utils";
+import { cn, uuidV4 } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +16,7 @@ import { Sello } from "@/components/shared/sello";
 import {
   ACCEPT_ADJUNTO,
   LABEL_ORIGEN,
+  firmaFormulario,
   ORIGENES_SOLICITUD,
   TIPOS_SOLICITUD,
   type EstadoSolicitud,
@@ -25,6 +26,13 @@ import {
 import { etiquetaLugar, type LugarSimple } from "./lugares";
 import { SelectorPuesto } from "./selector-puesto";
 import { llamarAccion } from "@/lib/llamar-accion";
+import { AlertaError } from "@/components/cobranza/alerta-error";
+import {
+  adjuntoMuyPesado,
+  ERROR_PESO_ADJUNTO,
+  explicarFalloEnvio,
+  prepararAdjuntos,
+} from "@/components/comunicaciones/adjuntos";
 
 export type ClienteBuscable = {
   id: string;
@@ -99,6 +107,16 @@ function Formulario({
   const [nombreAdjunto, setNombreAdjunto] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creada, setCreada] = useState<{ id: string; numero: number; estado: EstadoSolicitud } | null>(null);
+  const adjuntoRef = useRef<HTMLInputElement>(null);
+  // Clave de idempotencia: la misma mientras no cambie lo cargado y hasta que se guarde (un
+  // corte de red no la renueva: tocar "Enviar" de nuevo no crea otra solicitud igual). Si la
+  // persona corrige algo, es otro envío. "Cargar otra" remonta el formulario.
+  const claveRef = useRef<{ firma: string; ref: string } | null>(null);
+
+  function quitarAdjunto() {
+    if (adjuntoRef.current) adjuntoRef.current.value = "";
+    setNombreAdjunto(null);
+  }
 
   const puedeElegirOrigen = conClientes;
   const clienteElegido = clientes.find((c) => c.id === clienteId) ?? null;
@@ -123,6 +141,7 @@ function Formulario({
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (pendiente) return;
     setError(null);
     const fd = new FormData(e.currentTarget);
     fd.set("tipo", tipo);
@@ -148,17 +167,28 @@ function Formulario({
       fd.set("espacioId", lugar.id);
       fd.delete("referencia");
     }
+    const firma = firmaFormulario(fd);
+    if (claveRef.current?.firma !== firma) claveRef.current = { firma, ref: uuidV4() };
+    fd.set("ref", claveRef.current.ref);
     startTransition(async () => {
+      // Las fotos se achican antes de subir (una de la tablet pesa 3–8 MB).
+      const errorPeso = await prepararAdjuntos(fd, ["adjunto"]);
+      if (errorPeso) {
+        setError(errorPeso);
+        return;
+      }
       const res = await llamarAccion(() => crearSolicitud(fd));
       if (!res.ok) {
-        setError(res.error);
-        toast.error(res.error);
+        // Lo cargado queda en el formulario y la clave se conserva para el reintento.
+        setError(explicarFalloEnvio(res.error, fd, ["adjunto"]));
         return;
       }
       toast.success(
-        res.data.estado === "con_jefe"
-          ? `Solicitud N° ${res.data.numero}: le llegó al Jefe de Portería`
-          : `Solicitud N° ${res.data.numero}: le llegó al Líder de Procesos`
+        res.data.repetido
+          ? `Ya se había enviado: es la solicitud N° ${res.data.numero}`
+          : res.data.estado === "con_jefe"
+            ? `Solicitud N° ${res.data.numero}: le llegó al Jefe de Portería`
+            : `Solicitud N° ${res.data.numero}: le llegó al Líder de Procesos`
       );
       setCreada(res.data);
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -384,25 +414,42 @@ function Formulario({
         <Label htmlFor="sol-adjunto" className="text-base">
           Foto o PDF (opcional)
         </Label>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <Label
             htmlFor="sol-adjunto"
-            className="inline-flex min-h-12 cursor-pointer items-center gap-2 rounded-md border bg-card px-4 text-sm font-medium hover:bg-muted"
+            className="inline-flex min-h-12 max-w-full min-w-0 cursor-pointer items-center gap-2 rounded-md border bg-card px-4 text-sm font-medium hover:bg-muted"
           >
-            <Paperclip className="size-4" strokeWidth={2} />
-            {nombreAdjunto ?? "Sacá una foto o elegí un PDF"}
+            <Paperclip className="size-4 shrink-0" strokeWidth={2} />
+            <span className="min-w-0 truncate">{nombreAdjunto ?? "Sacá una foto o elegí un PDF"}</span>
           </Label>
-          <span className="text-sm text-muted-foreground">
-            {nombreAdjunto ? "Se adjunta al crear." : "Foto (JPG, PNG, WEBP) o PDF, hasta 20 MB."}
-          </span>
+          {nombreAdjunto ? (
+            <Button type="button" variant="ghost" className="h-12 px-3" onClick={quitarAdjunto}>
+              <X className="size-4" strokeWidth={2} />
+              Quitar
+            </Button>
+          ) : null}
         </div>
+        <p className="text-sm text-muted-foreground">
+          {nombreAdjunto ? "Se adjunta al enviar." : "Foto o PDF. Las fotos se achican solas."}
+        </p>
         <Input
+          ref={adjuntoRef}
           id="sol-adjunto"
           name="adjunto"
           type="file"
           accept={ACCEPT_ADJUNTO}
           className="sr-only"
-          onChange={(e) => setNombreAdjunto(e.target.files?.[0]?.name ?? null)}
+          onChange={(e) => {
+            const archivo = e.target.files?.[0] ?? null;
+            if (adjuntoMuyPesado(archivo)) {
+              e.target.value = "";
+              setNombreAdjunto(null);
+              setError(ERROR_PESO_ADJUNTO);
+              return;
+            }
+            setError(null);
+            setNombreAdjunto(archivo?.name ?? null);
+          }}
         />
       </div>
 
@@ -434,12 +481,7 @@ function Formulario({
         </fieldset>
       ) : null}
 
-      {error ? (
-        <p className="flex items-start gap-2 rounded-md bg-pendiente-suave px-4 py-3 text-sm font-medium text-pendiente" role="alert">
-          <CircleAlert className="mt-0.5 size-4 shrink-0" strokeWidth={2} />
-          {error}
-        </p>
-      ) : null}
+      {error ? <AlertaError error={error} titulo="No se pudo enviar" /> : null}
 
       <Button type="submit" size="lg" disabled={pendiente} className="h-12 w-full text-base font-semibold sm:w-auto sm:px-8">
         {pendiente ? <Spinner className="size-5" /> : null}

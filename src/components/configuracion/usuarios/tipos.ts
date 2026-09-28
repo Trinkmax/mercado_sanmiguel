@@ -35,4 +35,6 @@ export type ClienteAcceso = {
   /** "Puesto 58 · 60 · Local 3" (para buscar y reconocerlo). */
   lugares: string | null;
   acceso: UsuarioFila | null;
+  /** Cliente dado de baja que todavía tiene usuario del portal activo (hay que quitárselo). */
+  dadoDeBaja: boolean;
 };

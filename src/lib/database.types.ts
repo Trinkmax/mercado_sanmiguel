@@ -330,6 +330,9 @@ export type Database = {
           anulado_por: string | null
           caja_id: string
           cantidad: number
+          conciliado: boolean
+          conciliado_en: string | null
+          conciliado_por: string | null
           creado_en: string
           creado_por: string | null
           destino: string | null
@@ -357,6 +360,9 @@ export type Database = {
           anulado_por?: string | null
           caja_id: string
           cantidad?: number
+          conciliado?: boolean
+          conciliado_en?: string | null
+          conciliado_por?: string | null
           creado_en?: string
           creado_por?: string | null
           destino?: string | null
@@ -384,6 +390,9 @@ export type Database = {
           anulado_por?: string | null
           caja_id?: string
           cantidad?: number
+          conciliado?: boolean
+          conciliado_en?: string | null
+          conciliado_por?: string | null
           creado_en?: string
           creado_por?: string | null
           destino?: string | null
@@ -438,11 +447,15 @@ export type Database = {
       }
       cargos: {
         Row: {
+          anulado_en: string | null
+          anulado_motivo: string | null
+          anulado_por: string | null
           cantidad: number
           cliente_id: string
           codigo: string
           concepto_id: string
           creado_en: string
+          creado_por: string | null
           descripcion: string
           descuento_aplicado: number
           descuento_pronto_pago: number
@@ -461,11 +474,15 @@ export type Database = {
           vencimiento: string
         }
         Insert: {
+          anulado_en?: string | null
+          anulado_motivo?: string | null
+          anulado_por?: string | null
           cantidad?: number
           cliente_id: string
           codigo: string
           concepto_id: string
           creado_en?: string
+          creado_por?: string | null
           descripcion: string
           descuento_aplicado?: number
           descuento_pronto_pago?: number
@@ -484,11 +501,15 @@ export type Database = {
           vencimiento: string
         }
         Update: {
+          anulado_en?: string | null
+          anulado_motivo?: string | null
+          anulado_por?: string | null
           cantidad?: number
           cliente_id?: string
           codigo?: string
           concepto_id?: string
           creado_en?: string
+          creado_por?: string | null
           descripcion?: string
           descuento_aplicado?: number
           descuento_pronto_pago?: number
@@ -560,6 +581,7 @@ export type Database = {
           fecha_depositado: string | null
           fecha_entregado: string | null
           fecha_recibido: string
+          gasto_diferencia: string | null
           gasto_id: string | null
           id: string
           monto: number
@@ -573,6 +595,7 @@ export type Database = {
           rechazado_por: string | null
           recibido_de: string | null
           titular: string | null
+          vuelto_movimiento_id: string | null
         }
         Insert: {
           banco?: string | null
@@ -589,6 +612,7 @@ export type Database = {
           fecha_depositado?: string | null
           fecha_entregado?: string | null
           fecha_recibido?: string
+          gasto_diferencia?: string | null
           gasto_id?: string | null
           id?: string
           monto: number
@@ -602,6 +626,7 @@ export type Database = {
           rechazado_por?: string | null
           recibido_de?: string | null
           titular?: string | null
+          vuelto_movimiento_id?: string | null
         }
         Update: {
           banco?: string | null
@@ -618,6 +643,7 @@ export type Database = {
           fecha_depositado?: string | null
           fecha_entregado?: string | null
           fecha_recibido?: string
+          gasto_diferencia?: string | null
           gasto_id?: string | null
           id?: string
           monto?: number
@@ -631,6 +657,7 @@ export type Database = {
           rechazado_por?: string | null
           recibido_de?: string | null
           titular?: string | null
+          vuelto_movimiento_id?: string | null
         }
         Relationships: [
           {
@@ -652,6 +679,13 @@ export type Database = {
             columns: ["gasto_id"]
             isOneToOne: false
             referencedRelation: "gastos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cheques_vuelto_movimiento_id_fkey"
+            columns: ["vuelto_movimiento_id"]
+            isOneToOne: false
+            referencedRelation: "movimientos_tesoreria"
             referencedColumns: ["id"]
           },
           {
@@ -731,6 +765,7 @@ export type Database = {
           obligatoria: boolean
           org_id: string
           publico: string[] | null
+          ref: string | null
           storage_path: string | null
           titulo: string
         }
@@ -745,6 +780,7 @@ export type Database = {
           obligatoria?: boolean
           org_id: string
           publico?: string[] | null
+          ref?: string | null
           storage_path?: string | null
           titulo: string
         }
@@ -759,6 +795,7 @@ export type Database = {
           obligatoria?: boolean
           org_id?: string
           publico?: string[] | null
+          ref?: string | null
           storage_path?: string | null
           titulo?: string
         }
@@ -1048,6 +1085,51 @@ export type Database = {
           },
         ]
       }
+      empleado_bajas: {
+        Row: {
+          creada_en: string
+          creada_por: string | null
+          desde: string
+          empleado_id: string
+          hasta: string
+          id: string
+          org_id: string
+        }
+        Insert: {
+          creada_en?: string
+          creada_por?: string | null
+          desde: string
+          empleado_id: string
+          hasta: string
+          id?: string
+          org_id: string
+        }
+        Update: {
+          creada_en?: string
+          creada_por?: string | null
+          desde?: string
+          empleado_id?: string
+          hasta?: string
+          id?: string
+          org_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "empleado_bajas_empleado_id_fkey"
+            columns: ["empleado_id"]
+            isOneToOne: false
+            referencedRelation: "empleados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "empleado_bajas_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizaciones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       empleado_horarios: {
         Row: {
           dia_semana: number
@@ -1269,6 +1351,7 @@ export type Database = {
           pago_revertido_motivo: string | null
           pago_revertido_por: string | null
           periodo: string
+          ref: string | null
           rubro_id: string
           tipo: Database["public"]["Enums"]["tipo_gasto"]
           validado_en: string | null
@@ -1297,6 +1380,7 @@ export type Database = {
           pago_revertido_motivo?: string | null
           pago_revertido_por?: string | null
           periodo?: string
+          ref?: string | null
           rubro_id: string
           tipo?: Database["public"]["Enums"]["tipo_gasto"]
           validado_en?: string | null
@@ -1325,6 +1409,7 @@ export type Database = {
           pago_revertido_motivo?: string | null
           pago_revertido_por?: string | null
           periodo?: string
+          ref?: string | null
           rubro_id?: string
           tipo?: Database["public"]["Enums"]["tipo_gasto"]
           validado_en?: string | null
@@ -1365,23 +1450,29 @@ export type Database = {
       imputaciones: {
         Row: {
           cargo_id: string
+          creado_en: string | null
           id: string
           monto: number
           org_id: string
+          origen: string
           pago_id: string
         }
         Insert: {
           cargo_id: string
+          creado_en?: string | null
           id?: string
           monto: number
           org_id: string
+          origen?: string
           pago_id: string
         }
         Update: {
           cargo_id?: string
+          creado_en?: string | null
           id?: string
           monto?: number
           org_id?: string
+          origen?: string
           pago_id?: string
         }
         Relationships: [
@@ -1589,6 +1680,8 @@ export type Database = {
       }
       movimientos_tesoreria: {
         Row: {
+          anulado_en: string | null
+          anulado_por: string | null
           caja_id: string | null
           creado_en: string
           creado_por: string | null
@@ -1600,11 +1693,14 @@ export type Database = {
           id: string
           moneda: Database["public"]["Enums"]["moneda"]
           monto: number
+          motivo_anulacion: string | null
           org_id: string
           ref: string | null
           tipo: Database["public"]["Enums"]["tipo_mov_tesoreria"]
         }
         Insert: {
+          anulado_en?: string | null
+          anulado_por?: string | null
           caja_id?: string | null
           creado_en?: string
           creado_por?: string | null
@@ -1618,11 +1714,14 @@ export type Database = {
           id?: string
           moneda?: Database["public"]["Enums"]["moneda"]
           monto: number
+          motivo_anulacion?: string | null
           org_id: string
           ref?: string | null
           tipo: Database["public"]["Enums"]["tipo_mov_tesoreria"]
         }
         Update: {
+          anulado_en?: string | null
+          anulado_por?: string | null
           caja_id?: string | null
           creado_en?: string
           creado_por?: string | null
@@ -1636,6 +1735,7 @@ export type Database = {
           id?: string
           moneda?: Database["public"]["Enums"]["moneda"]
           monto?: number
+          motivo_anulacion?: string | null
           org_id?: string
           ref?: string | null
           tipo?: Database["public"]["Enums"]["tipo_mov_tesoreria"]
@@ -1673,9 +1773,11 @@ export type Database = {
           horas: number | null
           id: string
           justificada: boolean | null
+          lote: string | null
           motivo_anulacion: string | null
           motivo_rechazo: string | null
           org_id: string
+          rechazo_visto_en: string | null
           revisada_en: string | null
           revisada_por: string | null
           sector: Database["public"]["Enums"]["sector_personal"]
@@ -1696,9 +1798,11 @@ export type Database = {
           horas?: number | null
           id?: string
           justificada?: boolean | null
+          lote?: string | null
           motivo_anulacion?: string | null
           motivo_rechazo?: string | null
           org_id: string
+          rechazo_visto_en?: string | null
           revisada_en?: string | null
           revisada_por?: string | null
           sector: Database["public"]["Enums"]["sector_personal"]
@@ -1719,9 +1823,11 @@ export type Database = {
           horas?: number | null
           id?: string
           justificada?: boolean | null
+          lote?: string | null
           motivo_anulacion?: string | null
           motivo_rechazo?: string | null
           org_id?: string
+          rechazo_visto_en?: string | null
           revisada_en?: string | null
           revisada_por?: string | null
           sector?: Database["public"]["Enums"]["sector_personal"]
@@ -1923,6 +2029,50 @@ export type Database = {
           },
         ]
       }
+      perfiles_eventos: {
+        Row: {
+          accion: string
+          detalle: string | null
+          hecho_en: string
+          hecho_por: string | null
+          id: string
+          org_id: string
+          user_id: string
+          valor_anterior: string | null
+          valor_nuevo: string | null
+        }
+        Insert: {
+          accion: string
+          detalle?: string | null
+          hecho_en?: string
+          hecho_por?: string | null
+          id?: string
+          org_id: string
+          user_id: string
+          valor_anterior?: string | null
+          valor_nuevo?: string | null
+        }
+        Update: {
+          accion?: string
+          detalle?: string | null
+          hecho_en?: string
+          hecho_por?: string | null
+          id?: string
+          org_id?: string
+          user_id?: string
+          valor_anterior?: string | null
+          valor_nuevo?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "perfiles_eventos_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizaciones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       periodos: {
         Row: {
           estado: string
@@ -2019,6 +2169,7 @@ export type Database = {
           id: string
           mensaje: string
           org_id: string
+          ref: string | null
           registro_id: string
         }
         Insert: {
@@ -2031,6 +2182,7 @@ export type Database = {
           id?: string
           mensaje: string
           org_id: string
+          ref?: string | null
           registro_id: string
         }
         Update: {
@@ -2043,6 +2195,7 @@ export type Database = {
           id?: string
           mensaje?: string
           org_id?: string
+          ref?: string | null
           registro_id?: string
         }
         Relationships: [
@@ -2257,6 +2410,7 @@ export type Database = {
           interno: boolean
           mensaje: string
           org_id: string
+          ref: string | null
           solicitud_id: string
         }
         Insert: {
@@ -2269,6 +2423,7 @@ export type Database = {
           interno?: boolean
           mensaje: string
           org_id: string
+          ref?: string | null
           solicitud_id: string
         }
         Update: {
@@ -2281,6 +2436,7 @@ export type Database = {
           interno?: boolean
           mensaje?: string
           org_id?: string
+          ref?: string | null
           solicitud_id?: string
         }
         Relationships: [
@@ -2324,6 +2480,7 @@ export type Database = {
           numero: number
           org_id: string
           origen: Database["public"]["Enums"]["origen_solicitud"]
+          ref: string | null
           referencia: string | null
           resolucion: string | null
           resolucion_de: string | null
@@ -2331,6 +2488,7 @@ export type Database = {
           resuelta_por: string | null
           revisada_en: string | null
           revisada_por: string | null
+          solicitante_visto_en: string | null
           tipo: Database["public"]["Enums"]["tipo_solicitud"]
         }
         Insert: {
@@ -2356,6 +2514,7 @@ export type Database = {
           numero?: never
           org_id: string
           origen: Database["public"]["Enums"]["origen_solicitud"]
+          ref?: string | null
           referencia?: string | null
           resolucion?: string | null
           resolucion_de?: string | null
@@ -2363,6 +2522,7 @@ export type Database = {
           resuelta_por?: string | null
           revisada_en?: string | null
           revisada_por?: string | null
+          solicitante_visto_en?: string | null
           tipo?: Database["public"]["Enums"]["tipo_solicitud"]
         }
         Update: {
@@ -2388,6 +2548,7 @@ export type Database = {
           numero?: never
           org_id?: string
           origen?: Database["public"]["Enums"]["origen_solicitud"]
+          ref?: string | null
           referencia?: string | null
           resolucion?: string | null
           resolucion_de?: string | null
@@ -2395,6 +2556,7 @@ export type Database = {
           resuelta_por?: string | null
           revisada_en?: string | null
           revisada_por?: string | null
+          solicitante_visto_en?: string | null
           tipo?: Database["public"]["Enums"]["tipo_solicitud"]
         }
         Relationships: [
@@ -2512,6 +2674,86 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "terminos_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizaciones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      tesoreria_eventos: {
+        Row: {
+          cheque_id: string | null
+          detalle: string
+          gasto_id: string | null
+          hecho_en: string
+          hecho_por: string | null
+          id: string
+          moneda: Database["public"]["Enums"]["moneda"]
+          monto: number | null
+          motivo: string | null
+          movimiento_id: string | null
+          org_id: string
+          tipo: string
+          valor_anterior: Json | null
+          valor_nuevo: Json | null
+        }
+        Insert: {
+          cheque_id?: string | null
+          detalle: string
+          gasto_id?: string | null
+          hecho_en?: string
+          hecho_por?: string | null
+          id?: string
+          moneda?: Database["public"]["Enums"]["moneda"]
+          monto?: number | null
+          motivo?: string | null
+          movimiento_id?: string | null
+          org_id: string
+          tipo: string
+          valor_anterior?: Json | null
+          valor_nuevo?: Json | null
+        }
+        Update: {
+          cheque_id?: string | null
+          detalle?: string
+          gasto_id?: string | null
+          hecho_en?: string
+          hecho_por?: string | null
+          id?: string
+          moneda?: Database["public"]["Enums"]["moneda"]
+          monto?: number | null
+          motivo?: string | null
+          movimiento_id?: string | null
+          org_id?: string
+          tipo?: string
+          valor_anterior?: Json | null
+          valor_nuevo?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tesoreria_eventos_cheque_id_fkey"
+            columns: ["cheque_id"]
+            isOneToOne: false
+            referencedRelation: "cheques"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tesoreria_eventos_gasto_id_fkey"
+            columns: ["gasto_id"]
+            isOneToOne: false
+            referencedRelation: "gastos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tesoreria_eventos_movimiento_id_fkey"
+            columns: ["movimiento_id"]
+            isOneToOne: false
+            referencedRelation: "movimientos_tesoreria"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tesoreria_eventos_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizaciones"
@@ -2669,6 +2911,36 @@ export type Database = {
           },
         ]
       }
+      v_ultimo_pago_ambulante: {
+        Row: {
+          cliente_id: string | null
+          org_id: string | null
+          pago_hasta: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cargos_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cargos_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "v_clientes_segmentos"
+            referencedColumns: ["cliente_id"]
+          },
+          {
+            foreignKeyName: "cargos_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizaciones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       abrir_caja: {
@@ -2679,9 +2951,17 @@ export type Database = {
         Args: { p_canon: string; p_motivo: string }
         Returns: undefined
       }
+      anular_movimiento_tesoreria: {
+        Args: { p_id: string; p_motivo: string }
+        Returns: Json
+      }
       anular_novedad: {
         Args: { p_motivo: string; p_novedad: string }
         Returns: undefined
+      }
+      anular_cargo_manual: {
+        Args: { p_cargo: string; p_motivo: string }
+        Returns: Json
       }
       anular_pago: {
         Args: { p_motivo: string; p_pago: string }
@@ -2716,6 +2996,13 @@ export type Database = {
         Returns: undefined
       }
       cerrar_caja: { Args: { p_caja: string }; Returns: Json }
+      cobranza_diaria: {
+        Args: { p_desde: string; p_hasta: string }
+        Returns: {
+          fecha: string
+          monto: number
+        }[]
+      }
       cobrar_diario: {
         Args: {
           p_caja: string
@@ -2729,9 +3016,27 @@ export type Database = {
         Returns: Json
       }
       datos_recibo: { Args: { p_pago: string }; Returns: Json }
+      conciliar_canon: { Args: { p_ids: string[] }; Returns: Json }
       dejar_sin_efecto_multa: {
         Args: { p_motivo: string; p_registro: string }
         Returns: undefined
+      }
+      desconciliar_canon: { Args: { p_id: string }; Returns: undefined }
+      deshacer_acreditacion_cheque: {
+        Args: { p_cheque: string; p_motivo: string }
+        Returns: Json
+      }
+      deshacer_deposito_cheque: {
+        Args: { p_cheque: string; p_motivo: string }
+        Returns: Json
+      }
+      desvincular_cheque_gasto: {
+        Args: { p_cheque: string; p_motivo: string }
+        Returns: Json
+      }
+      devolver_cheque_a_cartera: {
+        Args: { p_cheque: string; p_motivo: string }
+        Returns: Json
       }
       editar_espacio: {
         Args: {
@@ -2762,11 +3067,12 @@ export type Database = {
       entregar_cheque: {
         Args: {
           p_cheque: string
+          p_diferencia?: string
           p_fecha?: string
           p_gasto?: string
           p_proveedor: string
         }
-        Returns: undefined
+        Returns: Json
       }
       espacios_del_plano: {
         Args: never
@@ -2790,13 +3096,46 @@ export type Database = {
         Args: { p_cuotas: number }
         Returns: undefined
       }
-      integrar_caja_porteria: {
-        Args: { p_caja: string; p_observaciones?: string }
+      guardar_saldo_inicial: {
+        Args: {
+          p_fecha: string
+          p_medio: Database["public"]["Enums"]["medio_pago"]
+          p_moneda: Database["public"]["Enums"]["moneda"]
+          p_monto: number
+          p_motivo?: string
+          p_notas?: string
+        }
         Returns: Json
+      }
+      integrar_caja_porteria: {
+        Args: {
+          p_caja: string
+          p_efectivo_recibido?: number
+          p_observaciones?: string
+        }
+        Returns: Json
+      }
+      lugares_del_cliente: {
+        Args: { p_cliente: string }
+        Returns: {
+          id: string
+          medio: boolean
+          numero: string
+          propio: boolean
+          tipo: string
+        }[]
       }
       marcar_registro_visto: {
         Args: { p_registro: string }
         Returns: undefined
+      }
+      marcar_solicitud_vista: {
+        Args: { p_solicitud: string }
+        Returns: boolean
+      }
+      ocultar_rechazo_novedad: {
+        Args: { p_novedad: string }
+        Returns: boolean
       }
       pagar_gasto: {
         Args: {
@@ -2810,6 +3149,10 @@ export type Database = {
       }
       reabrir_caja: {
         Args: { p_caja: string; p_motivo?: string }
+        Returns: undefined
+      }
+      reincorporar_empleado: {
+        Args: { p_desde?: string; p_empleado: string }
         Returns: undefined
       }
       rechazar_cambio: {
@@ -2847,6 +3190,7 @@ export type Database = {
         }
         Returns: Json
       }
+      registrar_contrasena_nueva: { Args: { p_user: string }; Returns: undefined }
       registrar_cobro: {
         Args: {
           p_caja: string
@@ -2866,6 +3210,19 @@ export type Database = {
           p_periodo: string
         }
         Returns: string
+      }
+      registrar_movimiento_tesoreria: {
+        Args: {
+          p_comision?: number
+          p_cuenta: Database["public"]["Enums"]["cuenta_tesoreria"]
+          p_descripcion?: string
+          p_fecha: string
+          p_moneda: Database["public"]["Enums"]["moneda"]
+          p_monto: number
+          p_ref?: string
+          p_tipo: Database["public"]["Enums"]["tipo_mov_tesoreria"]
+        }
+        Returns: Json
       }
       registrar_pago: {
         Args: {
@@ -2957,6 +3314,7 @@ export type Database = {
         Returns: Database["public"]["Enums"]["estado_novedad"]
       }
       siguiente_codigo_cliente: { Args: never; Returns: number }
+      solicitudes_con_respuesta: { Args: never; Returns: string[] }
       solicitar_cambio: {
         Args: {
           p_accion: string
@@ -2972,6 +3330,16 @@ export type Database = {
         Args: { p_caja: string; p_motivo: string }
         Returns: undefined
       }
+      sumar_abonos_energia: { Args: { p_periodo: string }; Returns: Json }
+      ultimas_lecturas: {
+        Args: { p_antes: string }
+        Returns: {
+          fecha_lectura: string
+          lectura_actual: number
+          medidor_id: string
+          periodo: string
+        }[]
+      }
       validar_caja: {
         Args: {
           p_caja: string
@@ -2981,8 +3349,8 @@ export type Database = {
         Returns: undefined
       }
       vincular_cheque_gasto: {
-        Args: { p_cheque: string; p_gasto: string }
-        Returns: undefined
+        Args: { p_cheque: string; p_diferencia?: string; p_gasto: string }
+        Returns: Json
       }
     }
     Enums: {

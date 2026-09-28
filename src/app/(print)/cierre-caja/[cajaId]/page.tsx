@@ -21,7 +21,8 @@ import { cargarDatosCajaPorId } from "@/components/caja/datos";
 
 type Props = {
   params: Promise<{ cajaId: string }>;
-  searchParams: Promise<{ auto?: string | string[] }>;
+  /** `auto=1`: imprimir al abrir. `ver=1`: solo mirar (nunca imprime sola, aunque esté la impresión directa). */
+  searchParams: Promise<{ auto?: string | string[]; ver?: string | string[] }>;
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -59,10 +60,11 @@ function Titulo({ children }: { children: React.ReactNode }) {
 /**
  * Imprimible del cierre de caja (I2): la cuenta completa, el detalle de lo que entró
  * y salió, el recuadro para el conteo a mano, firmas y bitácora. Con la caja abierta
- * sale marcado PARCIAL. `?auto=1` (desde "Imprimir cierre") abre el diálogo de impresión.
+ * sale marcado PARCIAL. `?auto=1` (desde "Imprimir cierre") abre el diálogo de impresión;
+ * `?ver=1` (el detalle desde la bandeja de Administración) es solo para mirar: no imprime solo.
  */
 export default async function CierreCajaPage({ params, searchParams }: Props) {
-  const [{ cajaId }, { auto }] = await Promise.all([params, searchParams]);
+  const [{ cajaId }, { auto, ver }] = await Promise.all([params, searchParams]);
   const perfil = await requireRol("admin", "guardia", "tesoreria", "lider");
   // La RLS limita al Jefe a las cajas de portería: lo que no ve, no existe.
   const datos = await cargarDatosCajaPorId(perfil, cajaId);
@@ -77,7 +79,11 @@ export default async function CierreCajaPage({ params, searchParams }: Props) {
 
   const porteria = tipo === "guardia";
   const abierta = caja.estado === "abierta";
-  const autoImprimir = (Array.isArray(auto) ? auto[0] : auto) === "1" || Boolean(configRes.data?.impresion_directa);
+  const primero = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+  // Mirar el detalle de una rendición antes de recibirla no tiene que sacar una hoja por la impresora.
+  const soloMirar = primero(ver) === "1";
+  const autoImprimir =
+    primero(auto) === "1" || (Boolean(configRes.data?.impresion_directa) && !soloMirar);
   const impresoEn = formatFechaHora(new Date().toISOString());
 
   // Cobros: una fila por línea (medio); las líneas de un mismo recibo van juntas.

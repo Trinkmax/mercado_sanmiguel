@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowRight, Equal, FileText, Minus, Receipt, TrendingUp } from "lucide-react";
 import { requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { labelPeriodo, periodoActual, sumarMeses } from "@/lib/format";
+import { labelPeriodo, periodoActual } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,7 +25,7 @@ import { MenuExportar } from "@/components/reportes/menu-exportar";
 import { FilaIngreso, type ResumenConcepto } from "@/components/reportes/fila-ingreso";
 import { ChartCobranzaDiaria } from "@/components/charts/chart-cobranza-diaria";
 import { ChartGastosRubro, type GastoRubro } from "@/components/charts/chart-gastos-rubro";
-import { armarSerieDiaria, rangoDelPeriodo } from "@/components/charts/serie-cobranza";
+import { rangoDelPeriodo, serieDesdeTotales } from "@/components/charts/serie-cobranza";
 
 export const metadata = { title: "Reportes" };
 
@@ -43,34 +43,16 @@ export default async function ReportesPage({
   const periodo = /^\d{4}-\d{2}-01$/.test(crudo) ? crudo : periodoActual();
 
   const supabase = await createClient();
-  const siguiente = sumarMeses(periodo, 1);
-  // Los pagos son timestamptz: el rango del mes es en hora argentina (UTC-3
-  // fijo, sin DST); el día exacto se deriva en memoria con el huso argentino.
-  const [ingresosRes, gastosRes, pagosMesRes, canonMesRes] = await Promise.all([
+  const rango = rangoDelPeriodo(periodo);
+  // Cobros + bono camioneros por día argentino, sumados en SQL (cobranza_diaria, 0024):
+  // traer las filas se cortaba en 1000 y el gráfico daba menos que la tabla.
+  const [ingresosRes, gastosRes, cobranzaRes] = await Promise.all([
     supabase.rpc("resumen_conceptos", { p_periodo: periodo }),
     supabase.rpc("resumen_gastos", { p_periodo: periodo }),
-    supabase
-      .from("pagos")
-      .select("fecha, monto")
-      .eq("anulado", false)
-      .gte("fecha", `${periodo}T00:00:00-03:00`)
-      .lt("fecha", `${siguiente}T00:00:00-03:00`),
-    // Bono camioneros del mes, sin los anulados (se anulan, no se borran).
-    supabase
-      .from("canon_camiones")
-      .select("fecha, monto, anulado")
-      .eq("anulado", false)
-      .gte("fecha", periodo)
-      .lt("fecha", siguiente),
+    supabase.rpc("cobranza_diaria", { p_desde: rango.desde, p_hasta: rango.hasta }),
   ]);
 
-  const rango = rangoDelPeriodo(periodo);
-  const serieCobranza = armarSerieDiaria(
-    rango.desde,
-    rango.hasta,
-    pagosMesRes.data ?? [],
-    canonMesRes.data ?? []
-  );
+  const serieCobranza = serieDesdeTotales(rango.desde, rango.hasta, cobranzaRes.data ?? []);
   const hayCobros = serieCobranza.some((p) => p.monto > 0);
 
   const ingresos = (ingresosRes.data ?? []) as ResumenConcepto[];

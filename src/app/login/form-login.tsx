@@ -18,7 +18,8 @@ function pareceEmail(v: string): boolean {
   return /[a-z@]/i.test(v);
 }
 
-export function FormLogin() {
+/** `volver`: pantalla donde estaba cuando se le cerró la sesión (ya validada en el servidor). */
+export function FormLogin({ volver }: { volver?: string | null }) {
   const [estado, accion, pendiente] = useActionState<EstadoLogin, FormData>(
     iniciarSesion,
     null
@@ -55,6 +56,7 @@ export function FormLogin() {
 
   return (
     <form action={accion} className="space-y-5">
+      {volver ? <input type="hidden" name="volver" value={volver} /> : null}
       {estado?.error ? (
         <Alert variant="destructive" aria-live="assertive">
           <AlertTitle className="text-sm">{estado.error}</AlertTitle>

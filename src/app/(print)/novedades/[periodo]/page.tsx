@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { SIN_CONEXION } from "@/lib/sesion";
 import { formatFechaHora, labelPeriodo, periodoActual } from "@/lib/format";
 import { Marca } from "@/components/shared/marca";
 import { BotonImprimir } from "@/components/shared/boton-imprimir";
@@ -46,6 +47,9 @@ export default async function ImprimirNovedadesPage({ params }: Props) {
     supabase.from("organizaciones").select("nombre").eq("id", perfil.org_id).maybeSingle(),
     supabase.from("configuracion").select("impresion_directa").eq("org_id", perfil.org_id).maybeSingle(),
   ]);
+  // Si la base no respondió no se imprime una planilla vacía con lugar para firmas: la
+  // pantalla de error reintenta sola.
+  if (resumenRes.error) throw new Error(SIN_CONEXION);
   const filas = resumenRes.data ?? [];
   const aprobadas = await armarVistas(
     supabase,

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { CalendarX2, HandCoins, Lock, Printer } from "lucide-react";
@@ -20,8 +20,9 @@ import { Spinner } from "@/components/ui/spinner";
 import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
 import { CuentaCajon } from "@/components/caja/cuenta-cajon";
+import { AlertaError } from "@/components/cobranza/alerta-error";
 import type { Arqueo } from "@/components/caja/arqueo-tipos";
-import { llamarAccion } from "@/lib/llamar-accion";
+import { llamarAccion, SIN_RESPUESTA } from "@/lib/llamar-accion";
 
 /**
  * Acción del final del día. El diálogo muestra la cuenta ANTES de confirmar
@@ -50,21 +51,44 @@ export function BotonCerrarCaja({
 }) {
   const [abierto, setAbierto] = useState(false);
   const [resultado, setResultado] = useState<Arqueo | null>(null);
+  // Se cortó la red, el cierre sí había llegado y el reintento contestó "ya está cerrada":
+  // se muestra el éxito con el arqueo que trae la página (se refresca al instante).
+  const [yaCerrada, setYaCerrada] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [enviando, startTransition] = useTransition();
+  const huboCorte = useRef(false);
   const router = useRouter();
   const rinde = tipo === "guardia" && !forzado;
   const Icono = forzado ? CalendarX2 : rinde ? HandCoins : Lock;
   const verbo = forzado ? "Cerrar (quedó abierta)" : rinde ? "Rendir caja" : "Cerrar caja";
 
-  if (!mostrar && !resultado) return null;
+  // Con el diálogo abierto se sigue mostrando aunque la caja ya figure cerrada (el refresh no
+  // lo hace desaparecer de golpe: se ve el éxito o el error hasta que toquen "Listo").
+  if (!mostrar && !resultado && !yaCerrada && !abierto) return null;
 
   function confirmar() {
+    setError(null);
     startTransition(async () => {
       const res = await llamarAccion(() => cerrarCaja(cajaId));
       if (!res.ok) {
-        toast.error(res.error);
+        const yaEstaba = res.error.startsWith("La caja ya está cerrada");
+        if (yaEstaba && huboCorte.current) {
+          // El intento que se quedó sin respuesta sí la cerró: no es un error.
+          huboCorte.current = false;
+          toast.info(rinde ? "Ya había quedado rendida." : "Ya había quedado cerrada.");
+          setYaCerrada(true);
+          router.refresh();
+          return;
+        }
+        if (res.error === SIN_RESPUESTA) huboCorte.current = true;
+        // El diálogo queda abierto con el error a la vista. Reintentar es seguro: si ya se
+        // había cerrado, la base contesta "La caja ya está cerrada" y no pasa nada más.
+        setError(res.error);
+        // La cerró otra persona: se trae la pantalla al día.
+        if (yaEstaba) router.refresh();
         return;
       }
+      huboCorte.current = false;
       setResultado(res.data);
     });
   }
@@ -72,9 +96,14 @@ export function BotonCerrarCaja({
   function cerrarDialogo(v: boolean) {
     if (enviando) return;
     setAbierto(v);
-    if (!v) setResultado(null);
+    if (!v) {
+      setResultado(null);
+      setYaCerrada(false);
+      setError(null);
+    }
   }
 
+  const exito = resultado !== null || yaCerrada;
   const a = resultado ?? arqueo;
 
   return (
@@ -110,13 +139,16 @@ export function BotonCerrarCaja({
 
       <Dialog open={abierto} onOpenChange={cerrarDialogo}>
         <DialogContent className="max-h-[92dvh] gap-5 overflow-y-auto p-6 sm:max-w-lg">
-          {resultado ? (
+          {exito ? (
             <>
-              <DialogHeader>
+              <DialogHeader className="pr-8">
                 <DialogTitle className="text-xl">
                   {rinde ? "Caja de portería rendida" : "Caja cerrada"}
                 </DialogTitle>
                 <DialogDescription className="text-base">
+                  {yaCerrada && !resultado
+                    ? "Se había cortado la conexión, pero ya había quedado hecho. "
+                    : ""}
                   {rinde
                     ? "Llevá el efectivo a Administración. Cuando lo reciban, entra en la caja mayor."
                     : "Contá la plata y fijate que coincida. Tesorería la controla y la valida."}
@@ -164,7 +196,7 @@ export function BotonCerrarCaja({
             </>
           ) : (
             <>
-              <DialogHeader>
+              <DialogHeader className="pr-8">
                 <DialogTitle className="text-xl">
                   {rinde ? "Rendir la caja a Administración" : forzado ? "Cerrar la caja que quedó abierta" : "Cerrar la caja"}
                 </DialogTitle>
@@ -197,6 +229,10 @@ export function BotonCerrarCaja({
                   ? "Después de rendir, Portería no puede cobrar más canon hoy; si hubo un error pedí la reapertura."
                   : "Después de cerrar no se cargan más cobros. Si te olvidaste de algo, se reabre mientras Tesorería no la valide."}
               </p>
+
+              {error ? (
+                <AlertaError error={error} titulo={rinde ? "No se pudo rendir la caja" : "No se pudo cerrar la caja"} />
+              ) : null}
 
               <DialogFooter className="gap-2 sm:gap-2">
                 <Button

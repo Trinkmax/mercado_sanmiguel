@@ -42,11 +42,8 @@ export default async function PlanillaLecturasPage() {
       .from("lecturas")
       .select("medidor_id, lectura_anterior")
       .eq("periodo", periodo),
-    supabase
-      .from("lecturas")
-      .select("medidor_id, lectura_actual")
-      .lt("periodo", periodo)
-      .order("periodo", { ascending: false }),
+    // Una fila por medidor, calculada en SQL (el historial entero pasaba el tope de 1000 filas).
+    supabase.rpc("ultimas_lecturas", { p_antes: periodo }),
     // Impresión directa (Configuración → General): abre el diálogo solo.
     supabase
       .from("configuracion")

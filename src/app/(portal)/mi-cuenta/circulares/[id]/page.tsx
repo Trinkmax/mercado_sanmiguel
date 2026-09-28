@@ -63,9 +63,15 @@ export default async function CircularSocioPage({
           </p>
           {c.detalle ? (
             <p className="whitespace-pre-line text-base leading-relaxed">{c.detalle}</p>
-          ) : (
+          ) : pdfUrl ? (
             <p className="text-muted-foreground">El contenido está en el PDF.</p>
-          )}
+          ) : null}
+          {c.storage_path && !pdfUrl ? (
+            <p className="rounded-md bg-parcial-suave px-3 py-2 text-sm">
+              No pudimos abrir el PDF de esta circular. Actualizá la página; si sigue igual, consultá en
+              administración.
+            </p>
+          ) : null}
           {pdfUrl ? (
             <Button asChild variant="outline" className="min-h-12 w-full text-base">
               <a href={pdfUrl} target="_blank" rel="noopener noreferrer">

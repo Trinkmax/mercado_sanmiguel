@@ -162,13 +162,16 @@ export default async function ComunicacionesSocioPage({
 }
 
 function FilaRegistro({ r }: { r: RegistroPortal }) {
-  // Un solo sello de "qué hacer" (el más urgente) + el de la multa si tiene.
-  const aviso = esperaDescargo(r)
-    ? "a_responder"
+  // Un solo sello de "qué hacer" + el de la multa si tiene. Primero lo NUEVO, igual que el
+  // contador de la pestaña: si nunca lo abrió es "Nueva" (aunque ya le hayan escrito); si le
+  // escribieron después de la última vez que lo abrió, "Respuesta nueva" (aunque todavía
+  // espere su descargo). Si no, "Tenés que responder" (también lo avisa Mi cuenta).
+  const aviso = registroSinVer(r)
+    ? "nueva_comunicacion"
     : respuestaNueva(r)
       ? "respuesta_nueva"
-      : registroSinVer(r)
-        ? "nueva_comunicacion"
+      : esperaDescargo(r)
+        ? "a_responder"
         : null;
   const multa = estadoMulta(r);
   const saldo = saldoMulta(r);

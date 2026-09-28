@@ -13,6 +13,7 @@ import {
   type Material,
 } from "./geometria";
 import {
+  A_NE,
   A_SO,
   arco,
   barridoElipse,
@@ -265,10 +266,10 @@ function recortar(texto: string, ancho: number, tamano: number): string {
   return limpio.length <= max ? limpio : `${limpio.slice(0, max - 1).trimEnd()}…`;
 }
 
-/** Apodo: se achica hasta 9 u antes de recortar (así entra "Bar de Mary"). */
-function apodoAjustado(texto: string, ancho: number): { t: string; tam: number } {
+/** Apodo: se achica hasta 9 u (o `minimo`) antes de recortar (así entra "Bar de Mary"). */
+function apodoAjustado(texto: string, ancho: number, minimo = 9): { t: string; tam: number } {
   let tam = 10.5;
-  while (tam > 9 && texto.length > Math.floor(ancho / (tam * 0.56))) tam -= 0.5;
+  while (tam > minimo && texto.length > Math.floor(ancho / (tam * 0.56))) tam -= 0.5;
   return { t: recortar(texto, ancho, tam), tam };
 }
 
@@ -425,6 +426,35 @@ export const DefsPlano = memo(function DefsPlano() {
       <filter id="mapa-desenfoque" x="-2%" y="-2%" width="104%" height="104%">
         <feGaussianBlur stdDeviation={4.5} />
       </filter>
+      {/* Plano girado (pantalla vertical): las texturas que tienen dirección, a 90° */}
+      <pattern id="mapa-adoquin-girado" width={15} height={10} patternUnits="userSpaceOnUse" patternTransform="rotate(90)">
+        <rect width={15} height={10} fill="oklch(0.925 0.01 75)" />
+        <path d="M0 10H15M0 5H15M7.5 0V5M0 5V10M15 5V10" stroke="oklch(0.885 0.012 70)" strokeWidth={0.9} />
+      </pattern>
+      <Lineal id="mapa-hundido-oeste" horizontal stops={[[0, TINTA_SOMBRA, 0.16], [1, TINTA_SOMBRA, 0]]} />
+      <pattern id="mapa-surcos-girado" width={14} height={12} patternUnits="userSpaceOnUse" patternTransform="rotate(90)">
+        <rect y={7.5} width={14} height={3.2} rx={1.6} fill="oklch(0.83 0.045 70)" />
+        <rect y={6.6} width={14} height={1} fill="oklch(0.95 0.02 82)" />
+      </pattern>
+      <pattern id="mapa-brotes-girado" width={14} height={12} patternUnits="userSpaceOnUse" patternTransform="rotate(90)">
+        <circle cx={4} cy={6.4} r={2.3} fill="oklch(0.74 0.075 128)" />
+        <circle cx={11} cy={6.4} r={2.1} fill="oklch(0.7 0.07 132)" />
+      </pattern>
+      {/* Bóveda acostada: el brillo sigue la cresta (a un cuarto del alto de la silueta) */}
+      <Lineal
+        id="mapa-vidrio-acostado"
+        stops={[
+          [0, "#ffffff", 0.78],
+          [0.12, "oklch(0.95 0.03 185)", 0.5],
+          [0.24, "#ffffff", 0.86],
+          [0.46, "oklch(0.92 0.04 185)", 0.46],
+          [1, "oklch(0.8 0.05 195)", 0.62],
+        ]}
+      />
+      <pattern id="mapa-plantas-girado" width={21.5} height={13} patternUnits="userSpaceOnUse" patternTransform="rotate(90)">
+        <ellipse cx={10.75} cy={6.5} rx={6.2} ry={4.2} fill="oklch(0.72 0.08 130)" />
+        <ellipse cx={9.4} cy={5.3} rx={2.6} ry={1.7} fill="oklch(0.84 0.07 125)" />
+      </pattern>
     </defs>
   );
 });
@@ -551,6 +581,88 @@ function cocheras(el: ElementoPlano, norte: boolean, c: Capas) {
   );
 }
 
+/** Cocheras en una franja parada (plano girado): demarcación a lo ancho, cordones al
+ * oeste y al este, tachas del lado que mira a la nave y el cartel parado. */
+function cocherasParadas(el: ElementoPlano, naveAlEste: boolean, c: Capas) {
+  const { x, y, w, h } = el;
+  const n = Math.max(0, el.capacidad ?? 0);
+  let lineas = "";
+  for (let i = 1; i < n; i++) lineas += `M${x + 7} ${f(y + (h * i) / n)}H${x + w - 7}`;
+  const xl = naveAlEste ? x + w - 4.5 : x + 4.5;
+  const tachas = `M${xl} ${y + 12}V${y + h - 12}`;
+  c.suelos.push(
+    <Fragment key={el.id}>
+      <rect x={x} y={y} width={w} height={h} rx={6} fill="url(#mapa-asfalto)" />
+      {/* La sombra del cordón oeste (la luz viene del noroeste) */}
+      <rect x={x} y={y + 3} width={7} height={h - 6} rx={3} fill="url(#mapa-hundido-oeste)" />
+      {lineas ? <path d={lineas} stroke="#fff" strokeWidth={1.8} strokeLinecap="round" /> : null}
+      {n > 0 ? (
+        <>
+          <path d={tachas} stroke="var(--primary)" strokeOpacity={0.1} strokeWidth={5} strokeLinecap="round" />
+          <path
+            d={tachas}
+            stroke="oklch(0.6 0.15 262)"
+            strokeWidth={3}
+            strokeDasharray={`0.1 ${f(h / n)}`}
+            strokeDashoffset={f(-(h / n) / 2 + 12)}
+            strokeLinecap="round"
+          />
+        </>
+      ) : null}
+    </Fragment>
+  );
+  // Cordones oeste y este: bordes elevados 3 u (tapa, cara este y cabeza sur).
+  for (const [lado, cx] of [
+    ["o", x - 4],
+    ["e", x + w],
+  ] as const) {
+    const xb = cx + 4;
+    c.objetos.push({
+      z: y + h,
+      x: cx,
+      k: `${el.id}:${lado}`,
+      n: (
+        <>
+          <path
+            d={
+              poly([P(xb, y, 0), P(xb, y + h, 0), P(xb, y + h, ALT.cordon), P(xb, y, ALT.cordon)]) +
+              poly([P(cx, y + h, 0), P(xb, y + h, 0), P(xb, y + h, ALT.cordon), P(cx, y + h, ALT.cordon)])
+            }
+            fill="oklch(0.83 0.008 80)"
+          />
+          <rect
+            x={f(cx - K * ALT.cordon)}
+            y={y - ALT.cordon}
+            width={4}
+            height={h}
+            rx={1.5}
+            fill="oklch(0.955 0.005 85)"
+          />
+        </>
+      ),
+    });
+  }
+  // El cartel, parado (se lee de abajo hacia arriba, como "Pasillo" en el plano horizontal).
+  const etiqueta = el.etiqueta ?? `${n} cocheras`;
+  const ancho = etiqueta.length * 8.3 + 30;
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  c.rotulos.push(
+    <g key={el.id} transform={`rotate(-90 ${f(cx)} ${f(cy)})`}>
+      <rect
+        x={f(cx - ancho / 2)}
+        y={f(cy - 13.5)}
+        width={f(ancho)}
+        height={27}
+        rx={13.5}
+        fill="#fff"
+        stroke="oklch(0.87 0.01 258)"
+      />
+      <Texto x={cx} y={cy} t={etiqueta} clase="rot7" tam={15} fill={TINTA_ROTULO} />
+    </g>
+  );
+}
+
 /** Tramo de cerco de malla (10 u) con postes, baranda y brillo. */
 function tramoCerco(x0: number, y0: number, x1: number, y1: number): ReactNode {
   const z = ALT.cerco;
@@ -621,15 +733,28 @@ function recinto(el: ElementoPlano, c: Capas) {
   }
 }
 
-/** Dónde corta el pasillo a la nave (x de sus bordes), si la cruza. */
+/** Dónde corta el pasillo a la nave (x de sus bordes), si la cruza de norte a sur. */
 function cortePasillo(nave: ElementoPlano, pasillo: ElementoPlano | null): [number, number] | null {
   if (!pasillo) return null;
   const cruza =
+    pasillo.h >= pasillo.w &&
     pasillo.x > nave.x &&
     pasillo.x + pasillo.w < nave.x + nave.w &&
     pasillo.y < nave.y + nave.h &&
     pasillo.y + pasillo.h > nave.y;
   return cruza ? [pasillo.x, pasillo.x + pasillo.w] : null;
+}
+
+/** Dónde corta un pasillo acostado (plano girado) a la nave (y de sus bordes), si
+ * la cruza de oeste a este: parte los muros bajos y el zócalo del este. */
+function cortePasilloAcostado(nave: ElementoPlano, pasillo: ElementoPlano): [number, number] | null {
+  const cruza =
+    pasillo.w > pasillo.h &&
+    pasillo.y > nave.y &&
+    pasillo.y + pasillo.h < nave.y + nave.h &&
+    pasillo.x < nave.x + nave.w &&
+    pasillo.x + pasillo.w > nave.x;
+  return cruza ? [pasillo.y, pasillo.y + pasillo.h] : null;
 }
 
 const SOMBRA_NAVE: [number, number, number, number, number][] = [
@@ -638,13 +763,35 @@ const SOMBRA_NAVE: [number, number, number, number, number][] = [
   [10, 17, 15, 13, 0.04],
 ];
 
-/** La nave es una plataforma: sombra (sin filtro), zócalo partido por el pasillo y piso. */
-function nave(el: ElementoPlano, corte: [number, number] | null, c: Capas) {
+/** La nave es una plataforma: sombra (sin filtro), zócalo partido por el pasillo y piso.
+ * `corte`: pasillo de norte a sur (parte la cara sur); `corteAcostado`: pasillo de
+ * oeste a este, en el plano girado (parte la cara este). */
+function nave(
+  el: ElementoPlano,
+  corte: [number, number] | null,
+  c: Capas,
+  corteAcostado: [number, number] | null = null
+) {
   const { x, y, w, h } = el;
   const zc = -ALT.zocalo;
   const r = 6;
   const so: Pt = [x + r, y + h - r];
   const se: Pt = [x + w - r, y + h - r];
+  const ne: Pt = [x + w - r, y + r];
+  const este = corteAcostado ? (
+    // Tramo norte (esquina NE redondeada) y tramo sur (esquina SE), con el pasillo en medio.
+    <path
+      d={
+        `M${pt(P(x + w, corteAcostado[0], 0))}L${pt(esq(ne, r, 0, 0))}${arco(r, esq(ne, r, A_NE, 0), 0)}` +
+        `L${pt(esq(ne, r, A_NE, zc))}${arco(r, esq(ne, r, 0, zc), 1)}L${pt(P(x + w, corteAcostado[0], zc))}Z` +
+        `M${pt(esq(se, r, 45, 0))}${arco(r, esq(se, r, 0, 0), 0)}L${pt(P(x + w, corteAcostado[1], 0))}` +
+        `L${pt(P(x + w, corteAcostado[1], zc))}L${pt(esq(se, r, 0, zc))}${arco(r, esq(se, r, 45, zc), 1)}Z`
+      }
+      fill="oklch(0.74 0.018 72)"
+    />
+  ) : (
+    <path d={caraEste(x, y, w, h, r, 0, zc)} fill="oklch(0.74 0.018 72)" />
+  );
   const zocalo = corte ? (
     <>
       {/* Tramo oeste (esquina SO redondeada), corte que mira al pasillo y tramo este */}
@@ -686,7 +833,7 @@ function nave(el: ElementoPlano, corte: [number, number] | null, c: Capas) {
         />
       ))}
       {zocalo}
-      <path d={caraEste(x, y, w, h, r, 0, zc)} fill="oklch(0.74 0.018 72)" />
+      {este}
       <rect x={x} y={y} width={w} height={h} rx={r} fill="url(#mapa-piso)" />
       <rect x={x} y={y} width={w} height={h} rx={r} fill="url(#mapa-juntas)" />
       <path d={`M${x + r} ${f(y + h - 0.7)}H${x + w - r}`} stroke="#fff" strokeOpacity={0.9} strokeWidth={1.2} />
@@ -733,9 +880,52 @@ function pasillo(el: ElementoPlano, nave: ElementoPlano | null, c: Capas) {
   );
 }
 
+/** Pasillo acostado (plano girado): el mismo solado, bordes y guía a lo largo de x. */
+function pasilloAcostado(el: ElementoPlano, nave: ElementoPlano | null, c: Capas) {
+  const { y, h } = el;
+  const x0 = el.x;
+  const x1 = el.x + el.w;
+  const cy = y + h / 2;
+  const guia = `M${x0 + 10} ${cy}H${x1 - 10}`;
+  c.suelos.push(
+    <Fragment key={el.id}>
+      <rect x={x0} y={y} width={x1 - x0} height={h} fill="url(#mapa-adoquin-girado)" />
+      <path d={`M${x0} ${y + 1}H${x1}M${x0} ${y + h - 1}H${x1}`} stroke="oklch(0.84 0.012 70)" strokeWidth={2} />
+      <path d={`M${x0} ${f(y + 2.6)}H${x1}`} stroke="#fff" strokeOpacity={0.7} strokeWidth={1} />
+      <path d={guia} stroke="var(--primary)" strokeOpacity={0.1} strokeWidth={7} strokeLinecap="round" />
+      <path
+        d={guia}
+        stroke="oklch(0.6 0.13 262)"
+        strokeOpacity={0.8}
+        strokeWidth={1.7}
+        strokeDasharray="9 9"
+        strokeLinecap="round"
+      />
+    </Fragment>
+  );
+  c.rotulos.push(
+    <Texto
+      key={el.id}
+      x={nave ? nave.x + nave.w / 2 : el.x + el.w / 2}
+      y={cy}
+      t={el.etiqueta ?? "Pasillo"}
+      clase="rot"
+      tam={15}
+      fill={TINTA_ROTULO}
+      halo="oklch(0.925 0.01 75)"
+      grosorHalo={4.5}
+    />
+  );
+}
+
 /** Nave en corte: muro norte alto con ventanas, pilastras y cabriadas cortadas;
  * muros este y oeste bajos y antepecho sur (abiertos en el pasillo). */
-function muros(el: ElementoPlano, corte: [number, number] | null, c: Capas) {
+function muros(
+  el: ElementoPlano,
+  corte: [number, number] | null,
+  c: Capas,
+  corteAcostado: [number, number] | null = null
+) {
   const { x, y, w, h } = el;
   const t = 7;
   const tb = 5;
@@ -807,22 +997,39 @@ function muros(el: ElementoPlano, corte: [number, number] | null, c: Capas) {
     );
   });
   c.objetos.push({ z: y + t, x, k: `${el.id}:muro-n`, n: norte });
-  // Cara que se ve, cabeza sur y tapa (en corte).
-  const bajo = (mx: number, cara: string) => {
+  // Cara que se ve, cabeza sur y tapa (en corte), de y0 a y1.
+  const bajo = (mx: number, cara: string, y0 = y + t, y1 = y + h) => {
     const x1 = mx + tb;
     return (
       <>
-        <path d={poly([P(x1, y + t, 0), P(x1, y + h, 0), P(x1, y + h, zB), P(x1, y + t, zB)])} fill={cara} />
-        <path d={poly([P(mx, y + h, 0), P(x1, y + h, 0), P(x1, y + h, zB), P(mx, y + h, zB)])} fill="oklch(0.91 0.01 80)" />
+        <path d={poly([P(x1, y0, 0), P(x1, y1, 0), P(x1, y1, zB), P(x1, y0, zB)])} fill={cara} />
+        <path d={poly([P(mx, y1, 0), P(x1, y1, 0), P(x1, y1, zB), P(mx, y1, zB)])} fill="oklch(0.91 0.01 80)" />
         <path
-          d={poly([P(mx, y + t, zB), P(x1, y + t, zB), P(x1, y + h, zB), P(mx, y + h, zB)])}
+          d={poly([P(mx, y0, zB), P(x1, y0, zB), P(x1, y1, zB), P(mx, y1, zB)])}
           fill="oklch(0.83 0.012 262)"
         />
       </>
     );
   };
-  c.objetos.push({ z: y + h, x, k: `${el.id}:muro-o`, n: bajo(x, "oklch(0.95 0.007 82)") });
-  c.objetos.push({ z: y + h, x: x + w - tb, k: `${el.id}:muro-e`, n: bajo(x + w - tb, "oklch(0.88 0.012 80)") });
+  if (corteAcostado) {
+    // Plano girado: el pasillo cruza de oeste a este y abre los dos muros bajos.
+    const tramos: [number, number][] = [
+      [y + t, corteAcostado[0]],
+      [corteAcostado[1], y + h],
+    ];
+    tramos.forEach(([y0, y1], i) => {
+      c.objetos.push({ z: y1, x, k: `${el.id}:muro-o${i}`, n: bajo(x, "oklch(0.95 0.007 82)", y0, y1) });
+      c.objetos.push({
+        z: y1,
+        x: x + w - tb,
+        k: `${el.id}:muro-e${i}`,
+        n: bajo(x + w - tb, "oklch(0.88 0.012 80)", y0, y1),
+      });
+    });
+  } else {
+    c.objetos.push({ z: y + h, x, k: `${el.id}:muro-o`, n: bajo(x, "oklch(0.95 0.007 82)") });
+    c.objetos.push({ z: y + h, x: x + w - tb, k: `${el.id}:muro-e`, n: bajo(x + w - tb, "oklch(0.88 0.012 80)") });
+  }
   const huecos: [number, number][] = corte ? [[x + tb, corte[0]], [corte[1], x + w - tb]] : [[x + tb, x + w - tb]];
   c.objetos.push({
     z: y + h,
@@ -850,9 +1057,11 @@ function cantero(el: ElementoPlano, finFichas: number | undefined, detalle: bool
   c.sombras.push(
     <rect key={el.id} x={x + 1} y={y + 2} width={w + 4} height={h + 5} rx={r + 2} fill={TINTA_SOMBRA} fillOpacity={0.2} />
   );
-  // Surcos (y brotes con zoom) en la franja libre bajo las fichas.
+  // Surcos (y brotes con zoom) en la franja libre bajo las fichas; a lo largo del
+  // cantero (en el plano girado, el cantero parado lleva los surcos parados).
   const yc = (finFichas ?? y + 58) + 2;
   const hc = ty + h - 8 - yc;
+  const girado = h > w ? "-girado" : "";
   c.objetos.push({
     z: y + h,
     x,
@@ -877,9 +1086,11 @@ function cantero(el: ElementoPlano, finFichas: number | undefined, detalle: bool
           stroke="oklch(0.8 0.04 70)"
           strokeWidth={1}
         />
-        {hc > 10 ? <rect x={f(tx + 10)} y={f(yc)} width={w - 20} height={f(hc)} fill="url(#mapa-surcos)" /> : null}
+        {hc > 10 ? (
+          <rect x={f(tx + 10)} y={f(yc)} width={w - 20} height={f(hc)} fill={`url(#mapa-surcos${girado})`} />
+        ) : null}
         {hc > 10 && detalle ? (
-          <rect x={f(tx + 10)} y={f(yc)} width={w - 20} height={f(hc)} fill="url(#mapa-brotes)" />
+          <rect x={f(tx + 10)} y={f(yc)} width={w - 20} height={f(hc)} fill={`url(#mapa-brotes${girado})`} />
         ) : null}
         <path d={canto(tx, ty, w, h, r)} fill="none" stroke="#fff" strokeOpacity={0.7} strokeWidth={1.1} />
       </>
@@ -1091,6 +1302,92 @@ function invernadero(el: ElementoPlano, c: Capas) {
   );
 }
 
+/** Invernadero acostado (plano girado): la bóveda corre de oeste a este. Se ven la
+ * ladera norte hasta la cresta aparente, la ladera sur y el frente esmerilado del
+ * este (el que mira a la cámara, con la puerta). */
+function invernaderoAcostado(el: ElementoPlano, c: Capas) {
+  const { x, y, w, h } = el;
+  const H = ALT.invernadero;
+  const cy = y + h / 2;
+  const N = 24;
+  // Perfil de la bóveda en x = xx, de norte a sur.
+  const arcoEn = (xx: number) => {
+    const pts: Pt[] = [];
+    for (let i = 0; i <= N; i++) {
+      const yy = y + (h * i) / N;
+      const u = (yy - cy) / (h / 2);
+      pts.push(P(xx, yy, H * Math.sqrt(Math.max(0, 1 - u * u))));
+    }
+    return pts;
+  };
+  const oeste = arcoEn(x);
+  const este = arcoEn(x + w);
+  // El punto del perfil más alto en pantalla: de ahí hacia el norte la bóveda da la espalda.
+  const iTop = oeste.reduce((m, p, i) => (p[1] < oeste[m][1] ? i : m), 0);
+  const lineas = (ps: Pt[]) => ps.map((p) => `L${pt(p)}`).join("");
+  const tira = (ps: Pt[]) => `M${pt(ps[0])}${lineas(ps.slice(1))}`;
+  // Silueta: cresta aparente → arco este hasta el pie norte → pie del frente → borde
+  // sur → arco oeste de vuelta a la cresta.
+  const silueta =
+    `M${pt(oeste[iTop])}L${pt(este[iTop])}${lineas(este.slice(0, iTop).reverse())}` +
+    `L${pt(P(x + w, y + h, 0))}${lineas(oeste.slice(iTop + 1).reverse())}Z`;
+  let costillas = "";
+  for (let xx = x + 26; xx < x + w - 4; xx += 26) costillas += tira(arcoEn(xx).slice(iTop));
+  c.sombras.push(
+    <rect
+      key={el.id}
+      x={x + 2}
+      y={y + 6}
+      width={w + 12}
+      height={h + 10}
+      rx={14}
+      fill="oklch(0.3 0.04 200)"
+      fillOpacity={0.2}
+    />
+  );
+  c.objetos.push({
+    z: y + h,
+    x,
+    k: el.id,
+    n: (
+      <>
+        <rect x={x} y={y} width={w} height={h} rx={3} fill="oklch(0.86 0.035 80)" />
+        <rect x={x + 4} y={y + 4} width={w - 8} height={h - 8} fill="url(#mapa-plantas-girado)" />
+        <path d={silueta} fill="url(#mapa-vidrio-acostado)" stroke="oklch(0.76 0.05 190)" strokeWidth={1} />
+        {costillas ? <path d={costillas} fill="none" stroke="#fff" strokeOpacity={0.95} strokeWidth={1.3} /> : null}
+        <path
+          d={`M${f(x - K * H + 3)} ${f(cy - H - 5)}H${f(x + w - K * H - 3)}`}
+          stroke="#fff"
+          strokeWidth={2.4}
+          strokeOpacity={0.95}
+          strokeLinecap="round"
+        />
+        <path d={`${tira(este)}Z`} fill="#fff" fillOpacity={0.5} stroke="oklch(0.72 0.06 190)" strokeWidth={1.1} />
+        <path
+          d={poly([P(x + w, cy - 8, 0), P(x + w, cy + 8, 0), P(x + w, cy + 8, 17), P(x + w, cy - 8, 17)])}
+          fill="oklch(0.84 0.04 190)"
+          fillOpacity={0.7}
+          stroke="oklch(0.7 0.06 190)"
+          strokeWidth={0.8}
+        />
+      </>
+    ),
+  });
+  c.rotulos.push(
+    <Texto
+      key={el.id}
+      x={x + w / 2 - K * H}
+      y={cy - H + 12}
+      t={el.etiqueta ?? "Invernadero"}
+      clase="rot"
+      tam={15}
+      fill="oklch(0.4 0.06 190)"
+      halo="oklch(0.965 0.02 185)"
+      grosorHalo={4}
+    />
+  );
+}
+
 /** Árboles: sombras y troncos, un path cada uno; la copa, una por árbol. */
 function arboledas(arboles: Arbol[], c: Capas) {
   if (arboles.length === 0) return;
@@ -1189,34 +1486,51 @@ export const Fondo = memo(function Fondo({
   const naves = elementos.filter((el) => el.tipo === "nave");
   const pasillos = elementos.filter((el) => el.tipo === "pasillo");
   const nave0 = naves[0] ?? null;
-  // Dónde corta el pasillo a cada nave (si la cruza).
+  // Dónde corta el pasillo a cada nave (si la cruza): de norte a sur en el plano tal
+  // cual, de oeste a este en el plano girado.
   const cortes = new Map(naves.map((n) => [n.id, pasillos.map((p) => cortePasillo(n, p)).find(Boolean) ?? null]));
+  const cortesAcostados = new Map(
+    naves.map((n) => [n.id, pasillos.map((p) => cortePasilloAcostado(n, p)).find(Boolean) ?? null])
+  );
 
-  // Las cocheras al norte de la nave llevan las tachas del lado que la mira.
-  for (const el of elementos) if (el.tipo === "cocheras") cocheras(el, nave0 !== null && el.y < nave0.y, c);
+  // Las cocheras al norte de la nave llevan las tachas del lado que la mira (en el
+  // plano girado, las franjas paradas: del lado este u oeste).
+  for (const el of elementos) {
+    if (el.tipo !== "cocheras") continue;
+    if (el.h > el.w) cocherasParadas(el, nave0 !== null && el.x < nave0.x, c);
+    else cocheras(el, nave0 !== null && el.y < nave0.y, c);
+  }
   for (const el of elementos) if (el.tipo === "recinto") recinto(el, c);
-  for (const n of naves) nave(n, cortes.get(n.id) ?? null, c);
-  for (const p of pasillos) pasillo(p, naves.find((n) => cortePasillo(n, p)) ?? null, c);
-  for (const n of naves) muros(n, cortes.get(n.id) ?? null, c);
+  for (const n of naves) nave(n, cortes.get(n.id) ?? null, c, cortesAcostados.get(n.id) ?? null);
+  for (const p of pasillos) {
+    if (p.w > p.h) pasilloAcostado(p, naves.find((n) => cortePasilloAcostado(n, p)) ?? null, c);
+    else pasillo(p, naves.find((n) => cortePasillo(n, p)) ?? null, c);
+  }
+  for (const n of naves) muros(n, cortes.get(n.id) ?? null, c, cortesAcostados.get(n.id) ?? null);
   elementos
     .filter((el) => el.tipo === "quinteros")
     .sort((a, b) => a.x - b.x)
     .forEach((el) => cantero(el, finFichas.get(el.id), detalle, c));
   for (const el of elementos) {
     if (el.tipo === "administracion") administracion(el, detalle, c);
-    else if (el.tipo === "invernadero") invernadero(el, c);
-    else if (el.tipo === "rotulo" && el.etiqueta) {
+    else if (el.tipo === "invernadero") {
+      if (el.w > el.h) invernaderoAcostado(el, c);
+      else invernadero(el, c);
+    } else if (el.tipo === "rotulo" && el.etiqueta) {
+      // Rótulo parado (plano girado): se lee de abajo hacia arriba, como el pasillo.
+      const parado = el.h > el.w;
       c.rotulos.push(
         <Texto
           key={el.id}
-          x={el.x + el.w / 2}
-          y={el.y + el.h / 2 + 2}
+          x={el.x + el.w / 2 + (parado ? 2 : 0)}
+          y={el.y + el.h / 2 + (parado ? 0 : 2)}
           t={el.etiqueta}
           clase="rot7"
           tam={16}
           fill={TINTA_ROTULO}
           halo="var(--background)"
           grosorHalo={4}
+          vertical={parado}
         />
       );
     }
@@ -1340,7 +1654,9 @@ function Huella({ bloque, marca }: { bloque: Bloque; marca: Exclude<Marca, null>
 }
 
 /** Puesto o bar: mostrador de madera con faldón festoneado del color del estado
- * (a rayas si debe), tapa lisa, ranuras entre puestos y canto iluminado. */
+ * (a rayas si debe), tapa lisa, ranuras entre puestos y canto iluminado. En el
+ * plano girado los puestos fundidos van en columna: las ranuras cruzan la tapa a
+ * lo ancho y el frente (sur) es solo el del último puesto, sin costuras. */
 function cuerpoPuesto(
   b: Bloque,
   mat: Material,
@@ -1355,7 +1671,13 @@ function cuerpoPuesto(
   const r = radioTapa(b);
   const tx = x - K * H;
   const ty = y - H;
-  const divisiones = b.espacios.slice(1).map((e, i) => (b.espacios[i].x + b.espacios[i].w + e.x) / 2);
+  const columna = b.eje === "y";
+  // Dónde se tocan dos puestos del bloque: x en una fila, y en una columna.
+  const divisiones = b.espacios
+    .slice(1)
+    .map((e, i) =>
+      columna ? (b.espacios[i].y + b.espacios[i].h + e.y) / 2 : (b.espacios[i].x + b.espacios[i].w + e.x) / 2
+    );
   let caras: ReactNode;
   if (pintado) {
     const zf = detalle ? ALT.faldonDetalle : ALT.faldon;
@@ -1369,7 +1691,7 @@ function cuerpoPuesto(
         merc += `M${f(sx - 3.1)} ${f(y + h - zm)}a3.1 2.3 0 1 0 6.2 0a3.1 2.3 0 1 0 -6.2 0`;
       }
     }
-    const costuras = divisiones.map((lx) => `M${pt(P(lx, y + h, H))}L${pt(P(lx, y + h, zf))}`).join("");
+    const costuras = columna ? "" : divisiones.map((lx) => `M${pt(P(lx, y + h, H))}L${pt(P(lx, y + h, zf))}`).join("");
     caras = (
       <>
         <path d={caraEste(x, y, w, h, r, H, 0)} fill={M.lado} />
@@ -1398,10 +1720,18 @@ function cuerpoPuesto(
       </>
     );
   }
-  // Ranuras entre los puestos fusionados (más cortas si abajo va el apodo).
+  // Ranuras entre los puestos fusionados (más cortas si abajo va el apodo); en una
+  // columna, a lo ancho (el apodo va dentro del último puesto: no las cruza).
   const fin = conApodo ? ty + h * 0.56 : ty + h - 6;
-  const ranuras = divisiones.map((lx) => `M${f(lx - K * H)} ${f(ty + 6)}V${f(fin)}`).join("");
-  const luces = divisiones.map((lx) => `M${f(lx - K * H + 1)} ${f(ty + 6)}V${f(fin)}`).join("");
+  const ranuras = divisiones
+    .map((d) => (columna ? `M${f(tx + 6)} ${f(d - H)}H${f(tx + w - 6)}` : `M${f(d - K * H)} ${f(ty + 6)}V${f(fin)}`))
+    .join("");
+  // El filo iluminado (luz del noroeste): al este de la ranura, o al sur en una columna.
+  const luces = divisiones
+    .map((d) =>
+      columna ? `M${f(tx + 6)} ${f(d - H + 1)}H${f(tx + w - 6)}` : `M${f(d - K * H + 1)} ${f(ty + 6)}V${f(fin)}`
+    )
+    .join("");
   // Lote punteado: "disponible" se lee por forma, no solo por color.
   let lote = "";
   if (libre) {
@@ -1409,8 +1739,8 @@ function cuerpoPuesto(
       const ex = e.x - K * H;
       const x0 = ex + 4;
       const x1 = ex + e.w - 4;
-      const y0 = ty + 4;
-      const y1 = ty + h - 4;
+      const y0 = (columna ? e.y - H : ty) + 4;
+      const y1 = (columna ? e.y + e.h - H : ty + h) - 4;
       lote +=
         `M${f(x0 + 2)} ${f(y0)}H${f(x1 - 2)}Q${f(x1)} ${f(y0)} ${f(x1)} ${f(y0 + 2)}` +
         `V${f(y1 - 2)}Q${f(x1)} ${f(y1)} ${f(x1 - 2)} ${f(y1)}` +
@@ -1636,6 +1966,73 @@ type TextoPlano = {
 
 const APODO = { k: "apodo", clase: "apodo", grosor: 2.5, opacidad: 0.9, apodo: true } as const;
 
+/** En una columna (plano girado), el puesto que lleva el apodo debajo de su número:
+ * el último (el de abajo) que tenga alto para dos líneas. */
+function anfitrionApodo(b: Bloque): Espacio | null {
+  for (let i = b.espacios.length - 1; i >= 0; i--) {
+    const e = b.espacios[i];
+    if (e.tipo !== "contenedor" && !e.medio && e.h >= 36) return e;
+  }
+  return null;
+}
+
+/** Números de una columna de puestos (plano girado): cada uno centrado en su parte y
+ * el apodo debajo del número del último, dentro de ese puesto (no pisa otros números). */
+function textosColumna(
+  b: Bloque,
+  zt: number,
+  detalle: boolean,
+  etiqueta: string | null,
+  atenuado: boolean
+): TextoPlano[] {
+  const out: TextoPlano[] = [];
+  const anfitrion = detalle && etiqueta !== null && !atenuado ? anfitrionApodo(b) : null;
+  for (const e of b.espacios) {
+    const ecx = e.x + e.w / 2;
+    const [nx, ny] = P(ecx, e === anfitrion ? e.y + e.h * 0.4 : e.y + e.h / 2 + 0.5, zt);
+    if (e.tipo === "bar") {
+      out.push({ k: e.id, x: nx, y: ny, t: e.numero ?? "Bar", tam: 18, clase: "rot", grosor: 3 });
+    } else if (e.medio && e.w > e.h) {
+      // Medio puesto acostado: número y "½" en una línea ("34½").
+      const t = `${e.numero ?? "?"}½`;
+      out.push({
+        k: e.id,
+        x: nx,
+        y: ny,
+        t,
+        tam: f(Math.min(15, (e.w - 8) / (t.length * 0.62), e.h * 0.75)),
+        clase: "num",
+        grosor: 2.5,
+        espaciado: -0.3,
+      });
+    } else if (e.medio) {
+      const [mx, my] = P(ecx, e.y + e.h * 0.38, zt);
+      const [hx, hy] = P(ecx, e.y + e.h * 0.7, zt);
+      out.push({ k: e.id, x: mx, y: my, t: e.numero ?? "?", tam: 15, clase: "num", grosor: 2.5, espaciado: -0.3 });
+      out.push({ k: `${e.id}:½`, x: hx, y: hy, t: "½", tam: 12, clase: "apodo", grosor: 2.5, opacidad: 0.85 });
+    } else {
+      out.push({
+        k: e.id,
+        x: nx,
+        y: ny,
+        t: e.numero ?? "?",
+        // La profundidad del puesto (lo que en el plano tal cual es el alto) es el ancho.
+        tam: e.tipo === "local" || e.w < 45 ? 19 : 22,
+        clase: "num",
+        grosor: 3,
+        opacidad: e.numero === null ? 0.7 : undefined,
+      });
+    }
+  }
+  if (anfitrion && etiqueta !== null) {
+    // La columna es angosta (un puesto de ancho): el apodo usa toda la tapa y baja a 8,5 u.
+    const a = apodoAjustado(etiqueta, anfitrion.w - 4, 8.5);
+    const [ax, ay] = P(anfitrion.x + anfitrion.w / 2, anfitrion.y + anfitrion.h * 0.76, zt);
+    out.push({ ...APODO, x: ax, y: ay, t: a.t, tam: a.tam });
+  }
+  return out;
+}
+
 /** Números y apodos de un bloque, a la altura zt (proyectados, horizontales). */
 function textosBloque(
   b: Bloque,
@@ -1649,14 +2046,25 @@ function textosBloque(
   if (b.tipo === "contenedor") {
     const e = b.espacios[0];
     const [cx, cy] = P(x + w / 2, y + h / 2, zt);
-    const apodo = detalle && etiqueta !== null && w >= 60 && !atenuado ? etiqueta : null;
-    out.push({ k: e.id, x: cx, y: cy + (apodo ? -6 : 0.5), t: e.numero ?? "?", tam: 17, clase: "num", grosor: 2.5 });
+    // Tambor ovalado: con zoom lleva el apodo (parado, en el plano girado, también).
+    const parado = h > w;
+    const apodo = detalle && etiqueta !== null && (parado ? h : w) >= 60 && !atenuado ? etiqueta : null;
+    out.push({
+      k: e.id,
+      x: cx,
+      y: cy + (apodo ? (parado ? -9 : -6) : 0.5),
+      t: e.numero ?? "?",
+      tam: 17,
+      clase: "num",
+      grosor: 2.5,
+    });
     if (apodo) {
-      const a = apodoAjustado(apodo, w - 18);
-      out.push({ ...APODO, x: cx, y: cy + 10, t: a.t, tam: a.tam });
+      const a = apodoAjustado(apodo, parado ? w - 8 : w - 18);
+      out.push({ ...APODO, x: cx, y: cy + (parado ? 11 : 10), t: a.t, tam: a.tam });
     }
     return out;
   }
+  if (b.eje === "y") return textosColumna(b, zt, detalle, etiqueta, atenuado);
   const apodo =
     detalle && etiqueta !== null && h >= 36 && !atenuado && !b.espacios.every((e) => e.medio) ? etiqueta : null;
   for (const e of b.espacios) {
@@ -1749,6 +2157,9 @@ const Banderines = memo(function Banderines({
 }) {
   const propios = bloque.espacios.filter((e) => e.propio);
   if (propios.length === 0) return null;
+  // En una columna (plano girado) el apodo ocupa solo el puesto de abajo.
+  const columna = bloque.eje === "y";
+  const anfitrion = columna && conApodo ? anfitrionApodo(bloque) : null;
   return (
     <g opacity={atenuado ? 0.5 : undefined}>
       {propios.map((e) => {
@@ -1759,8 +2170,10 @@ const Banderines = memo(function Banderines({
         const punta = P(x0 + 9, y0, alto + 10);
         const bajo = P(x0, y0, alto + 7);
         const pano = `M${pt(tope)}L${pt(punta)}L${pt(bajo)}Z`;
-        const etiqueta = detalle && !conApodo && bloque.rect.h >= 36 && bloque.tipo === "puesto";
-        const [lx, ly] = P(e.x + e.w / 2, e.y + bloque.rect.h * 0.8, alto);
+        const etiqueta = columna
+          ? detalle && e !== anfitrion && e.h >= 36 && bloque.tipo === "puesto"
+          : detalle && !conApodo && bloque.rect.h >= 36 && bloque.tipo === "puesto";
+        const [lx, ly] = P(e.x + e.w / 2, e.y + (columna ? e.h : bloque.rect.h) * 0.8, alto);
         return (
           <g key={e.id}>
             <path d={`M${pt(base)}L${pt(tope)}`} stroke="#fff" strokeWidth={3.2} strokeLinecap="round" />
@@ -2134,6 +2547,11 @@ export function ubicarPastilla(
   ]);
   const pisa = (r: Caja, o: Caja) =>
     Math.max(0, Math.min(r[2], o[2]) - Math.max(r[0], o[0])) * Math.max(0, Math.min(r[3], o[3]) - Math.max(r[1], o[1]));
+  // Plano girado (pantalla parada): la columna es angosta y, corrida al costado, la
+  // pastilla quedaría fuera de cámara al enfocar la selección (la cámara deja 140 u a
+  // cada lado); y va arriba, porque el detalle sube desde abajo y la taparía.
+  const columna = ancla.b.eje === "y";
+  const alcance = columna ? w / 2 + 140 : Number.POSITIVE_INFINITY;
   let mejor: { cx: number; cy: number; lado: "arriba" | "abajo"; pen: number } | null = null;
   let orden = 0;
   for (const lado of ["arriba", "abajo"] as const) {
@@ -2144,6 +2562,8 @@ export function ubicarPastilla(
       let pen =
         numeros.reduce((s, o) => s + pisa(r, o), 0) * 10 + tapas.reduce((s, o) => s + pisa(r, o), 0) * 20;
       if (r[0] < lim.x || r[2] > lim.x + lim.w || r[1] < lim.y || r[3] > lim.y + lim.h) pen += 1e6;
+      if (acx - r[0] > alcance || r[2] - acx > alcance) pen += 1e5;
+      if (columna && lado === "abajo") pen += 5e4;
       pen += orden++ * 0.01; // a igual puntaje, el orden de preferencia
       if (!mejor || pen < mejor.pen) mejor = { cx, cy, lado, pen };
     }
@@ -2240,6 +2660,8 @@ export type FichaQuintero = {
   seleccionado: boolean;
   /** Pincel de asignar: borde de color, sin despegar (el pincel no levanta). */
   pincel: boolean;
+  /** Tamaño del nombre si no es el de siempre (cantero angosto del plano girado). */
+  tam?: number;
 };
 
 /** Pastilla baja sobre el cantero (base en zb, tapa 4 u más arriba). */
@@ -2342,7 +2764,7 @@ export const FichasQuinteros = memo(function FichasQuinteros({
               y={fy + ficha.rect.h / 2}
               t={ficha.texto}
               clase="apodo"
-              tam={10.5}
+              tam={ficha.tam ?? 10.5}
               fill={MAT[mat].texto}
             />
           </g>
@@ -2355,31 +2777,41 @@ export const FichasQuinteros = memo(function FichasQuinteros({
 /** Ficha "+N": los quinteros que no entraron en su zona. */
 export type Resto = { rect: Rect; n: number };
 
+/** Cantero angosto (el plano girado lo deja parado): una ficha por renglón, de lado a
+ * lado, con el nombre achicado antes de recortarlo. */
+const CANTERO_ANGOSTO = 160;
+
 /** Reparte fichas de quinteros en filas dentro de una zona. Si no entran
  * todos, la última ficha pasa a ser "+N" (los demás se encuentran buscando). */
 export function repartirFichas(
   zona: Rect,
   textos: { clienteId: string; texto: string }[]
-): { fichas: { clienteId: string; texto: string; rect: Rect }[]; resto: Resto | null } {
+): { fichas: { clienteId: string; texto: string; rect: Rect; tam?: number }[]; resto: Resto | null } {
   const alto = 22;
   const gap = 6;
-  const pad = 12;
+  const angosto = zona.w < CANTERO_ANGOSTO;
+  const pad = angosto ? 8 : 12;
   const anchoResto = 46;
   const inicioY = zona.y + 36;
   const maxX = zona.x + zona.w - pad;
   const maxY = zona.y + zona.h - 8;
-  const fichas: { clienteId: string; texto: string; rect: Rect }[] = [];
+  const fichas: { clienteId: string; texto: string; rect: Rect; tam?: number }[] = [];
   let cx = zona.x + pad;
   let cy = inicioY;
   for (const t of textos) {
-    const texto = recortar(t.texto, zona.w - pad * 2 - 20, 10.5);
-    const w = Math.min(zona.w - pad * 2, Math.max(52, texto.length * 6.1 + 20));
+    const ajustado = angosto ? apodoAjustado(t.texto, zona.w - pad * 2 - 12, 8.5) : null;
+    const texto = ajustado ? ajustado.t : recortar(t.texto, zona.w - pad * 2 - 20, 10.5);
+    const w = angosto ? zona.w - pad * 2 : Math.min(zona.w - pad * 2, Math.max(52, texto.length * 6.1 + 20));
     if (cx + w > maxX) {
       cx = zona.x + pad;
       cy += alto + gap;
     }
     if (cy + alto > maxY) break;
-    fichas.push({ clienteId: t.clienteId, texto, rect: { x: cx, y: cy, w, h: alto } });
+    fichas.push(
+      ajustado
+        ? { clienteId: t.clienteId, texto, rect: { x: cx, y: cy, w, h: alto }, tam: ajustado.tam }
+        : { clienteId: t.clienteId, texto, rect: { x: cx, y: cy, w, h: alto } }
+    );
     cx += w + gap;
   }
   if (fichas.length === textos.length) return { fichas, resto: null };

@@ -31,6 +31,7 @@ import {
   textoBotonPago,
 } from "@/components/gastos/selector-origen";
 import { delDia, type CajaElegible, type OrigenPago } from "@/components/gastos/tipos";
+import { AlertaError } from "@/components/cobranza/alerta-error";
 import { llamarAccion } from "@/lib/llamar-accion";
 
 export type GastoAcciones = {
@@ -197,7 +198,7 @@ export function AccionesGasto({
       {/* Pagar */}
       <Dialog open={dialogo === "pagar"} onOpenChange={(o) => !o && !pendiente && setDialogo(null)}>
         <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-lg">
-          <DialogHeader>
+          <DialogHeader className="pr-8">
             <DialogTitle className="text-lg">Pagar {gasto.etiqueta}</DialogTitle>
             <DialogDescription className="text-base">
               <Money monto={gasto.monto} className="text-2xl font-bold text-foreground" />
@@ -214,15 +215,11 @@ export function AccionesGasto({
             hoy={hoy}
             idBase={`pagar-${gasto.id}`}
           />
-          {error ? (
-            <p role="alert" className="rounded-lg bg-pendiente-suave px-4 py-3 text-sm font-medium text-pendiente">
-              {error}
-            </p>
-          ) : null}
+          {error ? <AlertaError error={error} titulo="No se pudo pagar" /> : null}
           <DialogFooter>
             <Button
               size="lg"
-              className="h-13 w-full text-base font-semibold"
+              className="h-auto min-h-13 w-full py-2.5 text-base leading-snug font-semibold whitespace-normal"
               disabled={pendiente || !puedePagar}
               onClick={pagar}
             >
@@ -236,17 +233,13 @@ export function AccionesGasto({
       {/* Anular */}
       <Dialog open={dialogo === "anular"} onOpenChange={(o) => !o && !pendiente && setDialogo(null)}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader>
+          <DialogHeader className="pr-8">
             <DialogTitle className="text-lg">¿Anular {gasto.etiqueta}?</DialogTitle>
             <DialogDescription className="text-base">
               {formatARS(gasto.monto)}. Queda anotado como anulado y no suma en el mes.
             </DialogDescription>
           </DialogHeader>
-          {error ? (
-            <p role="alert" className="text-sm font-medium text-pendiente">
-              {error}
-            </p>
-          ) : null}
+          {error ? <AlertaError error={error} titulo="No se pudo anular" /> : null}
           <DialogFooter className="gap-2">
             <Button variant="outline" className="h-12 px-5 text-base" disabled={pendiente} onClick={() => setDialogo(null)}>
               No, volver
@@ -262,7 +255,7 @@ export function AccionesGasto({
       {/* Deshacer pago */}
       <Dialog open={dialogo === "deshacer"} onOpenChange={(o) => !o && !pendiente && setDialogo(null)}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader>
+          <DialogHeader className="pr-8">
             <DialogTitle className="text-lg">¿Deshacer el pago de {gasto.etiqueta}?</DialogTitle>
             <DialogDescription className="text-base">
               {formatARS(gasto.monto)} vuelve a Por pagar. Si salió de una caja, su arqueo se
@@ -299,11 +292,7 @@ export function AccionesGasto({
               maxLength={300}
             />
           </div>
-          {error ? (
-            <p role="alert" className="text-sm font-medium text-pendiente">
-              {error}
-            </p>
-          ) : null}
+          {error ? <AlertaError error={error} titulo="No se pudo deshacer" /> : null}
           <DialogFooter className="gap-2">
             <Button variant="outline" className="h-12 px-5 text-base" disabled={pendiente} onClick={() => setDialogo(null)}>
               No, volver

@@ -4,8 +4,9 @@ import { useRef, useState, useTransition, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  AlertCircle,
+  ArrowRight,
   FileText,
+  Lock,
   PiggyBank,
   Plus,
   Repeat,
@@ -34,9 +35,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Spinner } from "@/components/ui/spinner";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
+import { AlertaError, esErrorDeCajaCerrada } from "@/components/cobranza/alerta-error";
 import { BotonAplicarSaldoFavor } from "@/components/cobranza/aplicar-saldo-favor";
 import { DatosCheque, cuitParaRevisar } from "@/components/cobranza/datos-cheque";
 import { DatosTransferencia } from "@/components/cobranza/datos-transferencia";
@@ -45,6 +46,7 @@ import { ReciboRegistrado } from "@/components/cobranza/recibo-registrado";
 import { SelectorMedio } from "@/components/cobranza/selector-medio";
 import {
   LABEL_MEDIO,
+  MAX_COMPROBANTE,
   MEDIOS,
   montoATexto,
   nuevaLinea,
@@ -132,6 +134,8 @@ export function FormCobro({
   proveedores = [],
   plan = null,
   volverA = "/cobranza",
+  cajaCerrada = false,
+  irACaja = "/caja",
 }: {
   clienteId: string;
   clienteNombre: string;
@@ -150,6 +154,10 @@ export function FormCobro({
   plan?: PlanDelMes | null;
   /** "Cobrar a otro cliente" vuelve a esta lista. */
   volverA?: string;
+  /** La caja de hoy de quien cobra no está abierta: la página lo avisa arriba y acá no se cobra. */
+  cajaCerrada?: boolean;
+  /** Dónde se reabre / pide la reapertura de la caja (link del error "La caja ya está cerrada…"). */
+  irACaja?: string;
 }) {
   const router = useRouter();
   const [lineas, setLineas] = useState<LineaForm[]>(() => [nuevaLinea(medios[0] ?? "efectivo", 0, "l1")]);
@@ -166,6 +174,15 @@ export function FormCobro({
   const [refrescando, startRefresh] = useTransition();
   // Idempotencia: un lote por cobro (se crea al primer intento y se renueva al terminar).
   const loteRef = useRef<string | null>(null);
+  // Líneas cuya foto del comprobante se está achicando: hasta que termine no se cobra
+  // (si no, el cobro saldría sin la foto y la foto se perdería sin aviso).
+  const [preparandoFotos, setPreparandoFotos] = useState<string[]>([]);
+  const preparandoFoto = preparandoFotos.length > 0;
+  function marcarPreparando(id: string, preparando: boolean) {
+    setPreparandoFotos((prev) =>
+      preparando ? (prev.includes(id) ? prev : [...prev, id]) : prev.filter((x) => x !== id)
+    );
+  }
 
   const mixto = lineas.length > 1;
   const total = redondear2(lineas.reduce((acc, l) => acc + parseMonto(l.monto), 0));
@@ -232,7 +249,21 @@ export function FormCobro({
 
   // ---------- registro ----------
   function enviar(permitirSaldoFavor: boolean, lineasAEnviar: LineaForm[] = lineas) {
+    if (preparandoFoto) return;
     setErrorRpc(null);
+    // Las fotos ya vienen achicadas (DatosTransferencia); si igual suman más de 4 MB (un PDF
+    // pesado) el pedido no llegaría al servidor: se avisa acá, sin perder nada de lo cargado.
+    const pesoFotos = lineasAEnviar.reduce(
+      (acc, l) => acc + (l.medio === "transferencia" && l.comprobante ? l.comprobante.size : 0),
+      0
+    );
+    if (pesoFotos > MAX_COMPROBANTE) {
+      setErrorRpc(
+        "Los comprobantes juntos pesan más de 4 MB y no se pueden subir. Quitá alguno o, si es un PDF, mandá una captura de pantalla (foto) en vez del PDF, y tocá de nuevo."
+      );
+      return;
+    }
+    // Idempotencia: el MISMO lote hasta que el cobro termine bien (un corte de red no lo renueva).
     loteRef.current ??= uuidV4();
     const datos: InputCobro = {
       clienteId,
@@ -314,6 +345,7 @@ export function FormCobro({
 
   function onSubmit(e: FormEvent) {
     e.preventDefault();
+    if (cajaCerrada || isPending || preparandoFoto) return;
     intentar();
   }
 
@@ -353,7 +385,7 @@ export function FormCobro({
           type="button"
           size="lg"
           variant="outline"
-          className="h-12 w-full text-base font-semibold"
+          className="h-auto min-h-12 w-full py-2 text-base font-semibold whitespace-normal"
           onClick={() => {
             reset();
             startRefresh(() => router.refresh());
@@ -439,6 +471,7 @@ export function FormCobro({
           onErrorComprobante={(error) =>
             setErrores((prev) => ({ ...prev, [l.id]: { ...prev[l.id], comprobante: error } }))
           }
+          onPreparando={(preparando) => marcarPreparando(l.id, preparando)}
         />
       );
     }
@@ -674,37 +707,51 @@ export function FormCobro({
       )}
 
       {errorRpc ? (
-        <Alert variant="destructive">
-          <AlertCircle strokeWidth={2} />
-          <AlertTitle>No se pudo registrar el cobro</AlertTitle>
-          <AlertDescription>
-            <p>{errorRpc}</p>
-            {errorPideSaldoFavor ? (
-              <Button
-                type="button"
-                variant="outline"
-                className="mt-2 h-11 bg-card px-4 text-sm font-semibold text-foreground"
-                disabled={isPending}
-                onClick={() => enviar(true)}
-              >
-                <PiggyBank className="size-4" strokeWidth={2} />
-                Dejar el sobrante como saldo a favor y registrar
-              </Button>
-            ) : null}
-          </AlertDescription>
-        </Alert>
+        <AlertaError error={errorRpc} titulo="No se pudo registrar el cobro">
+          {errorPideSaldoFavor ? (
+            <Button
+              type="button"
+              variant="outline"
+              className="h-auto min-h-11 max-w-full bg-card px-4 py-2 text-left text-sm font-semibold whitespace-normal text-foreground"
+              disabled={isPending || preparandoFoto}
+              onClick={() => enviar(true)}
+            >
+              <PiggyBank className="size-4" strokeWidth={2} />
+              Dejar el sobrante como saldo a favor y registrar
+            </Button>
+          ) : esErrorDeCajaCerrada(errorRpc) ? (
+            <Button asChild variant="outline" className="h-11 bg-card px-4 text-sm font-semibold text-foreground">
+              <Link href={irACaja}>
+                Ir a Caja
+                <ArrowRight className="size-4" strokeWidth={2} />
+              </Link>
+            </Button>
+          ) : null}
+        </AlertaError>
+      ) : null}
+
+      {cajaCerrada ? (
+        <p className="flex items-start gap-2 text-sm font-medium text-parcial">
+          <Lock className="mt-0.5 size-4 shrink-0" strokeWidth={2} />
+          No se puede cobrar: la caja de hoy no está abierta (mirá el aviso de arriba).
+        </p>
       ) : null}
 
       <Button
         type="submit"
         size="lg"
-        disabled={isPending || total <= 0}
+        disabled={isPending || total <= 0 || cajaCerrada || preparandoFoto}
         className="h-auto min-h-14 w-full py-3 text-lg font-semibold whitespace-normal"
       >
         {isPending ? (
           <>
             <Spinner className="size-6" />
             Registrando…
+          </>
+        ) : preparandoFoto ? (
+          <>
+            <Spinner className="size-6" />
+            Esperá, preparando la foto…
           </>
         ) : (
           etiquetaBoton
@@ -713,8 +760,8 @@ export function FormCobro({
 
       {/* Plata de más: se confirma antes de dejarla a favor (mismo lote al reintentar). */}
       <Dialog open={confirmarSaldo} onOpenChange={setConfirmarSaldo}>
-        <DialogContent className="gap-5 p-6 sm:max-w-md">
-          <DialogHeader>
+        <DialogContent className="max-h-[92dvh] gap-5 overflow-y-auto p-6 sm:max-w-md">
+          <DialogHeader className="pr-8">
             <DialogTitle className="text-xl">
               Sobran {formatARS(sobrante)}: ¿los dejamos como saldo a favor de {clienteNombre}?
             </DialogTitle>
@@ -738,7 +785,7 @@ export function FormCobro({
               type="button"
               size="lg"
               className="h-12 px-5 text-base font-semibold"
-              disabled={isPending}
+              disabled={isPending || preparandoFoto}
               onClick={() => {
                 setConfirmarSaldo(false);
                 enviar(true);

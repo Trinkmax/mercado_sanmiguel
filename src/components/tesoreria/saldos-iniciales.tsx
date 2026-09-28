@@ -1,5 +1,5 @@
 import { ChevronDown } from "lucide-react";
-import { formatFecha, type Moneda } from "@/lib/format";
+import { formatFecha, formatFechaHora, type Moneda } from "@/lib/format";
 import {
   Collapsible,
   CollapsibleContent,
@@ -15,6 +15,8 @@ export type SaldoInicial = {
   monto: number;
   fecha: string;
   notas: string | null;
+  /** Última corrección de monto o fecha (rastro: quién, cuándo, por qué). */
+  corregido: { por: string; en: string; motivo: string } | null;
 };
 
 const CUENTAS: { medio: "efectivo" | "transferencia"; moneda: Moneda; titulo: string }[] = [
@@ -42,10 +44,15 @@ export function SaldosIniciales({ saldos }: { saldos: SaldoInicial[] }) {
             {s ? (
               <div className="space-y-2">
                 <MontoMoneda monto={s.monto} moneda={c.moneda} className="block text-2xl font-bold" />
-                <p className="text-sm text-muted-foreground">
+                <p className="text-sm break-words text-muted-foreground">
                   Al comenzar el {formatFecha(s.fecha)}
                   {s.notas ? ` · ${s.notas}` : ""}
                 </p>
+                {s.corregido ? (
+                  <p className="text-sm break-words text-parcial">
+                    Corregido por {s.corregido.por} el {formatFechaHora(s.corregido.en)}: {s.corregido.motivo}
+                  </p>
+                ) : null}
                 <Collapsible>
                   <CollapsibleTrigger className="group flex min-h-11 items-center gap-1.5 text-base font-medium text-primary">
                     <ChevronDown

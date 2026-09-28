@@ -1,7 +1,18 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
-import { ArrowRight, Flag, HandCoins, MousePointerClick, TriangleAlert, UserPlus, X } from "lucide-react";
+import {
+  ArrowRight,
+  Flag,
+  HandCoins,
+  MousePointerClick,
+  Pencil,
+  TriangleAlert,
+  Unlink,
+  UserPlus,
+  X,
+} from "lucide-react";
 import { LABEL_CATEGORIA_PLURAL, textoAvance, type CategoriaCliente } from "@/lib/segmentos";
 import { Button } from "@/components/ui/button";
 import { Money } from "@/components/shared/money";
@@ -87,6 +98,11 @@ function AvanceQuintero({ cliente }: { cliente: ClienteMapa }) {
   );
 }
 
+/** "el puesto 58" · "el bar" · "el contéiner 7" */
+function nombreConArticulo(e: Espacio): string {
+  return e.tipo === "bar" ? "el bar" : `el ${NOMBRE_TIPO[e.tipo].toLowerCase()} ${numeroVisible(e)}`;
+}
+
 /** Panel de consulta bajo el plano: quién ocupa lo que se tocó. */
 export function PanelDetalle({
   cliente,
@@ -97,6 +113,8 @@ export function PanelDetalle({
   puedeEditar,
   onAsignarCliente,
   onAsignarEspacio,
+  onEditarEspacio,
+  onLiberar,
   onEnfocar,
   onCerrar,
   vista = "completa",
@@ -111,6 +129,10 @@ export function PanelDetalle({
   puedeEditar: boolean;
   onAsignarCliente: (clienteId: string) => void;
   onAsignarEspacio: (espacioId: string) => void;
+  /** Abre el editor del espacio (número, nota, medio, puesto propio: C3). */
+  onEditarEspacio?: (espacioId: string) => void;
+  /** Deja libre un espacio que figura ocupado por alguien que no está en el mapa. */
+  onLiberar?: (espacioId: string) => void;
   onEnfocar: (r: Rect) => void;
   onCerrar: () => void;
   /** "porteria": mapa del Jefe (G11): tocar un puesto es avisarle al Líder. */
@@ -120,6 +142,10 @@ export function PanelDetalle({
   /** Categorías que el rol gestiona (Cobrar / Ver ficha solo para esas). */
   categoriasGestion?: CategoriaCliente[];
 }) {
+  // Con varios puestos, "Editar un puesto" pregunta cuál (el panel se remonta por selección).
+  const [eligiendo, setEligiendo] = useState(false);
+  const editarPuesto = puedeEditar && onEditarEspacio ? onEditarEspacio : null;
+
   if (cliente) {
     const sello = TEXTO_SELLO[cliente.estado];
     const difs = vista === "porteria" ? [] : diferencias(cliente, suyos);
@@ -162,6 +188,29 @@ export function PanelDetalle({
               {textoDiferencia(d)}
             </p>
           ))}
+          {eligiendo && editarPuesto && suyos.length > 1 ? (
+            <div className="space-y-1.5 rounded-lg border border-primary/25 bg-accent/60 p-2.5">
+              <p className="text-sm font-medium">¿Cuál querés editar?</p>
+              <div className="flex flex-wrap gap-1.5">
+                {suyos.map((e) => (
+                  <Button
+                    key={e.id}
+                    type="button"
+                    variant="outline"
+                    className="min-h-11 min-w-11 bg-card px-3 font-display text-[15px] font-bold tabular"
+                    onClick={() => editarPuesto(e.id)}
+                    aria-label={`Editar ${nombreConArticulo(e)}`}
+                  >
+                    {e.propio ? <Flag className="size-3.5 text-primary" strokeWidth={2.2} aria-hidden /> : null}
+                    {e.tipo === "puesto" ? numeroVisible(e) : etiquetaEspacio(e)}
+                  </Button>
+                ))}
+                <Button type="button" variant="ghost" className="min-h-11 px-3 text-sm" onClick={() => setEligiendo(false)}>
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          ) : null}
         </div>
 
         <div className="flex flex-wrap items-center gap-3 @2xl:flex-col @2xl:items-end">
@@ -173,7 +222,21 @@ export function PanelDetalle({
               <p className="font-display text-xl font-bold text-pagado">Sin deuda</p>
             )}
           </div>
-          <div className="flex flex-wrap gap-2">
+          {/* Al costado (tablet/escritorio) los botones se apilan en una columna angosta: no
+              aprietan la lista de puestos del medio. */}
+          <div className="flex flex-wrap gap-2 @2xl:max-w-60 @2xl:justify-end">
+            {editarPuesto && suyos.length > 0 ? (
+              <Button
+                type="button"
+                variant="outline"
+                className={BOTON}
+                aria-expanded={suyos.length > 1 ? eligiendo : undefined}
+                onClick={() => (suyos.length === 1 ? editarPuesto(suyos[0].id) : setEligiendo((v) => !v))}
+              >
+                <Pencil className="size-4" strokeWidth={2} />
+                {suyos.length === 1 ? `Editar ${nombreConArticulo(suyos[0])}` : "Editar un puesto"}
+              </Button>
+            ) : null}
             {puedeEditar && suyos.length === 0 && !esQuintero ? (
               <Button type="button" variant="outline" className={BOTON} onClick={() => onAsignarCliente(cliente.id)}>
                 <UserPlus className="size-4" strokeWidth={2} />
@@ -184,6 +247,14 @@ export function PanelDetalle({
               <Button asChild variant="outline" className={BOTON}>
                 <Link href={`${destinos.ficha}/${cliente.id}`}>
                   Ver ficha
+                  <ArrowRight className="size-4" strokeWidth={2} />
+                </Link>
+              </Button>
+            ) : destinos.ficha && puedeEditar ? (
+              // Administración y un quintero: la carpeta es del Jefe, pero la energía es suya (§4.7).
+              <Button asChild variant="outline" className={BOTON}>
+                <Link href={`${destinos.ficha}/${cliente.id}?tab=medidores`}>
+                  Ver sus medidores
                   <ArrowRight className="size-4" strokeWidth={2} />
                 </Link>
               </Button>
@@ -209,27 +280,47 @@ export function PanelDetalle({
   if (espacio) {
     const titulo =
       espacio.tipo === "bar" ? "Bar" : `${NOMBRE_TIPO[espacio.tipo]} ${numeroVisible(espacio)}`;
+    // Ocupado por alguien que no está en el mapa (dado de baja o ambulante): no hay ficha
+    // que mostrar; se ofrece dejarlo libre.
+    const huerfano = espacio.clienteId !== null;
     return (
       <div className="relative flex flex-col gap-3 p-4 @xl:flex-row @xl:items-center @xl:gap-6 @xl:p-5 @xl:pr-16">
         <BotonCerrar onCerrar={onCerrar} />
         <div className="min-w-0 flex-1 space-y-1 pr-12 @xl:pr-0">
           <div className="flex flex-wrap items-center gap-2">
-            <Sello estado="libre" texto="Libre" />
+            {huerfano ? <Sello estado="inactivo" texto="Ocupado" /> : <Sello estado="libre" texto="Libre" />}
             {espacio.propio ? <Sello estado="propio" /> : null}
             {espacio.medio ? <span className="text-xs text-muted-foreground">Medio puesto</span> : null}
           </div>
           <p className="font-display text-lg font-bold">{titulo}</p>
           <p className="text-sm text-muted-foreground">
-            {espacio.nota
-              ? `${espacio.nota}. Sin puestero asignado en el sistema.`
-              : "Sin puestero asignado en el sistema."}
+            {huerfano
+              ? "Figura a nombre de un cliente que ya no está en el mapa (dado de baja o ambulante). Si quedó libre, liberalo."
+              : espacio.nota
+                ? `${espacio.nota}. Sin puestero asignado en el sistema.`
+                : "Sin puestero asignado en el sistema."}
           </p>
         </div>
         {puedeEditar ? (
-          <Button type="button" className={BOTON} onClick={() => onAsignarEspacio(espacio.id)}>
-            <UserPlus className="size-4" strokeWidth={2} />
-            Asignar puestero
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {huerfano && onLiberar ? (
+              <Button type="button" className={BOTON} onClick={() => onLiberar(espacio.id)}>
+                <Unlink className="size-4" strokeWidth={2} />
+                Liberar
+              </Button>
+            ) : !huerfano ? (
+              <Button type="button" className={BOTON} onClick={() => onAsignarEspacio(espacio.id)}>
+                <UserPlus className="size-4" strokeWidth={2} />
+                Asignar puestero
+              </Button>
+            ) : null}
+            {editarPuesto ? (
+              <Button type="button" variant="outline" className={BOTON} onClick={() => editarPuesto(espacio.id)}>
+                <Pencil className="size-4" strokeWidth={2} />
+                Editar
+              </Button>
+            ) : null}
+          </div>
         ) : null}
       </div>
     );

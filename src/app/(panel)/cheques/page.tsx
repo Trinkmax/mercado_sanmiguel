@@ -2,7 +2,7 @@ import Link from "next/link";
 import { ArrowRight, Banknote, Landmark, Link2, Search } from "lucide-react";
 import { requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { formatARS, formatCuit, formatFecha, hoyISO, periodoActual } from "@/lib/format";
+import { formatARS, formatCuit, formatFecha, hoyISO, periodoActual, redondear2 } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,7 +51,7 @@ const VACIOS: Record<FiltroCheque, { titulo: string; descripcion: string }> = {
   },
   rechazado: {
     titulo: "No hay cheques rechazados",
-    descripcion: "Si el banco rebota un cheque o el proveedor lo devuelve, se marca como rechazado.",
+    descripcion: "Si el banco rebota un cheque (o el proveedor lo devuelve porque rebotó), se marca como rechazado.",
   },
   todos: {
     titulo: "Todavía no se registró ningún cheque",
@@ -61,6 +61,21 @@ const VACIOS: Record<FiltroCheque, { titulo: string; descripcion: string }> = {
 
 function normalizar(t: string | null | undefined): string {
   return (t ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+
+/** Qué se hizo con la diferencia entre el cheque y el gasto que pagó ("dio $ 20.000 de vuelto…"). */
+function textoDiferencia(
+  diferencia: string | null,
+  montoCheque: number,
+  montoGasto: number | null,
+  proveedor: string | null
+): string | null {
+  if (montoGasto === null) return null;
+  const sobra = redondear2(montoCheque - montoGasto);
+  if (diferencia === "vuelto_efectivo" && sobra > 0) return `dio ${formatARS(sobra)} de vuelto en efectivo`;
+  if (diferencia === "a_favor" && sobra > 0) return `quedan ${formatARS(sobra)} a favor con ${proveedor ?? "el proveedor"}`;
+  if (diferencia === "dividido") return "el resto del gasto quedó por pagar";
+  return null;
 }
 
 export default async function ChequesPage({
@@ -83,7 +98,7 @@ export default async function ChequesPage({
     supabase
       .from("cheques")
       .select(
-        "id, numero, cuit, recibido_de, puesto, proveedor, monto, estado, fecha_recibido, fecha_cobro, fecha_depositado, fecha_acreditado, fecha_entregado, entregado_en_cobro, gasto_id, motivo_rechazo, rechazado_en, titular, cliente:clientes(nombre, codigo), gasto:gastos(descripcion, rubro:rubros_gasto(nombre))"
+        "id, numero, cuit, recibido_de, puesto, proveedor, monto, estado, fecha_recibido, fecha_cobro, fecha_depositado, fecha_acreditado, fecha_entregado, entregado_en_cobro, gasto_id, gasto_diferencia, motivo_rechazo, rechazado_en, titular, cliente:clientes(nombre, codigo), gasto:gastos(descripcion, monto, rubro:rubros_gasto(nombre))"
       )
       .order("fecha_cobro", { ascending: true }),
     cargarGastosPendientes(supabase),
@@ -256,6 +271,12 @@ export default async function ChequesPage({
                 ? etiquetaGasto(c.gasto.descripcion, c.gasto.rubro?.nombre)
                 : null;
               const recibidoDe = c.recibido_de ?? c.titular ?? c.cliente?.nombre ?? "—";
+              const diferencia = textoDiferencia(
+                c.gasto_diferencia,
+                Number(c.monto),
+                c.gasto ? Number(c.gasto.monto) : null,
+                c.proveedor
+              );
               return (
                 <li
                   key={c.id}
@@ -314,9 +335,12 @@ export default async function ChequesPage({
                       ) : null}
                     </div>
                     {gastoEtiqueta ? (
-                      <p>
-                        <span className="text-muted-foreground">Pagó: </span>
+                      <p className="break-words">
+                        <span className="text-muted-foreground">
+                          {c.estado === "rechazado" ? "Iba a pagar: " : "Pagó: "}
+                        </span>
                         <span className="font-medium">{gastoEtiqueta}</span>
+                        {diferencia ? <span className="text-muted-foreground"> · {diferencia}</span> : null}
                       </p>
                     ) : esSinGasto(c) ? (
                       <p className="font-medium text-primary">Falta decir qué gasto pagó</p>
@@ -339,6 +363,11 @@ export default async function ChequesPage({
                       proveedor: c.proveedor,
                       gastoId: c.gasto_id,
                       gastoEtiqueta,
+                      gastoDiferencia: c.gasto_diferencia,
+                      sobrante:
+                        c.gasto && Number(c.monto) > Number(c.gasto.monto)
+                          ? redondear2(Number(c.monto) - Number(c.gasto.monto))
+                          : null,
                       puesto: c.puesto,
                     }}
                     hoy={hoy}

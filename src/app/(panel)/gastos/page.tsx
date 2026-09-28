@@ -36,6 +36,9 @@ export const metadata = { title: "Gastos" };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+const COLUMNAS_GASTO =
+  "id, descripcion, tipo, monto, estado, vencimiento, periodo, fecha_pago, medio_pago, pagado_desde, pagado_por, factura_path, comprobante_validado, notas, origen_id, pago_revertido_por, pago_revertido_en, pago_revertido_motivo, rubro:rubros_gasto(codigo, nombre), caja:cajas(fecha)";
+
 function GrupoGastos({
   titulo,
   detalle,
@@ -68,19 +71,16 @@ export default async function GastosPage({
     sp.tipo === "fijo" || sp.tipo === "variable" ? sp.tipo : "todos";
   const cajaParam = UUID.test(sp.caja ?? "") ? sp.caja! : null;
   const mesAnterior = sumarMeses(periodo, -1);
+  // En el mes actual se ven también los impagos de meses anteriores: no quedan escondidos.
+  const esMesActual = periodo === periodoActual();
   const hoy = hoyISO();
   // Tesorería paga casi siempre desde el banco; Administración y el Líder, de la caja.
   const preferirCaja = perfil.rol !== "tesoreria";
   const puedeOperar = true; // admin, tesorería y el Líder (§1.3) operan todo.
 
   const supabase = await createClient();
-  const [gastosRes, rubrosRes, anterioresRes, usoRes, cajas] = await Promise.all([
-    supabase
-      .from("gastos")
-      .select(
-        "id, descripcion, tipo, monto, estado, vencimiento, fecha_pago, medio_pago, pagado_desde, pagado_por, factura_path, comprobante_validado, notas, origen_id, pago_revertido_por, pago_revertido_en, pago_revertido_motivo, rubro:rubros_gasto(codigo, nombre), caja:cajas(fecha)"
-      )
-      .eq("periodo", periodo),
+  const [gastosRes, rubrosRes, anterioresRes, usoRes, cajas, impagosRes] = await Promise.all([
+    supabase.from("gastos").select(COLUMNAS_GASTO).eq("periodo", periodo),
     supabase.from("rubros_gasto").select("id, codigo, nombre").eq("activo", true).order("nombre"),
     supabase
       .from("gastos")
@@ -96,16 +96,29 @@ export default async function GastosPage({
       .lte("periodo", periodo)
       .limit(2000),
     cargarCajasElegibles(supabase, perfil.rol, hoy),
+    esMesActual
+      ? supabase
+          .from("gastos")
+          .select(COLUMNAS_GASTO)
+          .eq("estado", "pendiente")
+          .lt("periodo", periodo)
+          .order("periodo", { ascending: true })
+          .order("vencimiento", { ascending: true, nullsFirst: false })
+          .limit(300)
+      : null,
   ]);
 
   const gastos = gastosRes.data ?? [];
+  const impagosAnteriores = impagosRes?.data ?? [];
   const rubros = rubrosRes.data ?? [];
 
   // Cheques que pagaron gastos del mes ("Cheque N° 123 a Frutas del Sur").
   const idsConCheque = gastos.filter((g) => g.pagado_desde === "cheque").map((g) => g.id);
   const usuarios = [
     ...new Set(
-      gastos.flatMap((g) => [g.pagado_por, g.pago_revertido_por]).filter((x): x is string => Boolean(x))
+      [...gastos, ...impagosAnteriores]
+        .flatMap((g) => [g.pagado_por, g.pago_revertido_por])
+        .filter((x): x is string => Boolean(x))
     ),
   ];
   const [chequesRes, perfilesRes] = await Promise.all([
@@ -125,13 +138,15 @@ export default async function GastosPage({
 
   // Facturas: link firmado (1 h).
   const urls = new Map<string, string>();
-  const paths = gastos.map((g) => g.factura_path).filter((p): p is string => Boolean(p));
+  const paths = [...gastos, ...impagosAnteriores]
+    .map((g) => g.factura_path)
+    .filter((p): p is string => Boolean(p));
   if (paths.length > 0) {
     const { data: firmadas } = await supabase.storage.from("documentos").createSignedUrls(paths, 3600);
     for (const f of firmadas ?? []) if (f.path && f.signedUrl) urls.set(f.path, f.signedUrl);
   }
 
-  const filas: GastoFila[] = gastos.map((g) => ({
+  const aFila = (g: (typeof gastos)[number], conMes = false): GastoFila => ({
     id: g.id,
     etiqueta: etiquetaGasto(g.descripcion, g.rubro?.nombre),
     sinDescripcion: !g.descripcion?.trim(),
@@ -159,7 +174,10 @@ export default async function GastosPage({
             motivo: g.pago_revertido_motivo,
           }
         : null,
-  }));
+    mes: conMes ? labelPeriodo(g.periodo) : null,
+  });
+  const filas: GastoFila[] = gastos.map((g) => aFila(g));
+  const anteriores: GastoFila[] = impagosAnteriores.map((g) => aFila(g, true));
 
   // Fijos del mes anterior que todavía no se trajeron (E3).
   const yaTraidos = new Set(
@@ -203,6 +221,7 @@ export default async function GastosPage({
     (g) => g.vencimiento && g.vencimiento >= hoy && diasEntre(hoy, g.vencimiento) <= 7
   );
   const totalPorPagar = suma(pendientesMes);
+  const totalAnteriores = suma(anteriores);
   const totalPagado = suma(filas.filter((g) => g.estado === "pagado"));
 
   const cajaPreseleccionada = cajaParam ? cajas.find((c) => c.id === cajaParam) ?? null : null;
@@ -226,12 +245,14 @@ export default async function GastosPage({
       >
         <BotonExportar dataset="gastos" periodo={periodo} />
         <DialogNuevoGasto
+          key={cajaPreseleccionada?.id ?? "sin-caja"}
           rubros={rubros}
           frecuentes={frecuentes}
           periodo={periodo}
           cajas={cajas}
           hoy={hoy}
           preferirCaja={preferirCaja}
+          cajaPreseleccionadaId={cajaPreseleccionada?.id ?? null}
         />
       </PageHeader>
 
@@ -244,14 +265,15 @@ export default async function GastosPage({
 
       {cajaPreseleccionada ? (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-primary/30 bg-accent/60 px-5 py-4">
-          <p className="text-base">
+          <p className="min-w-0 flex-1 basis-64 text-base">
             <strong>Pagás desde la caja {delDia(cajaPreseleccionada.fecha, hoy)}.</strong> Tocá{" "}
-            <em>Pagar</em> en el gasto que salió de esa caja
+            <em>Pagar</em> en el gasto que salió de esa caja, o <em>Cargar gasto</em> si todavía no
+            está en la lista
             {cajaPreseleccionada.efectivo !== null
               ? ` (tiene ${formatARS(cajaPreseleccionada.efectivo)} en efectivo).`
               : "."}
           </p>
-          <div className="flex gap-2">
+          <div className="flex shrink-0 gap-2">
             <Button asChild variant="outline" className="h-11 px-4 text-base">
               <Link href={`/caja?fecha=${cajaPreseleccionada.fecha}&tipo=administracion`}>Volver a la caja</Link>
             </Button>
@@ -265,7 +287,7 @@ export default async function GastosPage({
       ) : null}
 
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <SelectorMes periodo={periodo} />
+        <SelectorMes periodo={periodo} caja={cajaPreseleccionada?.id ?? null} />
         <dl className="flex flex-wrap divide-x rounded-xl border bg-card">
           <div className="px-5 py-3">
             <dt className="text-sm text-muted-foreground">Por pagar</dt>
@@ -278,6 +300,11 @@ export default async function GastosPage({
             {vencidos.length > 0 ? (
               <dd className="text-sm font-medium text-pendiente">
                 {vencidos.length === 1 ? "1 vencido" : `${vencidos.length} vencidos`}
+              </dd>
+            ) : null}
+            {anteriores.length > 0 ? (
+              <dd className="text-sm font-medium text-pendiente">
+                y {formatARS(totalAnteriores)} de meses anteriores
               </dd>
             ) : null}
           </div>
@@ -295,6 +322,21 @@ export default async function GastosPage({
           </div>
         </dl>
       </div>
+
+      {anteriores.length > 0 ? (
+        <GrupoGastos
+          titulo="De meses anteriores, sin pagar"
+          detalle={
+            <>
+              {anteriores.length} · <Money monto={totalAnteriores} className="font-semibold text-pendiente" />
+            </>
+          }
+        >
+          {anteriores.map((g) => (
+            <FilaGasto key={g.id} g={g} {...filaProps} />
+          ))}
+        </GrupoGastos>
+      ) : null}
 
       {fijosParaTraer.length > 0 && filas.length > 0 ? (
         <TraerFijos items={fijosParaTraer} mesOrigen={mesAnterior} mesDestino={periodo} />
@@ -336,7 +378,8 @@ export default async function GastosPage({
             </GrupoGastos>
           ) : (
             <p className="rounded-xl border border-dashed bg-card px-5 py-4 text-base text-muted-foreground">
-              No queda nada por pagar{filtro !== "todos" ? " en este filtro" : ""} en {labelPeriodo(periodo)}.
+              No queda nada por pagar{filtro !== "todos" ? " en este filtro" : ""} en {labelPeriodo(periodo)}
+              {anteriores.length > 0 ? " (los de meses anteriores están arriba)" : ""}.
             </p>
           )}
 

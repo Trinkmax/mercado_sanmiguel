@@ -10,6 +10,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { FilaNovedad } from "./fila-novedad";
 import type { NovedadVista } from "./constantes";
 import { llamarAccion } from "@/lib/llamar-accion";
+import { AlertaError } from "@/components/cobranza/alerta-error";
 
 export type PendienteBandeja = NovedadVista & { nombre: string };
 
@@ -26,21 +27,28 @@ export function BandejaAprobacion({
 }) {
   const router = useRouter();
   const [ocultas, setOcultas] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [pendiente, startTransition] = useTransition();
   if (pendientes.length === 0) return null;
   const n = pendientes.length;
 
   function aprobarTodas() {
+    setError(null);
     setOcultas(true); // optimista
     startTransition(async () => {
+      // Reintento tras un corte: aprobar_novedades saltea las que ya están aprobadas.
       const res = await llamarAccion(() => aprobarNovedades({ ids: pendientes.map((p) => p.id) }));
       if (!res.ok) {
         setOcultas(false);
-        toast.error(res.error);
+        setError(res.error);
         return;
       }
       toast.success(
-        res.data.cantidad === 1 ? "Aprobaste 1 novedad" : `Aprobaste ${res.data.cantidad} novedades`
+        res.data.cantidad === 0
+          ? "Ya estaban aprobadas"
+          : res.data.cantidad === 1
+            ? "Aprobaste 1 novedad"
+            : `Aprobaste ${res.data.cantidad} novedades`
       );
       router.refresh();
     });
@@ -74,6 +82,8 @@ export function BandejaAprobacion({
           </Button>
         ) : null}
       </div>
+
+      {error ? <AlertaError error={error} titulo="No se pudieron aprobar" className="mt-3" /> : null}
 
       {ocultas ? (
         <p className="mt-4 flex items-center gap-2 text-sm font-medium">

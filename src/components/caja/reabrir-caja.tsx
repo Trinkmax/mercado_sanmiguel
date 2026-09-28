@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { LockOpen } from "lucide-react";
 import { toast } from "sonner";
 import { reabrirCaja } from "@/lib/actions/cajas";
@@ -17,7 +18,8 @@ import {
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
-import { llamarAccion } from "@/lib/llamar-accion";
+import { AlertaError } from "@/components/cobranza/alerta-error";
+import { llamarAccion, SIN_RESPUESTA } from "@/lib/llamar-accion";
 
 /**
  * Reabre una caja cerrada (administración sobre la suya, o autorizando un
@@ -39,10 +41,22 @@ export function BotonReabrirCaja({
   variant?: "outline" | "default";
   className?: string;
 }) {
+  const router = useRouter();
   const [abierto, setAbierto] = useState(false);
   const [motivo, setMotivo] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [errorServidor, setErrorServidor] = useState<string | null>(null);
   const [enviando, startTransition] = useTransition();
+  // Un intento anterior se quedó sin respuesta (corte de red): si ahora la base dice que la caja
+  // ya está abierta, la reabrió ese intento.
+  const huboCorte = useRef(false);
+
+  function terminar() {
+    huboCorte.current = false;
+    setAbierto(false);
+    setMotivo("");
+    setError(null);
+  }
 
   function confirmar() {
     const limpio = motivo.trim();
@@ -50,16 +64,22 @@ export function BotonReabrirCaja({
       setError("Contá por qué la reabrís.");
       return;
     }
+    setErrorServidor(null);
     startTransition(async () => {
       const res = await llamarAccion(() => reabrirCaja(cajaId, limpio || undefined));
       if (!res.ok) {
-        toast.error(res.error);
+        if (huboCorte.current && res.error.startsWith("La caja ya está abierta")) {
+          toast.info("Ya había quedado reabierta. Ya se pueden corregir los movimientos.");
+          terminar();
+          router.refresh();
+          return;
+        }
+        if (res.error === SIN_RESPUESTA) huboCorte.current = true;
+        setErrorServidor(res.error);
         return;
       }
       toast.success("Caja reabierta. Ya se pueden corregir los movimientos.");
-      setAbierto(false);
-      setMotivo("");
-      setError(null);
+      terminar();
     });
   }
 
@@ -67,8 +87,10 @@ export function BotonReabrirCaja({
     <Dialog
       open={abierto}
       onOpenChange={(v) => {
+        if (enviando) return;
         setAbierto(v);
         if (!v) {
+          setErrorServidor(null);
           setMotivo("");
           setError(null);
         }
@@ -80,8 +102,8 @@ export function BotonReabrirCaja({
           {etiqueta}
         </Button>
       </DialogTrigger>
-      <DialogContent className="gap-5 p-6 sm:max-w-md">
-        <DialogHeader>
+      <DialogContent className="max-h-[92dvh] gap-5 overflow-y-auto p-6 sm:max-w-md">
+        <DialogHeader className="pr-8">
           <DialogTitle className="text-xl">{etiqueta}</DialogTitle>
           <DialogDescription className="text-base">{descripcion}</DialogDescription>
         </DialogHeader>
@@ -102,7 +124,8 @@ export function BotonReabrirCaja({
             placeholder="Ej.: faltó cargar un cobro"
             className="min-h-24 text-base md:text-base"
           />
-          {error ? <p className="text-sm text-destructive">{error}</p> : null}
+          {error ? <p className="text-sm font-medium text-destructive">{error}</p> : null}
+          {errorServidor ? <AlertaError error={errorServidor} titulo="No se pudo reabrir la caja" /> : null}
         </div>
         <DialogFooter>
           <Button

@@ -20,18 +20,21 @@ import {
 } from "@/components/tesoreria/datos";
 
 function Bloque({
+  id,
   titulo,
   detalle,
   accion,
   children,
 }: {
+  /** Ancla para llegar directo (p. ej. "/tesoreria#cajas-para-validar" desde el Inicio). */
+  id?: string;
   titulo: string;
   detalle?: React.ReactNode;
   accion?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
-    <section className="space-y-3" aria-label={titulo}>
+    <section id={id} className="scroll-mt-24 space-y-3" aria-label={titulo}>
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
         <div>
           <h2 className="font-display text-lg font-bold tracking-tight">{titulo}</h2>
@@ -65,18 +68,28 @@ export async function PestanaHoy({
   saldos: SaldoInicial[];
 }) {
   if (saldos.length === 0) {
+    // Sin saldos iniciales igual se ven las cajas para validar: el Inicio y el menú
+    // mandan acá para validarlas (no dependen de los saldos).
+    const cajasSinSaldos = await cargarCajasPendientes(await createClient());
     return (
-      <section className="space-y-5" aria-label="Saldos iniciales">
-        <div className="rounded-xl border border-primary/30 bg-accent/60 px-5 py-4">
-          <h2 className="font-display text-xl font-bold tracking-tight">Antes de empezar, cargá cuánta plata había</h2>
-          <p className="mt-1 max-w-prose text-base text-muted-foreground">
-            Poné el efectivo y el saldo del banco (en pesos y, si hay, en dólares) de un día. Desde ese
-            día el sistema suma los cobros y resta los gastos solo. Si alguna cuenta no tiene plata,
-            cargala en cero.
-          </p>
-        </div>
-        <SaldosIniciales saldos={saldos} />
-      </section>
+      <div className="space-y-10">
+        <section className="space-y-5" aria-label="Saldos iniciales">
+          <div className="rounded-xl border border-primary/30 bg-accent/60 px-5 py-4">
+            <h2 className="font-display text-xl font-bold tracking-tight">Antes de empezar, cargá cuánta plata había</h2>
+            <p className="mt-1 max-w-prose text-base text-muted-foreground">
+              Poné el efectivo y el saldo del banco (en pesos y, si hay, en dólares) de un día. Desde ese
+              día el sistema suma los cobros y resta los gastos solo. Si alguna cuenta no tiene plata,
+              cargala en cero.
+            </p>
+          </div>
+          <SaldosIniciales saldos={saldos} />
+        </section>
+        {cajasSinSaldos.length > 0 ? (
+          <Bloque id="cajas-para-validar" titulo="Cajas para contar y validar">
+            <CajasParaValidar cajas={cajasSinSaldos} />
+          </Bloque>
+        ) : null}
+      </div>
     );
   }
 
@@ -96,15 +109,16 @@ export async function PestanaHoy({
       .eq("estado", "pendiente")
       .not("vencimiento", "is", null)
       .lte("vencimiento", sumarDias(hoy, 7))
-      .order("vencimiento", { ascending: true })
-      .limit(30),
+      .order("vencimiento", { ascending: true }),
     cargarCajasElegibles(supabase, rol, hoy),
   ]);
 
   const listos = chequesRes.data ?? [];
   const totalListos = listos.reduce((acc, c) => acc + Number(c.monto), 0);
+  // Todos los vencidos y por vencer (el total es el real); en la lista, los primeros 30.
   const gastos = gastosRes.data ?? [];
   const totalGastos = gastos.reduce((acc, g) => acc + Number(g.monto), 0);
+  const GASTOS_VISIBLES = 30;
   const cajasAdmin = cajas.filter((c) => c.tipo === "administracion").length;
 
   return (
@@ -123,6 +137,7 @@ export async function PestanaHoy({
       </Bloque>
 
       <Bloque
+        id="cajas-para-validar"
         titulo="Cajas para contar y validar"
         detalle={
           cajas.length === 0
@@ -181,7 +196,7 @@ export async function PestanaHoy({
         detalle={
           gastos.length === 0
             ? "Nada vencido ni por vencer en los próximos 7 días."
-            : `Vencidos y los que vencen en 7 días: ${formatARS(totalGastos)}`
+            : `${gastos.length === 1 ? "1 gasto vencido o por vencer" : `${gastos.length} gastos vencidos o por vencer`} en 7 días: ${formatARS(totalGastos)}`
         }
         accion={
           <Button asChild variant="outline" className="h-11 px-4 text-base">
@@ -194,7 +209,7 @@ export async function PestanaHoy({
       >
         {gastos.length > 0 ? (
           <ul className="divide-y overflow-hidden rounded-xl border bg-card">
-            {gastos.map((g) => {
+            {gastos.slice(0, GASTOS_VISIBLES).map((g) => {
               const etiqueta = etiquetaGasto(g.descripcion, g.rubro?.nombre);
               const vencido = (g.vencimiento ?? "") < hoy;
               return (
@@ -203,7 +218,7 @@ export async function PestanaHoy({
                   className={`flex flex-wrap items-center justify-between gap-3 px-4 py-3 ${vencido ? "bg-pendiente-suave/50" : ""}`}
                 >
                   <div className="min-w-0 space-y-0.5">
-                    <p className="flex flex-wrap items-center gap-2 text-base font-semibold">
+                    <p className="flex flex-wrap items-center gap-2 text-base font-semibold break-words">
                       {g.rubro ? <Codigo codigo={g.rubro.codigo} /> : null}
                       {etiqueta}
                     </p>
@@ -231,6 +246,15 @@ export async function PestanaHoy({
                 </li>
               );
             })}
+            {gastos.length > GASTOS_VISIBLES ? (
+              <li className="px-4 py-2.5 text-sm text-muted-foreground">
+                y {gastos.length - GASTOS_VISIBLES} más en{" "}
+                <Link href="/gastos" className="font-medium text-primary hover:underline">
+                  Gastos
+                </Link>
+                .
+              </li>
+            ) : null}
           </ul>
         ) : null}
       </Bloque>

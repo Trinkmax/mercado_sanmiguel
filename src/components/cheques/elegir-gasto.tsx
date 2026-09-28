@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, Search } from "lucide-react";
-import { formatARS, formatFecha } from "@/lib/format";
+import { Check, Scissors, Search, Banknote, HandCoins } from "lucide-react";
+import type { DiferenciaCheque } from "@/lib/actions/cheques";
+import { formatARS, formatFecha, redondear2 } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Codigo } from "@/components/shared/codigo";
@@ -70,7 +71,6 @@ export function ElegirGasto({
     const filtrados = q ? ordenados.filter((g) => normalizar(g.etiqueta).includes(q)) : ordenados;
     return filtrados.slice(0, 8);
   }, [gastos, proveedor, montoCheque, q]);
-  const elegido = valor ? gastos.find((g) => g.id === valor) ?? null : null;
 
   if (gastos.length === 0) {
     return (
@@ -116,7 +116,7 @@ export function ElegirGasto({
                   {activo ? <Check className="size-5 shrink-0" strokeWidth={2.2} /> : null}
                   {g.rubroCodigo ? <Codigo codigo={g.rubroCodigo} /> : null}
                   <span className="min-w-0">
-                    <span className="block truncate text-base font-medium">{g.etiqueta}</span>
+                    <span className="block text-base font-medium break-words">{g.etiqueta}</span>
                     <span className={cn("block text-sm", activo ? "text-primary-foreground/80" : "text-muted-foreground")}>
                       {g.vencimiento ? `Vence ${formatFecha(g.vencimiento).slice(0, 5)}` : "Sin vencimiento"}
                       {g.sugerido ? " · sugerido" : ""}
@@ -132,12 +132,105 @@ export function ElegirGasto({
           <li className="px-3 py-3 text-sm text-muted-foreground">No encontramos un gasto con eso.</li>
         ) : null}
       </ul>
-      {elegido && Math.abs(elegido.monto - montoCheque) >= 0.5 ? (
-        <p className="rounded-lg bg-parcial-suave px-4 py-2.5 text-sm font-medium text-parcial">
-          El cheque es de {formatARS(montoCheque)} y el gasto de {formatARS(elegido.monto)}: el gasto queda
-          pagado completo igual.
-        </p>
-      ) : null}
     </div>
+  );
+}
+
+/** ¿El cheque y el gasto son de distinto monto? (al centavo) */
+export function montosDistintos(montoCheque: number, montoGasto: number): boolean {
+  return Math.abs(redondear2(montoCheque - montoGasto)) >= 0.01;
+}
+
+function Opcion({
+  activo,
+  onClick,
+  icono: Icono,
+  titulo,
+  ayuda,
+}: {
+  activo: boolean;
+  onClick: () => void;
+  icono: typeof Banknote;
+  titulo: string;
+  ayuda: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={activo}
+      className={cn(
+        "flex min-h-14 w-full items-start gap-3 rounded-xl border-2 px-4 py-3 text-left transition-colors",
+        "focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none",
+        activo ? "border-primary bg-accent" : "border-input bg-card hover:bg-accent/60"
+      )}
+    >
+      <Icono className="mt-0.5 size-5 shrink-0 text-primary" strokeWidth={1.9} />
+      <span className="min-w-0">
+        <span className="block text-base font-semibold break-words">{titulo}</span>
+        <span className="block text-sm text-muted-foreground">{ayuda}</span>
+      </span>
+      {activo ? <Check className="ml-auto size-5 shrink-0 text-primary" strokeWidth={2.2} /> : null}
+    </button>
+  );
+}
+
+/**
+ * El cheque y el gasto no son del mismo monto: hay que decir qué pasó con la
+ * diferencia (así ningún peso queda sin registrar). Cheque menor → el resto queda
+ * como otro gasto por pagar. Cheque mayor → vuelto en efectivo o saldo a favor.
+ */
+export function ElegirDiferencia({
+  montoCheque,
+  montoGasto,
+  proveedor,
+  valor,
+  onCambiar,
+}: {
+  montoCheque: number;
+  montoGasto: number;
+  proveedor: string;
+  valor: DiferenciaCheque | null;
+  onCambiar: (v: DiferenciaCheque) => void;
+}) {
+  if (!montosDistintos(montoCheque, montoGasto)) return null;
+  const dif = redondear2(montoCheque - montoGasto);
+  const quien = proveedor.trim() || "el proveedor";
+  return (
+    <fieldset className="space-y-2 rounded-xl border border-parcial/40 bg-parcial-suave/50 p-3">
+      <legend className="sr-only">¿Qué pasó con la diferencia?</legend>
+      <p className="text-sm font-medium">
+        El cheque es de {formatARS(montoCheque)} y el gasto de {formatARS(montoGasto)}.{" "}
+        {dif < 0 ? `Faltan ${formatARS(-dif)}.` : `Sobran ${formatARS(dif)}.`} ¿Qué pasó con la diferencia?
+      </p>
+      {dif < 0 ? (
+        <>
+          <Opcion
+            activo={valor === "dividir"}
+            onClick={() => onCambiar("dividir")}
+            icono={Scissors}
+            titulo={`Quedan ${formatARS(-dif)} por pagar`}
+            ayuda={`El cheque paga ${formatARS(montoCheque)} y el resto queda como otro gasto en Por pagar. Si ya lo pagaste, después tocá Pagar en ese gasto.`}
+          />
+        </>
+      ) : (
+        <>
+          <Opcion
+            activo={valor === "vuelto_efectivo"}
+            onClick={() => onCambiar("vuelto_efectivo")}
+            icono={Banknote}
+            titulo={`Me dio ${formatARS(dif)} de vuelto en efectivo`}
+            ayuda="Entra al efectivo de Tesorería."
+          />
+          <Opcion
+            activo={valor === "a_favor"}
+            onClick={() => onCambiar("a_favor")}
+            icono={HandCoins}
+            titulo={`Quedan ${formatARS(dif)} a favor con ${quien}`}
+            ayuda="Para descontar en la próxima compra."
+          />
+        </>
+      )}
+    </fieldset>
   );
 }

@@ -90,26 +90,38 @@ const gastoSchema = z.object({
     .trim()
     .max(200, "La descripción es muy larga (máximo 200 letras).")
     .nullable(),
+  // Pesos con hasta 2 decimales ("1234.56" o "1234,56"): comisiones e IVA traen centavos.
   monto: z
     .string()
-    .regex(/^\d+$/, "Poné el monto del gasto, solo números.")
-    .transform(Number)
+    .transform((t) => t.replace(",", "."))
+    .pipe(z.string().regex(/^\d{1,12}(\.\d{1,2})?$/, "Poné el monto del gasto (con coma para los centavos)."))
+    .transform((t) => Math.round(Number(t) * 100) / 100)
     .refine((n) => n > 0, "El monto tiene que ser mayor a cero."),
   vencimiento: z.iso.date("La fecha de vencimiento no es válida.").nullable(),
   notas: z.string().trim().max(500, "La nota es muy larga.").nullable(),
   periodo: periodoSchema,
+  /** Clave de idempotencia del formulario: el reintento después de un corte de red no duplica. */
+  ref: z.uuid("Actualizá la página y probá de nuevo.").nullable(),
 });
+
+export type ResultadoCrearGasto = {
+  id: string;
+  pago: ResultadoPagoGasto | null;
+  errorPago: string | null;
+  /** Ya estaba cargado (el mismo formulario llegó dos veces por un corte de red). */
+  repetido: boolean;
+  /** Estado del gasto después de la carga (en un repetido puede venir ya pagado). */
+  estado: "pendiente" | "pagado" | "anulado";
+};
 
 /**
  * Carga un gasto del mes (descripción y factura opcionales). Si viene
  * `pagar_origen`, además lo paga en el mismo paso ("¿Ya lo pagaste?"). Si el
  * pago falla, el gasto queda cargado como pendiente y se avisa el motivo.
+ * Con `ref` (clave del formulario) un reintento devuelve el gasto ya cargado:
+ * no lo duplica ni lo paga dos veces.
  */
-export async function crearGasto(
-  formData: FormData
-): Promise<
-  ActionResult<{ id: string; pago: ResultadoPagoGasto | null; errorPago: string | null }>
-> {
+export async function crearGasto(formData: FormData): Promise<ActionResult<ResultadoCrearGasto>> {
   const perfil = await requireRol("admin", "tesoreria", "lider");
   const texto = (k: string) => String(formData.get(k) ?? "").trim();
 
@@ -121,6 +133,7 @@ export async function crearGasto(
     vencimiento: texto("vencimiento") || null,
     notas: texto("notas") || null,
     periodo: texto("periodo"),
+    ref: texto("ref") || null,
   });
   if (!parsed.success) return fallo(parsed.error.issues[0].message);
 
@@ -145,6 +158,13 @@ export async function crearGasto(
   }
 
   const supabase = await createClient();
+
+  // ¿Este mismo formulario ya llegó antes? (la respuesta se perdió por un corte de red)
+  const ref = parsed.data.ref;
+  if (ref) {
+    const previo = await gastoPorRef(supabase, perfil.org_id, ref);
+    if (previo) return reintentoDeGasto(supabase, previo, pago);
+  }
 
   let facturaPath: string | null = null;
   const factura = formData.get("factura");
@@ -175,12 +195,18 @@ export async function crearGasto(
       notas: parsed.data.notas,
       periodo: parsed.data.periodo,
       factura_path: facturaPath,
+      ref,
     })
     .select("id")
     .single();
 
   if (error) {
     if (facturaPath) await supabase.storage.from("documentos").remove([facturaPath]);
+    // Dos envíos simultáneos del mismo formulario: el otro ya lo cargó.
+    if (error.code === "23505" && ref) {
+      const previo = await gastoPorRef(supabase, perfil.org_id, ref);
+      if (previo) return reintentoDeGasto(supabase, previo, null);
+    }
     return fallo(error);
   }
 
@@ -193,7 +219,55 @@ export async function crearGasto(
   }
 
   revalidarGastos();
-  return ok({ id: data.id, pago: resultadoPago, errorPago });
+  return ok({
+    id: data.id,
+    pago: resultadoPago,
+    errorPago,
+    repetido: false,
+    estado: resultadoPago ? "pagado" : "pendiente",
+  });
+}
+
+type GastoPrevio = { id: string; estado: "pendiente" | "pagado" | "anulado" };
+
+async function gastoPorRef(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  org: string,
+  ref: string
+): Promise<GastoPrevio | null> {
+  const { data } = await supabase
+    .from("gastos")
+    .select("id, estado")
+    .eq("org_id", org)
+    .eq("ref", ref)
+    .maybeSingle();
+  return data ?? null;
+}
+
+/**
+ * El gasto de este formulario ya estaba cargado: no se carga de nuevo. Si había
+ * que pagarlo y sigue pendiente (el pago del primer intento falló), se intenta pagar.
+ */
+async function reintentoDeGasto(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  previo: GastoPrevio,
+  pago: Omit<EntradaPago, "id"> | null
+): Promise<ActionResult<ResultadoCrearGasto>> {
+  let resultadoPago: ResultadoPagoGasto | null = null;
+  let errorPago: string | null = null;
+  if (pago && previo.estado === "pendiente") {
+    const res = await llamarPagarGasto(supabase, { id: previo.id, ...pago });
+    if (res.ok) resultadoPago = res.data;
+    else errorPago = res.error;
+  }
+  revalidarGastos();
+  return ok({
+    id: previo.id,
+    pago: resultadoPago,
+    errorPago,
+    repetido: true,
+    estado: resultadoPago ? "pagado" : previo.estado,
+  });
 }
 
 /* ---------------- Pagar / deshacer el pago ---------------- */

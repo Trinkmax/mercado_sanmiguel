@@ -57,7 +57,7 @@ export function RendicionesPorRecibir({
                   <div className="min-w-[14rem] flex-1 space-y-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <Link
-                        href={detalleEnImprimible ? `/cierre-caja/${r.cajaId}` : `/caja?fecha=${r.fecha}&tipo=guardia`}
+                        href={detalleEnImprimible ? `/cierre-caja/${r.cajaId}?ver=1` : `/caja?fecha=${r.fecha}&tipo=guardia`}
                         className="font-display text-lg font-bold tracking-tight text-primary underline-offset-4 hover:underline"
                       >
                         Caja de portería del {formatFecha(r.fecha)}

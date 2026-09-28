@@ -25,6 +25,8 @@ import {
   type TipoRegistro,
 } from "./constantes";
 import { llamarAccion } from "@/lib/llamar-accion";
+import { adjuntoMuyPesado, ERROR_PESO_ADJUNTO, explicarFalloEnvio, prepararAdjuntos } from "./adjuntos";
+import { AvisoError, irAlCampo } from "./aviso-error";
 
 export type ClienteOpcion = {
   id: string;
@@ -56,6 +58,8 @@ function normalizar(s: string): string {
  * Nuevo registro (D3, D4): ¿A quién? → ¿Qué es? → título + detalle + foto/PDF → multa (si es
  * apercibimiento o sanción) → "Así lo ve el socio" → "Notificar a {nombre} (Puesto N)".
  * `ref` por intento: un doble toque manda la misma clave y la base crea UN registro y UNA multa.
+ * Si falla (o se corta el wifi) se conserva todo lo cargado y la MISMA clave: el reintento
+ * devuelve "repetido" si el primero había llegado. La clave cambia recién al terminar bien.
  */
 export function FormRegistro({
   clientes,
@@ -79,6 +83,8 @@ export function FormRegistro({
   const archivoRef = useRef<HTMLInputElement>(null);
   const [pendiente, startTransition] = useTransition();
   const [ref, setRef] = useState(nuevoRef);
+  /** Cliente con el que ya se intentó mandar esta clave (null = todavía no se usó). */
+  const refUsadaCon = useRef<string | null>(null);
 
   const [clienteId, setClienteId] = useState<string | null>(clienteInicialId);
   const cliente = clientes.find((c) => c.id === clienteId) ?? null;
@@ -93,9 +99,11 @@ export function FormRegistro({
   const [nombreArchivo, setNombreArchivo] = useState<string | null>(null);
   const [conMulta, setConMulta] = useState(false);
   const [multa, setMulta] = useState("");
+  // La multa vence a los 10 días de HOY aunque el hecho sea de antes: nunca nace vencida.
   const [vence, setVence] = useState(sumarDias(fechaHoy, DIAS_VENCIMIENTO_MULTA));
-  const [venceTocado, setVenceTocado] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Campo al que corresponde el error (el aviso va debajo de ese campo); null = junto al botón. */
+  const [campoError, setCampoError] = useState<string | null>(null);
 
   const info = infoTipoRegistro(tipo);
   const montoMulta = Number(multa || 0);
@@ -119,12 +127,20 @@ export function FormRegistro({
     setClienteId(c.id);
     setLugarId(c.lugares.length === 1 ? c.lugares[0].id : null);
     setBusqueda("");
-    setError(null);
+    mostrarError(null);
+    // Otro destinatario = otro registro: clave nueva. Si no, un envío que había llegado antes
+    // de un corte trababa el formulario con "Ese registro ya se emitió para otro cliente".
+    // Si vuelve a elegir al MISMO, se conserva la clave (el reintento no duplica).
+    if (refUsadaCon.current && refUsadaCon.current !== c.id) {
+      setRef(nuevoRef());
+      refUsadaCon.current = null;
+    }
   }
 
-  function cambiarFecha(v: string) {
-    setFecha(v);
-    if (!venceTocado && v) setVence(sumarDias(v, DIAS_VENCIMIENTO_MULTA));
+  function quitarCliente() {
+    setClienteId(null);
+    setLugarId(null);
+    mostrarError(null);
   }
 
   function quitarArchivo() {
@@ -141,23 +157,55 @@ export function FormRegistro({
     setMulta("");
     setFecha(fechaHoy);
     setVence(sumarDias(fechaHoy, DIAS_VENCIMIENTO_MULTA));
-    setVenceTocado(false);
     setRef(nuevoRef());
+    refUsadaCon.current = null;
+  }
+
+  function mostrarError(mensaje: string | null, campo: string | null = null) {
+    setError(mensaje);
+    setCampoError(mensaje ? campo : null);
+  }
+
+  /** Al corregir el campo marcado, el aviso se va. */
+  function corrigio(campo: string) {
+    if (campoError === campo) mostrarError(null);
+  }
+
+  /** Error de validación: el aviso va debajo del campo que falta y se lleva la pantalla ahí. */
+  function falta(mensaje: string, campoId: string) {
+    // Si el campo no está en pantalla, el aviso va junto al botón (nunca queda sin mostrarse).
+    const visible = typeof document !== "undefined" && document.getElementById(campoId) !== null;
+    mostrarError(mensaje, visible ? campoId : null);
+    if (visible) irAlCampo(campoId);
+  }
+
+  /** Aviso debajo de un campo, si el error es de ese campo. */
+  function avisoDe(campo: string) {
+    return error && campoError === campo ? <AvisoError mensaje={error} /> : null;
   }
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setError(null);
+    if (pendiente) return;
+    mostrarError(null);
     if (!cliente) {
-      setError("Elegí a quién va dirigido: buscalo por nombre, apodo o número de puesto.");
+      falta("Elegí a quién va dirigido: buscalo por nombre, apodo o número de puesto.", "reg-buscar");
       return;
     }
     if (!titulo.trim()) {
-      setError("Poné un título (ej.: Falta de limpieza del puesto).");
+      falta("Poné un título (ej.: Falta de limpieza del puesto).", "reg-titulo");
+      return;
+    }
+    if (fecha && fecha > fechaHoy) {
+      falta("La fecha no puede ser de un día que todavía no llegó: elegí hoy o un día anterior.", "reg-fecha");
       return;
     }
     if (info.llevaMulta && conMulta && montoMulta <= 0) {
-      setError("Poné el monto de la multa, o apagá “¿Lleva multa?”.");
+      falta("Poné el monto de la multa, o apagá “¿Lleva multa?”.", "reg-multa");
+      return;
+    }
+    if (lleva && (!vence || vence < fechaHoy)) {
+      falta("La multa tiene que vencer de hoy en adelante: elegí otra fecha en “Vence el”.", "reg-vence");
       return;
     }
     const fd = new FormData(e.currentTarget);
@@ -167,6 +215,7 @@ export function FormRegistro({
     fd.set("detalle", detalle.trim());
     fd.set("fecha", fecha);
     fd.set("ref", ref);
+    refUsadaCon.current = cliente.id;
     if (lugarId) fd.set("espacioId", lugarId);
     else fd.delete("espacioId");
     if (lleva) {
@@ -178,9 +227,15 @@ export function FormRegistro({
     }
     const nombre = cliente.nombre;
     startTransition(async () => {
+      const errorPeso = await prepararAdjuntos(fd, ["archivo"]);
+      if (errorPeso) {
+        mostrarError(errorPeso);
+        return;
+      }
       const res = await llamarAccion(() => emitirRegistro(fd));
       if (!res.ok) {
-        setError(res.error);
+        // Queda todo lo cargado y la misma clave: tocar de nuevo no duplica.
+        mostrarError(explicarFalloEnvio(res.error, fd, ["archivo"]));
         return;
       }
       const etiqueta = `${infoTipoRegistro(res.data.tipo).label} N° ${res.data.numero}`;
@@ -205,7 +260,9 @@ export function FormRegistro({
     : "Notificar";
 
   return (
-    <form ref={formRef} onSubmit={onSubmit} className="space-y-8">
+    // noValidate: los min/max de las fechas quedan para el selector, pero el aviso lo da
+    // onSubmit (fijo junto al botón y con foco) en vez del globo nativo que se va solo.
+    <form ref={formRef} onSubmit={onSubmit} noValidate className="space-y-8">
       {/* 1. ¿A quién? */}
       {!clienteFijo ? (
         <section className="space-y-3" aria-labelledby="reg-quien">
@@ -235,10 +292,7 @@ export function FormRegistro({
                 type="button"
                 variant="outline"
                 className="min-h-11"
-                onClick={() => {
-                  setClienteId(null);
-                  setLugarId(null);
-                }}
+                onClick={quitarCliente}
               >
                 Cambiar
               </Button>
@@ -251,15 +305,20 @@ export function FormRegistro({
                   strokeWidth={2}
                 />
                 <Input
+                  id="reg-buscar"
                   autoFocus
                   type="search"
                   value={busqueda}
-                  onChange={(e) => setBusqueda(e.target.value)}
+                  onChange={(e) => {
+                    setBusqueda(e.target.value);
+                    corrigio("reg-buscar");
+                  }}
                   placeholder="N° de puesto, nombre, apodo o carpeta…"
                   aria-label="Buscar cliente"
                   className="h-14 pl-11 text-lg md:text-lg"
                 />
               </div>
+              {avisoDe("reg-buscar")}
               {busqueda && resultados.length === 0 ? (
                 <p className="rounded-lg border border-dashed px-4 py-4 text-center text-sm text-muted-foreground">
                   No encontramos a nadie con eso. Probá con el número de puesto o parte del nombre.
@@ -350,6 +409,8 @@ export function FormRegistro({
                 onClick={() => {
                   setTipo(t.valor);
                   if (!t.llevaMulta) setConMulta(false);
+                  corrigio("reg-multa");
+                  corrigio("reg-vence");
                 }}
                 className={cn(
                   "flex min-h-16 flex-col items-start justify-center gap-1 rounded-lg border px-4 py-3 text-left transition-colors",
@@ -376,20 +437,27 @@ export function FormRegistro({
           <Input
             id="reg-titulo"
             value={titulo}
-            onChange={(e) => setTitulo(e.target.value)}
+            onChange={(e) => {
+              setTitulo(e.target.value);
+              corrigio("reg-titulo");
+            }}
             maxLength={200}
             autoComplete="off"
             placeholder="Ej.: Falta de limpieza del puesto"
             className="h-12 text-base md:text-base"
           />
+          {avisoDe("reg-titulo")}
           <div className="flex flex-wrap gap-2 pt-1">
             {TITULOS_SUGERIDOS[tipo].map((s) => (
               <button
                 key={s}
                 type="button"
-                onClick={() => setTitulo(s)}
+                onClick={() => {
+                  setTitulo(s);
+                  corrigio("reg-titulo");
+                }}
                 className={cn(
-                  "min-h-10 rounded-full border px-3 text-sm transition-colors",
+                  "min-h-11 rounded-full border px-3 text-sm transition-colors",
                   titulo === s ? "border-primary bg-accent" : "bg-card hover:bg-accent/60"
                 )}
               >
@@ -424,9 +492,13 @@ export function FormRegistro({
               type="date"
               value={fecha}
               max={fechaHoy}
-              onChange={(e) => cambiarFecha(e.target.value)}
+              onChange={(e) => {
+                setFecha(e.target.value);
+                corrigio("reg-fecha");
+              }}
               className="h-12 text-base md:text-base"
             />
+            {avisoDe("reg-fecha")}
           </div>
           <div className="space-y-2">
             <span className="block text-base font-medium">
@@ -453,8 +525,18 @@ export function FormRegistro({
               type="file"
               accept={ACCEPT_ADJUNTO_REGISTRO}
               className="sr-only"
-              onChange={(e) => setNombreArchivo(e.target.files?.[0]?.name ?? null)}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (adjuntoMuyPesado(f)) {
+                  quitarArchivo();
+                  mostrarError(ERROR_PESO_ADJUNTO, "reg-archivo");
+                  return;
+                }
+                corrigio("reg-archivo");
+                setNombreArchivo(f?.name ?? null);
+              }}
             />
+            {avisoDe("reg-archivo")}
           </div>
         </div>
       </section>
@@ -468,7 +550,15 @@ export function FormRegistro({
               conMulta ? "border-pendiente/40 bg-pendiente-suave/60" : "bg-card"
             )}
           >
-            <Switch checked={conMulta} onCheckedChange={setConMulta} className="scale-125" />
+            <Switch
+              checked={conMulta}
+              onCheckedChange={(v) => {
+                setConMulta(v);
+                corrigio("reg-multa");
+                corrigio("reg-vence");
+              }}
+              className="scale-125"
+            />
             <span className="space-y-0.5">
               <span className="block text-base font-semibold">¿Lleva multa?</span>
               <span className="block text-sm text-muted-foreground">
@@ -488,7 +578,10 @@ export function FormRegistro({
                   inputMode="numeric"
                   autoComplete="off"
                   value={multa}
-                  onChange={(e) => setMulta(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                  onChange={(e) => {
+                    setMulta(e.target.value.replace(/\D/g, "").slice(0, 10));
+                    corrigio("reg-multa");
+                  }}
                   placeholder="0"
                   className="h-12 text-lg tabular md:text-lg"
                 />
@@ -501,14 +594,18 @@ export function FormRegistro({
                     "Escribí solo números o elegí un monto:"
                   )}
                 </p>
+                {avisoDe("reg-multa")}
                 <div className="flex flex-wrap gap-2">
                   {MULTAS_RAPIDAS.map((m) => (
                     <button
                       key={m}
                       type="button"
-                      onClick={() => setMulta(String(m))}
+                      onClick={() => {
+                        setMulta(String(m));
+                        corrigio("reg-multa");
+                      }}
                       className={cn(
-                        "min-h-10 rounded-full border px-3 text-sm font-medium tabular transition-colors",
+                        "min-h-11 rounded-full border px-3 text-sm font-medium tabular transition-colors",
                         montoMulta === m ? "border-primary bg-accent" : "bg-card hover:bg-accent/60"
                       )}
                     >
@@ -525,15 +622,16 @@ export function FormRegistro({
                   id="reg-vence"
                   type="date"
                   value={vence}
-                  min={fecha}
+                  min={fechaHoy}
                   onChange={(e) => {
                     setVence(e.target.value);
-                    setVenceTocado(true);
+                    corrigio("reg-vence");
                   }}
                   className="h-12 text-base md:text-base"
                 />
+                {avisoDe("reg-vence")}
                 <p className="text-sm text-muted-foreground">
-                  Si no lo cambiás, vence a los {DIAS_VENCIMIENTO_MULTA} días.
+                  Si no lo cambiás, vence en {DIAS_VENCIMIENTO_MULTA} días (contando desde hoy).
                 </p>
               </div>
             </div>
@@ -585,20 +683,18 @@ export function FormRegistro({
         </section>
       ) : null}
 
-      {error ? (
-        <p role="alert" className="rounded-md bg-pendiente-suave px-4 py-3 text-sm font-medium text-pendiente">
-          {error}
-        </p>
-      ) : null}
+      {error && !campoError ? <AvisoError mensaje={error} /> : null}
 
+      {/* Siempre se puede tocar: si falta algo, el cartel de arriba dice qué. Un nombre
+          largo baja de renglón en vez de cortarse (es a quién le llega). */}
       <Button
         type="submit"
         size="lg"
-        disabled={pendiente || !cliente || !titulo.trim()}
-        className="h-14 w-full text-base font-semibold"
+        disabled={pendiente}
+        className="h-auto min-h-14 w-full gap-2 py-3 text-base font-semibold whitespace-normal"
       >
         {pendiente ? <Spinner className="size-5" /> : <Send className="size-5" strokeWidth={2} />}
-        <span className="truncate">{textoBoton}</span>
+        <span className="min-w-0 text-center leading-snug break-words">{textoBoton}</span>
       </Button>
     </form>
   );

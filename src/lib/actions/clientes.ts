@@ -19,6 +19,7 @@ import {
   type CategoriaCliente,
 } from "@/lib/segmentos";
 import { etiquetaEspacio } from "@/components/mapa/geometria";
+import { conceptoSigueConCategoria } from "@/components/clientes/constantes";
 
 /* ------------------------------------------------------------------ */
 /* Aprobación obligatoria (contrato Fase 2 §2, Fase 3 §4.7)            */
@@ -137,6 +138,13 @@ async function clienteGestionable(
     categoria,
     etiqueta: `${data.nombre} (N° ${data.codigo})`,
   };
+}
+
+/** Un concepto mensual que no es de la categoría del cliente (misma regla que 0024). */
+function mensajeNoCorresponde(categoria: CategoriaCliente): string {
+  return categoria === "ambulante"
+    ? "Al ambulante se le cobra por día: no paga conceptos mensuales."
+    : `Ese concepto no le corresponde a un ${LABEL_CATEGORIA[categoria].toLowerCase()}. Solo se puede dejar de facturar.`;
 }
 
 /** "teléfono", "teléfono y email", "teléfono, email y dirección". */
@@ -433,9 +441,41 @@ export async function editarCliente(
     const de = LABEL_CATEGORIA[actual.categoria as CategoriaCliente].toLowerCase();
     const a = LABEL_CATEGORIA[categoriaFinal as CategoriaCliente].toLowerCase();
     const resto = camposCambiados.filter((c) => c !== "categoria" && c !== "es_socio");
+    // Lo mensual que deja de facturarse al aplicarse (private.aplicar_cambio, 0024): el
+    // Líder lo lee en Aprobaciones antes de aprobar.
+    const { data: activos } = await supabase
+      .from("cliente_conceptos")
+      .select("conceptos(codigo, tipo, segmento)")
+      .eq("cliente_id", id)
+      .eq("activo", true);
+    const dejaDe = (activos ?? [])
+      .flatMap((i) => (i.conceptos ? [i.conceptos] : []))
+      .filter(
+        (c) =>
+          c.tipo === "recurrente" &&
+          !conceptoSigueConCategoria(c.segmento, categoriaFinal as CategoriaCliente)
+      )
+      .map((c) => c.codigo);
+    const efectos = dejaDe.length > 0 ? [`deja de facturarse ${enumerar(dejaDe)}`] : [];
+    if (categoriaFinal === "ambulante") {
+      // También se liberan sus lugares del plano y se desactivan sus medidores (0024). El
+      // Jefe no lee espacios: lugares_del_cliente devuelve los del cliente que gestiona.
+      const [{ data: lugares }, { data: medidores }] = await Promise.all([
+        supabase.rpc("lugares_del_cliente", { p_cliente: id }),
+        supabase.from("medidores").select("numero").eq("cliente_id", id).eq("activo", true).order("numero"),
+      ]);
+      if (lugares && lugares.length > 0)
+        efectos.push(
+          `se libera${lugares.length > 1 ? "n" : ""} ${enumerar(lugares.map((e) => etiquetaEspacio(e)))}`
+        );
+      if (medidores && medidores.length > 0)
+        efectos.push(
+          `se desactiva${medidores.length > 1 ? "n los medidores" : " el medidor"} N° ${enumerar(medidores.map((m) => m.numero))}`
+        );
+    }
     resumen = `Pasar a ${actual.nombre} de ${de} a ${a}${
       resto.length > 0 ? ` y cambiar ${enumerar(resto.map((c) => LABEL_CAMPO[c]))}` : ""
-    }`;
+    }${efectos.length > 0 ? ` (${efectos.join("; ")})` : ""}`;
   } else {
     resumen = `Cambiar ${enumerar(camposCambiados.map((c) => LABEL_CAMPO[c]))} de ${actual.nombre}`;
   }
@@ -607,6 +647,43 @@ export async function registrarDeudaAnterior(
   return ok(undefined);
 }
 
+/**
+ * Anula una deuda anterior (RD) cargada por error, con motivo (RPC anular_cargo_manual,
+ * 0024): queda "Anulado", con quién, cuándo y por qué. Si se le había aplicado saldo a
+ * favor, vuelve al cliente; si ya se cobró en caja, pide anular primero ese cobro.
+ * Administración (sobre puesteros) y el Líder, igual que el alta (§7.3).
+ */
+export async function anularCargoManual(
+  input: unknown
+): Promise<ActionResult<{ repetido: boolean; creditoDevuelto: number }>> {
+  await requireRol("admin", "lider");
+  const parsed = z
+    .object({
+      cargoId: z.uuid("No encontramos ese cargo. Recargá la página."),
+      clienteId: z.uuid("No encontramos el cliente. Recargá la página."),
+      motivo: z
+        .string("Contá por qué se anula (ej.: se tipeó mal el monto).")
+        .trim()
+        .min(3, "Contá por qué se anula (ej.: se tipeó mal el monto).")
+        .max(300, "El motivo es demasiado largo"),
+    })
+    .safeParse(input);
+  if (!parsed.success) return fallo(parsed.error.issues[0].message);
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("anular_cargo_manual", {
+    p_cargo: parsed.data.cargoId,
+    p_motivo: parsed.data.motivo,
+  });
+  if (error) return fallo(error.message);
+
+  const r = (data ?? {}) as { repetido?: boolean; credito_devuelto?: number | string };
+  revalidatePath(`/clientes/${parsed.data.clienteId}`);
+  revalidatePath("/clientes");
+  revalidatePath("/cobranza", "layout");
+  return ok({ repetido: Boolean(r.repetido), creditoDevuelto: Number(r.credito_devuelto ?? 0) });
+}
+
 /** Aplica el saldo a favor del cliente a sus cargos pendientes (RPC). */
 export async function aplicarSaldoFavor(
   input: unknown
@@ -649,11 +726,13 @@ export async function agregarConceptoCliente(
   if (!cliente.ok) return fallo(cliente.error);
   const { data: concepto } = await supabase
     .from("conceptos")
-    .select("id, nombre")
+    .select("id, nombre, tipo, segmento")
     .eq("id", parsed.data.conceptoId)
     .eq("org_id", perfil.org_id)
     .maybeSingle();
   if (!concepto) return fallo("Ese concepto no existe. Recargá la página y probá de nuevo.");
+  if (concepto.tipo === "recurrente" && !conceptoSigueConCategoria(concepto.segmento, cliente.categoria))
+    return fallo(mensajeNoCorresponde(cliente.categoria));
 
   const res = await solicitarCambio(supabase, {
     entidad: "cliente_concepto",
@@ -699,12 +778,20 @@ export async function editarConceptoCliente(
   if (!cliente.ok) return fallo(cliente.error);
   const { data: item } = await supabase
     .from("cliente_conceptos")
-    .select("id, cliente_id, cantidad, activo, conceptos(nombre)")
+    .select("id, cliente_id, cantidad, activo, conceptos(nombre, tipo, segmento)")
     .eq("id", parsed.data.id)
     .eq("org_id", perfil.org_id)
     .maybeSingle();
   if (!item || item.cliente_id !== parsed.data.clienteId)
     return fallo("Ese concepto ya no está en la carpeta del cliente.");
+  // Lo que ya no corresponde a su categoría solo se puede apagar (la base lo rechaza igual).
+  const quedaActivo = parsed.data.activo ?? item.activo;
+  if (
+    quedaActivo &&
+    item.conceptos?.tipo === "recurrente" &&
+    !conceptoSigueConCategoria(item.conceptos.segmento, cliente.categoria)
+  )
+    return fallo(mensajeNoCorresponde(cliente.categoria));
 
   const concepto = item.conceptos?.nombre ?? "el concepto";
 

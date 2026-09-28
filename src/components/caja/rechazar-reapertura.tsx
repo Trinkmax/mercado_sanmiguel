@@ -17,6 +17,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
+import { AlertaError } from "@/components/cobranza/alerta-error";
 import { llamarAccion } from "@/lib/llamar-accion";
 
 /** Rechaza un pedido de reapertura; el motivo es opcional y queda en la bitácora. */
@@ -29,13 +30,15 @@ export function BotonRechazarReapertura({
 }) {
   const [abierto, setAbierto] = useState(false);
   const [motivo, setMotivo] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const [enviando, startTransition] = useTransition();
 
   function confirmar() {
+    setError(null);
     startTransition(async () => {
       const res = await llamarAccion(() => rechazarReaperturaCaja(cajaId, motivo.trim() || undefined));
       if (!res.ok) {
-        toast.error(res.error);
+        setError(res.error);
         return;
       }
       toast.success("Pedido de reapertura rechazado. La caja sigue cerrada.");
@@ -48,8 +51,12 @@ export function BotonRechazarReapertura({
     <Dialog
       open={abierto}
       onOpenChange={(v) => {
+        if (enviando) return;
         setAbierto(v);
-        if (!v) setMotivo("");
+        if (!v) {
+          setMotivo("");
+          setError(null);
+        }
       }}
     >
       <DialogTrigger asChild>
@@ -58,8 +65,8 @@ export function BotonRechazarReapertura({
           Rechazar
         </Button>
       </DialogTrigger>
-      <DialogContent className="gap-5 p-6 sm:max-w-md">
-        <DialogHeader>
+      <DialogContent className="max-h-[92dvh] gap-5 overflow-y-auto p-6 sm:max-w-md">
+        <DialogHeader className="pr-8">
           <DialogTitle className="text-xl">Rechazar el pedido de reapertura</DialogTitle>
           <DialogDescription className="text-base">{descripcion}</DialogDescription>
         </DialogHeader>
@@ -76,6 +83,7 @@ export function BotonRechazarReapertura({
             className="min-h-20 text-base md:text-base"
           />
         </div>
+        {error ? <AlertaError error={error} titulo="No se pudo rechazar el pedido" /> : null}
         <DialogFooter>
           <Button
             variant="outline"

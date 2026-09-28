@@ -5,7 +5,7 @@ import { CajaRegistradora } from "@/components/shared/iconos";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Money } from "@/components/shared/money";
 import { ChartCobranzaDiaria } from "@/components/charts/chart-cobranza-diaria";
-import { contar, resumenDelMes, serieUltimos14, type Supabase } from "./datos";
+import { cajasParaValidar, contar, resumenDelMes, serieUltimos14, type Supabase } from "./datos";
 import { BarraConcepto, BarraEstimado, TarjetaAviso, type Aviso } from "./bloques";
 
 /**
@@ -19,17 +19,11 @@ export async function InicioTesoreria({ perfil, supabase }: { perfil: Perfil; su
   const periodo = periodoActual();
   const hoy = hoyISO();
 
-  const [resumen, serie, cajasParaValidar, transferencias, chequesListos, gastosVencidos] =
+  const [resumen, serie, cajasValidar, transferenciasCobros, chequesListos, gastosVencidos, transferenciasBono] =
     await Promise.all([
       resumenDelMes(supabase, periodo),
-      serieUltimos14(supabase, org),
-      contar(
-        supabase
-          .from("cajas")
-          .select("id", { count: "exact", head: true })
-          .eq("org_id", org)
-          .in("estado", ["cerrada", "integrada"])
-      ),
+      serieUltimos14(supabase),
+      cajasParaValidar(supabase, org),
       contar(
         supabase
           .from("pagos")
@@ -55,7 +49,18 @@ export async function InicioTesoreria({ perfil, supabase }: { perfil: Perfil; su
           .eq("estado", "pendiente")
           .lt("vencimiento", hoy)
       ),
+      // Bono camioneros cobrado por transferencia: también se cruza con el banco (J2).
+      contar(
+        supabase
+          .from("canon_camiones")
+          .select("id", { count: "exact", head: true })
+          .eq("org_id", org)
+          .eq("medio", "transferencia")
+          .eq("anulado", false)
+          .eq("conciliado", false)
+      ),
     ]);
+  const transferencias = transferenciasCobros + transferenciasBono;
 
   // El bono camioneros (BC) no tiene "estimado": se cobra en el momento. Va aparte.
   const conceptos = resumen.filter((f) => f.codigo !== "BC");
@@ -70,12 +75,15 @@ export async function InicioTesoreria({ perfil, supabase }: { perfil: Perfil; su
   const avisos: Aviso[] = [
     {
       clave: "validar",
-      n: cajasParaValidar,
+      n: cajasValidar.n,
       singular: "caja para contar y validar",
       plural: "cajas para contar y validar",
-      descripcion: "Contá el efectivo y dales el OK definitivo.",
-      href: "/caja",
-      cta: "Validar",
+      descripcion:
+        cajasValidar.n === 1
+          ? "Contá el efectivo y dale el OK definitivo."
+          : "Contá el efectivo de cada una y dales el OK definitivo.",
+      href: cajasValidar.href,
+      cta: cajasValidar.n === 1 ? "Validar" : "Ver cajas",
       icono: CajaRegistradora,
       tono: "parcial" as const,
     },

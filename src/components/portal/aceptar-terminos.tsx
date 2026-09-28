@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Spinner } from "@/components/ui/spinner";
+import { AvisoError } from "@/components/comunicaciones/aviso-error";
 import { llamarAccion } from "@/lib/llamar-accion";
 
 /**
@@ -30,14 +31,20 @@ export function AceptarTerminos({
 }) {
   const router = useRouter();
   const [acepta, setAcepta] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [pendiente, startTransition] = useTransition();
 
   function confirmar() {
-    if (!acepta) return;
+    setError(null);
+    if (!acepta) {
+      // El botón no queda gris sin explicación: dice qué falta.
+      setError("Marcá la casilla “Leí y acepto los términos y condiciones” para entrar.");
+      return;
+    }
     startTransition(async () => {
       const res = await llamarAccion(() => aceptarTerminos({ terminosId, acepta: true }));
       if (!res.ok) {
-        toast.error(res.error);
+        setError(res.error);
         return;
       }
       toast.success("Términos aceptados. ¡Bienvenido!");
@@ -81,7 +88,10 @@ export function AceptarTerminos({
       >
         <Checkbox
           checked={acepta}
-          onCheckedChange={(v) => setAcepta(v === true)}
+          onCheckedChange={(v) => {
+            setAcepta(v === true);
+            setError(null);
+          }}
           className="mt-0.5 size-6 [&_svg]:size-4"
           aria-label="Leí y acepto los términos y condiciones"
         />
@@ -90,10 +100,12 @@ export function AceptarTerminos({
         </span>
       </label>
 
+      {error ? <AvisoError mensaje={error} /> : null}
+
       <Button
         size="lg"
         className="h-14 w-full text-lg font-semibold"
-        disabled={!acepta || pendiente}
+        disabled={pendiente}
         onClick={confirmar}
       >
         {pendiente ? (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
   ArrowRight,
@@ -14,8 +14,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { crearMovimiento } from "@/lib/actions/tesoreria";
-import { formatMoneda, hoyISO, type Moneda } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import { formatMoneda, hoyISO, parseMonto, sanitizarMonto, type Moneda } from "@/lib/format";
+import { cn, uuidV4 } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -35,6 +35,7 @@ import {
   type Cuenta,
   type TipoMovimiento,
 } from "@/components/tesoreria/tipos";
+import { AlertaError } from "@/components/cobranza/alerta-error";
 import { llamarAccion } from "@/lib/llamar-accion";
 
 /** Saldos actuales por moneda (para la vista previa "antes → después"). */
@@ -124,10 +125,14 @@ export function AccionesRapidas({
   const [descripcion, setDescripcion] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pendiente, startTransition] = useTransition();
+  // Clave del movimiento: la MISMA hasta que se guarde bien (un corte de red no la
+  // renueva, así el reintento no registra dos veces el depósito).
+  const refMov = useRef<string | null>(null);
 
   const hoy = hoyISO();
 
   function abrir(a: Accion | null) {
+    refMov.current = null;
     setAccion(a);
     setSub("comision");
     setMoneda("ARS");
@@ -143,8 +148,8 @@ export function AccionesRapidas({
   }
 
   const tipo = accion ? tipoDeAccion(accion, sub) : null;
-  const montoNum = Number(monto || 0);
-  const comisionNum = conComision ? Number(comision || 0) : 0;
+  const montoNum = parseMonto(monto);
+  const comisionNum = conComision ? parseMonto(comision) : 0;
   const cuentaEfectiva: Cuenta = tipo === "deposito" ? "efectivo" : tipo === "extraccion" ? "banco" : cuenta;
   const destino: Cuenta | null = tipo === "deposito" ? "banco" : tipo === "extraccion" ? "efectivo" : null;
 
@@ -173,6 +178,8 @@ export function AccionesRapidas({
   function guardar() {
     if (!tipo) return;
     setError(null);
+    refMov.current ??= uuidV4();
+    const ref = refMov.current;
     startTransition(async () => {
       const res = await llamarAccion(() => crearMovimiento({
         tipo,
@@ -183,17 +190,32 @@ export function AccionesRapidas({
         fecha,
         descripcion: descripcion.trim() || undefined,
         comision: tipo === "deposito" && conComision ? comisionNum : undefined,
+        ref,
       }));
       if (!res.ok) {
+        // Todo queda como estaba (y con la misma clave) para tocar de nuevo.
         setError(res.error);
         return;
       }
+      refMov.current = null;
       setAbierto(false);
+      if (res.data.repetido) {
+        toast.info("Ese movimiento ya estaba registrado (del intento anterior): revisalo en la lista.");
+        return;
+      }
       toast.success(
         `Registraste ${LABEL_TIPO_MOVIMIENTO[tipo].toLowerCase()} de ${formatMoneda(montoNum, moneda)}` +
           (res.data.filas > 1 ? ` y la comisión de ${formatMoneda(comisionNum, moneda)}.` : ".")
       );
     });
+  }
+
+  /**
+   * Al corregir el formulario después de un error se borra el cartel, pero la clave NO
+   * cambia: si el intento anterior sí llegó a guardarse, el nuevo no lo duplica.
+   */
+  function tocar() {
+    setError(null);
   }
 
   const textoBoton = !tipo
@@ -228,7 +250,7 @@ export function AccionesRapidas({
 
       <Dialog open={abierto} onOpenChange={(v) => !pendiente && setAbierto(v)}>
         <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-lg">
-          <DialogHeader>
+          <DialogHeader className="pr-8">
             <DialogTitle className="text-lg">
               {accion ? ACCIONES.find((a) => a.valor === accion)?.titulo : "¿Qué pasó?"}
             </DialogTitle>
@@ -246,8 +268,11 @@ export function AccionesRapidas({
                     <button
                       type="button"
                       onClick={() => {
+                        // Otro tipo de movimiento: es otro registro (clave nueva).
+                        refMov.current = null;
                         setAccion(a.valor);
                         setCuenta(cuentaInicial(a.valor));
+                        setError(null);
                       }}
                       className="flex min-h-14 w-full items-center gap-3 px-4 py-2 text-left hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
                     >
@@ -322,18 +347,18 @@ export function AccionesRapidas({
                 </Label>
                 <Input
                   id="mov-monto"
-                  inputMode="numeric"
+                  inputMode="decimal"
                   autoComplete="off"
                   placeholder="0"
                   value={monto}
                   onChange={(e) => {
-                    setMonto(e.target.value.replace(/\D/g, "").slice(0, 12));
-                    setError(null);
+                    setMonto(sanitizarMonto(e.target.value).slice(0, 15));
+                    tocar();
                   }}
                   className="h-13 text-xl font-semibold tabular"
                 />
                 <p className="min-h-5 text-base font-semibold tabular text-muted-foreground">
-                  {montoNum > 0 ? formatMoneda(montoNum, moneda) : ""}
+                  {montoNum > 0 ? formatMoneda(montoNum, moneda) : "Los centavos van con coma: 1234,50"}
                 </p>
               </div>
 
@@ -355,13 +380,21 @@ export function AccionesRapidas({
                       </Label>
                       <Input
                         id="mov-comision"
-                        inputMode="numeric"
+                        inputMode="decimal"
                         autoComplete="off"
                         placeholder="0"
                         value={comision}
-                        onChange={(e) => setComision(e.target.value.replace(/\D/g, "").slice(0, 12))}
+                        onChange={(e) => {
+                          setComision(sanitizarMonto(e.target.value).slice(0, 15));
+                          tocar();
+                        }}
                         className="h-12 text-lg tabular"
                       />
+                      {comisionNum > 0 ? (
+                        <p className="text-sm font-medium tabular text-muted-foreground">
+                          {formatMoneda(comisionNum, moneda)}
+                        </p>
+                      ) : null}
                       {comisionNum > 0 && montoNum > 0 && comisionNum >= montoNum ? (
                         <p className="text-sm font-medium text-pendiente">
                           La comisión no puede ser mayor que el depósito.
@@ -434,7 +467,11 @@ export function AccionesRapidas({
 
               <button
                 type="button"
-                onClick={() => setAccion(null)}
+                onClick={() => {
+                  refMov.current = null;
+                  setAccion(null);
+                  setError(null);
+                }}
                 className="min-h-11 text-sm font-medium text-primary hover:underline"
               >
                 Elegir otro movimiento
@@ -442,17 +479,13 @@ export function AccionesRapidas({
             </div>
           )}
 
-          {error ? (
-            <p role="alert" className="rounded-lg bg-pendiente-suave px-4 py-3 text-sm font-medium text-pendiente">
-              {error}
-            </p>
-          ) : null}
+          {error ? <AlertaError error={error} titulo="No se pudo registrar" /> : null}
 
           {accion ? (
             <DialogFooter>
               <Button
                 size="lg"
-                className="h-13 w-full text-base font-semibold"
+                className="h-auto min-h-13 w-full py-2.5 text-base leading-snug font-semibold whitespace-normal"
                 disabled={pendiente || !listo}
                 onClick={guardar}
               >

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { requireStaff } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { SIN_CONEXION } from "@/lib/sesion";
 import { formatFechaHora } from "@/lib/format";
 import { LABEL_ROL } from "@/lib/roles";
 import { Marca } from "@/components/shared/marca";
@@ -16,7 +17,10 @@ export const metadata = { title: "Solicitud — formulario" };
 
 /**
  * Formulario imprimible de una solicitud (con lugar para el "recibido" y la resolución).
- * Lo de Portería lo recibe el Jefe de Portería; el resto, Administración.
+ * "Recibido por" sigue el camino real: lo que cargó un portero y pasó por el Jefe de Portería
+ * lo recibe el Jefe; el resto de lo de Portería (avisos del propio Jefe desde el mapa, o lo
+ * que se cargó sin un Jefe activo) va al Líder de Procesos; lo demás, Administración (como en
+ * fase 2: es quien recibe el papel en la ventanilla).
  */
 export default async function ImprimirSolicitudPage({
   params,
@@ -27,13 +31,15 @@ export default async function ImprimirSolicitudPage({
   const perfil = await requireStaff();
   const supabase = await createClient();
 
-  const { data: s } = await supabase
+  const { data: s, error: errorSolicitud } = await supabase
     .from("solicitudes")
     .select(
-      "id, numero, tipo, asunto, detalle, origen, estado, referencia, resolucion, resolucion_de, creada_por, creada_en, resuelta_en, cliente:clientes(nombre, codigo, apodo)"
+      "id, numero, tipo, asunto, detalle, origen, estado, referencia, resolucion, resolucion_de, elevada_en, creada_por, creada_en, resuelta_en, cliente:clientes(nombre, codigo, apodo)"
     )
     .eq("id", id)
     .maybeSingle();
+  // Si la base no respondió no se muestra "no existe": la pantalla de error reintenta sola.
+  if (errorSolicitud && errorSolicitud.code !== "22P02") throw new Error(SIN_CONEXION); // 22P02: id inválido → 404
   if (!s) notFound();
 
   const [orgRes, autorRes, configRes] = await Promise.all([
@@ -57,7 +63,15 @@ export default async function ImprimirSolicitudPage({
   ]);
 
   const autor = autorRes.data;
-  const recibe = s.origen === "porteria" ? "Jefe de Portería" : "Administración";
+  const pasoPorJefe =
+    s.origen === "porteria" &&
+    autor?.rol === "porteria" &&
+    (s.estado === "con_jefe" || Boolean(s.elevada_en) || s.resolucion_de === "jefe");
+  const recibe = pasoPorJefe
+    ? "Jefe de Portería"
+    : s.origen === "porteria"
+      ? "Líder de Procesos"
+      : "Administración";
   const tituloResolucion =
     s.estado === "rechazada"
       ? "Motivo del rechazo"

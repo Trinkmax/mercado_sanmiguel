@@ -6,7 +6,6 @@ import { createClient } from "@/lib/supabase/server";
 import { requireRol } from "@/lib/auth";
 import { ok, fallo, type ActionResult } from "@/lib/actions/result";
 import { hoyISO } from "@/lib/format";
-import type { TablesInsert } from "@/lib/database.types";
 
 /* Tesorería (J2, J3, J6): Tesorería y el Líder de Procesos (§1.3 D-P2). */
 
@@ -61,9 +60,10 @@ export async function validarCaja(
 
 /* ---------------- Movimientos de tesorería (J6) ---------------- */
 /*
- * Efecto en el flujo (flujo_caja, 0018): ajuste (con signo) e ingreso suman en su
+ * Efecto en el flujo (flujo_caja): ajuste (con signo) e ingreso suman en su
  * cuenta; comisión, impuesto, débito fiscal y egreso restan; depósito saca del
  * efectivo y pone en el banco; extracción al revés. Los dólares van aparte.
+ * Todo pasa por RPC (0026): nada se borra, se anula con motivo y queda el rastro.
  */
 
 const TIPOS_MOVIMIENTO = [
@@ -77,12 +77,25 @@ const TIPOS_MOVIMIENTO = [
   "egreso",
 ] as const;
 
+/** Pesos o dólares con hasta 2 decimales. */
+const montoSchema = z
+  .number("Poné el monto.")
+  .positive("El monto tiene que ser mayor a cero.")
+  .max(999_999_999_999, "El monto es demasiado grande.")
+  .transform((n) => Math.round(n * 100) / 100);
+
+const motivoSchema = z
+  .string()
+  .trim()
+  .min(3, "Contá por qué (por ejemplo: se cargó dos veces).")
+  .max(300, "El motivo es muy largo (máximo 300 letras).");
+
 const movimientoSchema = z
   .object({
     tipo: z.enum(TIPOS_MOVIMIENTO, "Elegí qué pasó."),
     moneda: z.enum(["ARS", "USD"], "Elegí pesos o dólares."),
     cuenta: z.enum(["efectivo", "banco"], "Elegí efectivo o banco."),
-    monto: z.number("Poné el monto.").positive("El monto tiene que ser mayor a cero."),
+    monto: montoSchema,
     /** Solo ajustes: true = resta, false = suma. */
     resta: z.boolean().optional(),
     fecha: z.iso
@@ -94,7 +107,13 @@ const movimientoSchema = z
       .max(200, "La descripción es muy larga (máximo 200 letras).")
       .optional(),
     /** Solo depósitos: comisión que cobró el banco por el depósito (misma moneda, sale del banco). */
-    comision: z.number().min(0, "La comisión no puede ser negativa.").optional(),
+    comision: z
+      .number()
+      .min(0, "La comisión no puede ser negativa.")
+      .transform((n) => Math.round(n * 100) / 100)
+      .optional(),
+    /** Clave del formulario: un reintento después de un corte de red no duplica el movimiento. */
+    ref: z.uuid("Actualizá la página y probá de nuevo."),
   })
   .refine((d) => d.tipo !== "deposito" || (d.comision ?? 0) < d.monto, {
     message: "La comisión no puede ser mayor que el depósito.",
@@ -102,87 +121,61 @@ const movimientoSchema = z
 
 export async function crearMovimiento(
   input: unknown
-): Promise<ActionResult<{ filas: number }>> {
-  const perfil = await requireRol("tesoreria", "lider");
+): Promise<ActionResult<{ filas: number; repetido: boolean }>> {
+  await requireRol("tesoreria", "lider");
   const parsed = movimientoSchema.safeParse(input);
   if (!parsed.success) return fallo(parsed.error.issues[0].message);
   const d = parsed.data;
 
-  // Depósito siempre efectivo → banco; extracción banco → efectivo (check mov_tes_cuentas).
-  const cuenta =
-    d.tipo === "deposito" ? "efectivo" : d.tipo === "extraccion" ? "banco" : d.cuenta;
-  const cuentaDestino: "efectivo" | "banco" | null =
-    d.tipo === "deposito" ? "banco" : d.tipo === "extraccion" ? "efectivo" : null;
-  const monto = d.tipo === "ajuste" && d.resta ? -d.monto : d.monto;
-  const conComision = d.tipo === "deposito" && (d.comision ?? 0) > 0;
-  const grupoId = conComision ? crypto.randomUUID() : null;
-
-  const filas: TablesInsert<"movimientos_tesoreria">[] = [
-    {
-      org_id: perfil.org_id,
-      fecha: d.fecha,
-      tipo: d.tipo,
-      descripcion: d.descripcion || null,
-      monto,
-      moneda: d.moneda,
-      cuenta,
-      cuenta_destino: cuentaDestino,
-      grupo_id: grupoId,
-    },
-  ];
-  if (conComision) {
-    filas.push({
-      org_id: perfil.org_id,
-      fecha: d.fecha,
-      tipo: "comision",
-      descripcion: "Comisión por el depósito",
-      monto: d.comision ?? 0,
-      moneda: d.moneda,
-      cuenta: "banco",
-      cuenta_destino: null,
-      grupo_id: grupoId,
-    });
-  }
-
   const supabase = await createClient();
-  const { error } = await supabase.from("movimientos_tesoreria").insert(filas);
+  const { data, error } = await supabase.rpc("registrar_movimiento_tesoreria", {
+    p_tipo: d.tipo,
+    p_moneda: d.moneda,
+    p_cuenta: d.cuenta,
+    p_monto: d.tipo === "ajuste" && d.resta ? -d.monto : d.monto,
+    p_fecha: d.fecha,
+    ...(d.descripcion ? { p_descripcion: d.descripcion } : {}),
+    ...(d.tipo === "deposito" && (d.comision ?? 0) > 0 ? { p_comision: d.comision } : {}),
+    p_ref: d.ref,
+  });
   if (error) return fallo(error);
 
+  const r = (data ?? {}) as { filas?: number; repetido?: boolean };
   revalidarTesoreria();
-  return ok({ filas: filas.length });
+  return ok({ filas: Number(r.filas ?? 1), repetido: Boolean(r.repetido) });
 }
 
-/** Borra un movimiento (y su comisión asociada, si la tiene). Los ajustes de caja no se borran acá. */
-export async function borrarMovimiento(id: string): Promise<ActionResult<{ borrados: number }>> {
-  const perfil = await requireRol("tesoreria", "lider");
-  const parsed = z.uuid("El movimiento no es válido. Actualizá la página.").safeParse(id);
+/**
+ * Anula un movimiento con motivo (no se borra: queda tachado, con quién y por qué, y
+ * lo ve el Líder en Correcciones). La comisión de un depósito se anula sola; el
+ * depósito se lleva su comisión. Los ajustes de caja se borran desde la caja.
+ */
+export async function anularMovimiento(
+  input: unknown
+): Promise<ActionResult<{ anulados: number; comision: number | null; repetido: boolean }>> {
+  await requireRol("tesoreria", "lider");
+  const parsed = z
+    .object({
+      id: z.uuid("El movimiento no es válido. Actualizá la página."),
+      motivo: motivoSchema,
+    })
+    .safeParse(input);
   if (!parsed.success) return fallo(parsed.error.issues[0].message);
 
   const supabase = await createClient();
-  const { data: mov, error: errorLeer } = await supabase
-    .from("movimientos_tesoreria")
-    .select("id, grupo_id, caja_id")
-    .eq("id", parsed.data)
-    .eq("org_id", perfil.org_id)
-    .maybeSingle();
-  if (errorLeer) return fallo(errorLeer);
-  if (!mov) return fallo("No encontramos el movimiento. Actualizá la página.");
-  if (mov.caja_id) {
-    return fallo("Es un ajuste de caja: se borra desde la caja de ese día, con motivo.");
-  }
-
-  let consulta = supabase
-    .from("movimientos_tesoreria")
-    .delete({ count: "exact" })
-    .eq("org_id", perfil.org_id)
-    .is("caja_id", null);
-  consulta = mov.grupo_id ? consulta.eq("grupo_id", mov.grupo_id) : consulta.eq("id", mov.id);
-  const { error, count } = await consulta;
+  const { data, error } = await supabase.rpc("anular_movimiento_tesoreria", {
+    p_id: parsed.data.id,
+    p_motivo: parsed.data.motivo,
+  });
   if (error) return fallo(error);
-  if (!count) return fallo("No se pudo borrar el movimiento. Actualizá la página.");
 
+  const r = (data ?? {}) as { anulados?: number; comision?: number | null; repetido?: boolean };
   revalidarTesoreria();
-  return ok({ borrados: count });
+  return ok({
+    anulados: Number(r.anulados ?? 1),
+    comision: r.comision === null || r.comision === undefined ? null : Number(r.comision),
+    repetido: Boolean(r.repetido),
+  });
 }
 
 /* ---------------- Saldos iniciales (por cuenta y moneda) ---------------- */
@@ -190,7 +183,11 @@ export async function borrarMovimiento(id: string): Promise<ActionResult<{ borra
 const saldoSchema = z.object({
   medio: z.enum(["efectivo", "transferencia"], "Elegí efectivo o banco."),
   moneda: z.enum(["ARS", "USD"], "Elegí pesos o dólares."),
-  monto: z.number("Poné el monto que había.").min(0, "El monto no puede ser negativo."),
+  monto: z
+    .number("Poné el monto que había.")
+    .min(0, "El monto no puede ser negativo.")
+    .max(999_999_999_999, "El monto es demasiado grande.")
+    .transform((n) => Math.round(n * 100) / 100),
   fecha: z.iso
     .date("Elegí desde qué día.")
     .refine((f) => f <= hoyISO(), "La fecha no puede ser futura."),
@@ -199,39 +196,40 @@ const saldoSchema = z.object({
     .trim()
     .max(300, "La nota es muy larga (máximo 300 letras).")
     .optional(),
+  /** Obligatorio al corregir el monto o la fecha de un saldo ya cargado (lo exige la base). */
+  motivo: z.string().trim().max(300, "El motivo es muy largo (máximo 300 letras).").optional(),
 });
 
 /**
  * Saldo al comenzar el día `fecha`: el flujo de esa cuenta cuenta desde ese día
- * inclusive. `medio` "transferencia" = banco.
+ * inclusive. `medio` "transferencia" = banco. Corregirlo pide motivo y deja el
+ * valor anterior → nuevo en el rastro.
  */
 export async function guardarSaldoInicial(
   medio: "efectivo" | "transferencia",
   moneda: "ARS" | "USD",
   monto: number,
   fecha: string,
-  notas?: string
-): Promise<ActionResult> {
-  const perfil = await requireRol("tesoreria", "lider");
-  const parsed = saldoSchema.safeParse({ medio, moneda, monto, fecha, notas });
+  notas?: string,
+  motivo?: string
+): Promise<ActionResult<{ corregido: boolean }>> {
+  await requireRol("tesoreria", "lider");
+  const parsed = saldoSchema.safeParse({ medio, moneda, monto, fecha, notas, motivo });
   if (!parsed.success) return fallo(parsed.error.issues[0].message);
 
   const supabase = await createClient();
-  const { error } = await supabase.from("saldos_iniciales").upsert(
-    {
-      org_id: perfil.org_id,
-      medio: parsed.data.medio,
-      moneda: parsed.data.moneda,
-      monto: parsed.data.monto,
-      fecha: parsed.data.fecha,
-      notas: parsed.data.notas || null,
-    },
-    { onConflict: "org_id,medio,moneda" }
-  );
+  const { data, error } = await supabase.rpc("guardar_saldo_inicial", {
+    p_medio: parsed.data.medio,
+    p_moneda: parsed.data.moneda,
+    p_monto: parsed.data.monto,
+    p_fecha: parsed.data.fecha,
+    ...(parsed.data.notas ? { p_notas: parsed.data.notas } : {}),
+    ...(parsed.data.motivo ? { p_motivo: parsed.data.motivo } : {}),
+  });
   if (error) return fallo(error);
 
   revalidarTesoreria();
-  return ok(undefined);
+  return ok({ corregido: Boolean((data as { corregido?: boolean } | null)?.corregido) });
 }
 
 /* ---------------- Conciliación bancaria: transferencias ---------------- */
@@ -290,6 +288,41 @@ export async function desconciliarTransferencia(id: string): Promise<ActionResul
   if (error) return fallo(error);
   if (!data || data.length === 0)
     return fallo("Esa transferencia ya no figura como conciliada. Actualizá la página.");
+
+  revalidarTesoreria();
+  return ok(undefined);
+}
+
+/* ---------------- Conciliación: bono camioneros por transferencia (J2) ---------------- */
+
+const idsCanonSchema = z
+  .array(z.uuid("Hay una transferencia que no se reconoce. Actualizá la página."))
+  .min(1, "Elegí al menos una transferencia.")
+  .max(200, "Conciliá de a 200 transferencias como máximo.");
+
+/** Marca como conciliados los cobros de bono camioneros por transferencia ya vistos en el banco. */
+export async function conciliarCanon(ids: string[]): Promise<ActionResult<{ conciliadas: number }>> {
+  await requireRol("tesoreria", "lider");
+  const parsed = idsCanonSchema.safeParse(ids);
+  if (!parsed.success) return fallo(parsed.error.issues[0].message);
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("conciliar_canon", { p_ids: parsed.data });
+  if (error) return fallo(error);
+
+  revalidarTesoreria();
+  return ok({ conciliadas: Number((data as { conciliados?: number } | null)?.conciliados ?? 0) });
+}
+
+/** Deshace la conciliación de un bono camioneros marcada por error. */
+export async function desconciliarCanon(id: string): Promise<ActionResult> {
+  await requireRol("tesoreria", "lider");
+  const parsed = z.uuid("La transferencia no se reconoce. Actualizá la página.").safeParse(id);
+  if (!parsed.success) return fallo(parsed.error.issues[0].message);
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("desconciliar_canon", { p_id: parsed.data });
+  if (error) return fallo(error);
 
   revalidarTesoreria();
   return ok(undefined);

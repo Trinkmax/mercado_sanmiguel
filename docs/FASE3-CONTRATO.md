@@ -29,7 +29,8 @@ sufijos tipo "0011b" ni versiones repetidas). Cada archivo se aplica como UNA tr
 | 4 | `0013_fase3_cajas.sql` … `0021_fase3_mapa.sql` (9 archivos) | Cada módulo reescribe los cuerpos de SUS funciones y crea SUS triggers. | Los escribe cada módulo; los aplica el ingeniero (paso 5). |
 | 4b | Rama de prueba | Integración y prueba de humo por rol ANTES de tocar producción (§11.3). | Ingeniero. |
 | 5 | 0013…0021 + `0022_fase3_endurecimiento.sql` + deploy | CONTRACT: RLS/grants de tablas existentes que cierran accesos que la app vieja usa. **Una sola ventana de mantenimiento**: 0013…0021 en orden, enseguida 0022 y enseguida el deploy del código (§0.3). | Ingeniero, con autorización del usuario. |
-| 6 | `0023_fase3_limpieza.sql` (futuro) | Borrar lo deprecado (§8). | Cuando fase 3 esté estable en producción. |
+| 5b | `0023_fase3_fix_cobros.sql` … `0028_fase3_fix_accesos.sql` | Arreglos de la verificación por área (0023: cobros, cajas y portería). El código de fase 3 ya los usa. | Junto con el deploy del código, o antes. |
+| 6 | `0029_fase3_limpieza.sql` (futuro) | Borrar lo deprecado (§8). Iba a ser la 0023: ese número lo tomó `0023_fase3_fix_cobros.sql`. | Cuando fase 3 esté estable en producción. |
 
 Archivos de los módulos (el número es el orden de aplicación; M2 primero porque su arqueo lo
 usan otros): `0013_fase3_cajas.sql` (M2), `0014_fase3_cobranza.sql` (M1), `0015_fase3_porteria.sql` (M3),
@@ -179,6 +180,7 @@ quintero por plata (§1.2-12); P23 recibo del socio = imprimible + "Guardar como
 | pagos | `numero` | sin cambio de tipo (identity) | Se REPITE en las líneas del lote: la RPC toma `nextval(pg_get_serial_sequence('public.pagos','numero'))` e inserta con `overriding system value`. |
 | pagos | índices `pagos_cheque_idx`, `pagos_comprobante_idx` | parciales | `rechazar_cheque`/`anular_pago` y la policy de comprobantes. |
 | imputaciones | constraint trigger `imputaciones_tope` (diferido) | Σ imputaciones de un pago ≤ su monto, al commit | Si dos transacciones imputan el mismo crédito, la segunda falla entera (mensaje "Probá de nuevo"). |
+| imputaciones | `creado_en`, `origen` (**0023**) | `timestamptz default now()`; `text not null default 'cobro'` check ∈ {cobro, saldo_favor} | `private.aplicar_saldo_favor` marca `saldo_favor`. `datos_recibo`/`resumen_lote` muestran solo lo imputado en el cobro (el recibo reimpreso no cambia) y aparte "Luego aplicado a". Las filas anteriores a 0023 quedan `cobro` con `creado_en` null. Lo usa también 0025. |
 | cheques | `cuit` | `text`, 11 dígitos; único `(org_id, cuit, numero)` si no está rechazado | A2. |
 | cheques | `recibido_de`, `puesto`, `proveedor` | `text` | A2 (puesto = snapshot "Puesto 34½ · 52"). |
 | cheques | `fecha_entregado`, `entregado_por` | `date`, `uuid` | E2. Check: `entregado` ⇒ proveedor y fecha. |
@@ -255,6 +257,7 @@ horas del feriado; 0<h≤24), `justificada`, `detalle` (obligatorio en `otra`; �
 
 - **`v_clientes_segmentos`** (nueva, `security_invoker`): `org_id, cliente_id, codigo, nombre, apodo, categoria, es_socio, activo, tiene_portal, segmentos text[]`. `tiene_portal` = usuario vinculado **y perfil activo** (`private.tiene_portal_activo`): quitarle el acceso a un socio no infla "51 lo ven en el portal". Cada rol ve solo los clientes que su RLS le deja. Uso: listado de Clientes, conteo del público de circulares (siempre con `clienteEnPublico()` de §5.5, no con `.overlaps` suelto: `socios` es filtro), exportación.
 - **`v_avance_mes`** (nueva, `security_invoker`): `org_id, cliente_id, periodo, total, pagado, falta, cuotas, cuotas_cubiertas, cuota_sugerida`. La ÚNICA cuenta de "2 de 4 · Falta $165.000" (G5): cargos del período no anulados de origen `generacion`/`energia` (recurrentes + ABEN + consumo; afuera AMB diario, multas, RD y manuales); `falta` = exigible hoy; `cuotas_cubiertas` = `floor((total − falta) / (total/cuotas))`, tope `cuotas − 1` mientras falte algo; `cuota_sugerida` = `round(total/cuotas, 2)` y la última = `falta` exacto. La consumen M1 (buscador y PlanCuotas), M8 (inicio del Jefe) y M9 (mapa del Jefe) filtrando `periodo`; nadie la recalcula en TS (texto con `textoAvance()`, §5.5). Probado en la réplica: 330.000 en 4 → sugiere 82.500; tras 247.500 pagados sugiere exactamente 82.500 = lo que falta.
+- **`v_ultimo_pago_ambulante`** (**0023**, `security_invoker`): `org_id, cliente_id, pago_hasta` = último día pago (`max(hasta)`) de los cargos `origen='diario'` no anulados. Una fila por ambulante: la lista de cobro ("Pagó hoy / Último día pago") no depende del tope de 1000 filas de PostgREST. Rige la RLS de `cargos`.
 - **`v_deuda_clientes`** (reemplazada, compatible): suma al final `deuda_vencida numeric` (lo vencido, sin beneficio), `vencido_desde date` (vencimiento impago más viejo), `proximo_vencimiento date` (próximo en término). Base del semáforo B3.
 
 ### 2.5 Datos (0011)
@@ -358,7 +361,7 @@ Notas (grants por columna; todos en 0022 salvo perfiles, que va en 0011):
 - `circular_recepciones` INSERT: `org_id, circular_id, cliente_id, recibida_por` (`recibida_en` = default `now()`: el socio no falsea la hora de "La vio").
 - `documentos_cliente` INSERT: `org_id, cliente_id, categoria, titulo, storage_path, mime`; sin UPDATE.
 - `configuracion` INSERT/UPDATE: `dia_vencimiento, impresion_directa, actualizado_en, actualizado_por` (+ `org_id` en INSERT). `cuotas_default_quintero` solo por `guardar_cuotas_quinteros`; `precio_canon_*` deprecados, nadie los escribe.
-- `ingresos_personal` INSERT: `org_id, empleado_id, dni, nombre, apellido, firma_path, fuera_de_horario, notas` (`ingreso_en` = `now()`, `registrado_por` = `auth.uid()`); UPDATE: `egreso_en, notas` (como hoy) + trigger `proteger_ingreso` de M3.
+- `ingresos_personal` INSERT: `id` (**0023**: el formulario manda su propio uuid y un reintento tras un corte de red choca con la PK en vez de duplicar), `org_id, empleado_id, dni, nombre, apellido, firma_path, fuera_de_horario, notas` (`ingreso_en` = `now()`, `registrado_por` = `auth.uid()`); UPDATE: `egreso_en, notas` (como hoy) + trigger `proteger_ingreso` de M3.
 - `registro_mensajes` INSERT: `org_id, registro_id, mensaje, adjunto_path`. `novedades_personal` INSERT: `org_id, empleado_id, tipo, fecha_desde, fecha_hasta, horas, justificada, detalle, adjunto_path`; UPDATE: los mismos sin org/empleado.
 - `pagos`, `cheques`, `canon_camiones`, `sanciones`: sin INSERT/DELETE directos (y `sanciones`/`canon` sin UPDATE). `cheques` UPDATE: `estado, fecha_depositado, fecha_acreditado, notas`.
 
@@ -480,7 +483,7 @@ public.registrar_cobro(p_cliente uuid, p_caja uuid, p_lineas jsonb,
 - `'No tenés permiso para registrar cobros'`
 - `'Agregá al menos un medio de pago'` · `'Un mismo cobro admite hasta 6 medios de pago'`
 - `'Ese cobro ya se registró para otro cliente'`
-- `'Caja inexistente'` · `'La caja ya está cerrada: pedí la reapertura para seguir cobrando'`
+- `'Caja inexistente'` · `'La caja ya está cerrada: pedí la reapertura para seguir cobrando'` (**0023**: el texto después de los dos puntos lo arma `private.mensaje_caja_no_abierta(estado, rol)` según quién cobra y si la caja está rendida, recibida o validada; siempre empieza con `'La caja ya está cerrada'`, igual en `cobrar_diario`)
 - `'Solo podés cobrar en la caja de portería'` · `'Solo podés cobrar en la caja de administración'`
 - `'Cliente inexistente'` · `'A este cliente lo cobra Administración'` (guardia) · `'A quinteros y ambulantes los cobra el Jefe de Portería'` (admin)
 - `'Cada medio de pago necesita un monto mayor a cero'` · `'Medio de pago inválido'`
@@ -566,12 +569,17 @@ revela que existe). **Retorno** (todo el lote del pago):
   "saldo_favor": 0 }
 ```
 `anulado` = todas las líneas anuladas. `beneficio` = `descuento_aplicado` si el cargo quedó pagado.
+**0023**: `imputaciones` = solo lo imputado EN ese cobro (`imputaciones.origen = 'cobro'` de las líneas vigentes
+del lote), así el recibo reimpreso no cambia; lo que un saldo a favor aplicó después va aparte en
+`aplicado_despues` (`[{cargo_id, codigo, descripcion, periodo, monto, fecha}]`). `beneficio` sale solo en el recibo
+que terminó de pagar el cargo (ningún cobro con número mayor ni saldo a favor posterior le imputó algo). Suma
+`total_original` (con las líneas anuladas) y `anulado_en` en cada línea: el recibo anulado muestra "Total (anulado)" tachado.
 
 ### 4.4 Modificadas de M1
 
 - **`anular_pago(p_pago uuid, p_motivo text) returns void`** — misma firma. Anula el **recibo completo** (todas las líneas vigentes del lote del pago). Bloqueos §4.0: caja `for update` → cliente `for update` → cargos. Roles y reglas de hoy: admin solo cajas `administracion` abiertas; guardia solo `guardia` abiertas; tesorería también cerradas o integradas; nadie sobre validadas. Si alguna línea tiene cheque que no está `en_cartera` → `'El cheque N° % ya fue %: pedile a Tesorería que lo resuelva desde Cheques'` (depositado / acreditado / entregado a un proveedor). Revierte imputaciones de cada línea (orden `linea desc`), borra los cheques en cartera del lote, marca anuladas las líneas, pasa a `anulado` los cargos `origen='diario'` del lote que quedaron con `monto_pagado = 0`, **evento `cobro_anulado` `'Recibo N° 1234 · $ 200.000 · {motivo}'`** en la caja del pago, y si la caja está cerrada/integrada → `private.recalcular_arqueo`. Errores de hoy + `'El cobro ya está anulado'`.
 - **`aplicar_saldo_favor_cliente(p_cliente)`** — roles `admin, guardia, lider` y `private.puede_gestionar_cliente` (Tesorería sale, J4). Error `'Sin permiso para aplicar saldo a favor'`. (Aplicar un crédito que ya está en la cuenta no mueve plata de ninguna caja: por eso el Líder sí puede.)
-- **`registrar_pago(...)`** — DEPRECADA, misma firma. Pasa a ser un wrapper: arma una línea con `p_medio/p_monto/p_cheque/p_transferencia` y llama a `registrar_cobro`; devuelve la forma vieja `{pago_id, numero, imputaciones, saldo_favor}`. Así nadie cobra por fuera de las reglas nuevas. Rompe la UI de fase 2 (cheques sin CUIT, Tesorería): por eso se aplica en la ventana del deploy (§0.3). Se borra en 0023.
+- **`registrar_pago(...)`** — DEPRECADA, misma firma. Pasa a ser un wrapper: arma una línea con `p_medio/p_monto/p_cheque/p_transferencia` y llama a `registrar_cobro`; devuelve la forma vieja `{pago_id, numero, imputaciones, saldo_favor}`. Así nadie cobra por fuera de las reglas nuevas. Rompe la UI de fase 2 (cheques sin CUIT, Tesorería): por eso se aplica en la ventana del deploy (§0.3). Se borra en la limpieza (0029).
 
 ### 4.5 Cajas y arqueo — M2 (A3, E4, I2, J3)
 
@@ -622,9 +630,17 @@ de días anteriores que quedaron abiertas (evento `cierre_forzado`; si es de hoy
 `'Tesorería solo cierra cajas de días anteriores que quedaron abiertas'`). Evento `cierre` con
 `'Efectivo $ X'`. Devuelve `calcular_arqueo` (superset de las claves viejas).
 
-**`integrar_caja_porteria(p_caja, p_observaciones)`** (mod): igual que hoy + evento en el destino
-`'Recibe la caja de portería del DD/MM: efectivo $ X — Quintas $ A · Ambulantes $ B · Bono camioneros $ C'`.
-Devuelve `{"caja_destino", "efectivo", "transferencia", "canon", "quintas", "ambulantes", "ajustes"}`.
+**`integrar_caja_porteria(p_caja uuid, p_observaciones text default null, p_efectivo_recibido numeric default null)`**
+(mod; **0023** agrega `p_efectivo_recibido` y borra la firma `(uuid, text)`): igual que hoy + evento en el destino
+`'Recibe la caja de portería del DD/MM: efectivo $ X — Quintas $ A · Ambulantes $ B · Bono camioneros $ C'`
+(+ `' (faltaron $ D)'` / `' (sobraron $ D)'`). Si `p_efectivo_recibido` difiere del `total_efectivo`
+recalculado, las observaciones son obligatorias (`'Contá qué pasó con la diferencia de $ D: queda anotado en la caja'`)
+y ANTES de integrar se anota un ajuste de la **caja de portería** (`movimientos_tesoreria` tipo `ajuste`, cuenta
+`efectivo`, `monto = recibido − total_efectivo`, `descripcion 'Diferencia al recibir la caja de portería (recibido $ X): …'`)
+y un evento `ajuste` en esa caja: el faltante es de la rendición, no de Administración. Si el MISMO usuario
+reintenta sobre una caja que ya integró (corte de red), no es error: devuelve lo registrado con `repetido: true`
+y la `diferencia` que anotó esa recepción; si la integró otra persona, `'Esta caja de portería ya la recibió {nombre}: actualizá la pantalla'`.
+Devuelve `{"caja_destino", "efectivo", "transferencia", "canon", "quintas", "ambulantes", "ajustes", "diferencia", "repetido"}`.
 
 **`reabrir_caja(p_caja, p_motivo)`** (mod): además pone en null las 8 columnas nuevas.
 
@@ -721,13 +737,24 @@ p_multa numeric default null, p_multa_vencimiento date default null, p_ref uuid 
 después el cargo `for update` ANTES de mirar `monto_pagado` (un cobro en paralelo no se cuela); el registro tiene
 multa vigente (`'Este registro no tiene una multa vigente'`); si el cargo tiene `monto_pagado > 0` →
 `'La multa ya tiene $ % cobrados: anulá primero ese cobro desde la caja'`; si no, cargo `estado = 'anulado'`
-y `multa_sin_efecto_en/_por/_motivo`.
+y `multa_sin_efecto_en/_por/_motivo`. **Fix 0025** (usa `imputaciones.origen` de 0023; si 0023 no corrió, la crea con default `'cobro'`): lo que se tomó solo del saldo a favor
+(`imputaciones.origen = 'saldo_favor'`, o en filas anteriores a 0023 —`imputaciones.creado_en` null— las de pagos ANTERIORES a la multa) no cuenta
+como cobrado: se borran esas imputaciones, el cargo queda anulado con `monto_pagado = 0` y el crédito liberado se
+vuelve a aplicar (`aplicar_saldo_favor`) o le queda a favor; el error solo aplica a lo imputado EN un cobro de caja
+(origen `'cobro'` con `creado_en` no nulo, aunque el pago tenga fecha apenas anterior a la multa por una carrera con
+`emitir_registro`: su recibo la muestra pagada). La pantalla del registro usa el mismo criterio (`pagadoConSaldo`). `emitir_registro`: sin vencimiento elegido, la multa vence
+`greatest(v_fecha, hoy) + 10` y nunca antes de hoy (`'La multa no puede vencer antes de hoy…'`). Circulares y
+mensajes del hilo llevan `ref uuid` de idempotencia (`circulares_ref_unq`, `registro_mensajes_ref_unq`). En el hilo, la
+UI conserva la misma `ref` tras un error aunque se corrija el texto; si el reintento vuelve `repetido` con otro
+contenido, deja lo escrito con un aviso ("tu mensaje anterior ya había llegado…") y recién ahí genera una `ref` nueva.
 
 **`marcar_registro_visto(p_registro uuid) returns void`** — solo socio; el registro es de
 `private.cliente_actual()` (si no, `'Registro inexistente'`); `visto_en = coalesce(visto_en, now()), socio_leyo_en = now()`.
 Silencioso. M5 la llama CADA VEZ que el socio abre el detalle. Reglas únicas (TS en `src/lib/segmentos.ts`, §5.5):
-`registroSinVer` = `visto_en === null`; `respuestaNueva` = `estado === 'respondido' && ultimo_mensaje_en > (socio_leyo_en ?? -∞)`.
+`registroSinVer` = `visto_en === null`; `respuestaNueva` = `ultimo_mensaje_en > (socio_leyo_en ?? -∞)` (sin mirar el estado, fix 0025: si el staff escribe primero en un registro `notificado`, el socio también se entera; cuando escribe el socio, el trigger iguala `socio_leyo_en` con su mensaje).
 Badge del portal = circulares visibles sin recepción + registros sin ver + registros con respuesta nueva.
+Sello de la fila en el portal (uno solo, igual que el contador): "Nueva" (sin ver) → "Respuesta nueva" → "Tenés que
+responder" (`esperaDescargo`, que además avisa Mi cuenta).
 
 **Triggers de `registro_mensajes`** (M5, en su `0017_fase3_comunicaciones.sql`): `registro_mensaje_descargo` BEFORE INSERT (se
 dispara después de `fijar_autor_registro` por orden alfabético) fija `es_descargo = (autor_rol = 'socio')`;
@@ -855,6 +882,23 @@ Se decide por el ROL de quien carga, no por el origen: las solicitudes del Jefe 
 origen `porteria` pero nacen `nueva` y van directo a la bandeja del Líder, nunca a "Para resolver" del Jefe.
 **Trigger `tocar_solicitud`** (AFTER INSERT en `solicitud_mensajes`, `private.tocar_solicitud`, **security definer**:
 quien escribe el mensaje puede no tener UPDATE sobre solicitudes): `solicitudes.actualizada_en = now()`.
+
+**Fix 0027** (`0027_fase3_fix_personal.sql`): idempotencia de las altas con `ref uuid` en `solicitudes`
+(`solicitudes_ref_unq`, formulario y `avisarSobrePuesto`) y `solicitud_mensajes` (`solicitud_mensajes_ref_unq`), y
+`lote uuid` en `novedades_personal` (`novedades_lote_unq`, una carga múltiple comparte el lote): un reintento tras un
+corte devuelve lo ya guardado con `repetido: true`. **"Respuesta nueva"** para quien cargó la solicitud:
+`solicitudes.solicitante_visto_en` + `solicitudes_con_respuesta() returns setof uuid` (mis solicitudes con un mensaje
+no interno de OTRA persona —incluye los automáticos de `avanzar_solicitud`— posterior a la última vista) +
+`marcar_solicitud_vista(p_solicitud) returns boolean` (la llama el detalle al montar). Aviso de rechazadas del Jefe:
+`novedades_personal.rechazo_visto_en` + `ocultar_rechazo_novedad(p_novedad)` ("Entendido"); además se van solas si
+volvió a cargar una del mismo empleado y tipo. **Turnos de noche**: `empleado_horarios` acepta salida ≤ entrada
+(termina al día siguiente; check `hora_hasta <> hora_desde`), `resumen_novedades` suma 24 h. **Reincorporación**:
+tabla `empleado_bajas(desde, hasta)` (solo SELECT por grant) + `reincorporar_empleado(p_empleado, p_desde date
+default null)` (Líder): con `p_desde` los días entre el egreso y la vuelta quedan como baja y `resumen_novedades` no
+los cuenta ni muestra al empleado en un mes que pasó entero afuera; sin `p_desde` deshace la baja. Administración ya
+no "toma" las solicitudes nuevas (son del Líder); la RPC no cambia. `avanzarSolicitud` tolera el reintento tras un
+corte: si la RPC falla pero la solicitud ya está en el estado que deja esa acción (y, cuando hay `*_por`, lo hizo la
+misma persona), devuelve ok. En el badge de Administración, una asignada propia con respuesta nueva cuenta una vez.
 
 ### 4.11 Accesos — M8 (F1–F5, G7)
 
@@ -1277,7 +1321,7 @@ export async function avisarSobrePuesto(input: { espacioId: string; motivo: stri
 4. **Configuración** — `requireRol('admin','guardia','lider')`. Pestañas por rol (`?tab=`): Líder = Precios · General · **Tarifas de transporte** (`<TarifasTransporte>` de M3) · **Quintas y ambulantes** · Usuarios · Rubros de gasto. Admin = Precios (sin EXPQ, AMB ni BC) · General (vencimiento, impresión directa; sin el viejo "cobro por día en portería") · Usuarios (socios) · Rubros. Jefe = **Quintas y ambulantes** · **Usuarios de Portería**. **QuintasAmbulantes** (nuevo): "Quinta (EXPQ) — por mes" con "En 4 pagos: $82.500 cada uno"; "Ambulante (AMB) — por día" con "3 días = $45.000"; **"¿En cuántos pagos cobrás la quinta?"** chips 1/2/3/4 → `guardar_cuotas_quinteros`; los precios van por `solicitar_cambio` (sello "Esperando aprobación"). Tabla de precios del Líder agrupada (Puestos · Quintas y ambulantes · Energía · Otros) con labels de tipo nuevos.
 5. **Inicio** — Jefe: sin "Ingresos de personal" (G1); tarjeta principal **"Quintas de {mes}"** (EXPQ cobrado vs estimado, "faltan $X", N al día / con deuda contados con `v_avance_mes` — la misma cuenta que Cobrar y el Mapa) + "Ambulantes cobrados este mes $Y"; botones "Cobrar"; tarjeta lateral **"Caja de portería de hoy"** con Quintas · Ambulantes · Bono camioneros (`arqueo_caja`); aviso "N solicitudes de Portería para resolver". Tesorería (J4): sin "Cobrar" ni "Caja de hoy"; héroe **"Se tendría que cobrar $X / Se cobró $Y (Z %)"** con barra (cobrado / beneficios / falta) y detalle por concepto usando `estimado`; bono camioneros aparte; avisos: cajas para validar, transferencias sin conciliar, **cheques para depositar**; sin "Ver reportes", sin links a Facturación ni Clientes. Admin: aviso "N novedades del Jefe de Portería para aprobar". **Líder (control del dueño)**: dos tarjetas nuevas. (1) **"Correcciones de los últimos 7 días (N)"**: una fila por evento con quién, cuándo, monto, motivo y link; fuentes: `caja_eventos` de tipo `cobro_anulado`, `canon_anulado`, `gasto_revertido`, `ajuste`, `ajuste_borrado`, `arqueo_recalculado`, `cierre_forzado`; `sanciones.multa_sin_efecto_*`; `cheques.rechazado_*`; `novedades_personal` anuladas; `perfiles.desactivado_*`. (2) **"Plata de hoy"**: Administración $A · Caja de portería $B (Quintas · Ambulantes · Bono camioneros) · Gastos pagados desde cajas $G (`arqueo_caja` de las dos cajas de hoy). Aviso "N altas de ambulantes para revisar" (D-1). Consejo: ramas borradas. Filtrar canon anulado en el gráfico de 14 días.
 6. **Navegación** — §7 (`/cobranza` suma al Líder, que cobra: §1.3). `NAVEGACION` suma campo opcional `porRol?: Partial<Record<Rol, { label?: string; corto?: string }>>` que aplica `navParaRol` (`/clientes` del Jefe = "Quinteros y ambulantes"/"Quintas"; `/caja` del Jefe = "Caja de portería"/"Caja"; `/caja` de Tesorería = "Cajas del día"). Ítem nuevo `/novedades` (ClipboardList, grupo `gestion`). `MAX_PLANO` y el umbral de la barra inferior pasan a 8 (constante compartida exportada desde `navegacion.ts`).
-7. **Badges** (`pendientes.ts`) — Jefe: `/solicitudes` = en `con_jefe`; Admin: `/novedades` = pendientes, `/comunicaciones` = registros en `descargo`; Líder: `/comunicaciones` = registros en `descargo`, `/aprobaciones` suma los `revisar_despues` sin revisar; Tesorería: `/cheques` = en cartera con `fecha_cobro ≤ hoy` + entregados sin gasto, `/gastos` = pendientes vencidos. Se va la rama consejo.
+7. **Badges** (`pendientes.ts`) — Jefe: `/solicitudes` = en `con_jefe`; Portería, Tesorería, Jefe y Admin: `/solicitudes` suma sus solicitudes con respuesta nueva (fix 0027; Admin ya no cuenta las `nueva`, solo `asignada`); Admin: `/novedades` = pendientes, `/comunicaciones` = registros en `descargo`; Líder: `/comunicaciones` = registros en `descargo`, `/aprobaciones` suma los `revisar_despues` sin revisar; Tesorería: `/cheques` = en cartera con `fecha_cobro ≤ hoy` + entregados sin gasto, `/gastos` = pendientes vencidos. Se va la rama consejo.
 8. **roles.ts** — `ROLES_COBRAN = ['admin','guardia','lider']` (§1.3 D-P2: el Líder cobra; los botones "Cobrar" de ficha, mapa y libre deuda le aparecen); `ROLES_REPORTES = ['lider']`; `ROLES_GESTION_CLIENTES = ['admin','guardia','lider']`; `ROLES_STAFF` y `ORDEN_ROL` sin consejo (`LABEL_ROL.consejo` se queda para hilos viejos); nuevos `ROLES_ASIGNABLES_STAFF = ['lider','admin','tesoreria','guardia','porteria']`, `rolesQueGestiona(rol)`, `puedeGestionarRol(actor, objetivo)` (espejo de `private.puede_gestionar_rol`). Descripciones: admin "Cobra a los puesteros, integra la caja de portería y da acceso a los socios"; guardia "Cobra a quinteros y ambulantes, rinde la caja de portería y gestiona los usuarios de Portería"; porteria "Cobra el canon de transporte, registra el ingreso del personal y genera solicitudes"; tesoreria "Valida cajas, concilia el banco y maneja cheques, gastos y el flujo de fondos"; lider "Aprueba cambios, gestiona usuarios y personal, mira reportes y registra lo que resuelve el Consejo".
 9. **Actions** — `auth.ts` (`iniciarSesion` por DNI/email, `USUARIOS_DEMO` sin consejo, opcional `cambiarMiContrasena`); `usuarios.ts` (`crearUsuario` lider/guardia, `crearAccesoSocio` admin/lider con DNI obligatorio, `cambiarActivoUsuario`, `restablecerContrasena`, `editarUsuario`; email técnico `{dni}@usuarios.sanmiguel.coop`; rollback del auth user si falla el perfil); `configuracion.ts` (`actualizarConcepto` admin/guardia/lider vía `solicitar_cambio`, `cambiarActivoConcepto` admin/lider, `guardarConfiguracionGeneral` admin/lider (solo `dia_vencimiento`, `impresion_directa`, `actualizado_por/en`: grants de 0022), `guardarCuotasQuinteros` guardia/lider, rubros admin/lider; se borra `guardarPreciosPorteria`).
 
@@ -1467,7 +1511,7 @@ exports nuevos (nunca renombrar, borrar ni volver obligatorio). Quien importa pr
 
 ---
 
-## 8. Deprecaciones (limpieza en `0023_fase3_limpieza.sql` y código, cuando fase 3 esté estable)
+## 8. Deprecaciones (limpieza en `0029_fase3_limpieza.sql` y código, cuando fase 3 esté estable)
 
 | Qué | Reemplazo | Nota |
 |---|---|---|
@@ -1578,7 +1622,8 @@ sellos del portal, "En mano / Por transferencia", pregunta J3, ficha de quintero
 | 5 | `0013_fase3_cajas.sql`, `0014_fase3_cobranza.sql`, `0015_fase3_porteria.sql`, `0016_fase3_clientes.sql`, `0017_fase3_comunicaciones.sql`, `0018_fase3_tesoreria.sql`, `0019_fase3_personal.sql`, `0020_fase3_accesos.sql`, `0021_fase3_mapa.sql` | Ventana de mantenimiento (§0.3), en ese orden. | — |
 | 6 | `supabase/migrations/0022_fase3_endurecimiento.sql` | Misma ventana, enseguida. | Correr §11.3 (todo `true`). |
 | 7 | Deploy del código de fase 3 | Misma ventana, enseguida. | Prueba de humo §6.11 en producción con los DNIs demo. |
-| — | `0023_fase3_limpieza.sql` | Cuando la fase 3 esté estable (§8). | — |
+| 8 | `0023_fase3_fix_cobros.sql` … `0028_fase3_fix_accesos.sql` | Con el deploy del código (o antes): el código de fase 3 ya los usa. | Pruebas de cada área en la réplica local. |
+| — | `0029_fase3_limpieza.sql` | Cuando la fase 3 esté estable (§8). | — |
 
 Estado verificado el 28/09 sobre una réplica local idéntica a la base viva (mismas columnas, policies, constraints,
 grants, triggers, índices y funciones, comparados por hash): 0010 → 0011 → 0012 → 0022 aplican sin errores; con

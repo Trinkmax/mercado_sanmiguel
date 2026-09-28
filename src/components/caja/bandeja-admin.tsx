@@ -64,7 +64,7 @@ export function BandejaAdministracion({ bandeja, rol }: { bandeja: BandejaAdmin;
                         <Link
                           href={
                             p.tipo === "guardia" && !reabreIntegradas
-                              ? `/cierre-caja/${p.id}`
+                              ? `/cierre-caja/${p.id}?ver=1`
                               : `/caja?fecha=${p.fecha}&tipo=${p.tipo}`
                           }
                           className="font-display text-lg font-bold tracking-tight text-primary underline-offset-4 hover:underline"

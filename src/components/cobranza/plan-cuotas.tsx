@@ -165,7 +165,7 @@ export function PlanCuotas({
               {hayAtrasado ? (
                 <Button
                   type="button"
-                  className="h-12 px-4 text-base font-semibold"
+                  className="h-auto min-h-12 max-w-full px-4 py-2 text-base font-semibold whitespace-normal"
                   disabled={deshabilitado}
                   onClick={() => onCobrar(Math.round((sugerida + atrasado.monto) * 100) / 100)}
                 >

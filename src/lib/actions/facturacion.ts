@@ -53,3 +53,39 @@ export async function generarPeriodo(
   revalidatePath("/clientes", "layout");
   return ok(data as unknown as ResultadoGeneracion);
 }
+
+export type ResultadoAbonos = {
+  /** Abonos (ABEN) nuevos del mes. */
+  abonos: number;
+  /** Plata que suman esos abonos. */
+  monto: number;
+};
+
+/**
+ * Energía (I1): suma SOLO los abonos que faltan del mes en curso ya generado (medidores
+ * cargados después de generar). RPC `sumar_abonos_energia` (0024): no genera expensas ni
+ * cambia quién generó el mes, a diferencia de volver a generar el período entero.
+ */
+export async function sumarAbonosEnergia(
+  input: unknown
+): Promise<ActionResult<ResultadoAbonos>> {
+  await requireRol("admin", "lider");
+
+  const parsed = schema.safeParse(input);
+  if (!parsed.success) return fallo(parsed.error.issues[0].message);
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("sumar_abonos_energia", {
+    p_periodo: parsed.data.periodo,
+  });
+  if (error) return fallo(error);
+
+  const r = (data ?? {}) as { abonos?: number | string; monto?: number | string };
+  revalidatePath("/energia");
+  revalidatePath("/facturacion");
+  revalidatePath("/reportes");
+  revalidatePath("/inicio");
+  revalidatePath("/cobranza", "layout");
+  revalidatePath("/clientes", "layout");
+  return ok({ abonos: Number(r.abonos ?? 0), monto: Number(r.monto ?? 0) });
+}

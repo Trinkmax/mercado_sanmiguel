@@ -100,11 +100,14 @@ export function QuintasAmbulantes({
 
 /* ---------- ¿En cuántos pagos cobrás la quinta? ---------- */
 
+/** La quinta se cobra en 1, 2, 3 o 4 pagos (G7). "Todos los días" es de otros conceptos. */
+const OPCIONES_QUINTA = OPCIONES_CUOTAS_MES.filter((o) => o.valor <= 4);
+
 function CuotasQuinta({ cuotasDefault, precioQuinta }: { cuotasDefault: number; precioQuinta: number }) {
   const [elegida, setElegida] = useState(cuotasDefault);
   const [guardando, startTransition] = useTransition();
   // Un valor fuera de 1..4 (lo puso el Líder por otra vía) se muestra aparte.
-  const esEstandar = OPCIONES_CUOTAS_MES.some((o) => o.valor === elegida);
+  const esEstandar = OPCIONES_QUINTA.some((o) => o.valor === elegida);
 
   function guardar(cuotas: number, anterior: number, avisar = true) {
     setElegida(cuotas);
@@ -140,7 +143,7 @@ function CuotasQuinta({ cuotasDefault, precioQuinta }: { cuotasDefault: number; 
         </p>
       </div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" role="radiogroup" aria-label="Pagos por mes">
-        {OPCIONES_CUOTAS_MES.map((o) => {
+        {OPCIONES_QUINTA.map((o) => {
           const activa = elegida === o.valor;
           return (
             <button

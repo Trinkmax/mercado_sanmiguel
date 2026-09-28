@@ -31,11 +31,14 @@ export function BajaCliente({
   nombre,
   activo,
   rol,
+  lugaresTexto = null,
 }: {
   clienteId: string;
   nombre: string;
   activo: boolean;
   rol: Rol;
+  /** Sus lugares del plano ("Puestos 58 · 60"): se liberan con la baja. */
+  lugaresTexto?: string | null;
 }) {
   const router = useRouter();
   const directo = aplicaDirectoRol(rol);
@@ -98,8 +101,8 @@ export function BajaCliente({
           </Button>
         </DialogTrigger>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>¿Reactivar a {nombre}?</DialogTitle>
+          <DialogHeader className="pr-8">
+            <DialogTitle className="break-words">¿Reactivar a {nombre}?</DialogTitle>
             <DialogDescription>
               Vuelve a la lista de clientes activos y a la facturación mensual
               con los conceptos que tenga cargados.
@@ -156,12 +159,13 @@ export function BajaCliente({
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Dar de baja a {nombre}</DialogTitle>
+        <DialogHeader className="pr-8">
+          <DialogTitle className="break-words">Dar de baja a {nombre}</DialogTitle>
           <DialogDescription>
             Deja de facturarse desde el próximo mes y sale de la lista de
             activos. Su cuenta y su carpeta quedan guardadas; se puede
             reactivar cuando haga falta.
+            {lugaresTexto ? ` Se libera en el plano: ${lugaresTexto}.` : ""}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-2">

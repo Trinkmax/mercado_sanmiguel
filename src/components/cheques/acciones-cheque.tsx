@@ -2,16 +2,21 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { CalendarClock, HandCoins, Landmark, Link2, Undo2 } from "lucide-react";
+import { CalendarClock, HandCoins, Landmark, Link2, RotateCcw, Undo2, Wallet } from "lucide-react";
 import { formatARS, formatFecha } from "@/lib/format";
 import type { ActionResult } from "@/lib/actions/result";
 import {
   acreditarCheque,
   depositarCheque,
+  deshacerAcreditacion,
   deshacerDeposito,
+  desvincularChequeGasto,
+  devolverChequeACartera,
   entregarCheque,
   rechazarCheque,
   vincularChequeGasto,
+  type DiferenciaCheque,
+  type ResultadoPagoCheque,
 } from "@/lib/actions/cheques";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -33,8 +38,9 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { ElegirGasto } from "@/components/cheques/elegir-gasto";
+import { ElegirDiferencia, ElegirGasto, montosDistintos } from "@/components/cheques/elegir-gasto";
 import { useDatosCheques } from "@/components/cheques/datos-cheques";
+import { AlertaError } from "@/components/cobranza/alerta-error";
 import { llamarAccion } from "@/lib/llamar-accion";
 
 export type ChequeAcciones = {
@@ -51,12 +57,35 @@ export type ChequeAcciones = {
   proveedor: string | null;
   gastoId: string | null;
   gastoEtiqueta: string | null;
+  /** Qué se hizo con la diferencia de montos al pagar el gasto (0026). */
+  gastoDiferencia: string | null;
+  /** Cheque mayor que el gasto que pagó: cuánto sobró (vuelto o a favor). */
+  sobrante: number | null;
   puesto: string | null;
 };
 
-type Dialogo = "depositar" | "acreditar" | "entregar" | "vincular" | "rechazar" | null;
+type Dialogo =
+  | "depositar"
+  | "acreditar"
+  | "entregar"
+  | "vincular"
+  | "rechazar"
+  | "deshacer_deposito"
+  | "deshacer_acreditacion"
+  | "deshacer_entrega"
+  | null;
 
-const MOTIVOS_RECHAZO = ["Sin fondos", "Firma no coincide", "Cuenta cerrada", "El proveedor lo devolvió"];
+/** Solo para cheques que REBOTARON: el cobro del cliente se anula. */
+const MOTIVOS_RECHAZO = ["Sin fondos", "Firma no coincide", "Cuenta cerrada", "El proveedor lo devolvió porque rebotó"];
+
+const MOTIVOS_DESHACER: Record<"deshacer_deposito" | "deshacer_acreditacion" | "a_cartera" | "cambiar_gasto", string[]> = {
+  deshacer_deposito: ["Lo marqué por error", "Todavía no lo llevé al banco", "El banco no lo recibió"],
+  deshacer_acreditacion: ["Lo marqué por error", "Todavía no está en el extracto"],
+  a_cartera: ["El proveedor lo devolvió sano", "Se lo di al proveedor equivocado", "No se lo di"],
+  cambiar_gasto: ["Elegí el gasto equivocado", "Pagaba otro gasto"],
+};
+
+const CTA_LARGO = "h-auto min-h-13 w-full py-2.5 text-base leading-snug font-semibold whitespace-normal";
 
 function restarDia(fecha: string): string {
   const [y, m, d] = fecha.split("-").map(Number);
@@ -131,10 +160,72 @@ function ElegirFecha({
   );
 }
 
+/** Chips de motivo + texto libre (motivo obligatorio para todo lo que deshace). */
+function ElegirMotivo({
+  id,
+  pregunta,
+  opciones,
+  valor,
+  onCambiar,
+}: {
+  id: string;
+  pregunta: string;
+  opciones: string[];
+  valor: string;
+  onCambiar: (v: string) => void;
+}) {
+  return (
+    <div className="space-y-3">
+      <Label htmlFor={id} className="text-base">
+        {pregunta}
+      </Label>
+      <div className="flex flex-wrap gap-2">
+        {opciones.map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => onCambiar(m)}
+            aria-pressed={valor === m}
+            className={cn(
+              "min-h-11 rounded-full border px-4 text-left text-sm font-medium",
+              valor === m ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:bg-accent"
+            )}
+          >
+            {m}
+          </button>
+        ))}
+      </div>
+      <Textarea
+        id={id}
+        value={valor}
+        onChange={(e) => onCambiar(e.target.value)}
+        placeholder="O contalo con tus palabras"
+        className="min-h-20 text-base"
+        maxLength={300}
+      />
+    </div>
+  );
+}
+
+/** Frase del toast según qué pasó con la diferencia de montos. */
+function fraseDiferencia(r: ResultadoPagoCheque, proveedor: string): string {
+  if (r.diferencia === "dividido" && r.resto) {
+    return ` Quedan ${formatARS(r.resto)} por pagar en Gastos.`;
+  }
+  if (r.diferencia === "vuelto_efectivo" && r.sobrante) {
+    return ` Entraron ${formatARS(r.sobrante)} de vuelto al efectivo.`;
+  }
+  if (r.diferencia === "a_favor" && r.sobrante) {
+    return ` Quedan ${formatARS(r.sobrante)} a favor con ${proveedor}.`;
+  }
+  return "";
+}
+
 /**
  * Acciones del ciclo de vida de un cheque (Tesorería y el Líder): depositar
  * (no antes de su fecha), se acreditó, entregar a un proveedor (pagando un gasto),
- * "¿Qué gasto pagó?" para los que se entregaron en el cobro y rechazar (con motivo).
+ * "¿Qué gasto pagó?" para los que se entregaron en el cobro, DESHACER cada paso
+ * (con motivo: el cobro del cliente no se toca) y rechazar (solo si rebotó).
  */
 export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: string }) {
   const { gastos, proveedores } = useDatosCheques();
@@ -143,6 +234,8 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
   const [motivo, setMotivo] = useState("");
   const [proveedor, setProveedor] = useState("");
   const [gastoId, setGastoId] = useState<string | null>(null);
+  const [diferencia, setDiferencia] = useState<DiferenciaCheque | null>(null);
+  const [deshacerComo, setDeshacerComo] = useState<"a_cartera" | "cambiar_gasto">("a_cartera");
   const [error, setError] = useState<string | null>(null);
   const [pendiente, startTransition] = useTransition();
 
@@ -151,20 +244,30 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
     setMotivo("");
     setProveedor(cheque.proveedor ?? "");
     setGastoId(null);
+    setDiferencia(null);
+    setDeshacerComo("a_cartera");
     setError(null);
     setDialogo(cual);
   }
 
-  function ejecutar(accion: () => Promise<ActionResult>, exito: string) {
+  function ejecutar<T>(
+    accion: () => Promise<ActionResult<T>>,
+    exito: (data: T) => string,
+    despues?: () => void
+  ) {
     setError(null);
+    const conDialogo = dialogo !== null;
     startTransition(async () => {
       const res = await llamarAccion(accion);
       if (!res.ok) {
-        setError(res.error);
+        // Si no hay un diálogo abierto donde mostrarlo, igual se avisa.
+        if (conDialogo) setError(res.error);
+        else toast.error(res.error);
         return;
       }
       setDialogo(null);
-      toast.success(exito);
+      toast.success(exito(res.data));
+      despues?.();
     });
   }
 
@@ -172,12 +275,17 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
   const esDiferido = cheque.estado === "en_cartera" && !cheque.puedeDepositar;
   const sinGasto = cheque.estado === "entregado" && !cheque.gastoId;
   const gastoElegido = gastoId ? gastos.find((g) => g.id === gastoId) ?? null : null;
+  const faltaDiferencia =
+    gastoElegido !== null && montosDistintos(cheque.monto, gastoElegido.monto) && diferencia === null;
   const cerrar = (o: boolean) => !o && !pendiente && setDialogo(null);
-  const errorVisible = error ? (
-    <p role="alert" className="rounded-lg bg-pendiente-suave px-4 py-3 text-sm font-medium text-pendiente">
-      {error}
-    </p>
-  ) : null;
+  const errorVisible = error ? <AlertaError error={error} titulo="No se pudo guardar" /> : null;
+  const motivoListo = motivo.trim().length >= 3;
+
+  function elegirGasto(id: string | null) {
+    setGastoId(id);
+    setDiferencia(null);
+    setError(null);
+  }
 
   return (
     <>
@@ -218,25 +326,32 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
               Se acreditó
             </Button>
             <Button
-              variant="ghost"
-              className="h-11 px-3 text-base text-muted-foreground"
+              variant="outline"
+              className="h-11 px-3 text-base"
               disabled={pendiente}
-              onClick={() =>
-                ejecutar(
-                  () => deshacerDeposito({ id: cheque.id }),
-                  `El ${nombre} volvió a Por cobrar.`
-                )
-              }
+              onClick={() => abrir("deshacer_deposito")}
             >
               <Undo2 className="size-4" strokeWidth={2} />
               Deshacer depósito
             </Button>
           </>
         ) : null}
+        {cheque.estado === "acreditado" ? (
+          <Button variant="outline" className="h-11 px-3 text-base" onClick={() => abrir("deshacer_acreditacion")}>
+            <Undo2 className="size-4" strokeWidth={2} />
+            Deshacer
+          </Button>
+        ) : null}
         {sinGasto ? (
           <Button className="h-11 px-4 text-base font-semibold" onClick={() => abrir("vincular")}>
             <Link2 className="size-4" strokeWidth={2} />
             ¿Qué gasto pagó?
+          </Button>
+        ) : null}
+        {cheque.estado === "entregado" ? (
+          <Button variant="outline" className="h-11 px-3 text-base" onClick={() => abrir("deshacer_entrega")}>
+            <Undo2 className="size-4" strokeWidth={2} />
+            Deshacer
           </Button>
         ) : null}
         {cheque.estado !== "rechazado" ? (
@@ -253,7 +368,7 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
       {/* Depositar */}
       <Dialog open={dialogo === "depositar"} onOpenChange={cerrar}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader>
+          <DialogHeader className="pr-8">
             <DialogTitle className="text-lg">Depositar el {nombre}</DialogTitle>
             <DialogDescription className="text-base">
               {formatARS(cheque.monto)}
@@ -274,10 +389,10 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
           <DialogFooter>
             <Button
               size="lg"
-              className="h-13 w-full text-base font-semibold"
+              className={CTA_LARGO}
               disabled={pendiente || !fecha || fecha > hoy}
               onClick={() =>
-                ejecutar(() => depositarCheque({ id: cheque.id, fecha }), `Depositaste el ${nombre}.`)
+                ejecutar(() => depositarCheque({ id: cheque.id, fecha }), () => `Depositaste el ${nombre}.`)
               }
             >
               {pendiente ? <Spinner className="size-5" /> : null}
@@ -290,7 +405,7 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
       {/* Acreditar */}
       <Dialog open={dialogo === "acreditar"} onOpenChange={cerrar}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader>
+          <DialogHeader className="pr-8">
             <DialogTitle className="text-lg">¿Se acreditó el {nombre}?</DialogTitle>
             <DialogDescription className="text-base">
               {formatARS(cheque.monto)} ya están en el banco: suman al saldo del banco.
@@ -310,10 +425,10 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
           <DialogFooter>
             <Button
               size="lg"
-              className="h-13 w-full text-base font-semibold"
+              className={CTA_LARGO}
               disabled={pendiente || !fecha || fecha > hoy}
               onClick={() =>
-                ejecutar(() => acreditarCheque({ id: cheque.id, fecha }), `El ${nombre} quedó acreditado.`)
+                ejecutar(() => acreditarCheque({ id: cheque.id, fecha }), () => `El ${nombre} quedó acreditado.`)
               }
             >
               {pendiente ? <Spinner className="size-5" /> : null}
@@ -323,10 +438,210 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
         </DialogContent>
       </Dialog>
 
+      {/* Deshacer depósito */}
+      <Dialog open={dialogo === "deshacer_deposito"} onOpenChange={cerrar}>
+        <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-md">
+          <DialogHeader className="pr-8">
+            <DialogTitle className="text-lg">¿Volver el {nombre} a Por cobrar?</DialogTitle>
+            <DialogDescription className="text-base">
+              {formatARS(cheque.monto)}. Se borra la fecha del depósito y queda anotado con tu nombre.
+            </DialogDescription>
+          </DialogHeader>
+          <ElegirMotivo
+            id={`motivo-dep-${cheque.id}`}
+            pregunta="¿Por qué lo deshacés?"
+            opciones={MOTIVOS_DESHACER.deshacer_deposito}
+            valor={motivo}
+            onCambiar={(v) => {
+              setMotivo(v);
+              setError(null);
+            }}
+          />
+          {errorVisible}
+          <DialogFooter className="gap-2">
+            <Button variant="outline" className="h-12 px-5 text-base" disabled={pendiente} onClick={() => setDialogo(null)}>
+              No, volver
+            </Button>
+            <Button
+              className="h-12 px-5 text-base font-semibold"
+              disabled={pendiente || !motivoListo}
+              onClick={() =>
+                ejecutar(
+                  () => deshacerDeposito({ id: cheque.id, motivo: motivo.trim() }),
+                  () => `El ${nombre} volvió a Por cobrar.`
+                )
+              }
+            >
+              {pendiente ? <Spinner className="size-5" /> : <Undo2 className="size-5" strokeWidth={2} />}
+              Sí, volver a Por cobrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Deshacer acreditación */}
+      <Dialog open={dialogo === "deshacer_acreditacion"} onOpenChange={cerrar}>
+        <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-md">
+          <DialogHeader className="pr-8">
+            <DialogTitle className="text-lg">¿El {nombre} todavía no se acreditó?</DialogTitle>
+            <DialogDescription className="text-base">
+              Vuelve a Depositados y el saldo del banco baja {formatARS(cheque.monto)}. Queda anotado con
+              tu nombre.
+            </DialogDescription>
+          </DialogHeader>
+          <ElegirMotivo
+            id={`motivo-acr-${cheque.id}`}
+            pregunta="¿Por qué lo deshacés?"
+            opciones={MOTIVOS_DESHACER.deshacer_acreditacion}
+            valor={motivo}
+            onCambiar={(v) => {
+              setMotivo(v);
+              setError(null);
+            }}
+          />
+          {errorVisible}
+          <DialogFooter className="gap-2">
+            <Button variant="outline" className="h-12 px-5 text-base" disabled={pendiente} onClick={() => setDialogo(null)}>
+              No, volver
+            </Button>
+            <Button
+              className="h-12 px-5 text-base font-semibold"
+              disabled={pendiente || !motivoListo}
+              onClick={() =>
+                ejecutar(
+                  () => deshacerAcreditacion({ id: cheque.id, motivo: motivo.trim() }),
+                  () => `El ${nombre} volvió a Depositados.`
+                )
+              }
+            >
+              {pendiente ? <Spinner className="size-5" /> : <Undo2 className="size-5" strokeWidth={2} />}
+              Sí, deshacer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Deshacer la entrega a un proveedor (o el gasto que pagó) */}
+      <Dialog open={dialogo === "deshacer_entrega"} onOpenChange={cerrar}>
+        <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader className="pr-8">
+            <DialogTitle className="text-lg">Deshacer: {nombre}</DialogTitle>
+            <DialogDescription className="text-base break-words">
+              {formatARS(cheque.monto)} · entregado a {cheque.proveedor ?? "un proveedor"}
+              {cheque.gastoEtiqueta ? ` · pagó ${cheque.gastoEtiqueta}` : ""}. El cobro del cliente no
+              se toca.
+            </DialogDescription>
+          </DialogHeader>
+          <fieldset className="space-y-2">
+            <legend className="mb-2 text-base font-medium">¿Qué pasó?</legend>
+            <button
+              type="button"
+              aria-pressed={deshacerComo === "a_cartera"}
+              onClick={() => {
+                setDeshacerComo("a_cartera");
+                setMotivo("");
+                setError(null);
+              }}
+              className={cn(
+                "flex min-h-14 w-full items-start gap-3 rounded-xl border-2 px-4 py-3 text-left transition-colors",
+                deshacerComo === "a_cartera" ? "border-primary bg-accent" : "border-input bg-card hover:bg-accent/60"
+              )}
+            >
+              <RotateCcw className="mt-0.5 size-5 shrink-0 text-primary" strokeWidth={1.9} />
+              <span className="min-w-0">
+                <span className="block text-base font-semibold">Volvió a la cartera</span>
+                <span className="block text-sm text-muted-foreground">
+                  El proveedor lo devolvió sano o no se lo diste: vuelve a Por cobrar
+                  {cheque.gastoEtiqueta ? ` y ${cheque.gastoEtiqueta} vuelve a Por pagar` : ""}.
+                </span>
+              </span>
+            </button>
+            {cheque.gastoId ? (
+              <button
+                type="button"
+                aria-pressed={deshacerComo === "cambiar_gasto"}
+                onClick={() => {
+                  setDeshacerComo("cambiar_gasto");
+                  setMotivo("");
+                  setError(null);
+                }}
+                className={cn(
+                  "flex min-h-14 w-full items-start gap-3 rounded-xl border-2 px-4 py-3 text-left transition-colors",
+                  deshacerComo === "cambiar_gasto" ? "border-primary bg-accent" : "border-input bg-card hover:bg-accent/60"
+                )}
+              >
+                <Link2 className="mt-0.5 size-5 shrink-0 text-primary" strokeWidth={1.9} />
+                <span className="min-w-0">
+                  <span className="block text-base font-semibold">El gasto estaba mal</span>
+                  <span className="block text-sm text-muted-foreground">
+                    {cheque.gastoEtiqueta ?? "El gasto"} vuelve a Por pagar y elegís el gasto correcto.
+                  </span>
+                </span>
+              </button>
+            ) : null}
+          </fieldset>
+          {cheque.gastoDiferencia === "vuelto_efectivo" ? (
+            <p className="flex gap-2 rounded-lg bg-parcial-suave px-4 py-3 text-sm font-medium text-parcial">
+              <Wallet className="mt-0.5 size-4 shrink-0" strokeWidth={2} />
+              El vuelto en efectivo que se anotó con este cheque también se anula.
+            </p>
+          ) : null}
+          {cheque.gastoDiferencia === "dividido" ? (
+            <p className="rounded-lg bg-muted/60 px-4 py-3 text-sm break-words">
+              {cheque.gastoEtiqueta ?? "El gasto"} vuelve a su monto completo y se anula el «Resto» que
+              quedó por pagar (si ya lo pagaste, queda como está).
+            </p>
+          ) : null}
+          <p className="text-sm text-muted-foreground">Si el banco lo rebotó, usá Rechazar.</p>
+          <ElegirMotivo
+            id={`motivo-ent-${cheque.id}`}
+            pregunta="¿Por qué lo deshacés?"
+            opciones={MOTIVOS_DESHACER[deshacerComo]}
+            valor={motivo}
+            onCambiar={(v) => {
+              setMotivo(v);
+              setError(null);
+            }}
+          />
+          {errorVisible}
+          <DialogFooter className="gap-2">
+            <Button variant="outline" className="h-12 px-5 text-base" disabled={pendiente} onClick={() => setDialogo(null)}>
+              No, volver
+            </Button>
+            <Button
+              className="h-auto min-h-12 px-5 py-2 text-base leading-snug font-semibold whitespace-normal"
+              disabled={pendiente || !motivoListo}
+              onClick={() =>
+                deshacerComo === "a_cartera"
+                  ? ejecutar(
+                      () => devolverChequeACartera({ id: cheque.id, motivo: motivo.trim() }),
+                      (r) =>
+                        `El ${nombre} volvió a Por cobrar.` +
+                        (r.gasto ? ` ${r.gasto} volvió a Por pagar` : "") +
+                        (r.gasto && r.reunido ? ` por ${formatARS(r.reunido)} (se juntó con el resto).` : r.gasto ? "." : "")
+                    )
+                  : ejecutar(
+                      () => desvincularChequeGasto({ id: cheque.id, motivo: motivo.trim() }),
+                      (r) =>
+                        `${r.gasto ?? "El gasto"} volvió a Por pagar` +
+                        (r.reunido ? ` por ${formatARS(r.reunido)} (se juntó con el resto)` : "") +
+                        ". Ahora elegí el gasto correcto.",
+                      // Sigue abierto el paso siguiente: elegir el gasto que sí pagó.
+                      () => abrir("vincular")
+                    )
+              }
+            >
+              {pendiente ? <Spinner className="size-5" /> : <Undo2 className="size-5" strokeWidth={2} />}
+              {deshacerComo === "a_cartera" ? "Volver a Por cobrar" : "Cambiar el gasto"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Entregar a proveedor */}
       <Dialog open={dialogo === "entregar"} onOpenChange={cerrar}>
         <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-lg">
-          <DialogHeader>
+          <DialogHeader className="pr-8">
             <DialogTitle className="text-lg">Entregar el {nombre} a un proveedor</DialogTitle>
             <DialogDescription className="text-base">
               {formatARS(cheque.monto)}. Sale de la cartera (sin tocar ninguna caja).
@@ -353,7 +668,7 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
                       key={p}
                       type="button"
                       onClick={() => setProveedor(p)}
-                      className="min-h-11 rounded-full border bg-card px-4 text-sm font-medium hover:bg-accent"
+                      className="min-h-11 max-w-full rounded-full border bg-card px-4 text-left text-sm font-medium break-words hover:bg-accent"
                     >
                       {p}
                     </button>
@@ -383,17 +698,26 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
                 proveedor={proveedor}
                 montoCheque={cheque.monto}
                 valor={gastoId}
-                onCambiar={setGastoId}
+                onCambiar={elegirGasto}
                 idBase={`ent-gasto-${cheque.id}`}
               />
+              {gastoElegido ? (
+                <ElegirDiferencia
+                  montoCheque={cheque.monto}
+                  montoGasto={gastoElegido.monto}
+                  proveedor={proveedor}
+                  valor={diferencia}
+                  onCambiar={setDiferencia}
+                />
+              ) : null}
             </div>
           </div>
           {errorVisible}
           <DialogFooter>
             <Button
               size="lg"
-              className="h-13 w-full text-base font-semibold"
-              disabled={pendiente || proveedor.trim().length < 2 || !fecha || fecha > hoy}
+              className={CTA_LARGO}
+              disabled={pendiente || proveedor.trim().length < 2 || !fecha || fecha > hoy || faltaDiferencia}
               onClick={() =>
                 ejecutar(
                   () =>
@@ -402,17 +726,21 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
                       proveedor: proveedor.trim(),
                       fecha,
                       gastoId,
+                      diferencia: gastoElegido && montosDistintos(cheque.monto, gastoElegido.monto) ? diferencia : null,
                     }),
-                  gastoElegido
-                    ? `Entregaste el ${nombre} a ${proveedor.trim()} y quedó pagado ${gastoElegido.etiqueta}.`
-                    : `Entregaste el ${nombre} a ${proveedor.trim()}.`
+                  (r) =>
+                    (gastoElegido
+                      ? `Entregaste el ${nombre} a ${proveedor.trim()} y quedó pagado ${gastoElegido.etiqueta}.`
+                      : `Entregaste el ${nombre} a ${proveedor.trim()}.`) + fraseDiferencia(r, proveedor.trim())
                 )
               }
             >
               {pendiente ? <Spinner className="size-5" /> : <HandCoins className="size-5" strokeWidth={2} />}
-              {gastoElegido
-                ? `Entregar y pagar ${gastoElegido.etiqueta}`
-                : `Entregar a ${proveedor.trim() || "…"}`}
+              {faltaDiferencia
+                ? "Elegí qué pasó con la diferencia"
+                : gastoElegido
+                  ? `Entregar y pagar ${gastoElegido.etiqueta}`
+                  : `Entregar a ${proveedor.trim() || "…"}`}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -421,10 +749,10 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
       {/* ¿Qué gasto pagó? */}
       <Dialog open={dialogo === "vincular"} onOpenChange={cerrar}>
         <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-lg">
-          <DialogHeader>
+          <DialogHeader className="pr-8">
             <DialogTitle className="text-lg">¿Qué gasto pagó el {nombre}?</DialogTitle>
-            <DialogDescription className="text-base">
-              Se lo dieron a {cheque.proveedor ?? "un proveedor"} en el cobro
+            <DialogDescription className="text-base break-words">
+              Se lo dieron a {cheque.proveedor ?? "un proveedor"}
               {` (${formatARS(cheque.monto)})`}. Elegí el gasto y queda pagado con el cheque.
             </DialogDescription>
           </DialogHeader>
@@ -433,25 +761,45 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
             proveedor={cheque.proveedor ?? ""}
             montoCheque={cheque.monto}
             valor={gastoId}
-            onCambiar={setGastoId}
+            onCambiar={elegirGasto}
             idBase={`vin-${cheque.id}`}
           />
+          {gastoElegido ? (
+            <ElegirDiferencia
+              montoCheque={cheque.monto}
+              montoGasto={gastoElegido.monto}
+              proveedor={cheque.proveedor ?? ""}
+              valor={diferencia}
+              onCambiar={setDiferencia}
+            />
+          ) : null}
           {errorVisible}
           <DialogFooter>
             <Button
               size="lg"
-              className="h-13 w-full text-base font-semibold"
-              disabled={pendiente || !gastoId}
+              className={CTA_LARGO}
+              disabled={pendiente || !gastoId || faltaDiferencia}
               onClick={() =>
                 gastoId &&
                 ejecutar(
-                  () => vincularChequeGasto({ chequeId: cheque.id, gastoId }),
-                  `${gastoElegido?.etiqueta ?? "El gasto"} quedó pagado con el ${nombre}.`
+                  () =>
+                    vincularChequeGasto({
+                      chequeId: cheque.id,
+                      gastoId,
+                      diferencia: gastoElegido && montosDistintos(cheque.monto, gastoElegido.monto) ? diferencia : null,
+                    }),
+                  (r) =>
+                    `${gastoElegido?.etiqueta ?? "El gasto"} quedó pagado con el ${nombre}.` +
+                    fraseDiferencia(r, cheque.proveedor ?? "el proveedor")
                 )
               }
             >
               {pendiente ? <Spinner className="size-5" /> : <Link2 className="size-5" strokeWidth={2} />}
-              {gastoElegido ? `Es este: pagar ${gastoElegido.etiqueta}` : "Elegí el gasto"}
+              {!gastoElegido
+                ? "Elegí el gasto"
+                : faltaDiferencia
+                  ? "Elegí qué pasó con la diferencia"
+                  : `Es este: pagar ${gastoElegido.etiqueta}`}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -459,9 +807,9 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
 
       {/* Rechazar */}
       <Dialog open={dialogo === "rechazar"} onOpenChange={cerrar}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-lg">¿Rechazar el {nombre}?</DialogTitle>
+        <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-md">
+          <DialogHeader className="pr-8">
+            <DialogTitle className="text-lg">¿El {nombre} rebotó?</DialogTitle>
             <DialogDescription className="text-base">
               {formatARS(cheque.monto)}. El cobro que respaldaba se anula y la deuda del cliente vuelve a
               figurar.
@@ -471,35 +819,37 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
               No se puede deshacer.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
-            <Label htmlFor={`motivo-${cheque.id}`} className="text-base">
-              ¿Por qué se rechazó?
-            </Label>
-            <div className="flex flex-wrap gap-2">
-              {MOTIVOS_RECHAZO.map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setMotivo(m)}
-                  aria-pressed={motivo === m}
-                  className={cn(
-                    "min-h-11 rounded-full border px-4 text-sm font-medium",
-                    motivo === m ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:bg-accent"
-                  )}
-                >
-                  {m}
-                </button>
-              ))}
-            </div>
-            <Textarea
-              id={`motivo-${cheque.id}`}
-              value={motivo}
-              onChange={(e) => setMotivo(e.target.value)}
-              placeholder="O contalo con tus palabras"
-              className="min-h-20 text-base"
-              maxLength={300}
-            />
-          </div>
+          {cheque.estado === "entregado" || cheque.estado === "depositado" || cheque.estado === "acreditado" ? (
+            <p className="rounded-lg bg-muted/60 px-4 py-3 text-sm">
+              Si no rebotó y solo te equivocaste en un paso, cerrá esto y tocá <strong>Deshacer</strong>: el
+              cobro del cliente no se toca.
+            </p>
+          ) : null}
+          {cheque.gastoDiferencia === "vuelto_efectivo" && cheque.sobrante ? (
+            <p className="flex gap-2 rounded-lg bg-parcial-suave px-4 py-3 text-sm font-medium break-words text-parcial">
+              <Wallet className="mt-0.5 size-4 shrink-0" strokeWidth={2} />
+              <span className="min-w-0">
+                {cheque.proveedor ?? "El proveedor"} te había dado {formatARS(cheque.sobrante)} de vuelto: queda
+                en Gastos como «Devolver el vuelto», para pagárselo.
+              </span>
+            </p>
+          ) : null}
+          {cheque.gastoDiferencia === "dividido" ? (
+            <p className="rounded-lg bg-muted/60 px-4 py-3 text-sm break-words">
+              {cheque.gastoEtiqueta ?? "El gasto"} vuelve a su monto completo y se anula el «Resto» que
+              quedó por pagar (si ya lo pagaste, queda como está).
+            </p>
+          ) : null}
+          <ElegirMotivo
+            id={`motivo-${cheque.id}`}
+            pregunta="¿Por qué se rechazó?"
+            opciones={MOTIVOS_RECHAZO}
+            valor={motivo}
+            onCambiar={(v) => {
+              setMotivo(v);
+              setError(null);
+            }}
+          />
           {errorVisible}
           <DialogFooter className="gap-2">
             <Button variant="outline" className="h-12 px-5 text-base" disabled={pendiente} onClick={() => setDialogo(null)}>
@@ -508,11 +858,11 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
             <Button
               variant="destructive"
               className="h-12 px-5 text-base font-semibold"
-              disabled={pendiente || motivo.trim().length < 3}
+              disabled={pendiente || !motivoListo}
               onClick={() =>
                 ejecutar(
                   () => rechazarCheque({ id: cheque.id, motivo: motivo.trim() }),
-                  `Rechazaste el ${nombre}: la deuda del cliente volvió.`
+                  () => `Rechazaste el ${nombre}: la deuda del cliente volvió.`
                 )
               }
             >

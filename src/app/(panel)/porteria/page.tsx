@@ -2,6 +2,7 @@ import Link from "next/link";
 import { FilePlus2, MessagesSquare, Settings2 } from "lucide-react";
 import { requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { pendientesNav } from "@/lib/pendientes";
 import { formatARS, formatFecha, formatFechaLarga, hoyISO } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -80,6 +81,8 @@ export default async function PorteriaPage({ searchParams }: Props) {
   const fecha = esLider && esFechaISO(fechaParam) && fechaParam <= hoy ? fechaParam : hoy;
   const esHoy = fecha === hoy;
   const { inicio, fin } = rangoDiaAR(fecha);
+  // Solicitudes del portero con respuesta nueva (mismo cálculo, cacheado, que la navegación).
+  const pendientesPromesa = perfil.rol === "porteria" ? pendientesNav(perfil) : null;
 
   const supabase = await createClient();
   const [ingresosRes, anterioresRes, canonRes, tarifasRes, estadoRes, planoRes, cajaDiaRes] = await Promise.all([
@@ -124,6 +127,7 @@ export default async function PorteriaPage({ searchParams }: Props) {
           .maybeSingle()
       : Promise.resolve({ data: null }),
   ]);
+  const respuestasNuevas = pendientesPromesa ? ((await pendientesPromesa)["/solicitudes"] ?? 0) : 0;
 
   // ---------------------------------------------------------------- canon
   const filasCanon = canonRes.data ?? [];
@@ -338,10 +342,23 @@ export default async function PorteriaPage({ searchParams }: Props) {
                 Generar solicitud o informe
               </Link>
             </Button>
-            <Button asChild variant="ghost" size="lg" className="h-12 px-4 text-base">
+            <Button
+              asChild
+              variant={respuestasNuevas > 0 ? "outline" : "ghost"}
+              size="lg"
+              className={cn(
+                "h-auto min-h-12 flex-wrap px-4 py-2 text-base whitespace-normal",
+                respuestasNuevas > 0 && "border-primary/40 bg-accent"
+              )}
+            >
               <Link href="/solicitudes">
                 <MessagesSquare className="size-5" strokeWidth={2} />
                 Ver mis solicitudes
+                {respuestasNuevas > 0 ? (
+                  <span className="rounded-full bg-primary px-2 py-0.5 text-xs font-bold text-primary-foreground tabular">
+                    {respuestasNuevas === 1 ? "1 respuesta nueva" : `${respuestasNuevas} respuestas nuevas`}
+                  </span>
+                ) : null}
               </Link>
             </Button>
           </CardContent>

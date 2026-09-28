@@ -1,10 +1,45 @@
 "use client";
 
+import { useState } from "react";
 import { Check, Copy, Printer, TriangleAlert } from "lucide-react";
 import { toast } from "sonner";
 import { formatDni } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Sello } from "@/components/shared/sello";
+
+/**
+ * Copia texto al portapapeles. `navigator.clipboard` solo existe en https o
+ * localhost: en las tablets que entran por la red local (http://192.168…) se usa
+ * el camino viejo (un textarea oculto + "copy"). Devuelve si pudo.
+ */
+async function copiarAlPortapapeles(texto: string): Promise<boolean> {
+  if (window.isSecureContext && navigator.clipboard) {
+    try {
+      await navigator.clipboard.writeText(texto);
+      return true;
+    } catch {
+      // sigue con el camino viejo
+    }
+  }
+  const area = document.createElement("textarea");
+  area.value = texto;
+  area.setAttribute("readonly", "");
+  area.style.position = "fixed";
+  area.style.top = "0";
+  area.style.left = "0";
+  area.style.opacity = "0";
+  document.body.appendChild(area);
+  area.select();
+  area.setSelectionRange(0, texto.length);
+  let ok = false;
+  try {
+    ok = document.execCommand("copy");
+  } catch {
+    ok = false;
+  }
+  area.remove();
+  return ok;
+}
 
 function escaparHtml(texto: string): string {
   return texto
@@ -36,6 +71,13 @@ export function Credencial({
   textoListo?: string;
 }) {
   const dniTexto = dni ? formatDni(dni) : "—";
+  // Si este navegador no deja copiar, el botón se va y queda Imprimir (o anotarla).
+  const [sinCopiar, setSinCopiar] = useState(false);
+  // Las generadas ("Tomate-4821") llevan mayúscula y guion: que se escriban igual.
+  const comoSeEscribe = [
+    /[A-ZÁÉÍÓÚÑ]/.test(password) ? "con la mayúscula" : null,
+    password.includes("-") ? "con el guion" : null,
+  ].filter(Boolean);
 
   function imprimir() {
     const url = window.location.origin;
@@ -62,6 +104,7 @@ export function Credencial({
   <p>Acceso al sistema de ${escaparHtml(nombre)}</p>
   <dl><dt>Entrá con tu DNI</dt><dd>${escaparHtml(dniTexto)}</dd>
   <dt>Contraseña</dt><dd>${escaparHtml(password)}</dd></dl>
+  ${comoSeEscribe.length > 0 ? `<p class="pie">Se escribe igual que acá: ${comoSeEscribe.join(" y ")}.</p>` : ""}
   <p class="pie">En ${escaparHtml(url)}. Guardá este papel: la contraseña no se puede volver a ver.
   Si la perdés, pedí una nueva.</p>
 </div></div>
@@ -72,11 +115,12 @@ export function Credencial({
   }
 
   async function copiar() {
-    try {
-      await navigator.clipboard.writeText(`DNI ${dniTexto} · Contraseña ${password}`);
+    const ok = await copiarAlPortapapeles(`DNI ${dniTexto} · Contraseña ${password}`);
+    if (ok) {
       toast.success("Copiado: pegalo en un mensaje para mandárselo.");
-    } catch {
-      toast.error("No se pudo copiar. Anotala a mano.");
+    } else {
+      setSinCopiar(true);
+      toast.error("Este aparato no deja copiar. Imprimila o anotala a mano.");
     }
   }
 
@@ -105,7 +149,14 @@ export function Credencial({
 
       <p className="flex items-start gap-2 text-sm font-medium text-foreground">
         <TriangleAlert className="mt-0.5 size-4 shrink-0 text-parcial" strokeWidth={2.2} />
-        Anotala ahora: después no se puede volver a ver.
+        <span>
+          Anotala ahora: después no se puede volver a ver.
+          {comoSeEscribe.length > 0 ? (
+            <span className="block font-normal text-muted-foreground">
+              Se escribe igual que acá: {comoSeEscribe.join(" y ")}.
+            </span>
+          ) : null}
+        </span>
       </p>
 
       <div className="flex flex-wrap gap-2">
@@ -113,15 +164,17 @@ export function Credencial({
           <Printer className="size-5" strokeWidth={2} />
           Imprimir
         </Button>
-        <Button
-          size="lg"
-          variant="outline"
-          className="h-12 flex-1 px-5 text-base sm:flex-none"
-          onClick={copiar}
-        >
-          <Copy className="size-5" strokeWidth={2} />
-          Copiar
-        </Button>
+        {sinCopiar ? null : (
+          <Button
+            size="lg"
+            variant="outline"
+            className="h-12 flex-1 px-5 text-base sm:flex-none"
+            onClick={copiar}
+          >
+            <Copy className="size-5" strokeWidth={2} />
+            Copiar
+          </Button>
+        )}
         <Button
           size="lg"
           variant="ghost"

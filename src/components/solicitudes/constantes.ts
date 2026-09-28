@@ -163,3 +163,17 @@ const PREFIJOS_AUTOMATICOS = [
 export function esMensajeAutomatico(mensaje: string): boolean {
   return PREFIJOS_AUTOMATICOS.some((p) => mensaje.startsWith(p));
 }
+
+/**
+ * Firma del contenido de un formulario (sin la clave "ref"): la clave de idempotencia se
+ * mantiene mientras el contenido sea el mismo (reintento tras un corte) y cambia si la
+ * persona lo corrige (es otro envío: no se le devuelve el anterior ni se pierde lo nuevo).
+ */
+export function firmaFormulario(fd: FormData): string {
+  const partes: string[] = [];
+  fd.forEach((valor, clave) => {
+    if (clave === "ref") return;
+    partes.push(`${clave}=${typeof valor === "string" ? valor.trim() : `${valor.name}:${valor.size}`}`);
+  });
+  return partes.join("\u0001");
+}
