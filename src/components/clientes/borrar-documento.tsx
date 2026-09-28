@@ -16,6 +16,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /** Borrado de un documento con confirmación (quien gestiona al cliente: Administración, el Jefe o el Líder). */
 export function BorrarDocumento({
@@ -33,7 +34,7 @@ export function BorrarDocumento({
 
   function confirmar() {
     startTransition(async () => {
-      const res = await borrarDocumento({ id, clienteId });
+      const res = await llamarAccion(() => borrarDocumento({ id, clienteId }));
       if (!res.ok) {
         toast.error(res.error);
         return;

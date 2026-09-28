@@ -18,6 +18,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Sello } from "@/components/shared/sello";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /** Textos de cada concepto de energía editable desde /energia. */
 const TEXTOS: Record<
@@ -77,7 +78,7 @@ export function PrecioConcepto({
     }
     setError(null);
     startTransition(async () => {
-      const res = await cambiarPrecioConcepto({ codigo, precio: numero });
+      const res = await llamarAccion(() => cambiarPrecioConcepto({ codigo, precio: numero }));
       if (!res.ok) {
         setError(res.error);
         return;

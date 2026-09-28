@@ -7,6 +7,7 @@ import { generarPeriodo } from "@/lib/actions/facturacion";
 import { formatNumero } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /**
  * Medidores que se agregaron después de generar el mes (I1, §1.2-11): esos clientes todavía
@@ -31,7 +32,7 @@ export function SumarAbonos({
 
   function sumar() {
     startTransition(async () => {
-      const res = await generarPeriodo({ periodo });
+      const res = await llamarAccion(() => generarPeriodo({ periodo }));
       if (!res.ok) {
         toast.error(res.error);
         return;

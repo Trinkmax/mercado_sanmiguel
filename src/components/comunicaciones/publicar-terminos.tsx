@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /**
  * Publicar nueva versión de los términos (solo Líder de Procesos). Es una
@@ -37,7 +38,7 @@ export function PublicarTerminos({
     e.preventDefault();
     setError(null);
     startTransition(async () => {
-      const res = await publicarTerminos({ titulo, contenido });
+      const res = await llamarAccion(() => publicarTerminos({ titulo, contenido }));
       if (!res.ok) {
         setError(res.error);
         toast.error(res.error);

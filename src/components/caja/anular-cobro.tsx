@@ -18,6 +18,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 const ATAJOS = ["Se cargó dos veces", "Monto equivocado", "Cliente equivocado", "Medio de pago equivocado"];
 
@@ -51,7 +52,7 @@ export function BotonAnularCobro({
       return;
     }
     startTransition(async () => {
-      const res = await anularCobro(pagoId, limpio);
+      const res = await llamarAccion(() => anularCobro(pagoId, limpio));
       if (!res.ok) {
         setError(res.error);
         return;

@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /** Da de baja una circular (deja de verse y de bloquear en el portal). */
 export function DesactivarCircular({
@@ -32,7 +33,7 @@ export function DesactivarCircular({
 
   function confirmar() {
     startTransition(async () => {
-      const res = await desactivarCircular({ id });
+      const res = await llamarAccion(() => desactivarCircular({ id }));
       if (!res.ok) {
         toast.error(res.error);
         return;

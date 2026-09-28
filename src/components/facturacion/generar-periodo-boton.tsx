@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /** Botón primario de Facturación: confirma y dispara la generación del mes. */
 /** "12 cargos, 8 abonos de energía y 3 consumos" */
@@ -60,7 +61,7 @@ export function GenerarPeriodoBoton({
 
   function confirmar() {
     startTransition(async () => {
-      const res = await generarPeriodo({ periodo });
+      const res = await llamarAccion(() => generarPeriodo({ periodo }));
       if (!res.ok) {
         toast.error(res.error);
         return;

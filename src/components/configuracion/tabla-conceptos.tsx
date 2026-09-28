@@ -27,6 +27,7 @@ import { Switch } from "@/components/ui/switch";
 import { Codigo } from "@/components/shared/codigo";
 import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 export type TipoConcepto =
   | "recurrente"
@@ -144,12 +145,12 @@ export function TablaConceptos({
   function guardar() {
     if (!editando) return;
     startGuardar(async () => {
-      const res = await actualizarConcepto({
+      const res = await llamarAccion(() => actualizarConcepto({
         id: editando.id,
         precio: Number(precio || 0),
         descuento_pronto_pago: Number(descuento || 0),
         orden_imputacion: Number(orden || 0),
-      });
+      }));
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -162,7 +163,7 @@ export function TablaConceptos({
   function cambiarActivo(concepto: ConceptoFila, activo: boolean) {
     setTogglePendiente(concepto.id);
     startToggle(async () => {
-      const res = await cambiarActivoConcepto({ id: concepto.id, activo });
+      const res = await llamarAccion(() => cambiarActivoConcepto({ id: concepto.id, activo }));
       if (!res.ok) toast.error(res.error);
       else
         avisar(

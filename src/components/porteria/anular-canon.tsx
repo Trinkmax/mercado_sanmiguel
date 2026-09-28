@@ -19,6 +19,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 const MOTIVOS_RAPIDOS = [
   "Se cargó dos veces",
@@ -73,7 +74,7 @@ export function AnularCanon({
     startTransition(async () => {
       let res: Awaited<ReturnType<typeof anularCanon>>;
       try {
-        res = await anularCanon({ id, motivo: limpio });
+        res = await llamarAccion(() => anularCanon({ id, motivo: limpio }));
       } catch {
         setError("No se pudo anular. Revisá la conexión y probá de nuevo.");
         return;

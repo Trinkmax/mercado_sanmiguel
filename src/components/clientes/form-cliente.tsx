@@ -38,6 +38,7 @@ import {
   cuotasDeCategoria,
   totalMensual,
 } from "@/components/clientes/constantes";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 export type DatosCliente = {
   id: string;
@@ -225,11 +226,11 @@ export function FormCliente({
 
     startTransition(async () => {
       if (cliente) {
-        const res = await editarCliente({
+        const res = await llamarAccion(() => editarCliente({
           id: cliente.id,
           ...datos,
           ...(codigoAbierto ? { codigo: codigo.trim() } : {}),
-        });
+        }));
         if (!res.ok) return mostrarError(res.error);
         if (res.data.estado === "aplicado") {
           toast.success("Datos del cliente guardados");
@@ -250,13 +251,13 @@ export function FormCliente({
             .map((c) => ({ concepto_id: c.id, cantidad: normalizarCantidad(cantidades[c.id] ?? 0) }))
             .filter((c) => c.cantidad > 0);
 
-      const res = await crearCliente({
+      const res = await llamarAccion(() => crearCliente({
         ...datos,
         ...(esAmbulante ? {} : { cuotas_mes: cuotasMes }),
         ...(codigoAbierto ? { codigo: codigo.trim() } : {}),
         conceptos: conceptosElegidos,
         ref,
-      });
+      }));
       if (!res.ok) return mostrarError(res.error);
       if (res.data.repetido) toast.info("Esa alta ya estaba cargada: no se duplicó.");
 

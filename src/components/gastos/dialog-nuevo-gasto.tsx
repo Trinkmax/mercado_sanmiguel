@@ -34,6 +34,7 @@ import {
 } from "@/components/gastos/selector-origen";
 import { avisarPago } from "@/components/gastos/acciones-gasto";
 import type { CajaElegible, OrigenPago, Rubro } from "@/components/gastos/tipos";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 const AYUDA_TIPO = {
   fijo: "Se repite todos los meses: el mes que viene lo traés con un toque, cambiando solo el monto.",
@@ -107,7 +108,7 @@ export function DialogNuevoGasto({
     }
     setError(null);
     startTransition(async () => {
-      const res = await crearGasto(fd);
+      const res = await llamarAccion(() => crearGasto(fd));
       if (!res.ok) {
         setError(res.error);
         return;

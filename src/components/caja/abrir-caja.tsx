@@ -7,6 +7,7 @@ import { abrirCaja } from "@/lib/actions/cajas";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import type { Enums } from "@/lib/database.types";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /** Acción única de la pantalla cuando todavía no existe la caja de hoy. */
 export function BotonAbrirCaja({ tipo }: { tipo: Enums<"tipo_caja"> }) {
@@ -14,7 +15,7 @@ export function BotonAbrirCaja({ tipo }: { tipo: Enums<"tipo_caja"> }) {
 
   function abrir() {
     startTransition(async () => {
-      const res = await abrirCaja(tipo);
+      const res = await llamarAccion(() => abrirCaja(tipo));
       if (!res.ok) {
         toast.error(res.error);
         return;

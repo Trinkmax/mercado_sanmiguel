@@ -24,6 +24,7 @@ import {
   TITULOS_SUGERIDOS,
   type TipoRegistro,
 } from "./constantes";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 export type ClienteOpcion = {
   id: string;
@@ -177,7 +178,7 @@ export function FormRegistro({
     }
     const nombre = cliente.nombre;
     startTransition(async () => {
-      const res = await emitirRegistro(fd);
+      const res = await llamarAccion(() => emitirRegistro(fd));
       if (!res.ok) {
         setError(res.error);
         return;

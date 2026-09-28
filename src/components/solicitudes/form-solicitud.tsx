@@ -24,6 +24,7 @@ import {
 } from "./constantes";
 import { etiquetaLugar, type LugarSimple } from "./lugares";
 import { SelectorPuesto } from "./selector-puesto";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 export type ClienteBuscable = {
   id: string;
@@ -148,7 +149,7 @@ function Formulario({
       fd.delete("referencia");
     }
     startTransition(async () => {
-      const res = await crearSolicitud(fd);
+      const res = await llamarAccion(() => crearSolicitud(fd));
       if (!res.ok) {
         setError(res.error);
         toast.error(res.error);

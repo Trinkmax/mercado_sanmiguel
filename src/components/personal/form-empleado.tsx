@@ -22,6 +22,7 @@ import {
   type SectorPersonal,
   type TipoContrato,
 } from "@/components/personal/constantes";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 export type DatosEmpleado = {
   id: string;
@@ -107,7 +108,7 @@ export function FormEmpleado({
     if (empleado) fd.set("id", empleado.id);
 
     startTransition(async () => {
-      const res = empleado ? await editarEmpleado(fd) : await crearEmpleado(fd);
+      const res = empleado ? await llamarAccion(() => editarEmpleado(fd)) : await llamarAccion(() => crearEmpleado(fd));
       if (!res.ok) {
         setError(res.error);
         toast.error(res.error);

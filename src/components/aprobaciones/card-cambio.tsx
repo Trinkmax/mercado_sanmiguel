@@ -27,6 +27,7 @@ import type {
   CambioFila,
   ReferenciaConcepto,
 } from "@/components/aprobaciones/tipos";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /**
  * Un cambio pendiente: qué se pide, quién y cuándo, el diff legible y los dos
@@ -49,7 +50,7 @@ export function CardCambio({
 
   function aprobar() {
     startAprobar(async () => {
-      const res = await aprobarCambio({ cambio_id: cambio.id });
+      const res = await llamarAccion(() => aprobarCambio({ cambio_id: cambio.id }));
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -79,7 +80,7 @@ export function CardCambio({
     }
     setErrorMotivo(null);
     startRechazar(async () => {
-      const res = await rechazarCambio({ cambio_id: cambio.id, motivo: texto });
+      const res = await llamarAccion(() => rechazarCambio({ cambio_id: cambio.id, motivo: texto }));
       if (!res.ok) {
         toast.error(res.error);
         return;

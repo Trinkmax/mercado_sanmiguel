@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
+import { unstable_rethrow } from "next/navigation";
 import {
   ClipboardCheck,
   DoorOpen,
@@ -14,6 +15,7 @@ import {
 import { entrarComoDemo, type RolDemo } from "@/lib/actions/auth";
 import { formatDni } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { SIN_RESPUESTA } from "@/lib/llamar-accion";
 
 /** Seis roles (el Consejo ya no tiene usuario, F5). El DNI es el de login de cada demo. */
 const ROLES: {
@@ -39,9 +41,15 @@ export function AccesoDemo() {
   function entrar(rol: RolDemo) {
     setRolActivo(rol);
     startTransition(async () => {
-      const res = await entrarComoDemo(rol);
-      if (res?.error) {
-        toast.error(res.error);
+      try {
+        const res = await entrarComoDemo(rol);
+        if (res?.error) {
+          toast.error(res.error);
+          setRolActivo(null);
+        }
+      } catch (error) {
+        unstable_rethrow(error); // el redirect al panel sigue su camino
+        toast.error(SIN_RESPUESTA);
         setRolActivo(null);
       }
     });

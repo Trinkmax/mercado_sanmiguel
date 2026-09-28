@@ -20,6 +20,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /** Lo que se muestra de una caja de portería rendida que espera entrar en la caja mayor. */
 export type RendicionARecibir = {
@@ -94,7 +95,7 @@ export function BotonIntegrarRendicion({
 
   function confirmar() {
     startTransition(async () => {
-      const res = await integrarCajaPorteria(r.cajaId, observaciones.trim() || undefined);
+      const res = await llamarAccion(() => integrarCajaPorteria(r.cajaId, observaciones.trim() || undefined));
       if (!res.ok) {
         toast.error(res.error);
         return;

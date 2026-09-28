@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { ACCEPT_ADJUNTO_REGISTRO } from "@/components/comunicaciones/constantes";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /**
  * Caja del socio para contestar un registro: "Presentar mi descargo" (apercibimiento o sanción)
@@ -51,7 +52,7 @@ export function CajaDescargo({
     const fd = new FormData(e.currentTarget);
     fd.set("registroId", registroId);
     startTransition(async () => {
-      const res = await presentarDescargo(fd);
+      const res = await llamarAccion(() => presentarDescargo(fd));
       if (!res.ok) {
         setError(res.error);
         return;

@@ -23,6 +23,7 @@ import {
   type EstadoNovedad,
   type NovedadVista,
 } from "./constantes";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 type Dialogo = "rechazar" | "anular" | "borrar" | null;
 
@@ -61,7 +62,7 @@ export function FilaNovedad({
   function aprobar() {
     setEstado("aprobada"); // optimista: el sello cambia ya
     startTransition(async () => {
-      const res = await revisarNovedad({ id: n.id, aprobar: true });
+      const res = await llamarAccion(() => revisarNovedad({ id: n.id, aprobar: true }));
       if (!res.ok) {
         setEstado(n.estado);
         toast.error(res.error);
@@ -73,7 +74,7 @@ export function FilaNovedad({
   }
 
   async function rechazar(motivo: string): Promise<string | null> {
-    const res = await revisarNovedad({ id: n.id, aprobar: false, motivo });
+    const res = await llamarAccion(() => revisarNovedad({ id: n.id, aprobar: false, motivo }));
     if (!res.ok) return res.error;
     setDialogo(null);
     setEstado("rechazada");
@@ -83,7 +84,7 @@ export function FilaNovedad({
   }
 
   async function anular(motivo: string): Promise<string | null> {
-    const res = await anularNovedad({ id: n.id, motivo });
+    const res = await llamarAccion(() => anularNovedad({ id: n.id, motivo }));
     if (!res.ok) return res.error;
     setDialogo(null);
     setEstado("anulada");
@@ -93,7 +94,7 @@ export function FilaNovedad({
   }
 
   async function borrar(): Promise<string | null> {
-    const res = await borrarNovedad({ id: n.id });
+    const res = await llamarAccion(() => borrarNovedad({ id: n.id }));
     if (!res.ok) return res.error;
     setDialogo(null);
     toast.success("Novedad borrada");

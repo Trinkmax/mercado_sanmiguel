@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Spinner } from "@/components/ui/spinner";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /**
  * Pantalla de aceptación de términos: bloquea TODO el portal hasta que el
@@ -34,7 +35,7 @@ export function AceptarTerminos({
   function confirmar() {
     if (!acepta) return;
     startTransition(async () => {
-      const res = await aceptarTerminos({ terminosId, acepta: true });
+      const res = await llamarAccion(() => aceptarTerminos({ terminosId, acepta: true }));
       if (!res.ok) {
         toast.error(res.error);
         return;

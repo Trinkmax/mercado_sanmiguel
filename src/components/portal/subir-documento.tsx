@@ -27,6 +27,7 @@ import {
   ACCEPT_ARCHIVOS,
   CATEGORIAS_DOCUMENTO,
 } from "@/components/portal/constantes";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /** Botón + formulario corto para que el socio suba un documento a su carpeta. */
 export function SubirDocumento() {
@@ -44,7 +45,7 @@ export function SubirDocumento() {
     const fd = new FormData(e.currentTarget);
     fd.set("categoria", categoria);
     startTransition(async () => {
-      const res = await subirDocumentoSocio(fd);
+      const res = await llamarAccion(() => subirDocumentoSocio(fd));
       if (!res.ok) {
         toast.error(res.error);
         return;

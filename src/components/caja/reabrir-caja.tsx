@@ -17,6 +17,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /**
  * Reabre una caja cerrada (administración sobre la suya, o autorizando un
@@ -50,7 +51,7 @@ export function BotonReabrirCaja({
       return;
     }
     startTransition(async () => {
-      const res = await reabrirCaja(cajaId, limpio || undefined);
+      const res = await llamarAccion(() => reabrirCaja(cajaId, limpio || undefined));
       if (!res.ok) {
         toast.error(res.error);
         return;

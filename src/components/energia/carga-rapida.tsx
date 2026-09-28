@@ -17,6 +17,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 export type FilaMedidor = {
   id: string;
@@ -193,12 +194,12 @@ export function CargaRapida({
       [fila.id]: { ...prev[fila.id], guardando: true, error: null },
     }));
 
-    const res = await registrarLectura({
+    const res = await llamarAccion(() => registrarLectura({
       medidorId: fila.id,
       periodo,
       anterior,
       actual,
-    });
+    }));
 
     if (!res.ok) {
       setEstado((prev) => ({

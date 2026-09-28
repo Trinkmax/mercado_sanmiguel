@@ -49,6 +49,7 @@ import {
   type EstadoNovedad,
   type TipoNovedad,
 } from "./constantes";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 export type EmpleadoElegible = {
   id: string;
@@ -272,7 +273,7 @@ export function FormNovedad({
 
     startTransition(async () => {
       if (editar) {
-        const res = await editarNovedad(fd);
+        const res = await llamarAccion(() => editarNovedad(fd));
         if (!res.ok) {
           setError(res.error);
           toast.error(res.error);
@@ -283,7 +284,7 @@ export function FormNovedad({
         router.refresh();
         return;
       }
-      const res = await cargarNovedad(fd);
+      const res = await llamarAccion(() => cargarNovedad(fd));
       if (!res.ok) {
         setError(res.error);
         toast.error(res.error);

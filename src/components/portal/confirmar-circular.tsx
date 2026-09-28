@@ -7,6 +7,7 @@ import { CheckCircle2 } from "lucide-react";
 import { confirmarRecepcionCircular } from "@/lib/actions/circulares";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /** Botón grande "Confirmo que la recibí" (circulares obligatorias, portal del socio). */
 export function ConfirmarCircular({
@@ -21,7 +22,7 @@ export function ConfirmarCircular({
 
   function confirmar() {
     startTransition(async () => {
-      const res = await confirmarRecepcionCircular({ circularId });
+      const res = await llamarAccion(() => confirmarRecepcionCircular({ circularId }));
       if (!res.ok) {
         toast.error(res.error);
         return;

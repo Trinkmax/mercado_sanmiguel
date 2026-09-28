@@ -15,6 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 function soloDigitos(valor: string): string {
   return valor.replace(/\D+/g, "");
@@ -55,7 +56,7 @@ function CardVencimiento({ diaVencimiento }: { diaVencimiento: number }) {
     }
     setErrorDia(null);
     startGuardar(async () => {
-      const res = await guardarConfiguracionGeneral({ dia_vencimiento: diaNum });
+      const res = await llamarAccion(() => guardarConfiguracionGeneral({ dia_vencimiento: diaNum }));
       if (!res.ok) toast.error(res.error);
       else toast.success(`Listo: los cargos del mes vencen el día ${diaNum}.`);
     });
@@ -116,7 +117,7 @@ function CardImpresionDirecta({ impresionDirecta }: { impresionDirecta: boolean 
     const anterior = activa;
     setActiva(valor);
     startGuardar(async () => {
-      const res = await guardarConfiguracionGeneral({ impresion_directa: valor });
+      const res = await llamarAccion(() => guardarConfiguracionGeneral({ impresion_directa: valor }));
       if (!res.ok) {
         setActiva(anterior);
         toast.error(res.error);

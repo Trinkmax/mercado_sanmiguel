@@ -21,6 +21,7 @@ import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
 import { CuentaCajon } from "@/components/caja/cuenta-cajon";
 import type { Arqueo } from "@/components/caja/arqueo-tipos";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /**
  * Acción del final del día. El diálogo muestra la cuenta ANTES de confirmar
@@ -59,7 +60,7 @@ export function BotonCerrarCaja({
 
   function confirmar() {
     startTransition(async () => {
-      const res = await cerrarCaja(cajaId);
+      const res = await llamarAccion(() => cerrarCaja(cajaId));
       if (!res.ok) {
         toast.error(res.error);
         return;

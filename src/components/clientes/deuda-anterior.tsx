@@ -19,6 +19,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /**
  * Reconocimiento de deuda (RD): deuda anterior al sistema.
@@ -62,12 +63,12 @@ export function DeudaAnterior({
     setTocoFecha(true);
     if (!fechaValida) return;
     startTransition(async () => {
-      const res = await registrarDeudaAnterior({
+      const res = await llamarAccion(() => registrarDeudaAnterior({
         clienteId,
         monto: montoNumero,
         detalle,
         fecha,
-      });
+      }));
       if (!res.ok) {
         toast.error(res.error);
         return;

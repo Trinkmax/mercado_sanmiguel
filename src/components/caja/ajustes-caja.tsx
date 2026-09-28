@@ -25,6 +25,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { Arqueo } from "@/components/caja/arqueo-tipos";
 import type { AjusteCaja } from "@/components/caja/datos";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 type Sentido = "falta" | "sobra";
 type Cuenta = "efectivo" | "banco";
@@ -62,7 +63,7 @@ function BotonBorrarAjuste({ ajuste }: { ajuste: AjusteCaja }) {
       return;
     }
     startTransition(async () => {
-      const res = await borrarAjusteCaja({ ajusteId: ajuste.id, motivo: limpio });
+      const res = await llamarAccion(() => borrarAjusteCaja({ ajusteId: ajuste.id, motivo: limpio }));
       if (!res.ok) {
         setError(res.error);
         return;
@@ -172,7 +173,7 @@ function FormAjuste({ cajaId, arqueo, onListo }: { cajaId: string; arqueo: Arque
       return;
     }
     startTransition(async () => {
-      const res = await registrarAjusteCaja({ cajaId, cuenta, monto: firmado, motivo: motivo.trim(), ref });
+      const res = await llamarAccion(() => registrarAjusteCaja({ cajaId, cuenta, monto: firmado, motivo: motivo.trim(), ref }));
       if (!res.ok) {
         setError(res.error);
         return;

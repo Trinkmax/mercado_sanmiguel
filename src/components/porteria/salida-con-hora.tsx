@@ -19,6 +19,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /** "YYYY-MM-DD" del día argentino de un timestamptz. */
 function diaAR(iso: string): string {
@@ -122,7 +123,7 @@ export function SalidaConHora({
     startTransition(async () => {
       let res: Awaited<ReturnType<typeof marcarEgreso>>;
       try {
-        res = await marcarEgreso({ id: ingresoId, egresoEn: iso });
+        res = await llamarAccion(() => marcarEgreso({ id: ingresoId, egresoEn: iso }));
       } catch {
         setError("No se pudo guardar. Revisá la conexión y probá de nuevo.");
         return;

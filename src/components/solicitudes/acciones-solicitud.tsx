@@ -21,6 +21,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { LABEL_ESTADO, type EstadoSolicitud, type OrigenSolicitud } from "./constantes";
 import { accionesPara, type DefAccion } from "./acciones";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 export type UsuarioAsignable = { user_id: string; nombre: string };
 
@@ -56,12 +57,12 @@ export function AccionesSolicitud({
 
   function ejecutar(def: DefAccion, conTexto?: string, conUsuario?: string) {
     startTransition(async () => {
-      const res = await avanzarSolicitud({
+      const res = await llamarAccion(() => avanzarSolicitud({
         solicitudId,
         accion: def.accion,
         texto: conTexto,
         usuarioId: conUsuario,
-      });
+      }));
       if (!res.ok) {
         if (abierta) setError(res.error);
         else toast.error(res.error);

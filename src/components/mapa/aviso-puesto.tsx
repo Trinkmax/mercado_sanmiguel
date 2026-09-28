@@ -25,6 +25,7 @@ import { avisarSobrePuesto } from "@/lib/actions/solicitudes";
 import { selloEstado, type EstadoSolicitud } from "@/components/solicitudes/constantes";
 import { etiquetaEspacio } from "./geometria";
 import type { AvisoPuestoPrevio, Espacio } from "./tipos";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 const MOTIVOS: { valor: string; icono: LucideIcon }[] = [
   { valor: "Luz / electricidad", icono: Zap },
@@ -66,11 +67,11 @@ export function AvisoPuesto({
     }
     setError(null);
     startTransition(async () => {
-      const res = await avisarSobrePuesto({
+      const res = await llamarAccion(() => avisarSobrePuesto({
         espacioId: espacio.id,
         motivo,
         detalle: detalle.trim() || undefined,
-      });
+      }));
       if (!res.ok) {
         setError(res.error);
         return;

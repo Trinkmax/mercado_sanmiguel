@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 const NOMBRE: Record<string, string> = {
   "efectivo-ARS": "Pesos en efectivo",
@@ -48,7 +49,7 @@ export function SaldoInicialForm({
   function guardar() {
     setError(null);
     startTransition(async () => {
-      const res = await guardarSaldoInicial(medio, moneda, montoNumero, fechaStr, notasStr.trim() || undefined);
+      const res = await llamarAccion(() => guardarSaldoInicial(medio, moneda, montoNumero, fechaStr, notasStr.trim() || undefined));
       if (!res.ok) {
         setError(res.error);
         return;

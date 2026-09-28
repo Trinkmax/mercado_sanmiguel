@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { ACCEPT_ADJUNTO_REGISTRO } from "./constantes";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /**
  * Respuesta de Administración o del Líder en el hilo del registro (D5). Si el socio presentó
@@ -45,7 +46,7 @@ export function ResponderRegistro({
     const fd = new FormData(e.currentTarget);
     fd.set("registroId", registroId);
     startTransition(async () => {
-      const res = await responderRegistro(fd);
+      const res = await llamarAccion(() => responderRegistro(fd));
       if (!res.ok) {
         setError(res.error);
         return;

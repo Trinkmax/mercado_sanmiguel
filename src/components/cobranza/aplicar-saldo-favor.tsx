@@ -8,6 +8,7 @@ import { aplicarSaldoFavor } from "@/lib/actions/cobranza";
 import { formatARS } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /**
  * Cuando el saldo a favor cubre la deuda: un toque y queda al día, sin cobrar
@@ -25,7 +26,7 @@ export function BotonAplicarSaldoFavor({
 
   function aplicar() {
     startTransition(async () => {
-      const res = await aplicarSaldoFavor(clienteId);
+      const res = await llamarAccion(() => aplicarSaldoFavor(clienteId));
       if (!res.ok) {
         toast.error(res.error);
         return;

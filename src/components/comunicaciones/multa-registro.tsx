@@ -22,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
 import { MOTIVOS_SIN_EFECTO, SELLO_MULTA, type EstadoMulta } from "./constantes";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /**
  * Caja de la multa del registro (D4): monto grande, sello Pendiente/Pagada/Sin efecto, vence,
@@ -60,7 +61,7 @@ export function MultaRegistro({
       return;
     }
     startTransition(async () => {
-      const res = await dejarSinEfectoMulta({ registroId, motivo: motivo.trim() });
+      const res = await llamarAccion(() => dejarSinEfectoMulta({ registroId, motivo: motivo.trim() }));
       if (!res.ok) {
         setError(res.error);
         return;

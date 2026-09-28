@@ -37,6 +37,7 @@ import {
   sumarDias,
   uuidV4,
 } from "@/components/cobranza/tipos";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 type Medio = "efectivo" | "transferencia";
 
@@ -148,7 +149,7 @@ export function CobroAmbulante({
     if (medio === "transferencia" && comprobante) fd.set("comprobante:l1", comprobante, comprobante.name);
 
     startTransition(async () => {
-      const res = await cobrarDiario(fd);
+      const res = await llamarAccion(() => cobrarDiario(fd));
       if (!res.ok) {
         setErrorRpc(res.error);
         return;

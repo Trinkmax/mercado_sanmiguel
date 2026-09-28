@@ -17,6 +17,7 @@ import {
   CATEGORIAS_DOCUMENTO,
   normalizarCategoriaDocumento,
 } from "./constantes";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /**
  * Sumar un documento a la carpeta (C7): la categoría se elige con un toque entre las
@@ -57,7 +58,7 @@ export function SubirDocumento({
     fd.set("categoria", categoriaFinal);
     setError(null);
     startTransition(async () => {
-      const res = await subirDocumento(fd);
+      const res = await llamarAccion(() => subirDocumento(fd));
       if (!res.ok) {
         setError(res.error);
         toast.error(res.error);

@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Codigo } from "@/components/shared/codigo";
 import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 export type PrecioPorteria = {
   id: string;
@@ -108,7 +109,7 @@ function CuotasQuinta({ cuotasDefault, precioQuinta }: { cuotasDefault: number; 
   function guardar(cuotas: number, anterior: number, avisar = true) {
     setElegida(cuotas);
     startTransition(async () => {
-      const res = await guardarCuotasQuinteros({ cuotas });
+      const res = await llamarAccion(() => guardarCuotasQuinteros({ cuotas }));
       if (!res.ok) {
         setElegida(anterior);
         toast.error(res.error);
@@ -222,7 +223,7 @@ function FilaPrecio({
     }
     setError(null);
     startTransition(async () => {
-      const res = await actualizarConcepto({ id: concepto.id, precio: nuevo });
+      const res = await llamarAccion(() => actualizarConcepto({ id: concepto.id, precio: nuevo }));
       if (!res.ok) {
         setError(res.error);
         return;

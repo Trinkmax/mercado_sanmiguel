@@ -57,6 +57,7 @@ import {
   type LineaForm,
   type MedioPago,
 } from "@/components/cobranza/tipos";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 const MAX_LINEAS = 6;
 
@@ -272,7 +273,7 @@ export function FormCobro({
     }
 
     startTransition(async () => {
-      const res = await registrarCobro(fd);
+      const res = await llamarAccion(() => registrarCobro(fd));
       if (!res.ok) {
         setErrorRpc(res.error);
         return;

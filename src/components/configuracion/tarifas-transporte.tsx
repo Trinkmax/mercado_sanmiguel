@@ -28,6 +28,7 @@ import {
   type TarifaTransporte,
   type UnidadTarifa,
 } from "@/components/porteria/tarifas";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 type Borrador = { nombre: string; precio: string; unidad: UnidadTarifa; icono: IconoTarifa };
 
@@ -161,13 +162,13 @@ function FilaEditable({
       return;
     }
     startGuardar(async () => {
-      const res = await guardarTarifaTransporte({
+      const res = await llamarAccion(() => guardarTarifaTransporte({
         id: tarifa?.id,
         nombre: b.nombre.trim(),
         precio,
         unidad: b.unidad,
         icono: b.icono,
-      });
+      }));
       if (!res.ok) {
         setError(res.error);
         return;
@@ -187,7 +188,7 @@ function FilaEditable({
     const anterior = activo;
     setActivo(v);
     startActivo(async () => {
-      const res = await cambiarActivoTarifaTransporte({ id: tarifa.id, activo: v });
+      const res = await llamarAccion(() => cambiarActivoTarifaTransporte({ id: tarifa.id, activo: v }));
       if (!res.ok) {
         setActivo(anterior);
         toast.error(res.error);

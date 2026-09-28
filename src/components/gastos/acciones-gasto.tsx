@@ -31,6 +31,7 @@ import {
   textoBotonPago,
 } from "@/components/gastos/selector-origen";
 import { delDia, type CajaElegible, type OrigenPago } from "@/components/gastos/tipos";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 export type GastoAcciones = {
   id: string;
@@ -116,13 +117,13 @@ export function AccionesGasto({
   function pagar() {
     setError(null);
     startTransition(async () => {
-      const res = await pagarGasto({
+      const res = await llamarAccion(() => pagarGasto({
         id: gasto.id,
         origen: origen.origen,
         cajaId: origen.origen === "caja" ? origen.caja?.id ?? null : null,
         medio: origen.origen === "caja" ? "efectivo" : origen.medio,
         fecha: origen.origen === "tesoreria" ? origen.fecha : null,
-      });
+      }));
       if (!res.ok) {
         setError(res.error);
         return;
@@ -134,7 +135,7 @@ export function AccionesGasto({
 
   function anular() {
     startTransition(async () => {
-      const res = await anularGasto({ id: gasto.id });
+      const res = await llamarAccion(() => anularGasto({ id: gasto.id }));
       if (!res.ok) {
         setError(res.error);
         return;
@@ -147,7 +148,7 @@ export function AccionesGasto({
   function deshacer() {
     setError(null);
     startTransition(async () => {
-      const res = await revertirPagoGasto({ id: gasto.id, motivo });
+      const res = await llamarAccion(() => revertirPagoGasto({ id: gasto.id, motivo }));
       if (!res.ok) {
         setError(res.error);
         return;

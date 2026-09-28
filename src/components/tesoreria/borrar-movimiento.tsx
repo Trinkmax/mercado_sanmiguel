@@ -17,6 +17,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /** Borrar un movimiento (con confirmación). Si tiene comisión asociada, se borran los dos. */
 export function BorrarMovimiento({
@@ -40,7 +41,7 @@ export function BorrarMovimiento({
   function confirmar() {
     setError(null);
     startTransition(async () => {
-      const res = await borrarMovimiento(id);
+      const res = await llamarAccion(() => borrarMovimiento(id));
       if (!res.ok) {
         setError(res.error);
         return;

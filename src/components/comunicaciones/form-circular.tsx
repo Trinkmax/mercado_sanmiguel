@@ -18,6 +18,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { contarPublico, type ClientePublico } from "./publico";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /**
  * Alta de circular (D2): qué dice, a quién le llega ("Todos" o grupos que se suman + filtro
@@ -80,7 +81,7 @@ export function FormCircular({
     fd.set("segmentos", JSON.stringify(segmentos));
     fd.set("soloSocios", soloSocios ? "true" : "false");
     startTransition(async () => {
-      const res = await crearCircular(fd);
+      const res = await llamarAccion(() => crearCircular(fd));
       if (!res.ok) {
         setError(res.error);
         return;

@@ -33,6 +33,7 @@ import {
   totalMensual,
 } from "@/components/clientes/constantes";
 import { cn } from "@/lib/utils";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 export type ItemConcepto = {
   id: string;
@@ -205,11 +206,11 @@ function AgregarConcepto({
   function agregar() {
     if (!concepto) return;
     startTransition(async () => {
-      const res = await agregarConceptoCliente({
+      const res = await llamarAccion(() => agregarConceptoCliente({
         clienteId,
         conceptoId: concepto.id,
         cantidad,
-      });
+      }));
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -330,7 +331,7 @@ function CuotasCard({
     if (cuotas === cuotasMes) return;
     const valor = cuotas;
     startTransition(async () => {
-      const res = await editarCuotasMes({ clienteId, cuotas_mes: valor });
+      const res = await llamarAccion(() => editarCuotasMes({ clienteId, cuotas_mes: valor }));
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -430,7 +431,7 @@ function FilaConcepto({
   function guardarCantidad() {
     if (!sucio) return;
     startTransition(async () => {
-      const res = await editarConceptoCliente({ id: item.id, clienteId, cantidad });
+      const res = await llamarAccion(() => editarConceptoCliente({ id: item.id, clienteId, cantidad }));
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -450,7 +451,7 @@ function FilaConcepto({
   function cambiarActivo(valor: boolean) {
     setActivo(valor);
     startTransition(async () => {
-      const res = await editarConceptoCliente({ id: item.id, clienteId, activo: valor });
+      const res = await llamarAccion(() => editarConceptoCliente({ id: item.id, clienteId, activo: valor }));
       if (!res.ok) {
         toast.error(res.error);
         setActivo(item.activo);

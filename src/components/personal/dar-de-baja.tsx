@@ -19,6 +19,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /** Baja lógica del empleado (con fecha de egreso) o reincorporación. */
 export function DarDeBaja({
@@ -37,7 +38,7 @@ export function DarDeBaja({
 
   function confirmarBaja() {
     startTransition(async () => {
-      const res = await darDeBaja({ id: empleadoId, fecha_egreso: fecha });
+      const res = await llamarAccion(() => darDeBaja({ id: empleadoId, fecha_egreso: fecha }));
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -50,7 +51,7 @@ export function DarDeBaja({
 
   function confirmarAlta() {
     startTransition(async () => {
-      const res = await reincorporar({ id: empleadoId });
+      const res = await llamarAccion(() => reincorporar({ id: empleadoId }));
       if (!res.ok) {
         toast.error(res.error);
         return;

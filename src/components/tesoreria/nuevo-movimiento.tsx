@@ -35,6 +35,7 @@ import {
   type Cuenta,
   type TipoMovimiento,
 } from "@/components/tesoreria/tipos";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /** Saldos actuales por moneda (para la vista previa "antes → después"). */
 export type SaldosCuentas = Record<Moneda, Record<Cuenta, number>>;
@@ -173,7 +174,7 @@ export function AccionesRapidas({
     if (!tipo) return;
     setError(null);
     startTransition(async () => {
-      const res = await crearMovimiento({
+      const res = await llamarAccion(() => crearMovimiento({
         tipo,
         moneda,
         cuenta: cuentaEfectiva,
@@ -182,7 +183,7 @@ export function AccionesRapidas({
         fecha,
         descripcion: descripcion.trim() || undefined,
         comision: tipo === "deposito" && conComision ? comisionNum : undefined,
-      });
+      }));
       if (!res.ok) {
         setError(res.error);
         return;

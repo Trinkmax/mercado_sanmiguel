@@ -16,6 +16,7 @@ import {
   TIPOS_SOLICITUD,
   type TipoSolicitud,
 } from "@/components/solicitudes/constantes";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /** Alta de solicitud del socio: tipo → asunto → detalle → foto opcional → enviar. */
 export function FormSolicitudSocio() {
@@ -31,7 +32,7 @@ export function FormSolicitudSocio() {
     const fd = new FormData(e.currentTarget);
     fd.set("tipo", tipo);
     startTransition(async () => {
-      const res = await crearSolicitudSocio(fd);
+      const res = await llamarAccion(() => crearSolicitudSocio(fd));
       if (!res.ok) {
         setError(res.error);
         toast.error(res.error);

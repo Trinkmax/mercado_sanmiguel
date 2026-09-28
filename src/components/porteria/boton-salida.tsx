@@ -8,6 +8,7 @@ import { marcarEgreso } from "@/lib/actions/porteria";
 import { horaAR } from "@/components/porteria/fechas";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /** "Marcar salida" de un ingreso que sigue adentro. Un toque, sin confirmación. */
 export function BotonSalida({ ingresoId, nombre }: { ingresoId: string; nombre: string }) {
@@ -16,7 +17,7 @@ export function BotonSalida({ ingresoId, nombre }: { ingresoId: string; nombre: 
 
   function marcar() {
     startTransition(async () => {
-      const res = await marcarEgreso({ id: ingresoId });
+      const res = await llamarAccion(() => marcarEgreso({ id: ingresoId }));
       if (!res.ok) {
         toast.error(res.error);
         return;

@@ -17,6 +17,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Spinner } from "@/components/ui/spinner";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /**
  * Aplica el saldo a favor del cliente a su deuda (la más vieja primero),
@@ -38,7 +39,7 @@ export function AplicarSaldoFavor({
 
   function aplicar() {
     startTransition(async () => {
-      const res = await aplicarSaldoFavor({ clienteId });
+      const res = await llamarAccion(() => aplicarSaldoFavor({ clienteId }));
       if (!res.ok) {
         toast.error(res.error);
         return;

@@ -28,6 +28,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
 import type { Arqueo } from "@/components/caja/arqueo-tipos";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 type CajaValidar = {
   id: string;
@@ -120,11 +121,11 @@ export function ValidarCajaDialog({
   function validar() {
     setError(null);
     startTransition(async () => {
-      const res = await validarCaja(
+      const res = await llamarAccion(() => validarCaja(
         caja.id,
         observaciones.trim() || undefined,
         pideConteo && contadoNum !== null ? contadoNum : undefined
-      );
+      ));
       if (!res.ok) {
         setError(res.error);
         return;

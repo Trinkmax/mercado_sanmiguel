@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import type { Franja } from "@/components/personal/constantes";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 type FranjaEditable = { clave: number; desde: string; hasta: string };
 type Semana = Record<number, FranjaEditable[]>;
@@ -129,7 +130,7 @@ export function EditorHorarios({
       }))
     );
     startTransition(async () => {
-      const res = await guardarHorarios({ empleadoId, franjas });
+      const res = await llamarAccion(() => guardarHorarios({ empleadoId, franjas }));
       if (!res.ok) {
         setErrorServidor(res.error);
         toast.error(res.error);

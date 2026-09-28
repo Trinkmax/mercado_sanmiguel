@@ -17,6 +17,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /**
  * El dueño de una caja ya rendida/cerrada pide que se la reabran (por ejemplo,
@@ -42,7 +43,7 @@ export function BotonPedirReapertura({
       return;
     }
     startTransition(async () => {
-      const res = await solicitarReaperturaCaja(cajaId, limpio);
+      const res = await llamarAccion(() => solicitarReaperturaCaja(cajaId, limpio));
       if (!res.ok) {
         toast.error(res.error);
         return;

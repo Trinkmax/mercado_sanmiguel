@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { Codigo } from "@/components/shared/codigo";
 import type { Rubro } from "@/components/gastos/tipos";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 function normalizar(t: string): string {
   return t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
@@ -49,7 +50,7 @@ export function SelectorRubro({
   function crear() {
     setError(null);
     startTransition(async () => {
-      const res = await crearRubro({ nombre: busqueda });
+      const res = await llamarAccion(() => crearRubro({ nombre: busqueda }));
       if (!res.ok) {
         setError(res.error);
         return;

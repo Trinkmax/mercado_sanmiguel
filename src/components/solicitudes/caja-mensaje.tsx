@@ -13,6 +13,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ACCEPT_ADJUNTO } from "./constantes";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /**
  * Caja para escribir en el hilo: texto + adjunto opcional + (solo staff)
@@ -41,7 +42,7 @@ export function CajaMensaje({
     fd.set("solicitudId", solicitudId);
     fd.set("interno", interno ? "true" : "false");
     startTransition(async () => {
-      const res = await enviarMensaje(fd);
+      const res = await llamarAccion(() => enviarMensaje(fd));
       if (!res.ok) {
         toast.error(res.error);
         return;

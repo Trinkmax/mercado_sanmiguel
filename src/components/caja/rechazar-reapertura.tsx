@@ -17,6 +17,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /** Rechaza un pedido de reapertura; el motivo es opcional y queda en la bitácora. */
 export function BotonRechazarReapertura({
@@ -32,7 +33,7 @@ export function BotonRechazarReapertura({
 
   function confirmar() {
     startTransition(async () => {
-      const res = await rechazarReaperturaCaja(cajaId, motivo.trim() || undefined);
+      const res = await llamarAccion(() => rechazarReaperturaCaja(cajaId, motivo.trim() || undefined));
       if (!res.ok) {
         toast.error(res.error);
         return;

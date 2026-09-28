@@ -14,6 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Sello } from "@/components/shared/sello";
 import { cn } from "@/lib/utils";
 import { ACCEPT_ARCHIVOS, TIPOS_REGISTRO, type TipoRegistro } from "./constantes";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 const TOAST_POR_TIPO: Record<TipoRegistro, string> = {
   notificacion: "Notificación registrada",
@@ -41,7 +42,7 @@ export function NuevaSancion({
     fd.set("clienteId", clienteId);
     fd.set("tipo", tipo);
     startTransition(async () => {
-      const res = await crearSancion(fd);
+      const res = await llamarAccion(() => crearSancion(fd));
       if (!res.ok) {
         toast.error(res.error);
         return;

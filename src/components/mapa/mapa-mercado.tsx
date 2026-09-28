@@ -69,6 +69,7 @@ import type {
   Rect,
   VistaMapa,
 } from "./tipos";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /** Plano real del mercado: cada puesto pintado según el estado de cobro de
  * quien lo ocupa. Tocar un puesto ilumina todos los espacios de ese puestero.
@@ -523,7 +524,9 @@ export function MapaMercado({
         for (const p of pasos) cambiarPlano({ tipo: "asignar", ids: p.ids, clienteId: p.clienteId });
         const resultados = await Promise.all(
           pasos.map((p) =>
-            asignarEspacios({ espacios: p.ids, cliente_id: p.clienteId, actual: p.actual })
+            llamarAccion(() =>
+              asignarEspacios({ espacios: p.ids, cliente_id: p.clienteId, actual: p.actual })
+            )
           )
         );
         const falla = resultados.find((r) => !r.ok);
@@ -718,7 +721,7 @@ export function MapaMercado({
   const editar = (e: Espacio, datos: DatosEspacio) => {
     startTransition(async () => {
       cambiarPlano({ tipo: "editar", id: e.id, ...datos });
-      const res = await editarEspacio({ id: e.id, ...datos });
+      const res = await llamarAccion(() => editarEspacio({ id: e.id, ...datos }));
       if (!res.ok) toast.error(res.error);
       else if (datos.propio !== undefined) {
         const n = datos.numero ?? e.numero ?? "?";
@@ -754,17 +757,17 @@ export function MapaMercado({
       const res =
         cantidadNueva <= 0
           ? item
-            ? await editarConceptoCliente({ id: item.id, clienteId: c.id, activo: false })
+            ? await llamarAccion(() => editarConceptoCliente({ id: item.id, clienteId: c.id, activo: false }))
             : null
           : item
-            ? await editarConceptoCliente({
+            ? await llamarAccion(() => editarConceptoCliente({
                 id: item.id,
                 clienteId: c.id,
                 cantidad: cantidadNueva,
                 ...(item.activo ? {} : { activo: true }),
-              })
+              }))
             : conceptoId
-              ? await agregarConceptoCliente({ clienteId: c.id, conceptoId, cantidad: cantidadNueva })
+              ? await llamarAccion(() => agregarConceptoCliente({ clienteId: c.id, conceptoId, cantidad: cantidadNueva }))
               : null;
       setFacturando(null);
       if (!res) {

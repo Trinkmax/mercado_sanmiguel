@@ -22,6 +22,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Sello } from "@/components/shared/sello";
 import { DiffCambio } from "@/components/aprobaciones/diff-cambio";
 import type { CambioFila, ReferenciaConcepto } from "@/components/aprobaciones/tipos";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /**
  * Alta de ambulante que el Jefe de Portería aplicó en el acto (§1.3 D-P1): ya existe y ya se
@@ -46,7 +47,7 @@ export function CardRevision({
 
   function revisar() {
     startRevisar(async () => {
-      const res = await marcarRevisada({ cambio_id: cambio.id });
+      const res = await llamarAccion(() => marcarRevisada({ cambio_id: cambio.id }));
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -64,11 +65,11 @@ export function CardRevision({
     if (!cliente) return;
     setErrorMotivo(null);
     startBaja(async () => {
-      const res = await darDeBajaRevisada({
+      const res = await llamarAccion(() => darDeBajaRevisada({
         cambio_id: cambio.id,
         cliente_id: cliente.id,
         motivo: texto,
-      });
+      }));
       if (!res.ok) {
         toast.error(res.error);
         return;

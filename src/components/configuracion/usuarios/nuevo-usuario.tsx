@@ -16,6 +16,7 @@ import { CampoContrasena, CampoDni, CampoEmailOpcional } from "./campos";
 import { Credencial } from "./credencial";
 import { generarContrasena } from "./contrasena";
 import type { EmpleadoPadron } from "./tipos";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 function plano(texto: string): string {
   return texto
@@ -94,7 +95,7 @@ export function NuevoUsuario({
     if (Object.keys(e).length > 0 || !rol) return;
 
     startTransition(async () => {
-      const res = await crearUsuario({ nombre: nombre.trim(), dni, rol, password, email: email || undefined });
+      const res = await llamarAccion(() => crearUsuario({ nombre: nombre.trim(), dni, rol, password, email: email || undefined }));
       if (!res.ok) {
         setErrores({ general: res.error });
         return;

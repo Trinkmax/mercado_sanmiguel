@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/table";
 import { Codigo } from "@/components/shared/codigo";
 import { EmptyState } from "@/components/shared/empty-state";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 export type RubroFila = {
   id: string;
@@ -41,7 +42,7 @@ export function TablaRubros({ rubros }: { rubros: RubroFila[] }) {
 
   function crear() {
     startCrear(async () => {
-      const res = await crearRubro({ codigo, nombre });
+      const res = await llamarAccion(() => crearRubro({ codigo, nombre }));
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -55,7 +56,7 @@ export function TablaRubros({ rubros }: { rubros: RubroFila[] }) {
   function cambiarActivo(rubro: RubroFila, activo: boolean) {
     setPendiente(rubro.id);
     startToggle(async () => {
-      const res = await cambiarActivoRubro({ id: rubro.id, activo });
+      const res = await llamarAccion(() => cambiarActivoRubro({ id: rubro.id, activo }));
       if (!res.ok) toast.error(res.error);
       else
         toast.success(

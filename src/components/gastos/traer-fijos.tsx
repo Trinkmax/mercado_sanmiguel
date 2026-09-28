@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { Codigo } from "@/components/shared/codigo";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 export type FijoParaTraer = {
   id: string;
@@ -81,7 +82,7 @@ export function TraerFijos({
   function traer() {
     setError(null);
     startTransition(async () => {
-      const res = await traerGastosFijos({
+      const res = await llamarAccion(() => traerGastosFijos({
         desde: mesOrigen,
         hasta: mesDestino,
         items: elegidos.map((i) => ({
@@ -90,7 +91,7 @@ export function TraerFijos({
           vencimiento: filaDe(i).vencimiento || null,
           descripcion: i.descripcion,
         })),
-      });
+      }));
       if (!res.ok) {
         setError(res.error);
         return;

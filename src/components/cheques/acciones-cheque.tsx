@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/tooltip";
 import { ElegirGasto } from "@/components/cheques/elegir-gasto";
 import { useDatosCheques } from "@/components/cheques/datos-cheques";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 export type ChequeAcciones = {
   id: string;
@@ -157,7 +158,7 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
   function ejecutar(accion: () => Promise<ActionResult>, exito: string) {
     setError(null);
     startTransition(async () => {
-      const res = await accion();
+      const res = await llamarAccion(accion);
       if (!res.ok) {
         setError(res.error);
         return;

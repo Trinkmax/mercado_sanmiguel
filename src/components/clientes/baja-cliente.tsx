@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { TOAST_ENVIADO_APROBACION, aplicaDirectoRol } from "./constantes";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /**
  * Baja lógica del cliente (con motivo) o reactivación. El Líder aplica
@@ -49,7 +50,7 @@ export function BajaCliente({
     setToco(true);
     if (!motivoOk) return;
     startTransition(async () => {
-      const res = await darDeBajaCliente({ clienteId, motivo });
+      const res = await llamarAccion(() => darDeBajaCliente({ clienteId, motivo }));
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -70,7 +71,7 @@ export function BajaCliente({
 
   function reactivar() {
     startTransition(async () => {
-      const res = await reactivarCliente({ clienteId });
+      const res = await llamarAccion(() => reactivarCliente({ clienteId }));
       if (!res.ok) {
         toast.error(res.error);
         return;

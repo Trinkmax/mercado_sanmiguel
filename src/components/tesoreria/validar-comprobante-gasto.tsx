@@ -6,6 +6,7 @@ import { Stamp } from "lucide-react";
 import { validarComprobanteGasto } from "@/lib/actions/tesoreria";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /** Botón "Validar comprobante": tesorería da el OK a la factura de un gasto pagado. */
 export function ValidarComprobanteGasto({
@@ -19,7 +20,7 @@ export function ValidarComprobanteGasto({
 
   function validar() {
     startTransition(async () => {
-      const res = await validarComprobanteGasto(id);
+      const res = await llamarAccion(() => validarComprobanteGasto(id));
       if (!res.ok) {
         toast.error(res.error);
         return;

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { FilaNovedad } from "./fila-novedad";
 import type { NovedadVista } from "./constantes";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 export type PendienteBandeja = NovedadVista & { nombre: string };
 
@@ -32,7 +33,7 @@ export function BandejaAprobacion({
   function aprobarTodas() {
     setOcultas(true); // optimista
     startTransition(async () => {
-      const res = await aprobarNovedades({ ids: pendientes.map((p) => p.id) });
+      const res = await llamarAccion(() => aprobarNovedades({ ids: pendientes.map((p) => p.id) }));
       if (!res.ok) {
         setOcultas(false);
         toast.error(res.error);

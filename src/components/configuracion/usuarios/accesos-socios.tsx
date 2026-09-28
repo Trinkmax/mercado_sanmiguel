@@ -17,6 +17,7 @@ import { Credencial } from "./credencial";
 import { FilaUsuario } from "./fila-usuario";
 import { dniDesdeCuit, generarContrasena } from "./contrasena";
 import type { ClienteAcceso } from "./tipos";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 function plano(texto: string): string {
   return texto
@@ -256,13 +257,13 @@ function FormDarAcceso({
     }
     setError(null);
     startTransition(async () => {
-      const res = await crearAccesoSocio({
+      const res = await llamarAccion(() => crearAccesoSocio({
         cliente_id: cliente.id,
         nombre: nombre.trim(),
         dni,
         password,
         email: email || undefined,
-      });
+      }));
       if (!res.ok) {
         setError(res.error);
         return;

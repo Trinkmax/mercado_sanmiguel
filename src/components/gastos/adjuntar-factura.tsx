@@ -17,6 +17,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /**
  * Botón "Adjuntar factura" + subformulario corto para un gasto cargado sin
@@ -36,7 +37,7 @@ export function AdjuntarFactura({
     const fd = new FormData(e.currentTarget);
     fd.set("id", gasto.id);
     startTransition(async () => {
-      const res = await adjuntarFacturaGasto(fd);
+      const res = await llamarAccion(() => adjuntarFacturaGasto(fd));
       if (!res.ok) {
         toast.error(res.error);
         return;

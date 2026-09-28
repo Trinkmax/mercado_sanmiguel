@@ -6,6 +6,7 @@ import { Undo2 } from "lucide-react";
 import { desconciliarTransferencia } from "@/lib/actions/tesoreria";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /** "Deshacer" de una conciliación marcada por error (Tesorería y el Líder). */
 export function BotonDesconciliar({ id, numero }: { id: string; numero: number }) {
@@ -13,7 +14,7 @@ export function BotonDesconciliar({ id, numero }: { id: string; numero: number }
 
   function deshacer() {
     startTransition(async () => {
-      const res = await desconciliarTransferencia(id);
+      const res = await llamarAccion(() => desconciliarTransferencia(id));
       if (!res.ok) {
         toast.error(res.error);
         return;

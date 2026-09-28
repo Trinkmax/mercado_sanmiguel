@@ -28,6 +28,7 @@ import { CampoContrasena, CampoDni } from "./campos";
 import { Credencial } from "./credencial";
 import { generarContrasena, inicial } from "./contrasena";
 import type { UsuarioFila } from "./tipos";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 type Panel = "contrasena" | "editar" | "credencial" | null;
 
@@ -85,7 +86,7 @@ export function FilaUsuario({
 
   function cambiarActivo(activo: boolean) {
     startTransition(async () => {
-      const res = await cambiarActivoUsuario({ user_id: usuario.user_id, activo });
+      const res = await llamarAccion(() => cambiarActivoUsuario({ user_id: usuario.user_id, activo }));
       setConfirmarQuitar(false);
       if (!res.ok) {
         toast.error(res.error);
@@ -113,7 +114,7 @@ export function FilaUsuario({
       return;
     }
     startTransition(async () => {
-      const res = await restablecerContrasena({ user_id: usuario.user_id, password });
+      const res = await llamarAccion(() => restablecerContrasena({ user_id: usuario.user_id, password }));
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -133,12 +134,12 @@ export function FilaUsuario({
     }
     setErrorEdicion(null);
     startTransition(async () => {
-      const res = await editarUsuario({
+      const res = await llamarAccion(() => editarUsuario({
         user_id: usuario.user_id,
         nombre: nombre.trim(),
         dni: dni || undefined,
         rol: puedeCambiarRol && rol !== usuario.rol ? rol : undefined,
-      });
+      }));
       if (!res.ok) {
         setErrorEdicion(res.error);
         return;

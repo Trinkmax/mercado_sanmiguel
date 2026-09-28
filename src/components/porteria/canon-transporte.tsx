@@ -29,6 +29,7 @@ import {
   type MedioCanon,
   type TarifaTransporte,
 } from "@/components/porteria/tarifas";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 /** Segundos que queda el sello "Cobrado N° X" antes de volver al total. */
 const SEGUNDOS_SELLO = 4;
@@ -127,7 +128,7 @@ export function CanonTransporte({
   function deshacer(e: Exito) {
     toast.promise(
       (async () => {
-        const res = await anularCanon({ id: e.id, motivo: "Deshecho al instante" });
+        const res = await llamarAccion(() => anularCanon({ id: e.id, motivo: "Deshecho al instante" }));
         if (!res.ok) throw new Error(res.error);
       })(),
       {
@@ -151,7 +152,7 @@ export function CanonTransporte({
     startTransition(async () => {
       let res: Awaited<ReturnType<typeof registrarCanon>>;
       try {
-        res = await registrarCanon({
+        res = await llamarAccion(() => registrarCanon({
           tarifaId: tarifa.id,
           cantidad,
           medio,
@@ -159,7 +160,7 @@ export function CanonTransporte({
           destino,
           puesto: destino === "puesto" && puestoNorm ? puestoNorm : undefined,
           ref,
-        });
+        }));
       } catch {
         // Sin red: no se sabe si llegó. Se conserva TODO (y el mismo ref: si ya había entrado,
         // el reintento devuelve el mismo cobro en vez de cobrar dos veces).

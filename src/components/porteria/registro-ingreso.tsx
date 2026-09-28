@@ -19,6 +19,7 @@ import { Sello } from "@/components/shared/sello";
 import { FirmaPad, type FirmaPadHandle } from "@/components/porteria/firma-pad";
 import { EscanerDni, type DatosDni } from "@/components/porteria/escaner-dni";
 import { horaAR } from "@/components/porteria/fechas";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 const SEGUNDOS_CONFIRMACION = 8;
 
@@ -78,7 +79,7 @@ export function RegistroIngreso() {
     const campo = campoBusqueda;
     const timer = setTimeout(async () => {
       setBuscando(true);
-      const res = await buscarEmpleados(texto);
+      const res = await llamarAccion(() => buscarEmpleados(texto));
       if (id !== ultimaBusqueda.current) return;
       setBuscando(false);
       if (!res.ok) {
@@ -178,7 +179,7 @@ export function RegistroIngreso() {
       if (empleado) fd.set("empleado_id", empleado.id);
       fd.set("firma", firma, "firma.png");
 
-      const res = await registrarIngreso(fd);
+      const res = await llamarAccion(() => registrarIngreso(fd));
       if (!res.ok) {
         setError(res.error);
         toast.error(res.error);

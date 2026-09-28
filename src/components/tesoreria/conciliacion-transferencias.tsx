@@ -19,6 +19,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 export type FilaTransferencia = {
   id: string;
@@ -109,7 +110,7 @@ export function ConciliacionTransferencias({
     if (ids.length === 0) return;
     setEnCurso(ids);
     startTransition(async () => {
-      const res = await conciliarTransferencias(ids);
+      const res = await llamarAccion(() => conciliarTransferencias(ids));
       setEnCurso([]);
       if (!res.ok) {
         toast.error(res.error);

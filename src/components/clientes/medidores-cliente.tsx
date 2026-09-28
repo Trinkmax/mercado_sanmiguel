@@ -23,6 +23,7 @@ import {
   type UbicacionElegida,
 } from "@/components/clientes/ubicacion-medidor";
 import { TOAST_ENVIADO_APROBACION, aplicaDirectoRol } from "@/components/clientes/constantes";
+import { llamarAccion } from "@/lib/llamar-accion";
 
 export type MedidorConLectura = {
   id: string;
@@ -84,11 +85,11 @@ export function MedidoresCliente({
     }
     setErrorNuevo(null);
     startTransition(async () => {
-      const res = await crearMedidor({
+      const res = await llamarAccion(() => crearMedidor({
         clienteId,
         numero: numeroNuevo,
         ...ubicacionParaGuardar(ubicacionNueva),
-      });
+      }));
       if (!res.ok) {
         setErrorNuevo(res.error);
         toast.error(res.error);
@@ -104,7 +105,7 @@ export function MedidoresCliente({
 
   function cambiarActivo(m: MedidorConLectura) {
     startTransition(async () => {
-      const res = await editarMedidor({ id: m.id, clienteId, activo: !m.activo });
+      const res = await llamarAccion(() => editarMedidor({ id: m.id, clienteId, activo: !m.activo }));
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -248,12 +249,12 @@ function EditarMedidor({
   function guardar(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     startTransition(async () => {
-      const res = await editarMedidor({
+      const res = await llamarAccion(() => editarMedidor({
         id: medidor.id,
         clienteId,
         numero,
         ...ubicacionParaGuardar(ubicacion),
-      });
+      }));
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -314,7 +315,7 @@ function BloqueAbono({
   function cambiar(valor: boolean) {
     setExento(valor);
     startTransition(async () => {
-      const res = await eximirAbono({ clienteId, eximir: valor });
+      const res = await llamarAccion(() => eximirAbono({ clienteId, eximir: valor }));
       if (!res.ok) {
         toast.error(res.error);
         setExento(abono.exento);
