@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Nunito, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
@@ -28,6 +28,15 @@ export const metadata: Metadata = {
   },
   description:
     "Sistema de gestión de la Cooperativa Mercado San Miguel: clientes, cobranza, cajas, energía, gastos y reportes.",
+};
+
+// viewport-fit=cover: la barra de navegación del celular respeta el área segura
+// (la rayita del iPhone) con env(safe-area-inset-bottom).
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#1f2a5c",
 };
 
 export default function RootLayout({

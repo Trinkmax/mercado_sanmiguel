@@ -93,7 +93,7 @@ export function PanelAsignacion({
   const espacioPorId = new Map(espacios.map((e) => [e.id, e]));
 
   return (
-    <div className="grid gap-5 p-4 md:p-5 lg:grid-cols-[minmax(0,1fr)_20rem]">
+    <div className="grid gap-5 p-4 @xl:p-5 @4xl:grid-cols-[minmax(0,1fr)_20rem]">
       <div className="min-w-0 space-y-4">
         {/* Avisos que piden una respuesta */}
         {confirmacion ? (
@@ -480,7 +480,7 @@ function ListaRevision({
   const plano = revisiones.filter((r) => r.tipo === "repetido" || r.tipo === "sin_numero");
 
   return (
-    <aside className="space-y-4 rounded-lg border bg-muted/25 p-3.5 lg:max-h-[26rem] lg:overflow-y-auto">
+    <aside className="space-y-4 rounded-lg border bg-muted/25 p-3.5">
       <p className="font-display text-sm font-bold">Para revisar</p>
       {revisiones.length === 0 ? (
         <p className="flex items-start gap-2 text-sm text-pagado">

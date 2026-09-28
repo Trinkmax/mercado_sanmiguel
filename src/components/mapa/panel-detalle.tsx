@@ -98,10 +98,10 @@ export function PanelDetalle({
     const esQuintero = cliente.facturado.quintas > 0;
     const puedeCobrar = destinos.cobro !== null && (!soloQuinteros || esQuintero);
     return (
-      <div className="relative flex flex-col gap-4 p-4 md:flex-row md:items-start md:gap-6 md:p-5">
+      <div className="relative flex flex-col gap-4 p-4 @2xl:flex-row @2xl:items-start @2xl:gap-6 @2xl:p-5">
         <BotonCerrar onCerrar={onCerrar} />
-        <div className="min-w-0 space-y-1 md:w-64 md:shrink-0 lg:w-72">
-          <div className="flex flex-wrap items-center gap-2 pr-10 md:pr-0">
+        <div className="min-w-0 space-y-1 @2xl:w-60 @2xl:shrink-0">
+          <div className="flex flex-wrap items-center gap-2 pr-10 @2xl:pr-0">
             <Sello estado={sello.estado} texto={sello.texto} />
             <span className="text-xs text-muted-foreground tabular">Carpeta N° {cliente.codigo}</span>
           </div>
@@ -129,8 +129,8 @@ export function PanelDetalle({
           ))}
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 md:flex-col md:items-end md:pr-8">
-          <div className="md:text-right">
+        <div className="flex flex-wrap items-center gap-3 @2xl:flex-col @2xl:items-end @2xl:pr-8">
+          <div className="@2xl:text-right">
             <p className="text-xs text-muted-foreground">Deuda</p>
             {cliente.deuda > 0 ? (
               <Money monto={cliente.deuda} className="font-display text-xl font-bold text-pendiente" />
@@ -171,7 +171,7 @@ export function PanelDetalle({
     const titulo =
       espacio.tipo === "bar" ? "Bar" : `${NOMBRE_TIPO[espacio.tipo]} ${numeroVisible(espacio)}`;
     return (
-      <div className="relative flex flex-col gap-3 p-4 md:flex-row md:items-center md:gap-6 md:p-5">
+      <div className="relative flex flex-col gap-3 p-4 @xl:flex-row @xl:items-center @xl:gap-6 @xl:p-5">
         <BotonCerrar onCerrar={onCerrar} />
         <div className="min-w-0 flex-1 space-y-1 pr-10">
           <div className="flex flex-wrap items-center gap-2">

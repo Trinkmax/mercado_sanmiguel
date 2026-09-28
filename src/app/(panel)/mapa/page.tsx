@@ -3,7 +3,6 @@ import { requireRol } from "@/lib/auth";
 import { ROLES_COBRAN } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/server";
 import { periodoActual } from "@/lib/format";
-import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { MapaMercado } from "@/components/mapa/mapa-mercado";
 import type {
@@ -147,23 +146,19 @@ export default async function MapaPage({ searchParams }: Props) {
   const inicialCliente = uno(sp.cliente);
   const inicialPuesto = uno(sp.puesto);
 
+  // La pantalla entera es el plano: sin título, del alto de la ventana menos
+  // las barras del celular (0 en escritorio).
   return (
-    <div className="space-y-6">
-      <PageHeader
-        titulo="Mapa del mercado"
-        descripcion={
-          puedeEditar
-            ? "El plano real del predio con el estado de cobro de cada puesto. Tocá un puesto para ver quién lo ocupa, o entrá en “Asignar puestos” para cargar la ocupación."
-            : "El plano real del predio con el estado de cobro de cada puesto. Tocá un puesto para ver quién lo ocupa."
-        }
-      />
-
+    <div className="flex h-[calc(100dvh-var(--cabecera-movil)-var(--nav-inferior))] min-h-[26rem] flex-col">
+      <h1 className="sr-only">Mapa del mercado</h1>
       {espacios.length === 0 ? (
-        <EmptyState
-          icono={MapIcon}
-          titulo="Todavía no está cargado el plano"
-          descripcion="Cuando se carguen los puestos del predio (supabase/plano), acá vas a ver el mapa con el estado de cobro de cada uno."
-        />
+        <div className="p-4 md:p-7">
+          <EmptyState
+            icono={MapIcon}
+            titulo="Todavía no está cargado el plano"
+            descripcion="Cuando se carguen los puestos del predio (supabase/plano), acá vas a ver el mapa con el estado de cobro de cada uno."
+          />
+        </div>
       ) : (
         <MapaMercado
           espacios={espacios}

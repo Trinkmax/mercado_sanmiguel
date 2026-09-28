@@ -2,11 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useOptimistic, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Check, Maximize2, Minimize2, Paintbrush } from "lucide-react";
+import { Check, Maximize2, Minimize2, MousePointerClick, Paintbrush } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatFraccion, formatNumero } from "@/lib/format";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
 import { asignarEspacios, editarEspacio } from "@/lib/actions/mapa";
@@ -159,6 +158,19 @@ export function MapaMercado({
   const [confirmacion, setConfirmacion] = useState<Confirmacion | null>(null);
   const [sugerencia, setSugerencia] = useState<Sugerencia | null>(null);
   const [pantallaCompleta, setPantallaCompleta] = useState(false);
+  /** Alto (px) del panel cuando flota sobre el plano: la cámara lo descuenta. */
+  const [insetPanel, setInsetPanel] = useState(0);
+  const panelRef = useCallback((el: HTMLDivElement | null) => {
+    if (!el) return;
+    const medir = () =>
+      setInsetPanel(getComputedStyle(el).position === "absolute" ? el.offsetHeight + 12 : 0);
+    const ro = new ResizeObserver(medir);
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      setInsetPanel(0);
+    };
+  }, []);
 
   // ---------- Derivados ----------
   const limites = useMemo(() => limitesPlano(elementos, espacios), [elementos, espacios]);
@@ -661,6 +673,21 @@ export function MapaMercado({
   }, [pantallaCompleta]);
 
   // Enfoque inicial por link (?cliente= / ?puesto=).
+  // Lo elegido no puede quedar debajo del panel flotante: al abrirse (o al
+  // cambiar de alto) la cámara lo trae arriba si hace falta.
+  const areaElegida = useMemo<Rect | null>(() => {
+    if (seleccion?.tipo === "cliente") {
+      const suyos = porCliente.get(seleccion.id);
+      if (suyos?.length) return unir(suyos);
+      return fichasBase.find((f) => f.clienteId === seleccion.id)?.rect ?? null;
+    }
+    if (seleccion?.tipo === "espacio") return espacioPorId.get(seleccion.id) ?? null;
+    return null;
+  }, [seleccion, porCliente, fichasBase, espacioPorId]);
+  useEffect(() => {
+    if (areaElegida && insetPanel > 0) lienzo.current?.asegurarVisible(areaElegida);
+  }, [areaElegida, insetPanel]);
+
   const enfoqueInicial = useMemo<Rect | null>(() => {
     if (clienteInicial) {
       const suyos = espacios.filter((e) => e.clienteId === clienteInicial);
@@ -709,32 +736,37 @@ export function MapaMercado({
   const cliPincel = pincel ? clientePorId.get(pincel) ?? null : null;
   const espacioSel = seleccion?.tipo === "espacio" ? espacioPorId.get(seleccion.id) ?? null : null;
   const clienteDetalle = clienteSel ? clientePorId.get(clienteSel) ?? null : null;
+  const hayPanel = modo === "asignar" || clienteDetalle !== null || espacioSel !== null;
 
   return (
     <section
       aria-label="Mapa del mercado"
-      className={cn(pantallaCompleta && "fixed inset-0 z-50 flex flex-col bg-background p-2 sm:p-4")}
+      className={cn(
+        "flex min-h-0 flex-1 flex-col bg-card",
+        pantallaCompleta &&
+          "fixed inset-0 z-50 pt-[env(safe-area-inset-top)] pr-[env(safe-area-inset-right)] pb-[env(safe-area-inset-bottom)] pl-[env(safe-area-inset-left)]"
+      )}
     >
-      <Card className={cn("gap-0 py-0", pantallaCompleta && "flex min-h-0 flex-1 flex-col")}>
         {/* Barra superior: buscar + acciones */}
-        <div className="flex flex-wrap items-center gap-2 border-b p-3">
+        <div className="flex items-center gap-2 border-b px-3 py-2.5 sm:px-4">
           <BuscadorMapa
             clientes={clientes}
             espacios={plano}
             onElegir={elegirBusqueda}
-            className="min-w-0 flex-1 basis-60 sm:max-w-md"
+            className="min-w-0 flex-1 sm:max-w-md"
           />
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-2">
             {puedeEditar ? (
               modo === "ver" ? (
                 <Button
                   type="button"
                   variant="outline"
-                  className="min-h-11 px-4 text-sm font-semibold"
+                  className="min-h-11 min-w-11 px-3 text-sm font-semibold sm:px-4"
                   onClick={() => entrarAsignar()}
+                  aria-label="Asignar puestos"
                 >
                   <Paintbrush className="size-4" strokeWidth={2} />
-                  Asignar puestos
+                  <span className="hidden sm:inline">Asignar puestos</span>
                 </Button>
               ) : (
                 <Button type="button" className="min-h-11 px-4 text-sm font-semibold" onClick={salirAsignar}>
@@ -768,9 +800,14 @@ export function MapaMercado({
             setFiltro(f);
             if (f) setSeleccion(null);
           }}
-          className="border-b px-3 py-3 sm:px-4"
+          className="border-b px-3 py-2.5 sm:px-4 md:py-3"
         />
 
+        {/* El plano ocupa todo lo que queda y nunca cambia de tamaño al elegir
+            algo: el detalle flota encima (hoja abajo en el celular, tarjeta
+            abajo a la derecha desde tablet). Asignar, en escritorio, va en una
+            columna al costado. */}
+        <div className="relative flex min-h-[12rem] flex-1 flex-col lg:flex-row">
         <LienzoPlano
           ref={lienzo}
           limites={limites}
@@ -793,8 +830,8 @@ export function MapaMercado({
           }}
           tooltip={tooltip}
           enfoqueInicial={enfoqueInicial}
-          pantallaCompleta={pantallaCompleta}
           resaltarBorde={modo === "asignar"}
+          insetInferior={insetPanel}
         >
           {modo === "asignar" ? (
             <div className="pointer-events-none absolute top-3 right-3 left-3 flex justify-center">
@@ -803,17 +840,28 @@ export function MapaMercado({
                 <span className="truncate">
                   {cliPincel
                     ? `Asignando a ${cliPincel.apodo ?? cliPincel.nombre}: tocá sus puestos`
-                    : "Elegí un puestero abajo, o tocá un puesto para corregirlo"}
+                    : "Elegí un puestero o tocá un puesto"}
                 </span>
               </p>
             </div>
           ) : null}
+          {!hayPanel ? (
+            <p className="pointer-events-none absolute right-3 bottom-3 hidden items-center gap-2 rounded-full bg-card/90 px-3.5 py-2 text-xs text-muted-foreground shadow-sm ring-1 ring-foreground/10 backdrop-blur-sm md:flex">
+              <MousePointerClick className="size-4 shrink-0" strokeWidth={1.8} />
+              Tocá un puesto para ver quién lo ocupa y cuánto debe
+            </p>
+          ) : null}
         </LienzoPlano>
 
+        {hayPanel ? (
         <div
+          ref={panelRef}
           className={cn(
-            "border-t",
-            pantallaCompleta && "max-h-[45vh] shrink-0 overflow-y-auto"
+            "@container absolute inset-x-2 bottom-2 z-30 max-h-[64%] overflow-y-auto overscroll-contain rounded-2xl bg-card shadow-[0_18px_40px_-12px_rgb(15_23_60/0.45)] ring-1 ring-foreground/10",
+            "md:inset-x-auto md:right-3 md:bottom-3 md:left-[9.5rem] md:max-h-[55%] md:max-w-[46rem] md:ml-auto",
+            // Asignando con el dedo hace falta ver más plano: el panel ocupa menos.
+            modo === "asignar" &&
+              "max-md:max-h-[46%] lg:static lg:inset-auto lg:z-auto lg:max-h-none lg:w-[27rem] lg:max-w-none lg:shrink-0 lg:rounded-none lg:border-l lg:shadow-none lg:ring-0"
           )}
         >
           {modo === "asignar" ? (
@@ -875,7 +923,8 @@ export function MapaMercado({
             />
           )}
         </div>
-      </Card>
+        ) : null}
+        </div>
     </section>
   );
 }

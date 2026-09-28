@@ -141,12 +141,28 @@
   --parcial-suave: oklch(0.32 0.04 85);
 }
 
+/* Alturas de las barras del celular y la tablet: cabecera de arriba y barra de
+   navegación flotante de abajo (en escritorio manda la barra lateral: 0). */
+:root {
+  --cabecera-movil: 3.5rem;
+  --nav-inferior: calc(4.75rem + max(0.75rem, env(safe-area-inset-bottom)));
+}
+@media (width >= 64rem) {
+  :root {
+    --cabecera-movil: 0rem;
+    --nav-inferior: 0rem;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
   body {
     @apply bg-background text-foreground;
+    /* viewport-fit=cover: en un iPhone apaisado nada queda bajo la cámara. */
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
   }
   html {
     @apply font-sans;

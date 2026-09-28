@@ -1,20 +1,28 @@
 import { LogOut } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { requireStaff } from "@/lib/auth";
 import { cerrarSesion } from "@/lib/actions/auth";
 import { LABEL_ROL } from "@/lib/roles";
 import { pendientesNav } from "@/lib/pendientes";
 import { Button } from "@/components/ui/button";
 import { NavLinks } from "@/components/shared/nav-links";
-import { MobileNav } from "@/components/shared/mobile-nav";
+import { BarraInferior } from "@/components/shared/barra-inferior";
+import { Principal } from "@/components/shared/principal";
 import { Marca } from "@/components/shared/marca";
 
-function BotonSalir() {
+/** Salir: en la barra lateral (azul) o en la hoja del menú del celular (clara). */
+function BotonSalir({ claro = false }: { claro?: boolean }) {
   return (
     <form action={cerrarSesion}>
       <Button
         type="submit"
-        variant="ghost"
-        className="w-full justify-start gap-3 text-sidebar-foreground/85 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground min-h-11"
+        variant={claro ? "outline" : "ghost"}
+        className={cn(
+          "min-h-11 gap-2",
+          claro
+            ? "px-4 text-sm font-semibold"
+            : "w-full justify-start gap-3 text-sidebar-foreground/85 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+        )}
       >
         <LogOut className="size-5" strokeWidth={1.8} />
         Salir
@@ -52,21 +60,24 @@ export default async function PanelLayout({
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col lg:pl-56">
-        {/* Barra superior (tablet vertical y celular) */}
-        <header className="no-print sticky top-0 z-20 flex items-center gap-3 bg-sidebar px-3 py-2 text-sidebar-foreground lg:hidden">
-          <MobileNav
-            rol={perfil.rol}
-            badges={badges}
-            nombre={perfil.nombre}
-            rolLabel={rolLabel}
-            logout={<BotonSalir />}
-          />
+        {/* Barra superior (tablet vertical y celular): solo la marca y quién
+            está usando el sistema; la navegación va en la barra de abajo. */}
+        <header className="no-print sticky top-0 z-20 flex h-14 items-center justify-between gap-3 bg-sidebar px-4 text-sidebar-foreground lg:hidden">
           <Marca compacta className="text-sidebar-foreground" />
+          <span className="truncate rounded-full bg-sidebar-accent px-3 py-1 text-xs font-semibold text-sidebar-accent-foreground">
+            {rolLabel}
+          </span>
         </header>
 
-        <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-5 md:px-7 md:py-6">
-          {children}
-        </main>
+        <Principal>{children}</Principal>
+
+        <BarraInferior
+          rol={perfil.rol}
+          badges={badges}
+          nombre={perfil.nombre}
+          rolLabel={rolLabel}
+          logout={<BotonSalir claro />}
+        />
       </div>
     </div>
   );

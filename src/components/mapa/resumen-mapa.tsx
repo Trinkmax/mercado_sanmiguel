@@ -85,13 +85,14 @@ export function ResumenMapa({
 
   return (
     <div className={cn("space-y-2.5", className)}>
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:gap-5">
-        <div className="min-w-0 space-y-1.5 md:w-56 md:shrink-0">
-          <p className="text-sm">
+      {/* En el celular es una sola fila que se desliza de costado. */}
+      <div className="flex items-center gap-3 overflow-x-auto [scrollbar-width:none] max-md:-mx-3 max-md:px-3 md:gap-5 md:overflow-visible [&::-webkit-scrollbar]:hidden">
+        <div className="min-w-0 shrink-0 space-y-1.5 max-md:w-[8.5rem] md:w-56">
+          <p className="text-sm whitespace-nowrap">
             <span className="font-display text-lg font-bold tabular">{formatFraccion(ocupados)}</span>
             <span className="text-muted-foreground">
               {" "}
-              de {formatFraccion(resumen.totalPuestos)} puestos ocupados
+              de {formatFraccion(resumen.totalPuestos)} <span className="max-md:hidden">puestos </span>ocupados
             </span>
           </p>
           <div
@@ -114,7 +115,7 @@ export function ResumenMapa({
           </div>
         </div>
 
-        <div className="flex flex-1 flex-wrap items-center gap-1.5" role="group" aria-label="Filtrar el plano">
+        <div className="flex items-center gap-1.5 md:flex-1 md:flex-wrap" role="group" aria-label="Filtrar el plano">
           {LEYENDA.map((l) => {
             const activo = filtro === l.filtro;
             return (
@@ -124,7 +125,7 @@ export function ResumenMapa({
                 aria-pressed={activo}
                 onClick={() => onFiltro(activo ? null : l.filtro)}
                 className={cn(
-                  "inline-flex min-h-11 items-center gap-2 rounded-full border px-3.5 text-[13px] font-medium transition-colors",
+                  "inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-3.5 text-[13px] font-medium whitespace-nowrap transition-colors",
                   activo
                     ? "border-primary bg-accent text-accent-foreground"
                     : "bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -142,7 +143,7 @@ export function ResumenMapa({
       </div>
 
       {resumen.secundarios.length > 0 ? (
-        <p className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+        <p className="hidden flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground md:flex">
           {resumen.secundarios.map((s) => (
             <span key={s.label} className="whitespace-nowrap">
               {s.label} <span className="font-semibold text-foreground tabular">{s.valor}</span>

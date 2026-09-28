@@ -55,7 +55,7 @@ export function BuscadorMapa({
   espacios,
   onElegir,
   soloClientes = false,
-  placeholder = "Buscá un puestero o un N° de puesto",
+  placeholder = "Buscá puestero o puesto",
   autoFocus = false,
   className,
 }: {
@@ -184,7 +184,7 @@ export function BuscadorMapa({
         autoFocus={autoFocus}
         value={texto}
         placeholder={placeholder}
-        aria-label={placeholder}
+        aria-label={soloClientes ? placeholder : "Buscá un puestero o un número de puesto"}
         className="h-11 rounded-lg pr-10 pl-10 text-[15px] md:text-[15px]"
         onChange={(e) => {
           setTexto(e.target.value);
@@ -233,7 +233,12 @@ export function BuscadorMapa({
         <ul
           id={listaId}
           role="listbox"
-          className="absolute top-full right-0 left-0 z-40 mt-1.5 max-h-80 overflow-y-auto rounded-lg border bg-popover p-1 text-popover-foreground shadow-lg"
+          className={cn(
+            "mt-1.5 overflow-y-auto rounded-lg border bg-popover p-1 text-popover-foreground",
+            // Dentro de un panel (elegir puestero) la lista va en línea: flotando
+            // la cortaría el scroll del panel.
+            soloClientes ? "max-h-72" : "absolute top-full right-0 left-0 z-40 max-h-80 shadow-lg"
+          )}
         >
           {filas.length === 0 ? (
             <li className="px-3 py-3 text-sm text-muted-foreground">

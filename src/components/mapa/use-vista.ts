@@ -52,13 +52,18 @@ function reduceMotion(): boolean {
  * ⌘/Ctrl + rueda (y el pellizco del trackpad) para acercar, más botones y
  * teclado. La cámara siempre mantiene el plano a la vista.
  */
-export function useVista(limites: Rect) {
+export function useVista(limites: Rect, insetInferior = 0) {
   const contRef = useRef<HTMLDivElement>(null);
   const [tam, setTam] = useState<Tam | null>(null);
   const [cam, setCam] = useState<Camara | null>(null);
   const camRef = useRef<Camara | null>(null);
   const tamRef = useRef<Tam | null>(null);
   const limRef = useRef(limites);
+  /** px de abajo del lienzo tapados por un panel flotante (la cámara los descuenta). */
+  const insetRef = useRef(insetInferior);
+  useEffect(() => {
+    insetRef.current = insetInferior;
+  }, [insetInferior]);
   // Mientras el usuario no toque el zoom, el plano sigue encuadrado al redimensionar.
   const ajustadoRef = useRef(true);
   const animRef = useRef<number | null>(null);
@@ -114,10 +119,13 @@ export function useVista(limites: Rect) {
       const k = acotar(c.k, kMin, kMax);
       const vw = t.w / k;
       const vh = t.h / k;
+      // Con un panel flotante abajo, la cámara puede bajar un poco más para que
+      // lo último del plano quede por encima del panel y no debajo.
+      const limH = lim.h + insetRef.current / k;
       const cx =
         vw >= lim.w ? lim.x + lim.w / 2 : acotar(c.cx, lim.x + vw / 2, lim.x + lim.w - vw / 2);
       const cy =
-        vh >= lim.h ? lim.y + lim.h / 2 : acotar(c.cy, lim.y + vh / 2, lim.y + lim.h - vh / 2);
+        vh >= limH ? lim.y + limH / 2 : acotar(c.cy, lim.y + vh / 2, lim.y + limH - vh / 2);
       return { cx, cy, k };
     },
     [kMinMax]
@@ -260,12 +268,14 @@ export function useVista(limites: Rect) {
       ajustadoRef.current = false;
       const kFit = encuadre(limRef.current, t).k;
       const margen = 140;
+      // Se encuadra en la parte visible (arriba del panel flotante, si hay).
+      const alto = Math.max(t.h - insetRef.current, t.h * 0.35);
       const k = acotar(
-        Math.min(t.w / (r.w + margen * 2), t.h / (r.h + margen * 2)),
+        Math.min(t.w / (r.w + margen * 2), alto / (r.h + margen * 2)),
         kFit,
         kFit * ZOOM_ENFOQUE
       );
-      animarA({ cx: r.x + r.w / 2, cy: r.y + r.h / 2, k });
+      animarA({ cx: r.x + r.w / 2, cy: r.y + r.h / 2 + (t.h - alto) / (2 * k), k });
     },
     [animarA]
   );
@@ -278,14 +288,15 @@ export function useVista(limites: Rect) {
       if (!c || !t) return;
       const x0 = c.cx - t.w / (2 * c.k);
       const y0 = c.cy - t.h / (2 * c.k);
+      const alto = Math.max(t.h - insetRef.current, t.h * 0.35);
       const x1 = x0 + t.w / c.k;
-      const y1 = y0 + t.h / c.k;
+      const y1 = y0 + alto / c.k;
       const margen = 24 / c.k;
       const visible =
         r.x >= x0 + margen && r.y >= y0 + margen && r.x + r.w <= x1 - margen && r.y + r.h <= y1 - margen;
       if (visible) return;
       ajustadoRef.current = false;
-      animarA({ cx: r.x + r.w / 2, cy: r.y + r.h / 2, k: c.k }, 260);
+      animarA({ cx: r.x + r.w / 2, cy: r.y + r.h / 2 + (t.h - alto) / (2 * c.k), k: c.k }, 260);
     },
     [animarA]
   );
@@ -294,11 +305,13 @@ export function useVista(limites: Rect) {
   const asegurarZoom = useCallback(
     (k: number, centro?: Rect | null) => {
       const c = camRef.current;
-      if (!c || c.k >= k) return;
+      const t = tamRef.current;
+      if (!c || !t || c.k >= k) return;
       ajustadoRef.current = false;
+      const alto = Math.max(t.h - insetRef.current, t.h * 0.35);
       animarA({
         cx: centro ? centro.x + centro.w / 2 : c.cx,
-        cy: centro ? centro.y + centro.h / 2 : c.cy,
+        cy: centro ? centro.y + centro.h / 2 + (t.h - alto) / (2 * k) : c.cy,
         k,
       });
     },

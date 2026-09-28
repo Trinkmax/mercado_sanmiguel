@@ -36,6 +36,8 @@ export type ControlLienzo = {
   ajustar: () => void;
   /** Acerca hasta esa escala (px por unidad) si hoy se ve más chico. */
   asegurarZoom: (k: number, centro?: Rect | null) => void;
+  /** Si el área quedó fuera de lo visible (o debajo del panel), la trae. */
+  asegurarVisible: (r: Rect) => void;
 };
 
 type Hover = { espacio: Espacio; bloque: Bloque; x: number; y: number; ancho: number };
@@ -65,8 +67,8 @@ export function LienzoPlano({
   onTocarFondo,
   tooltip,
   enfoqueInicial,
-  pantallaCompleta,
   resaltarBorde,
+  insetInferior = 0,
   children,
 }: {
   ref?: React.Ref<ControlLienzo>;
@@ -92,9 +94,10 @@ export function LienzoPlano({
   /** Contenido del cartel al pasar el mouse por un espacio. */
   tooltip: (espacio: Espacio, bloque: Bloque) => React.ReactNode;
   enfoqueInicial: Rect | null;
-  pantallaCompleta: boolean;
   /** Marco azul: el plano está en modo asignar. */
   resaltarBorde: boolean;
+  /** px de abajo tapados por el panel flotante: la cámara los descuenta al enfocar. */
+  insetInferior?: number;
   /** Carteles flotantes sobre el plano (modo asignar, etc.). */
   children?: React.ReactNode;
 }) {
@@ -121,7 +124,7 @@ export function LienzoPlano({
     enfocar,
     asegurarVisible,
     asegurarZoom,
-  } = useVista(limitesVista);
+  } = useVista(limitesVista, insetInferior);
   const [hover, setHover] = useState<Hover | null>(null);
   /** Espacio con foco de teclado: su bloque despega y lleva anillo doble. */
   const [foco, setFoco] = useState<string | null>(null);
@@ -171,12 +174,16 @@ export function LienzoPlano({
   }, []);
 
   const enfocarPlano = useCallback((r: Rect) => enfocar(encuadre(r, Z_ENFOQUE)), [enfocar, encuadre]);
+  const asegurarVisiblePlano = useCallback(
+    (r: Rect) => asegurarVisible(encuadre(r, Z_ENFOQUE)),
+    [asegurarVisible, encuadre]
+  );
 
-  useImperativeHandle(ref, () => ({ enfocar: enfocarPlano, ajustar, asegurarZoom }), [
-    enfocarPlano,
-    ajustar,
-    asegurarZoom,
-  ]);
+  useImperativeHandle(
+    ref,
+    () => ({ enfocar: enfocarPlano, ajustar, asegurarZoom, asegurarVisible: asegurarVisiblePlano }),
+    [enfocarPlano, ajustar, asegurarZoom, asegurarVisiblePlano]
+  );
 
   // Enfoque pedido por link (?cliente=… / ?puesto=…), una sola vez al medir.
   const enfocadoRef = useRef(false);
@@ -280,11 +287,7 @@ export function LienzoPlano({
       aria-label="Plano del mercado. Arrastrá para moverte; con + y − acercás o alejás, y con 0 lo ves entero."
       tabIndex={0}
       onKeyDown={alTeclado}
-      className={cn(
-        "relative overflow-hidden bg-background outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-inset",
-        pantallaCompleta ? "min-h-0 flex-1" : "max-h-[74vh] min-h-[24rem]"
-      )}
-      style={pantallaCompleta ? undefined : { aspectRatio: `${limitesVista.w} / ${limitesVista.h}` }}
+      className="relative min-h-0 flex-1 overflow-hidden bg-background outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-inset"
     >
       <svg
         viewBox={viewBox ?? `${limitesVista.x} ${limitesVista.y} ${limitesVista.w} ${limitesVista.h}`}
