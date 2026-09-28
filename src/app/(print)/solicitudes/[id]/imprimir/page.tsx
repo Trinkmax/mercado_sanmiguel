@@ -9,14 +9,14 @@ import { BotonImprimir } from "@/components/shared/boton-imprimir";
 import {
   LABEL_ORIGEN,
   LABEL_TIPO,
-  selloEstado,
+  selloSolicitud,
 } from "@/components/solicitudes/constantes";
 
 export const metadata = { title: "Solicitud — formulario" };
 
 /**
- * Formulario imprimible de una solicitud: lo que portería genera en papel
- * para derivar a Administración (con lugar para el "recibido" y la resolución).
+ * Formulario imprimible de una solicitud (con lugar para el "recibido" y la resolución).
+ * Lo de Portería lo recibe el Jefe de Portería; el resto, Administración.
  */
 export default async function ImprimirSolicitudPage({
   params,
@@ -30,7 +30,7 @@ export default async function ImprimirSolicitudPage({
   const { data: s } = await supabase
     .from("solicitudes")
     .select(
-      "id, numero, tipo, asunto, detalle, origen, estado, referencia, resolucion, creada_por, creada_en, resuelta_en, cliente:clientes(nombre, codigo, apodo)"
+      "id, numero, tipo, asunto, detalle, origen, estado, referencia, resolucion, resolucion_de, creada_por, creada_en, resuelta_en, cliente:clientes(nombre, codigo, apodo)"
     )
     .eq("id", id)
     .maybeSingle();
@@ -57,6 +57,15 @@ export default async function ImprimirSolicitudPage({
   ]);
 
   const autor = autorRes.data;
+  const recibe = s.origen === "porteria" ? "Jefe de Portería" : "Administración";
+  const tituloResolucion =
+    s.estado === "rechazada"
+      ? "Motivo del rechazo"
+      : s.resolucion_de === "jefe"
+        ? "Resolución del Jefe de Portería"
+        : s.resolucion_de === "consejo"
+          ? "Resolución del Consejo (registrada por el Líder de Procesos)"
+          : "Resolución";
 
   return (
     <>
@@ -84,7 +93,7 @@ export default async function ImprimirSolicitudPage({
                 {formatFechaHora(s.creada_en)}
               </p>
               <div className="mt-2">
-                <Sello estado={selloEstado(s.estado)} />
+                <Sello estado={selloSolicitud(s)} />
               </div>
             </div>
           </header>
@@ -102,11 +111,11 @@ export default async function ImprimirSolicitudPage({
               }
             />
             <Dato
-              label="Cliente / referencia"
+              label={s.cliente ? "Cliente" : "Lugar"}
               valor={
                 s.cliente
                   ? `Carpeta N° ${s.cliente.codigo} — ${s.cliente.nombre}${s.cliente.apodo ? ` (${s.cliente.apodo})` : ""}`
-                  : (s.referencia ?? "Sin puesto asociado")
+                  : (s.referencia ?? "General")
               }
             />
           </dl>
@@ -139,7 +148,7 @@ export default async function ImprimirSolicitudPage({
           {/* Recibido por administración */}
           <section className="rounded-md border border-foreground/60 p-4">
             <h2 className="font-display text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground">
-              Recibido por Administración
+              Recibido por: {recibe}
             </h2>
             <div className="mt-8 grid grid-cols-2 gap-8">
               <div className="border-t border-foreground pt-1.5 text-center text-sm text-muted-foreground">
@@ -154,7 +163,7 @@ export default async function ImprimirSolicitudPage({
           {/* Resolución */}
           <section className="rounded-md border border-foreground/60 p-4">
             <h2 className="font-display text-xs font-semibold uppercase tracking-[0.15em] text-muted-foreground">
-              Resolución
+              {tituloResolucion}
             </h2>
             {s.resolucion ? (
               <p className="mt-2 whitespace-pre-line text-[15px] leading-relaxed">

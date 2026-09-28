@@ -3,6 +3,8 @@
 import { useState } from "react";
 import {
   CircleCheck,
+  FilePen,
+  Flag,
   Hash,
   Loader2,
   Paintbrush,
@@ -16,15 +18,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
+import { Codigo } from "@/components/shared/codigo";
+import { Sello } from "@/components/shared/sello";
 import { BuscadorMapa } from "./buscador-mapa";
 import { ChipsEspacios } from "./panel-detalle";
 import {
   cantidad,
+  CODIGO_DIFERENCIA,
   NOMBRE_TIPO,
   objetivoPlano,
   numeroVisible,
   textoDiferencia,
-  unidades,
+  unidadesPuestos,
   type Diferencia,
 } from "./geometria";
 import type { ClienteMapa, Espacio, Rect } from "./tipos";
@@ -42,6 +47,14 @@ export type Revision =
 
 function nombreCorto(c: ClienteMapa): string {
   return c.apodo ?? c.nombre;
+}
+
+/** Datos que se guardan del editor de un espacio. */
+export type DatosEspacio = { numero: string | null; medio: boolean; nota: string | null; propio?: boolean };
+
+/** "Facturar 1½ en la carpeta" · "Dejar de facturar en la carpeta". */
+export function textoFacturar(d: Diferencia): string {
+  return d.enPlano > 0 ? `Facturar ${formatFraccion(d.enPlano)} en la carpeta` : "Dejar de facturarlo en la carpeta";
 }
 
 /** Panel del modo "Asignar puestos": el pincel (a quién se le asigna), el
@@ -67,6 +80,9 @@ export function PanelAsignacion({
   onSeleccionarEspacio,
   onCerrarEspacio,
   onEnfocar,
+  onFacturar,
+  puedeFacturar,
+  facturando = null,
 }: {
   clientes: ClienteMapa[];
   clientePorId: Map<string, ClienteMapa>;
@@ -80,7 +96,7 @@ export function PanelAsignacion({
   guardando: boolean;
   onPincel: (clienteId: string | null) => void;
   onAsignar: (espacioIds: string[], clienteId: string | null) => void;
-  onEditar: (espacio: Espacio, datos: { numero: string | null; medio: boolean; nota: string | null }) => void;
+  onEditar: (espacio: Espacio, datos: DatosEspacio) => void;
   onConfirmar: () => void;
   onCancelarConfirmacion: () => void;
   onAceptarSugerencia: () => void;
@@ -88,6 +104,12 @@ export function PanelAsignacion({
   onSeleccionarEspacio: (espacioId: string) => void;
   onCerrarEspacio: () => void;
   onEnfocar: (r: Rect) => void;
+  /** C6: propone llevar la carpeta a lo que muestra el plano (EXME/EXPP/EXPL/EXPE). */
+  onFacturar?: (cliente: ClienteMapa, dif: Diferencia) => void;
+  /** ¿Este rol puede proponer el cambio en la carpeta de ese cliente? */
+  puedeFacturar?: (cliente: ClienteMapa) => boolean;
+  /** Clave "clienteId:tipo" de la propuesta que se está enviando. */
+  facturando?: string | null;
 }) {
   const cliPincel = pincel ? clientePorId.get(pincel) ?? null : null;
   const espacioPorId = new Map(espacios.map((e) => [e.id, e]));
@@ -126,7 +148,7 @@ export function PanelAsignacion({
           />
         ) : espacioSel ? (
           <EditorEspacio
-            key={`${espacioSel.id}:${espacioSel.numero}:${espacioSel.medio}:${espacioSel.nota}`}
+            key={`${espacioSel.id}:${espacioSel.numero}:${espacioSel.medio}:${espacioSel.nota}:${espacioSel.propio}`}
             espacio={espacioSel}
             duenio={espacioSel.clienteId ? clientePorId.get(espacioSel.clienteId) ?? null : null}
             clientes={clientes}
@@ -175,6 +197,9 @@ export function PanelAsignacion({
         revisiones={revisiones}
         onPincel={onPincel}
         onSeleccionarEspacio={onSeleccionarEspacio}
+        onFacturar={onFacturar}
+        puedeFacturar={puedeFacturar}
+        facturando={facturando}
       />
     </div>
   );
@@ -193,10 +218,20 @@ function PincelActivo({
   onSoltar: () => void;
   onEnfocar: (r: Rect) => void;
 }) {
-  const enPlano = unidades(suyos);
-  const facturado = cliente.facturado.puestos;
-  const completo = facturado > 0 && Math.abs(enPlano - objetivoPlano(facturado, "puesto")) < 0.001;
-  const pct = facturado > 0 ? Math.min(100, (enPlano / facturado) * 100) : enPlano > 0 ? 100 : 0;
+  const filas = (
+    [
+      { tipo: "puesto", codigo: "EXME", enPlano: unidadesPuestos(suyos, false), facturado: cliente.facturado.puestos },
+      {
+        tipo: "propio",
+        codigo: "EXPP",
+        enPlano: unidadesPuestos(suyos, true),
+        facturado: cliente.facturado.propios ?? 0,
+      },
+    ] as const
+  ).filter((f, i) => i === 0 || f.enPlano > 0 || f.facturado > 0);
+  const completo =
+    filas.some((f) => f.facturado > 0) &&
+    filas.every((f) => Math.abs(f.enPlano - objetivoPlano(f.facturado, f.tipo)) < 0.001);
 
   return (
     <div className="space-y-3">
@@ -221,21 +256,13 @@ function PincelActivo({
         </Button>
       </div>
 
-      <div className="rounded-lg border bg-muted/30 p-3">
-        <div className="mb-2 flex items-baseline justify-between gap-3 text-sm">
-          <span>
-            <span className="font-display text-base font-bold tabular">{formatFraccion(enPlano)}</span>
-            <span className="text-muted-foreground">
-              {facturado > 0
-                ? ` de ${cantidad(facturado, "puesto")} facturados`
-                : " puestos en el plano · no factura expensa de puestos"}
-            </span>
-          </span>
+      <div className="space-y-2.5 rounded-lg border bg-muted/30 p-3">
+        <div className="flex justify-end">
           <span
             role="status"
             aria-live="polite"
             className={cn(
-              "inline-flex items-center gap-1.5 text-xs font-medium",
+              "inline-flex min-h-4 items-center gap-1.5 text-xs font-medium",
               guardando ? "text-muted-foreground" : completo ? "text-pagado" : "text-transparent"
             )}
           >
@@ -254,17 +281,35 @@ function PincelActivo({
             )}
           </span>
         </div>
-        <div className="h-2 overflow-hidden rounded-full bg-muted ring-1 ring-foreground/5">
-          <div
-            className={cn(
-              "h-full rounded-full transition-[width] duration-300",
-              enPlano > facturado && facturado > 0 ? "bg-parcial" : "bg-primary"
-            )}
-            style={{ width: `${pct}%` }}
-          />
-        </div>
+        {filas.map((f) => {
+          const pct = f.facturado > 0 ? Math.min(100, (f.enPlano / f.facturado) * 100) : f.enPlano > 0 ? 100 : 0;
+          return (
+            <div key={f.tipo} className="space-y-1.5">
+              <div className="flex items-baseline gap-2 text-sm">
+                <Codigo codigo={f.codigo} />
+                <span className="font-display text-base font-bold tabular">{formatFraccion(f.enPlano)}</span>
+                <span className="min-w-0 text-muted-foreground">
+                  {f.facturado > 0
+                    ? ` de ${cantidad(f.facturado, f.tipo)} facturados`
+                    : f.tipo === "propio"
+                      ? " puestos propios en el plano · no factura EXPP"
+                      : " puestos en el plano · no factura expensa de puesto"}
+                </span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-muted ring-1 ring-foreground/5">
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-[width] duration-300",
+                    f.enPlano > f.facturado && f.facturado > 0 ? "bg-parcial" : "bg-primary"
+                  )}
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            </div>
+          );
+        })}
         {suyos.length > 0 ? (
-          <div className="mt-3">
+          <div className="pt-1">
             <ChipsEspacios espacios={suyos} onEnfocar={onEnfocar} />
           </div>
         ) : null}
@@ -362,16 +407,18 @@ function EditorEspacio({
   espacios: Espacio[];
   guardando: boolean;
   onAsignar: (clienteId: string | null) => void;
-  onEditar: (datos: { numero: string | null; medio: boolean; nota: string | null }) => void;
+  onEditar: (datos: DatosEspacio) => void;
   onCerrar: () => void;
 }) {
   const [numero, setNumero] = useState(espacio.numero ?? "");
   const [medio, setMedio] = useState(espacio.medio);
   const [nota, setNota] = useState(espacio.nota ?? "");
+  const [propio, setPropio] = useState(Boolean(espacio.propio));
   const cambio =
     numero.trim() !== (espacio.numero ?? "") ||
     medio !== espacio.medio ||
-    nota.trim() !== (espacio.nota ?? "");
+    nota.trim() !== (espacio.nota ?? "") ||
+    propio !== Boolean(espacio.propio);
   const titulo =
     espacio.tipo === "bar" ? "Bar" : `${NOMBRE_TIPO[espacio.tipo]} ${numeroVisible(espacio)}`;
 
@@ -379,7 +426,10 @@ function EditorEspacio({
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="font-display text-lg font-bold">{titulo}</p>
+          <p className="flex flex-wrap items-center gap-2 font-display text-lg font-bold">
+            {titulo}
+            {espacio.propio ? <Sello estado="propio" /> : null}
+          </p>
           <p className="text-sm text-muted-foreground">
             {duenio ? (
               <>
@@ -404,6 +454,7 @@ function EditorEspacio({
             numero: numero.trim() || null,
             medio: espacio.tipo === "puesto" ? medio : false,
             nota: nota.trim() || null,
+            ...(espacio.tipo === "puesto" && propio !== Boolean(espacio.propio) ? { propio } : {}),
           });
         }}
       >
@@ -437,7 +488,23 @@ function EditorEspacio({
           <label className="flex min-h-11 cursor-pointer items-center gap-3 sm:col-span-3">
             <Switch checked={medio} onCheckedChange={setMedio} aria-label="Medio puesto" />
             <span className="text-sm">
-              Medio puesto <span className="text-muted-foreground">(cuenta ½ en la expensa de puestos)</span>
+              Medio puesto{" "}
+              <span className="text-muted-foreground">(cuenta ½ en la expensa: EXME, o EXPP si es propio)</span>
+            </span>
+          </label>
+        ) : null}
+        {espacio.tipo === "puesto" ? (
+          <label
+            className={cn(
+              "flex min-h-12 cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 sm:col-span-3",
+              propio ? "border-primary/40 bg-accent/60" : "bg-card"
+            )}
+          >
+            <Switch checked={propio} onCheckedChange={setPropio} aria-label="Puesto propio de la cooperativa" />
+            <Flag className={cn("size-4 shrink-0", propio ? "text-primary" : "text-muted-foreground")} strokeWidth={2} />
+            <span className="text-sm">
+              <span className="font-medium">Puesto propio de la cooperativa</span>{" "}
+              <span className="text-muted-foreground">· paga EXPP (Expensas Puestos Propios)</span>
             </span>
           </label>
         ) : null}
@@ -470,11 +537,29 @@ function ListaRevision({
   revisiones,
   onPincel,
   onSeleccionarEspacio,
+  onFacturar,
+  puedeFacturar,
+  facturando,
 }: {
   revisiones: Revision[];
   onPincel: (clienteId: string) => void;
   onSeleccionarEspacio: (espacioId: string) => void;
+  onFacturar?: (cliente: ClienteMapa, dif: Diferencia) => void;
+  puedeFacturar?: (cliente: ClienteMapa) => boolean;
+  facturando?: string | null;
 }) {
+  const accion = (r: Extract<Revision, { tipo: "falta" | "sobra" }>) => {
+    if (!onFacturar || (puedeFacturar && !puedeFacturar(r.cliente))) return undefined;
+    if (r.cliente.cambioPendiente) return { pendiente: true as const };
+    const clave = `${r.cliente.id}:${r.dif.tipo}`;
+    return {
+      pendiente: false as const,
+      texto: textoFacturar(r.dif),
+      codigo: CODIGO_DIFERENCIA[r.dif.tipo],
+      enviando: facturando === clave,
+      onClick: () => onFacturar(r.cliente, r.dif),
+    };
+  };
   const faltan = revisiones.filter((r) => r.tipo === "falta");
   const sobran = revisiones.filter((r) => r.tipo === "sobra");
   const plano = revisiones.filter((r) => r.tipo === "repetido" || r.tipo === "sin_numero");
@@ -498,6 +583,7 @@ function ListaRevision({
                 titulo={nombreCorto(r.cliente)}
                 detalle={textoDiferencia(r.dif)}
                 onClick={() => onPincel(r.cliente.id)}
+                facturar={accion(r)}
               />
             ) : null
           )}
@@ -514,6 +600,7 @@ function ListaRevision({
                 detalle={textoDiferencia(r.dif)}
                 aviso
                 onClick={() => onPincel(r.cliente.id)}
+                facturar={accion(r)}
               />
             ) : null
           )}
@@ -567,34 +654,64 @@ function GrupoRevision({
   );
 }
 
+type AccionFacturar =
+  | { pendiente: true }
+  | { pendiente: false; texto: string; codigo: string; enviando: boolean; onClick: () => void };
+
 function FilaRevision({
   titulo,
   detalle,
   aviso = false,
   icono = false,
   onClick,
+  facturar,
 }: {
   titulo: string;
   detalle: string;
   aviso?: boolean;
   icono?: boolean;
   onClick: () => void;
+  /** C6: propuesta de ajuste de la carpeta (o "Esperando aprobación"). */
+  facturar?: AccionFacturar;
 }) {
   return (
-    <li>
+    <li className="overflow-hidden rounded-md border bg-card">
       <button
         type="button"
         onClick={onClick}
-        className="flex min-h-11 w-full items-center gap-2.5 rounded-md border bg-card px-3 py-1.5 text-left transition-colors hover:border-primary/35 hover:bg-accent/60"
+        className="flex min-h-11 w-full items-center gap-2.5 px-3 py-1.5 text-left transition-colors hover:bg-accent/60"
       >
         {icono ? <Hash className="size-4 shrink-0 text-muted-foreground" strokeWidth={2} /> : null}
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-medium">{titulo}</span>
-          <span className={cn("block truncate text-xs", aviso ? "text-parcial" : "text-muted-foreground")}>
-            {detalle}
-          </span>
+          <span className={cn("block text-xs", aviso ? "text-parcial" : "text-muted-foreground")}>{detalle}</span>
         </span>
       </button>
+      {facturar ? (
+        <div className="flex min-h-11 items-center gap-2 border-t bg-muted/30 px-2 py-1">
+          {facturar.pendiente ? (
+            <Sello estado="pendiente_aprobacion" />
+          ) : (
+            <Button
+              type="button"
+              variant="ghost"
+              className="min-h-10 flex-1 justify-start px-2 text-sm font-medium text-primary"
+              onClick={facturar.onClick}
+              disabled={facturar.enviando}
+            >
+              {facturar.enviando ? (
+                <Loader2 className="size-4 animate-spin" strokeWidth={2} />
+              ) : (
+                <FilePen className="size-4" strokeWidth={2} />
+              )}
+              {facturar.texto}
+              <span className="ml-auto">
+                <Codigo codigo={facturar.codigo} />
+              </span>
+            </Button>
+          )}
+        </div>
+      ) : null}
     </li>
   );
 }

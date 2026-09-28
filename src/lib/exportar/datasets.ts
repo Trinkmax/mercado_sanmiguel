@@ -1,12 +1,15 @@
 import type { Rol } from "@/lib/auth";
-import type { DatasetExportable } from "@/components/shared/boton-exportar";
+import type { DatasetExportable as DatasetBoton } from "@/components/shared/boton-exportar";
 
-export type { DatasetExportable };
+/** Datasets exportables. Suma los nuevos de fase 3 (registros y novedades del personal)
+ * aunque el tipo del botón compartido todavía no los tenga (pedido a Fundación §5.6). */
+export type DatasetExportable = DatasetBoton;
 
 /** Qué es cada dataset exportable, quién puede bajarlo y si se filtra por mes.
  * Es la ÚNICA fuente de autorización del route handler `/api/exportar` y de los
- * menús que lo linkean. Los catálogos (clientes, empleados, circulares) ignoran
- * el período; el resto exporta lo del mes elegido. */
+ * menús que lo linkean (FASE3 §6 M9-8). Los catálogos (clientes, empleados,
+ * circulares) ignoran el período; el resto exporta lo del mes elegido. Las consultas
+ * pasan además por la RLS (el Jefe solo ve a sus quinteros y ambulantes). */
 export type DefinicionDataset = {
   label: string;
   descripcion: string;
@@ -16,108 +19,119 @@ export type DefinicionDataset = {
   grupo: "cobranza" | "plata" | "gestion" | "personal";
 };
 
-const GESTION: Rol[] = ["admin", "tesoreria", "consejo", "lider"];
-const DIRECCION: Rol[] = ["tesoreria", "consejo", "lider"];
-const PERSONAL: Rol[] = ["lider", "admin"];
-/** Portería y el Jefe exportan sus propios ingresos del mes. */
-const PORTERIA: Rol[] = ["lider", "admin", "porteria", "guardia"];
+/** Cada rol ve SUS clientes: Administración puesteros, el Jefe quinteros y ambulantes. */
+const CLIENTES: Rol[] = ["admin", "guardia", "lider"];
 
 export const DATASETS: Record<DatasetExportable, DefinicionDataset> = {
   balance_mensual: {
     label: "Balance del mes",
     descripcion: "Ingresos por concepto, gastos por rubro y resumen",
-    roles: DIRECCION,
+    roles: ["lider"],
     mensual: true,
     grupo: "plata",
   },
   clientes: {
     label: "Clientes",
-    descripcion: "Padrón con deuda de hoy y saldo a favor",
-    roles: GESTION,
+    descripcion: "Padrón con categoría, socio, qué tiene y deuda de hoy",
+    roles: CLIENTES,
     mensual: false,
     grupo: "cobranza",
   },
   cuenta_corriente: {
     label: "Cuenta corriente",
     descripcion: "Cargos del mes por cliente y concepto",
-    roles: GESTION,
+    roles: CLIENTES,
     mensual: true,
     grupo: "cobranza",
   },
   pagos: {
     label: "Pagos",
-    descripcion: "Recibos del mes, con medio y quién cobró",
-    roles: GESTION,
+    descripcion: "Recibos del mes con sus medios (pago mixto) y quién cobró",
+    roles: ["admin", "guardia", "lider", "tesoreria"],
     mensual: true,
     grupo: "cobranza",
   },
   cheques: {
     label: "Cheques",
-    descripcion: "Cheques recibidos en el mes y su estado",
-    roles: GESTION,
+    descripcion: "Cheques recibidos en el mes: CUIT, puesto, estado y proveedor",
+    roles: ["tesoreria", "lider"],
     mensual: true,
     grupo: "plata",
   },
   gastos: {
     label: "Gastos",
-    descripcion: "Gastos del mes por rubro, pagados y pendientes",
-    roles: GESTION,
+    descripcion: "Gastos del mes por rubro, de qué caja salieron",
+    roles: ["admin", "tesoreria", "lider"],
     mensual: true,
     grupo: "plata",
   },
   cajas: {
     label: "Cajas",
-    descripcion: "Arqueos diarios de Administración y Portería",
-    roles: GESTION,
+    descripcion: "Arqueos diarios: cobros, quintas, ambulantes, bono camioneros y ajustes",
+    roles: ["admin", "tesoreria", "lider"],
     mensual: true,
     grupo: "plata",
   },
   canon: {
-    label: "Canon diario",
-    descripcion: "Camiones, ambulantes y quinteros cobrados en portería",
-    roles: GESTION,
+    label: "Bono camioneros",
+    descripcion: "Canon de transporte cobrado en portería, vehículo por vehículo",
+    roles: ["admin", "tesoreria", "lider"],
     mensual: true,
     grupo: "cobranza",
   },
   lecturas: {
     label: "Lecturas de energía",
-    descripcion: "Medidores, kWh y monto del mes",
-    roles: GESTION,
+    descripcion: "Medidores, ubicación, kWh y monto del mes",
+    roles: ["admin", "lider"],
     mensual: true,
     grupo: "cobranza",
   },
   movimientos_tesoreria: {
     label: "Movimientos de tesorería",
-    descripcion: "Impuestos, comisiones, débito fiscal y ajustes",
-    roles: DIRECCION,
+    descripcion: "Depósitos, extracciones, comisiones y ajustes por moneda y cuenta",
+    roles: ["tesoreria", "lider"],
     mensual: true,
     grupo: "plata",
   },
   solicitudes: {
     label: "Solicitudes",
-    descripcion: "Solicitudes, informes, reclamos y consultas del mes",
-    roles: GESTION,
+    descripcion: "Solicitudes, informes y reclamos del mes, con puesto y quién resolvió",
+    roles: ["admin", "lider"],
     mensual: true,
     grupo: "gestion",
   },
   circulares: {
     label: "Circulares",
-    descripcion: "Todas las circulares con cuántos socios las recibieron",
-    roles: GESTION,
+    descripcion: "Todas las circulares con cuántos socios las vieron",
+    roles: ["admin", "lider"],
     mensual: false,
+    grupo: "gestion",
+  },
+  registros: {
+    label: "Registros",
+    descripcion: "Notificaciones, apercibimientos y sanciones del mes, con sus multas",
+    roles: ["admin", "lider"],
+    mensual: true,
     grupo: "gestion",
   },
   empleados: {
     label: "Empleados",
-    descripcion: "Personal con contrato y horarios",
-    roles: PERSONAL,
+    descripcion: "Personal con sector, horas de contrato y horarios",
+    roles: ["lider", "admin"],
     mensual: false,
     grupo: "personal",
   },
   ingresos_personal: {
     label: "Ingresos de personal",
     descripcion: "Entradas y salidas registradas en portería en el mes",
-    roles: PORTERIA,
+    roles: ["lider", "admin", "porteria"],
+    mensual: true,
+    grupo: "personal",
+  },
+  novedades_personal: {
+    label: "Novedades del personal",
+    descripcion: "Horas del mes, faltas, feriados y vacaciones por empleado",
+    roles: ["lider", "admin", "guardia"],
     mensual: true,
     grupo: "personal",
   },
@@ -136,8 +150,10 @@ export const ORDEN_DATASETS: DatasetExportable[] = [
   "movimientos_tesoreria",
   "solicitudes",
   "circulares",
+  "registros",
   "empleados",
   "ingresos_personal",
+  "novedades_personal",
 ];
 
 export const LABEL_GRUPO_DATASET: Record<DefinicionDataset["grupo"], string> = {

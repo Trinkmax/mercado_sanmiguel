@@ -15,20 +15,25 @@ const schema = z.object({
 export type ResultadoGeneracion = {
   periodo: string;
   vencimiento: string;
+  /** Cargos recurrentes nuevos (expensas, cocheras, quinta…). */
   cargos: number;
+  /** Abonos mensuales de energía (ABEN) nuevos (I1). */
+  abonos?: number;
+  /** Consumos de luz (kWh) de las lecturas ya cargadas. */
   energia: number;
   /** Saldo a favor de clientes que se aplicó solo a los cargos nuevos. */
   saldo_favor_aplicado?: number;
 };
 
 /**
- * Genera los cargos del mes llamando a la RPC `generar_periodo`.
- * La RPC es idempotente: si se corre dos veces no duplica nada.
+ * Genera los cargos del mes llamando a la RPC `generar_periodo` (recurrentes, abono de
+ * energía y consumos). Es idempotente: si se corre dos veces solo agrega lo que falta.
+ * J5: Tesorería ya no genera.
  */
 export async function generarPeriodo(
   input: unknown
 ): Promise<ActionResult<ResultadoGeneracion>> {
-  await requireRol("admin", "tesoreria", "consejo", "lider");
+  await requireRol("admin", "lider");
 
   const parsed = schema.safeParse(input);
   if (!parsed.success) return fallo(parsed.error.issues[0].message);
@@ -40,8 +45,11 @@ export async function generarPeriodo(
   if (error) return fallo(error);
 
   revalidatePath("/facturacion");
+  revalidatePath("/energia");
   revalidatePath("/reportes");
   revalidatePath("/inicio");
+  revalidatePath("/cobranza", "layout");
+  revalidatePath("/mapa");
   revalidatePath("/clientes", "layout");
   return ok(data as unknown as ResultadoGeneracion);
 }

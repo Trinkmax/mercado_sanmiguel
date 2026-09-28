@@ -22,7 +22,8 @@ export default async function ReporteMensualPage({
   const { periodo } = await params;
   if (!/^\d{4}-\d{2}-01$/.test(periodo)) notFound();
 
-  const perfil = await requireRol("tesoreria", "consejo", "lider");
+  // J7: solo el Líder de Procesos.
+  const perfil = await requireRol("lider");
   const supabase = await createClient();
 
   const [ingresosRes, gastosRes] = await Promise.all([

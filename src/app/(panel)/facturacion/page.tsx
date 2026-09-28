@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarRange, Store } from "lucide-react";
+import { CalendarRange, Store, Zap } from "lucide-react";
 import { requireRol } from "@/lib/auth";
 import { ROLES_REPORTES } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/server";
@@ -41,15 +41,17 @@ type FilaPreview = {
   orden: number;
   clientes: Set<string>;
   subtotal: number;
+  /** Fila del abono de energía que se genera sola (clientes con medidor activo). */
+  automatica?: boolean;
 };
 
 export default async function FacturacionPage() {
-  const perfil = await requireRol("admin", "tesoreria", "consejo", "lider");
-  // Administración no ve Reportes (pedido del cliente): sin link "Ver reporte".
+  // J5: Tesorería no factura. Reportes solo el Líder (J7).
+  const perfil = await requireRol("admin", "lider");
   const veReportes = ROLES_REPORTES.includes(perfil.rol);
   const supabase = await createClient();
 
-  const [periodosRes, previewRes, configRes] = await Promise.all([
+  const [periodosRes, previewRes, configRes, abenRes, medidoresRes, filasAbenRes] = await Promise.all([
     supabase
       .from("periodos")
       .select("id, periodo, vencimiento, generado_en, generado_por")
@@ -72,6 +74,24 @@ export default async function FacturacionPage() {
       .select("dia_vencimiento")
       .eq("org_id", perfil.org_id)
       .maybeSingle(),
+    // I1: abono mensual de energía (ABEN) a cada cliente activo con medidor activo.
+    supabase
+      .from("conceptos")
+      .select("id, codigo, nombre, precio, orden_imputacion, activo")
+      .eq("org_id", perfil.org_id)
+      .eq("codigo", "ABEN")
+      .maybeSingle(),
+    supabase
+      .from("medidores")
+      .select("cliente_id, clientes!inner(activo)")
+      .eq("org_id", perfil.org_id)
+      .eq("activo", true)
+      .eq("clientes.activo", true),
+    supabase
+      .from("cliente_conceptos")
+      .select("cliente_id, cantidad, activo, conceptos!inner(codigo)")
+      .eq("org_id", perfil.org_id)
+      .eq("conceptos.codigo", "ABEN"),
   ]);
 
   const historial = periodosRes.data ?? [];
@@ -112,16 +132,46 @@ export default async function FacturacionPage() {
     item.subtotal += subtotal;
     porConcepto.set(fila.conceptos.codigo, item);
   }
+  // Abono de energía (se genera solo): clientes con medidor activo, salvo exentos; la
+  // cantidad es la de su fila ABEN activa si la tiene (misma regla que la generación).
+  const aben = abenRes.data;
+  let abonosEstimados = 0;
+  if (aben && aben.activo && Number(aben.precio) > 0) {
+    const filaAben = new Map((filasAbenRes.data ?? []).map((f) => [f.cliente_id, f]));
+    const conMedidor = new Set((medidoresRes.data ?? []).map((m) => m.cliente_id));
+    const item: FilaPreview = {
+      codigo: aben.codigo,
+      nombre: aben.nombre,
+      orden: Number(aben.orden_imputacion),
+      clientes: new Set<string>(),
+      subtotal: 0,
+      automatica: true,
+    };
+    for (const clienteId of conMedidor) {
+      const fila = filaAben.get(clienteId);
+      if (fila && !fila.activo) continue; // exento
+      const cantidad = fila ? Number(fila.cantidad) : 1;
+      item.clientes.add(clienteId);
+      item.subtotal += cantidad * Number(aben.precio);
+    }
+    if (item.clientes.size > 0) {
+      abonosEstimados = item.clientes.size;
+      cargosEstimados += item.clientes.size;
+      porConcepto.set(item.codigo, item);
+    }
+  }
+
   const preview = [...porConcepto.values()].sort((a, b) => a.orden - b.orden);
   const totalEstimado = preview.reduce((acc, f) => acc + f.subtotal, 0);
 
-  // Estimado y cobrado de cada período generado (resumen_conceptos por período).
+  // Estimado y cobrado de cada período generado (resumen_conceptos por período). Sin BC:
+  // el bono camioneros se cobra en la garita, no se factura.
   const resumenes = await Promise.all(
     historial.map((p) => supabase.rpc("resumen_conceptos", { p_periodo: p.periodo }))
   );
   const resumenPorPeriodo = new Map<string, { estimado: number; cobrado: number }>();
   historial.forEach((p, i) => {
-    const filas = resumenes[i].data ?? [];
+    const filas = (resumenes[i].data ?? []).filter((f) => f.codigo !== "BC");
     resumenPorPeriodo.set(p.periodo.slice(0, 10), {
       estimado: filas.reduce((acc, f) => acc + Number(f.estimado), 0),
       cobrado: filas.reduce((acc, f) => acc + Number(f.cobrado), 0),
@@ -172,10 +222,16 @@ export default async function FacturacionPage() {
                   <div key={fila.codigo} className="flex items-center gap-4 py-3">
                     <Codigo codigo={fila.codigo} />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate font-medium">{fila.nombre}</p>
+                      <p className="flex items-center gap-1.5 truncate font-medium">
+                        {fila.automatica ? (
+                          <Zap className="size-4 shrink-0 text-primary" strokeWidth={2} aria-hidden />
+                        ) : null}
+                        {fila.nombre}
+                      </p>
                       <p className="text-sm text-muted-foreground">
                         {fila.clientes.size}{" "}
                         {fila.clientes.size === 1 ? "cliente" : "clientes"}
+                        {fila.automatica ? " con medidor · se suma solo" : ""}
                       </p>
                     </div>
                     <Money monto={fila.subtotal} className="font-medium" />
@@ -187,14 +243,15 @@ export default async function FacturacionPage() {
                 <Money monto={totalEstimado} className="text-2xl font-bold" />
               </div>
               <p className="text-sm text-muted-foreground">
-                La energía se suma aparte, según las lecturas de medidores
-                cargadas en el mes.
+                El consumo de luz (kWh) se suma con las lecturas del mes; el abono
+                mensual de energía ya está incluido.
               </p>
               <GenerarPeriodoBoton
                 periodo={proximo}
                 label={labelPeriodo(proximo)}
                 cargosEstimados={cargosEstimados}
                 totalEstimado={totalEstimado}
+                abonosEstimados={abonosEstimados}
               />
             </>
           )}

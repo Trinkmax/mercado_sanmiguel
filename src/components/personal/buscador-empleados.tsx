@@ -7,13 +7,15 @@ import { Input } from "@/components/ui/input";
 import { hrefPersonal } from "@/components/personal/constantes";
 
 /** Búsqueda por apellido, nombre o DNI. Actualiza ?q= con debounce; el
- * listado filtra en el servidor y conserva el filtro activos/todos. */
+ * listado filtra en el servidor y conserva el filtro activos/todos y el sector. */
 export function BuscadorEmpleados({
   inicial,
   filtro,
+  sector,
 }: {
   inicial: string;
   filtro?: string;
+  sector?: string | null;
 }) {
   const router = useRouter();
   const [valor, setValor] = useState(inicial);
@@ -25,10 +27,10 @@ export function BuscadorEmpleados({
       return;
     }
     const timer = setTimeout(() => {
-      router.replace(hrefPersonal(valor.trim(), filtro));
+      router.replace(hrefPersonal(valor.trim(), filtro, sector));
     }, 350);
     return () => clearTimeout(timer);
-  }, [valor, filtro, router]);
+  }, [valor, filtro, sector, router]);
 
   return (
     <div className="relative">

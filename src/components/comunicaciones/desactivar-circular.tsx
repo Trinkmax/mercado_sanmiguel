@@ -56,13 +56,10 @@ export function DesactivarCircular({
       <Dialog open={abierto} onOpenChange={setAbierto}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-lg">
-              ¿Desactivar la circular N° {numero}?
-            </DialogTitle>
+            <DialogTitle className="text-lg">¿Desactivar la circular N° {numero}?</DialogTitle>
             <DialogDescription className="text-sm">
-              &ldquo;{titulo}&rdquo; deja de mostrarse en el portal y ya no le
-              pide confirmación a nadie. Las confirmaciones que ya hubo quedan
-              guardadas.
+              &ldquo;{titulo}&rdquo; deja de mostrarse en el portal y ya no le pide confirmación a
+              nadie. Las lecturas y confirmaciones que ya hubo quedan guardadas.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">

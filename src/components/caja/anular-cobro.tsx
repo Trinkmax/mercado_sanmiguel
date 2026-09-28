@@ -19,17 +19,25 @@ import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 
-/** Botón de anulación con motivo obligatorio. Solo se muestra con caja abierta. */
+const ATAJOS = ["Se cargó dos veces", "Monto equivocado", "Cliente equivocado", "Medio de pago equivocado"];
+
+/**
+ * Anula un recibo COMPLETO (todas sus líneas: efectivo + transferencia + cheque),
+ * con motivo obligatorio. El cliente vuelve a deber ese monto.
+ */
 export function BotonAnularCobro({
   pagoId,
   numero,
   cliente,
-  monto,
+  total,
+  medios,
 }: {
   pagoId: string;
   numero: number;
   cliente: string;
-  monto: number;
+  total: number;
+  /** "efectivo + transferencia" */
+  medios: string;
 }) {
   const [abierto, setAbierto] = useState(false);
   const [motivo, setMotivo] = useState("");
@@ -39,16 +47,16 @@ export function BotonAnularCobro({
   function confirmar() {
     const limpio = motivo.trim();
     if (!limpio) {
-      setError("Contá por qué anulás el cobro.");
+      setError("Contá por qué anulás el recibo.");
       return;
     }
     startTransition(async () => {
       const res = await anularCobro(pagoId, limpio);
       if (!res.ok) {
-        toast.error(res.error);
+        setError(res.error);
         return;
       }
-      toast.success(`Cobro N° ${numero} anulado.`);
+      toast.success(`Recibo N° ${numero} anulado. ${cliente} vuelve a deber ${formatARS(total)}.`);
       setAbierto(false);
       setMotivo("");
       setError(null);
@@ -59,6 +67,7 @@ export function BotonAnularCobro({
     <Dialog
       open={abierto}
       onOpenChange={(v) => {
+        if (enviando) return;
         setAbierto(v);
         if (!v) {
           setMotivo("");
@@ -71,23 +80,39 @@ export function BotonAnularCobro({
           variant="ghost"
           size="icon-lg"
           className="size-11 text-destructive hover:bg-destructive/10 hover:text-destructive"
-          aria-label={`Anular cobro N° ${numero}`}
+          aria-label={`Anular el recibo N° ${numero}`}
         >
           <Ban className="size-5" strokeWidth={2} />
         </Button>
       </DialogTrigger>
       <DialogContent className="gap-5 p-6 sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-xl">Anular cobro</DialogTitle>
+          <DialogTitle className="text-xl">Anular el recibo N° {numero}</DialogTitle>
           <DialogDescription className="text-base">
-            Recibo N° {numero} de {cliente} por {formatARS(monto)}. Se revierte
-            lo imputado y el cliente vuelve a deber ese monto.
+            Se anula el recibo completo N° {numero} ({medios}) por {formatARS(total)}. Se revierte lo imputado
+            y {cliente} vuelve a deber ese monto.
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-2">
+        <div className="space-y-3">
           <Label htmlFor={`motivo-${pagoId}`} className="text-base">
             ¿Por qué lo anulás?
           </Label>
+          <div className="flex flex-wrap gap-2">
+            {ATAJOS.map((a) => (
+              <Button
+                key={a}
+                type="button"
+                variant={motivo === a ? "default" : "outline"}
+                className="min-h-11 text-sm"
+                onClick={() => {
+                  setMotivo(a);
+                  setError(null);
+                }}
+              >
+                {a}
+              </Button>
+            ))}
+          </div>
           <Textarea
             id={`motivo-${pagoId}`}
             value={motivo}
@@ -95,12 +120,13 @@ export function BotonAnularCobro({
               setMotivo(e.target.value);
               if (error) setError(null);
             }}
-            placeholder="Ej.: se cargó dos veces"
-            className="min-h-24 text-base md:text-base"
+            placeholder="O escribilo con tus palabras"
+            aria-invalid={Boolean(error)}
+            className="min-h-20 text-base md:text-base"
           />
           {error ? <p className="text-sm text-destructive">{error}</p> : null}
         </div>
-        <DialogFooter>
+        <DialogFooter className="gap-2 sm:gap-2">
           <Button
             variant="outline"
             size="lg"
@@ -117,12 +143,8 @@ export function BotonAnularCobro({
             onClick={confirmar}
             disabled={enviando}
           >
-            {enviando ? (
-              <Spinner className="size-5" />
-            ) : (
-              <Ban className="size-5" strokeWidth={2} />
-            )}
-            Anular cobro
+            {enviando ? <Spinner className="size-5" /> : <Ban className="size-5" strokeWidth={2} />}
+            Anular recibo
           </Button>
         </DialogFooter>
       </DialogContent>

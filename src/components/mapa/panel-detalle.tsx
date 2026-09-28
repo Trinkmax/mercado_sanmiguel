@@ -1,19 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, HandCoins, MousePointerClick, TriangleAlert, UserPlus, X } from "lucide-react";
+import { ArrowRight, Flag, HandCoins, MousePointerClick, TriangleAlert, UserPlus, X } from "lucide-react";
+import { LABEL_CATEGORIA_PLURAL, textoAvance, type CategoriaCliente } from "@/lib/segmentos";
 import { Button } from "@/components/ui/button";
 import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
+import { AvisoPuesto } from "./aviso-puesto";
 import {
   diferencias,
   espaciosPorTipo,
+  etiquetaEspacio,
   NOMBRE_TIPO,
+  nombreTipo,
   numeroVisible,
   textoDiferencia,
   unir,
 } from "./geometria";
-import type { ClienteMapa, Destinos, Espacio, EstadoCobro, Rect } from "./tipos";
+import type { AvisoPuestoPrevio, ClienteMapa, Destinos, Espacio, EstadoCobro, Rect, VistaMapa } from "./tipos";
 
 const TEXTO_SELLO: Record<EstadoCobro, { estado: string; texto?: string }> = {
   al_dia: { estado: "al_dia" },
@@ -37,33 +41,48 @@ export function ChipsEspacios({
       {grupos.map((g) => (
         <div key={g.tipo} className="flex flex-wrap items-center gap-1.5">
           <span className="w-24 shrink-0 text-xs text-muted-foreground">
-            {g.tipo === "puesto"
-              ? g.espacios.length > 1
-                ? "Puestos"
-                : "Puesto"
-              : g.tipo === "local"
-                ? g.espacios.length > 1
-                  ? "Locales"
-                  : "Local"
-                : g.tipo === "contenedor"
-                  ? g.espacios.length > 1
-                    ? "Contenedores"
-                    : "Contenedor"
-                  : "Bar"}
+            {nombreTipo(g.tipo, g.espacios.length > 1)}
           </span>
           {g.espacios.map((e) => (
             <button
               key={e.id}
               type="button"
               onClick={() => onEnfocar(e)}
-              className="inline-flex h-11 min-w-11 items-center justify-center rounded-md border bg-card px-2.5 font-display text-[15px] font-bold tabular transition-colors hover:border-primary/40 hover:bg-accent"
-              aria-label={`Ver ${NOMBRE_TIPO[e.tipo].toLowerCase()} ${numeroVisible(e)} en el plano`}
+              className="inline-flex h-11 min-w-11 items-center justify-center gap-1 rounded-md border bg-card px-2.5 font-display text-[15px] font-bold tabular transition-colors hover:border-primary/40 hover:bg-accent"
+              aria-label={`Ver ${etiquetaEspacio(e).toLowerCase()} en el plano`}
+              title={e.propio ? "Puesto propio de la cooperativa (paga EXPP)" : undefined}
             >
+              {e.propio ? <Flag className="size-3.5 text-primary" strokeWidth={2.2} aria-hidden /> : null}
               {numeroVisible(e)}
             </button>
           ))}
         </div>
       ))}
+    </div>
+  );
+}
+
+/** Avance del mes de un quintero (v_avance_mes): "2 de 4 · Falta $165.000" con barra. */
+function AvanceQuintero({ cliente }: { cliente: ClienteMapa }) {
+  const mes = cliente.mes;
+  if (!mes) {
+    return <p className="text-sm text-muted-foreground">Este mes todavía no se generó su quinta.</p>;
+  }
+  const total = Number(mes.total) || 0;
+  const pct = total > 0 ? Math.min(100, Math.max(0, ((total - Number(mes.falta)) / total) * 100)) : 100;
+  return (
+    <div className="space-y-1.5">
+      <p className="text-sm font-medium">{textoAvance(mes)}</p>
+      <div
+        className="h-2.5 overflow-hidden rounded-full bg-pendiente-suave ring-1 ring-foreground/5"
+        role="img"
+        aria-label={textoAvance(mes)}
+      >
+        <div className="h-full rounded-full bg-pagado transition-[width] duration-500" style={{ width: `${pct}%` }} />
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Del mes: <Money monto={total} className="font-medium text-foreground" />
+      </p>
     </div>
   );
 }
@@ -80,6 +99,9 @@ export function PanelDetalle({
   onAsignarEspacio,
   onEnfocar,
   onCerrar,
+  vista = "completa",
+  avisos = [],
+  categoriasGestion,
 }: {
   cliente: ClienteMapa | null;
   suyos: Espacio[];
@@ -91,12 +113,22 @@ export function PanelDetalle({
   onAsignarEspacio: (espacioId: string) => void;
   onEnfocar: (r: Rect) => void;
   onCerrar: () => void;
+  /** "porteria": mapa del Jefe (G11): tocar un puesto es avisarle al Líder. */
+  vista?: VistaMapa;
+  /** Avisos anteriores sobre el espacio elegido (mapa del Jefe). */
+  avisos?: AvisoPuestoPrevio[];
+  /** Categorías que el rol gestiona (Cobrar / Ver ficha solo para esas). */
+  categoriasGestion?: CategoriaCliente[];
 }) {
   if (cliente) {
     const sello = TEXTO_SELLO[cliente.estado];
-    const difs = diferencias(cliente, suyos);
-    const esQuintero = cliente.facturado.quintas > 0;
-    const puedeCobrar = destinos.cobro !== null && (!soloQuinteros || esQuintero);
+    const difs = vista === "porteria" ? [] : diferencias(cliente, suyos);
+    const esQuintero = cliente.categoria ? cliente.categoria === "quintero" : cliente.facturado.quintas > 0;
+    const gestiona =
+      !categoriasGestion || !cliente.categoria || categoriasGestion.includes(cliente.categoria);
+    const puedeCobrar = gestiona && destinos.cobro !== null && (!soloQuinteros || esQuintero);
+    const quienGestiona =
+      cliente.categoria === "puestero" ? "Administración" : cliente.categoria ? "el Jefe de Portería" : null;
     return (
       <div className="relative flex flex-col gap-4 p-4 @2xl:flex-row @2xl:items-start @2xl:gap-6 @2xl:p-5">
         <BotonCerrar onCerrar={onCerrar} />
@@ -114,13 +146,16 @@ export function PanelDetalle({
         <div className="min-w-0 flex-1 space-y-2.5">
           {suyos.length > 0 ? (
             <ChipsEspacios espacios={suyos} onEnfocar={onEnfocar} />
+          ) : esQuintero ? (
+            <AvanceQuintero cliente={cliente} />
           ) : (
-            <p className="text-sm text-muted-foreground">
-              {esQuintero
-                ? "Vende en la zona de quinteros: no tiene puestos numerados."
-                : "Todavía no tiene puestos asignados en el plano."}
-            </p>
+            <p className="text-sm text-muted-foreground">Todavía no tiene puestos asignados en el plano.</p>
           )}
+          {!gestiona && quienGestiona ? (
+            <p className="text-xs text-muted-foreground">
+              {cliente.categoria ? `${LABEL_CATEGORIA_PLURAL[cliente.categoria]}: ` : ""}lo gestiona {quienGestiona}.
+            </p>
+          ) : null}
           {difs.map((d) => (
             <p key={d.tipo} className="flex items-start gap-1.5 text-sm text-parcial">
               <TriangleAlert className="mt-0.5 size-4 shrink-0" strokeWidth={2} />
@@ -145,7 +180,7 @@ export function PanelDetalle({
                 Ubicar en el plano
               </Button>
             ) : null}
-            {destinos.ficha ? (
+            {destinos.ficha && gestiona ? (
               <Button asChild variant="outline" className={BOTON}>
                 <Link href={`${destinos.ficha}/${cliente.id}`}>
                   Ver ficha
@@ -167,6 +202,10 @@ export function PanelDetalle({
     );
   }
 
+  if (espacio && vista === "porteria") {
+    return <AvisoPuesto key={espacio.id} espacio={espacio} avisos={avisos} onCerrar={onCerrar} />;
+  }
+
   if (espacio) {
     const titulo =
       espacio.tipo === "bar" ? "Bar" : `${NOMBRE_TIPO[espacio.tipo]} ${numeroVisible(espacio)}`;
@@ -176,6 +215,7 @@ export function PanelDetalle({
         <div className="min-w-0 flex-1 space-y-1 pr-10">
           <div className="flex flex-wrap items-center gap-2">
             <Sello estado="libre" texto="Libre" />
+            {espacio.propio ? <Sello estado="propio" /> : null}
             {espacio.medio ? <span className="text-xs text-muted-foreground">Medio puesto</span> : null}
           </div>
           <p className="font-display text-lg font-bold">{titulo}</p>
@@ -199,8 +239,10 @@ export function PanelDetalle({
     <div className="flex items-center gap-3 px-4 py-3.5 text-sm text-muted-foreground md:px-5">
       <MousePointerClick className="size-5 shrink-0" strokeWidth={1.8} />
       <p>
-        Tocá un puesto para ver quién lo ocupa y cuánto debe. Arrastrá para moverte por el
-        plano; pellizcá o usá los botones para acercar.
+        {vista === "porteria"
+          ? "Tocá un puesto para avisarle algo al Líder, o un quintero para ver cómo viene con la quinta."
+          : "Tocá un puesto para ver quién lo ocupa y cuánto debe."}{" "}
+        Arrastrá para moverte por el plano; pellizcá o usá los botones para acercar.
       </p>
     </div>
   );

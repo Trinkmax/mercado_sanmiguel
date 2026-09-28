@@ -15,8 +15,9 @@ const LABELS: Record<string, { texto: string; variante: Variante }> = {
   integrada: { texto: "En caja mayor", variante: "info" },
   validada: { texto: "Validada", variante: "pagado" },
   reapertura_pedida: { texto: "Pide reapertura", variante: "parcial" },
-  // cheques
-  en_cartera: { texto: "En cartera", variante: "parcial" },
+  // cheques ("Por cobrar" es el término del cliente, A2; el valor en la base sigue siendo en_cartera)
+  en_cartera: { texto: "Por cobrar", variante: "parcial" },
+  entregado: { texto: "Entregado a proveedor", variante: "info" },
   listo_depositar: { texto: "Listo para depositar", variante: "info" },
   depositado: { texto: "Depositado", variante: "neutro" },
   acreditado: { texto: "Acreditado", variante: "pagado" },
@@ -35,11 +36,37 @@ const LABELS: Record<string, { texto: string; variante: Variante }> = {
   circular: { texto: "Circular", variante: "info" },
   recibida: { texto: "Recibida", variante: "pagado" },
   sin_recibir: { texto: "Sin confirmar", variante: "pendiente" },
-  // deuda / cuenta corriente
+  // estado del hilo de un registro (sanciones.estado) y su multa
+  notificado: { texto: "Notificado", variante: "info" },
+  descargo: { texto: "Descargo presentado", variante: "parcial" },
+  respondio: { texto: "Respondió", variante: "parcial" },
+  respondido: { texto: "Respondido", variante: "pagado" },
+  multa: { texto: "Multa", variante: "pendiente" },
+  multa_pagada: { texto: "Multa pagada", variante: "pagado" },
+  sin_efecto: { texto: "Sin efecto", variante: "neutro" },
+  // portal del socio (reglas en src/lib/segmentos.ts)
+  a_responder: { texto: "Tenés que responder", variante: "pendiente" },
+  respuesta_nueva: { texto: "Respuesta nueva", variante: "info" },
+  nueva_comunicacion: { texto: "Nueva", variante: "parcial" },
+  // circulares: quién la vio (D1)
+  la_vio: { texto: "La vio", variante: "pagado" },
+  no_la_vio: { texto: "Todavía no", variante: "neutro" },
+  sin_portal: { texto: "Sin portal", variante: "neutro" },
+  // deuda / cuenta corriente (semáforo B3: al_dia · en_termino · vencido)
   al_dia: { texto: "Al día", variante: "pagado" },
+  en_termino: { texto: "En término", variante: "parcial" },
   debe: { texto: "Debe", variante: "pendiente" },
   saldo_favor: { texto: "Saldo a favor", variante: "pagado" },
+  // clientes: categoría, socio y puesto propio
+  puestero: { texto: "Puestero", variante: "neutro" },
+  socio: { texto: "Socio", variante: "info" },
+  propio: { texto: "Puesto propio", variante: "info" },
+  // ambulantes
+  pago_hoy: { texto: "Pagó hoy", variante: "pagado" },
+  no_pago_hoy: { texto: "Hoy no pagó", variante: "neutro" },
   // solicitudes (ex peticiones)
+  con_jefe: { texto: "Con el Jefe", variante: "info" },
+  resuelta_jefe: { texto: "Resuelta por el Jefe", variante: "pagado" },
   nueva: { texto: "Nueva", variante: "parcial" },
   en_revision: { texto: "En revisión", variante: "info" },
   en_consejo: { texto: "En el Consejo", variante: "info" },
@@ -51,11 +78,21 @@ const LABELS: Record<string, { texto: string; variante: Variante }> = {
   // aprobaciones (cambios pendientes)
   pendiente_aprobacion: { texto: "Esperando aprobación", variante: "parcial" },
   aprobado: { texto: "Aprobado", variante: "pagado" },
+  revisar: { texto: "Revisala", variante: "parcial" },
+  // novedades del personal
+  aprobada: { texto: "Aprobada", variante: "pagado" },
+  anulada: { texto: "Anulada", variante: "neutro" },
+  // caja
+  despues_cierre: { texto: "Después del cierre", variante: "parcial" },
   // tesorería
   impuesto: { texto: "Impuesto", variante: "neutro" },
   debito_fiscal: { texto: "Débito fiscal", variante: "neutro" },
   comision: { texto: "Comisión", variante: "neutro" },
   ajuste: { texto: "Ajuste", variante: "info" },
+  deposito: { texto: "Depósito", variante: "info" },
+  extraccion: { texto: "Extracción", variante: "info" },
+  ingreso: { texto: "Ingreso", variante: "pagado" },
+  egreso: { texto: "Egreso", variante: "neutro" },
   // personal / portería
   activo: { texto: "Activo", variante: "pagado" },
   inactivo: { texto: "Inactivo", variante: "neutro" },
@@ -63,7 +100,7 @@ const LABELS: Record<string, { texto: string; variante: Variante }> = {
   fuera_horario: { texto: "Fuera de horario", variante: "parcial" },
   adentro: { texto: "Adentro", variante: "info" },
   salio: { texto: "Salió", variante: "neutro" },
-  // canon diario
+  // categoría de cliente (ambulante y quintero se reusan); camion queda deprecado (canon viejo)
   camion: { texto: "Camión", variante: "neutro" },
   ambulante: { texto: "Ambulante", variante: "neutro" },
   quintero: { texto: "Quintero", variante: "neutro" },

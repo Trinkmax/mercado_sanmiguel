@@ -4,15 +4,15 @@ import { useId, useMemo, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatFraccion } from "@/lib/format";
+import { textoAvance } from "@/lib/segmentos";
 import { Input } from "@/components/ui/input";
 import {
   compararNumero,
-  espaciosPorTipo,
-  etiquetaEspacios,
-  NOMBRE_TIPO,
+  etiquetaEspacio,
   normalizar,
   numeroVisible,
-  unidades,
+  textoEspacios,
+  unidadesPuestos,
 } from "./geometria";
 import type { ClienteMapa, Espacio, TipoEspacio } from "./tipos";
 
@@ -28,11 +28,11 @@ type Fila = {
 
 const MAX_RESULTADOS = 8;
 
-/** "local 3", "l3", "contenedor 7", "c 7", "bar", "52" → qué espacio buscar. */
+/** "local 3", "l3", "conteiner 7", "contenedor 7", "c 7", "bar", "52" → qué espacio buscar. */
 function leerEspacio(q: string): { tipo: TipoEspacio | null; numero: string } | null {
   const t = normalizar(q).replace(/\s+/g, " ").trim();
   if (t === "bar") return { tipo: "bar", numero: "" };
-  const m = t.match(/^(puesto|p|local|l|contenedor|cont|c)?\s*(\d{1,3})$/);
+  const m = t.match(/^(puesto|p|local|l|conteiner|contenedor|cont|c)?\s*(\d{1,3})$/);
   if (!m) return null;
   const pref = m[1] ?? "";
   const tipo: TipoEspacio | null = pref.startsWith("l")
@@ -57,6 +57,8 @@ export function BuscadorMapa({
   soloClientes = false,
   placeholder = "Buscá puestero o puesto",
   autoFocus = false,
+  anonimo = false,
+  vacio,
   className,
 }: {
   clientes: ClienteMapa[];
@@ -65,6 +67,10 @@ export function BuscadorMapa({
   soloClientes?: boolean;
   placeholder?: string;
   autoFocus?: boolean;
+  /** Sin datos de ocupación (Jefe de Portería, selector de lugar): no dice "Libre" ni de quién es. */
+  anonimo?: boolean;
+  /** Texto cuando no hay resultados (sin la búsqueda, que se agrega sola). */
+  vacio?: string;
   className?: string;
 }) {
   const [texto, setTexto] = useState("");
@@ -106,8 +112,18 @@ export function BuscadorMapa({
             clave: `e:${e.id}`,
             resultado: { tipo: "espacio", id: e.id },
             insignia: numeroVisible(e),
-            titulo: `${NOMBRE_TIPO[e.tipo]}${e.tipo === "bar" ? "" : ` ${numeroVisible(e)}`}`,
-            detalle: duenio ? duenio.apodo ?? duenio.nombre : e.clienteId ? "Ocupado" : "Libre",
+            titulo: etiquetaEspacio(e),
+            detalle: anonimo
+              ? e.propio
+                ? "De la cooperativa"
+                : e.medio
+                  ? "Medio puesto"
+                  : "Tocá para verlo en el plano"
+              : duenio
+                ? duenio.apodo ?? duenio.nombre
+                : e.clienteId
+                  ? "Ocupado"
+                  : "Libre",
           });
         }
       }
@@ -122,30 +138,39 @@ export function BuscadorMapa({
       );
     });
     // En modo asignar, primero los que tienen puestos facturados sin ubicar.
+    const faltan = (c: ClienteMapa) => {
+      const suyos = porCliente.get(c.id) ?? [];
+      return (
+        c.facturado.puestos - unidadesPuestos(suyos, false) > 0 ||
+        (c.facturado.propios ?? 0) - unidadesPuestos(suyos, true) > 0
+      );
+    };
     const ordenados = soloClientes
-      ? [...coinciden].sort((a, b) => {
-          const faltaA = a.facturado.puestos - unidades(porCliente.get(a.id) ?? []);
-          const faltaB = b.facturado.puestos - unidades(porCliente.get(b.id) ?? []);
-          return Number(faltaB > 0) - Number(faltaA > 0) || a.codigo - b.codigo;
-        })
+      ? [...coinciden].sort((a, b) => Number(faltan(b)) - Number(faltan(a)) || a.codigo - b.codigo)
       : coinciden;
 
     for (const c of ordenados) {
       const suyos = porCliente.get(c.id) ?? [];
       let detalle: string;
       if (soloClientes) {
-        const enPlano = unidades(suyos);
-        detalle =
-          c.facturado.puestos > 0
-            ? `Factura ${formatFraccion(c.facturado.puestos)} · en el plano ${formatFraccion(enPlano)}`
-            : suyos.length > 0
-              ? espaciosPorTipo(suyos).map((g) => etiquetaEspacios(g.espacios)).join(" · ")
-              : "Sin puestos facturados";
+        const comunes = c.facturado.puestos;
+        const propios = c.facturado.propios ?? 0;
+        const factura = [
+          comunes > 0 ? `${formatFraccion(comunes)} EXME` : null,
+          propios > 0 ? `${formatFraccion(propios)} EXPP` : null,
+        ]
+          .filter(Boolean)
+          .join(" + ");
+        const enPlano = unidadesPuestos(suyos, false) + unidadesPuestos(suyos, true);
+        detalle = factura
+          ? `Factura ${factura} · en el plano ${formatFraccion(enPlano)}`
+          : suyos.length > 0
+            ? textoEspacios(suyos)
+            : "Sin expensas de puesto facturadas";
+      } else if (anonimo) {
+        detalle = c.mes ? `Quintero · ${textoAvance(c.mes)}` : "Quintero";
       } else {
-        detalle =
-          suyos.length > 0
-            ? espaciosPorTipo(suyos).map((g) => etiquetaEspacios(g.espacios)).join(" · ")
-            : "Sin puestos en el plano";
+        detalle = suyos.length > 0 ? textoEspacios(suyos) : "Sin puestos en el plano";
       }
       salida.push({
         clave: `c:${c.id}`,
@@ -156,7 +181,7 @@ export function BuscadorMapa({
       });
     }
     return salida.slice(0, soloClientes ? 40 : MAX_RESULTADOS);
-  }, [texto, soloClientes, espacios, clientes, clientePorId, porCliente]);
+  }, [texto, soloClientes, anonimo, espacios, clientes, clientePorId, porCliente]);
 
   const elegir = (f: Fila) => {
     onElegir(f.resultado);
@@ -242,7 +267,7 @@ export function BuscadorMapa({
         >
           {filas.length === 0 ? (
             <li className="px-3 py-3 text-sm text-muted-foreground">
-              No encontramos a nadie con “{texto.trim()}”.
+              {vacio ?? "No encontramos a nadie con"} “{texto.trim()}”.
             </li>
           ) : (
             filas.map((f, i) => (

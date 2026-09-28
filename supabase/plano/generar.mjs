@@ -6,7 +6,9 @@
 // Convenciones del dibujo original:
 //   · "52 - 50 - 48 - 46" = un puestero con varios puestos (grupo).
 //   · "34 /2"             = medio puesto.
-//   · Los círculos son contenedores.
+//   · Los círculos son contéiners (el valor interno sigue siendo "contenedor").
+//   · { n, propio: true } = puesto propio de la cooperativa (C3; paga EXPP). Todavía no
+//     se sabe cuáles son los 4 (FASE3 §9-P12): se marcan desde el mapa.
 // Se respeta el dibujo tal cual, incluso lo que hay que revisar con el
 // mercado: "63 - 63" (repetido), "5 /2" en la isla y "7 - 5" en la fila sur
 // (el 5 aparece dos veces), un puesto con "?" y la falta del 17.
@@ -47,7 +49,7 @@ const espacios = [];
 const elementos = [];
 
 /** Fila de puestos de izquierda a derecha. Cada ítem:
- *  número | { n, medio?, ancho?, antes? (espacio extra previo), grupo?, nota?, tipo? } */
+ *  número | { n, medio?, propio?, ancho?, antes? (espacio extra previo), grupo?, nota?, tipo? } */
 function fila(items, x0, y, h = D) {
   let x = x0;
   for (const it of items) {
@@ -58,6 +60,7 @@ function fila(items, x0, y, h = D) {
       tipo: p.tipo ?? "puesto",
       numero: p.n,
       medio: Boolean(p.medio),
+      propio: Boolean(p.propio) && (p.tipo ?? "puesto") === "puesto",
       grupo: p.grupo ?? null,
       nota: p.nota ?? null,
       x,
@@ -286,6 +289,7 @@ const contenedor = (x, y, w = C, h = C) =>
     tipo: "contenedor",
     numero: String(++nContenedor),
     medio: false,
+    propio: false,
     grupo: null,
     nota: null,
     x,
@@ -299,7 +303,7 @@ const RECINTO_X = DERECHA_X + 66; // 1680
 
 // Recinto norte: 3 contenedores
 const recA = { x: RECINTO_X, y: 40, w: 170, h: 150 };
-elementos.push({ tipo: "recinto", etiqueta: "Contenedores", ...recA });
+elementos.push({ tipo: "recinto", etiqueta: "Contéiners", ...recA });
 contenedor(recA.x + 22, recA.y + 16);
 contenedor(recA.x + 96, recA.y + 52);
 contenedor(recA.x + 22, recA.y + 88);
@@ -318,7 +322,7 @@ for (let fi = 0; fi < 2; fi++) {
   }
 }
 recB.w = colX0 + 4 * C + 3 * CG + 18 - recB.x;
-elementos.push({ tipo: "recinto", etiqueta: "Contenedores", ...recB });
+elementos.push({ tipo: "recinto", etiqueta: "Contéiners", ...recB });
 
 // 10 contenedores bajo las 18 cocheras
 const diezW = 5 * C + 4 * CG;
@@ -331,7 +335,7 @@ for (let fi = 0; fi < 2; fi++) {
 }
 elementos.push({
   tipo: "rotulo",
-  etiqueta: "Contenedores",
+  etiqueta: "Contéiners",
   x: diezX,
   y: diezY + 2 * C + CG + 10,
   w: diezW,
@@ -346,6 +350,7 @@ for (let i = 0; i < 5; i++) {
     tipo: "local",
     numero: String(5 - i),
     medio: false,
+    propio: false,
     grupo: null,
     nota: null,
     x: DERECHA_X,
@@ -384,17 +389,36 @@ const filasElementos = elementos.map(
 );
 const filasEspacios = espacios.map(
   (e) =>
-    `  ('${ORG}', ${q(e.tipo)}, ${q(e.numero)}, ${e.medio}, ${q(e.grupo)}, ${q(e.nota)}, ${num(e.x)}, ${num(e.y)}, ${num(e.w)}, ${num(e.h)})`
+    `  ('${ORG}', ${q(e.tipo)}, ${q(e.numero)}, ${e.medio}, ${Boolean(e.propio)}, ${q(e.grupo)}, ${q(e.nota)}, ${num(e.x)}, ${num(e.y)}, ${num(e.w)}, ${num(e.h)})`
 );
 
 const puestos = espacios.filter((e) => e.tipo === "puesto");
 console.log(`-- ============================================================
 -- Plano real del Mercado San Miguel — generado por supabase/plano/generar.mjs
--- ${puestos.length} puestos (${puestos.filter((p) => p.medio).length} medios), 1 bar, 5 locales, ${nContenedor} contenedores.
--- Carga inicial: BORRA el plano de la organización (y sus asignaciones)
--- antes de insertarlo. Correr una sola vez, con el rol postgres.
+-- ${puestos.length} puestos (${puestos.filter((p) => p.medio).length} medios, ${puestos.filter((p) => p.propio).length} propios), 1 bar, 5 locales, ${nContenedor} contéiners.
+-- Carga INICIAL: borra el plano de la organización antes de insertarlo. Correr una sola
+-- vez, con el rol postgres. Si el plano ya está en uso (puestos asignados o marcados
+-- como propios, medidores, solicitudes, canon o registros que apuntan a un lugar) NO
+-- corre: esos vínculos se perderían (FASE3 §8). Los arreglos se hacen desde el mapa.
 -- ============================================================
 begin;
+
+do $$
+begin
+  if exists (select 1 from public.espacios e
+              where e.org_id = '${ORG}' and (e.cliente_id is not null or e.propio))
+     or exists (select 1 from public.medidores m join public.espacios e on e.id = m.espacio_id
+                 where e.org_id = '${ORG}')
+     or exists (select 1 from public.solicitudes s join public.espacios e on e.id = s.espacio_id
+                 where e.org_id = '${ORG}')
+     or exists (select 1 from public.canon_camiones c join public.espacios e on e.id = c.espacio_id
+                 where e.org_id = '${ORG}')
+     or exists (select 1 from public.sanciones s join public.espacios e on e.id = s.espacio_id
+                 where e.org_id = '${ORG}')
+  then
+    raise exception 'El plano ya está en uso (puestos asignados o propios, medidores, solicitudes, canon o registros con lugar): recrearlo borraría esos vínculos. Corregí los puestos desde el mapa (Asignar puestos → tocá el puesto).';
+  end if;
+end $$;
 
 delete from public.espacios where org_id = '${ORG}';
 delete from public.plano_elementos where org_id = '${ORG}';
@@ -402,7 +426,7 @@ delete from public.plano_elementos where org_id = '${ORG}';
 insert into public.plano_elementos (org_id, tipo, etiqueta, capacidad, x, y, w, h, orden) values
 ${filasElementos.join(",\n")};
 
-insert into public.espacios (org_id, tipo, numero, medio, grupo, nota, x, y, w, h) values
+insert into public.espacios (org_id, tipo, numero, medio, propio, grupo, nota, x, y, w, h) values
 ${filasEspacios.join(",\n")};
 
 commit;`);

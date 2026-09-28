@@ -20,6 +20,8 @@ const TIPOS_CONTRATO = [
   "pasantia",
 ] as const;
 
+const SECTORES = ["porteria", "limpieza", "mantenimiento", "administracion", "otro"] as const;
+
 const REGEX_FECHA = /^\d{4}-\d{2}-\d{2}$/;
 const REGEX_HORA = /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/;
 
@@ -74,6 +76,16 @@ const schemaEmpleado = z.object({
       (v) => v === null || z.email().safeParse(v).success,
       "El email no es válido"
     ),
+  sector: z.enum(SECTORES, { error: "Elegí el sector donde trabaja" }),
+  horas_semanales: z
+    .string()
+    .trim()
+    .optional()
+    .transform((v) => (v ? Number(v.replace(",", ".")) : null))
+    .refine(
+      (v) => v === null || (Number.isFinite(v) && v > 0 && v <= 84),
+      "Poné las horas por semana del contrato (ej.: 44), hasta 84"
+    ),
   tipo_contrato: z.enum(TIPOS_CONTRATO, { error: "Elegí el tipo de contrato" }),
   fecha_ingreso: fechaOpcional,
   fecha_egreso: fechaOpcional,
@@ -93,6 +105,8 @@ function leerDatos(formData: FormData) {
     cargo: get("cargo"),
     telefono: get("telefono"),
     email: get("email"),
+    sector: get("sector"),
+    horas_semanales: get("horas_semanales"),
     tipo_contrato: get("tipo_contrato"),
     fecha_ingreso: get("fecha_ingreso"),
     fecha_egreso: get("fecha_egreso"),
@@ -161,6 +175,8 @@ export async function crearEmpleado(
       cargo: datos.cargo,
       telefono: datos.telefono,
       email: datos.email,
+      sector: datos.sector,
+      horas_semanales: datos.horas_semanales,
       tipo_contrato: datos.tipo_contrato,
       fecha_ingreso: datos.fecha_ingreso,
       fecha_egreso: datos.fecha_egreso,
@@ -180,6 +196,7 @@ export async function crearEmpleado(
   }
 
   revalidatePath("/personal");
+  revalidatePath("/novedades", "layout");
   return ok({ id: data.id });
 }
 
@@ -236,6 +253,8 @@ export async function editarEmpleado(
       cargo: datos.cargo,
       telefono: datos.telefono,
       email: datos.email,
+      sector: datos.sector,
+      horas_semanales: datos.horas_semanales,
       tipo_contrato: datos.tipo_contrato,
       fecha_ingreso: datos.fecha_ingreso,
       fecha_egreso: datos.fecha_egreso,
@@ -259,6 +278,7 @@ export async function editarEmpleado(
 
   revalidatePath("/personal");
   revalidatePath(`/personal/${id}`);
+  revalidatePath("/novedades", "layout");
   return ok({ id });
 }
 
@@ -341,6 +361,7 @@ export async function guardarHorarios(
 
   revalidatePath("/personal");
   revalidatePath(`/personal/${empleadoId}`);
+  revalidatePath("/novedades", "layout");
   return ok({ cantidad: normalizadas.length });
 }
 
@@ -370,6 +391,7 @@ export async function darDeBaja(input: unknown): Promise<ActionResult<void>> {
 
   revalidatePath("/personal");
   revalidatePath(`/personal/${parsed.data.id}`);
+  revalidatePath("/novedades", "layout");
   return ok(undefined);
 }
 
@@ -389,5 +411,6 @@ export async function reincorporar(input: unknown): Promise<ActionResult<void>> 
 
   revalidatePath("/personal");
   revalidatePath(`/personal/${parsed.data.id}`);
+  revalidatePath("/novedades", "layout");
   return ok(undefined);
 }

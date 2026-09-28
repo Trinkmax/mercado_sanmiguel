@@ -57,6 +57,26 @@ export default function FichaEmpleadoLoading() {
         </div>
         <Skeleton className="h-12 w-44" />
       </div>
+
+      {/* Novedades del mes: barra de horas, contadores y botones */}
+      <Card>
+        <CardHeader className="space-y-2">
+          <Skeleton className="h-6 w-52" />
+          <Skeleton className="h-4 w-80 max-w-full" />
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Skeleton className="h-5 w-64" />
+          <Skeleton className="h-2.5 w-full max-w-xl rounded-full" />
+          <div className="flex gap-1.5">
+            <Skeleton className="h-8 w-28 rounded-full" />
+            <Skeleton className="h-8 w-36 rounded-full" />
+          </div>
+          <div className="flex gap-2">
+            <Skeleton className="h-12 w-40" />
+            <Skeleton className="h-12 w-48" />
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

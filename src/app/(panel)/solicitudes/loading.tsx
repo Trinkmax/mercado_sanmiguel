@@ -17,8 +17,8 @@ export default function LoadingSolicitudes() {
 
       {/* Pestañas por estado */}
       <div className="flex flex-wrap gap-2">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <Skeleton key={i} className="h-11 w-32 rounded-md" />
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-11 w-36 rounded-md" />
         ))}
       </div>
 

@@ -3,119 +3,345 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Info, Plus, Save, Send, Tags, Undo2 } from "lucide-react";
+import { Footprints, Info, Plus, Save, Send, Tags, Undo2 } from "lucide-react";
 import type { Rol } from "@/lib/auth";
 import {
   agregarConceptoCliente,
   editarConceptoCliente,
   editarCuotasMes,
 } from "@/lib/actions/clientes";
-import { formatFraccion, PASO_CANTIDAD } from "@/lib/format";
+import { CUOTAS_TODOS_LOS_DIAS, formatARS, formatFraccion, PASO_CANTIDAD } from "@/lib/format";
+import type { CategoriaCliente } from "@/lib/segmentos";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Codigo } from "@/components/shared/codigo";
+import { Money } from "@/components/shared/money";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StepperCantidad } from "@/components/clientes/stepper-cantidad";
-import { CuotasMesPicker } from "@/components/clientes/cuotas-mes";
+import { CuotasMesPicker, textoVistaPrevia } from "@/components/clientes/cuotas-mes";
 import {
+  AYUDA_CONCEPTO,
+  GRUPOS_CONCEPTO,
   TOAST_ENVIADO_APROBACION,
   aplicaDirectoRol,
+  cuotasDeCategoria,
+  grupoDeConcepto,
+  totalMensual,
 } from "@/components/clientes/constantes";
 import { cn } from "@/lib/utils";
 
-type ItemConcepto = {
+export type ItemConcepto = {
   id: string;
   cantidad: number;
   activo: boolean;
   codigo: string;
   nombre: string;
+  precio: number;
+  descuentoPp: number;
+  segmento: string | null;
 };
 
-type ConceptoDisponible = { id: string; codigo: string; nombre: string };
+export type ConceptoDisponible = {
+  id: string;
+  codigo: string;
+  nombre: string;
+  precio: number;
+  descuentoPp: number;
+  segmento: string | null;
+};
 
-/** Pestaña "Conceptos": qué paga el cliente y en cuántas veces por mes.
- * El Líder de Procesos aplica directo; los demás roles proponen y el cambio
- * queda esperando aprobación (se ve arriba en la ficha). */
+function textoComoPaga(cuotas: number): string {
+  if (cuotas === 1) return "Hoy paga todo el mes junto.";
+  if (cuotas === CUOTAS_TODOS_LOS_DIAS) return "Hoy paga todos los días.";
+  return `Hoy paga el mes en ${cuotas} veces.`;
+}
+
+/** Pestaña "Qué paga": lo que se le factura cada mes (agrupado, con precio y total) y en
+ * cuántas veces lo paga. El Líder aplica directo; Administración y el Jefe proponen y el
+ * cambio queda esperando aprobación (se ve arriba en la ficha). */
 export function ConceptosCliente({
   clienteId,
+  categoria,
   cuotasMes,
   items,
   disponibles,
   rol,
+  precioAmbulante,
 }: {
   clienteId: string;
+  categoria: CategoriaCliente;
   cuotasMes: number;
   items: ItemConcepto[];
   disponibles: ConceptoDisponible[];
   rol: Rol;
+  precioAmbulante?: number | null;
+}) {
+  const directo = aplicaDirectoRol(rol);
+
+  if (categoria === "ambulante") {
+    return (
+      <Card className="text-base">
+        <CardContent className="flex flex-wrap items-center gap-4 py-2">
+          <Footprints className="size-8 shrink-0 text-muted-foreground" strokeWidth={1.7} />
+          <div className="min-w-0 flex-1 space-y-1">
+            <p className="text-lg font-semibold">Se le cobra por día, cuando viene</p>
+            <p className="text-muted-foreground">
+              {precioAmbulante
+                ? `${formatARS(precioAmbulante)} por día (concepto AMB).`
+                : "El precio por día sale del concepto AMB."}{" "}
+              No tiene cargos mensuales ni paga en cuotas.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const activos = items.filter((i) => i.activo);
+  const { total, conBeneficio } = totalMensual(activos);
+  const grupos = GRUPOS_CONCEPTO.map((g) => ({
+    ...g,
+    items: items.filter((i) => grupoDeConcepto(i) === g.valor),
+  })).filter((g) => g.items.length > 0);
+
+  return (
+    <div className="space-y-6">
+      <Alert>
+        <Info className="size-4" />
+        <AlertDescription>
+          Los cambios rigen desde la próxima facturación mensual; el mes en curso no se toca.
+          {!directo ? " Cada cambio lo revisa y aprueba el Líder de Procesos." : null}
+        </AlertDescription>
+      </Alert>
+
+      <Card className="text-base">
+        <CardHeader>
+          <CardTitle className="text-lg">Qué paga cada mes</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          {items.length === 0 ? (
+            <EmptyState
+              icono={Tags}
+              titulo="Todavía no paga nada por mes"
+              descripcion={
+                categoria === "quintero"
+                  ? "Agregale abajo la quinta (Expensas Quinteros)."
+                  : "Agregale abajo lo que paga cada mes: la expensa del puesto, un local, un galpón…"
+              }
+            />
+          ) : (
+            <>
+              <div className="divide-y rounded-lg border">
+                {grupos.map((g) => (
+                  <div key={g.valor} className="divide-y">
+                    {grupos.length > 1 ? (
+                      <p className="bg-muted/40 px-3 py-1.5 text-xs font-semibold text-muted-foreground">
+                        {g.label}
+                      </p>
+                    ) : null}
+                    {g.items.map((item) => (
+                      <FilaConcepto
+                        key={`${item.id}-${item.cantidad}-${item.activo}`}
+                        item={item}
+                        clienteId={clienteId}
+                        directo={directo}
+                      />
+                    ))}
+                  </div>
+                ))}
+              </div>
+              <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 rounded-lg bg-muted/50 px-4 py-3">
+                <span className="text-sm text-muted-foreground">Por mes</span>
+                <span className="text-right">
+                  <Money monto={total} className="text-xl font-bold" />
+                  {conBeneficio < total ? (
+                    <span className="block text-sm text-muted-foreground">
+                      con beneficio en término{" "}
+                      <Money monto={conBeneficio} className="font-semibold text-pagado" />
+                    </span>
+                  ) : null}
+                </span>
+              </div>
+            </>
+          )}
+
+          <AgregarConcepto clienteId={clienteId} disponibles={disponibles} directo={directo} />
+        </CardContent>
+      </Card>
+
+      <CuotasCard
+        clienteId={clienteId}
+        categoria={categoria}
+        cuotasMes={cuotasMes}
+        totalMes={total}
+        directo={directo}
+      />
+    </div>
+  );
+}
+
+/** "Agregar": chips con lo que todavía no paga (pocas opciones → un toque), cantidad y botón. */
+function AgregarConcepto({
+  clienteId,
+  disponibles,
+  directo,
+}: {
+  clienteId: string;
+  disponibles: ConceptoDisponible[];
+  directo: boolean;
 }) {
   const router = useRouter();
-  const directo = aplicaDirectoRol(rol);
-  const [, startTransition] = useTransition();
-  const [conceptoNuevo, setConceptoNuevo] = useState("");
-  const [cantidadNueva, setCantidadNueva] = useState(1);
-  const [agregando, setAgregando] = useState(false);
-  const [cuotas, setCuotas] = useState(cuotasMes);
-  const [guardandoCuotas, setGuardandoCuotas] = useState(false);
+  const [pendiente, startTransition] = useTransition();
+  const [elegido, setElegido] = useState<string | null>(null);
+  const [cantidad, setCantidad] = useState(1);
+  const concepto = disponibles.find((c) => c.id === elegido) ?? null;
+
+  if (disponibles.length === 0) return null;
 
   function agregar() {
-    if (!conceptoNuevo) {
-      toast.error("Elegí el concepto que va a pagar.");
-      return;
-    }
-    setAgregando(true);
+    if (!concepto) return;
     startTransition(async () => {
       const res = await agregarConceptoCliente({
         clienteId,
-        conceptoId: conceptoNuevo,
-        cantidad: cantidadNueva,
+        conceptoId: concepto.id,
+        cantidad,
       });
-      setAgregando(false);
       if (!res.ok) {
         toast.error(res.error);
         return;
       }
       if (res.data.estado === "aplicado") {
-        toast.success("Concepto agregado");
+        toast.success(`Agregado: ${concepto.nombre} × ${formatFraccion(cantidad)}`);
       } else {
         toast.success(TOAST_ENVIADO_APROBACION, {
-          description: "El concepto se suma a la carpeta cuando lo apruebe.",
+          description: `${concepto.nombre} se suma a la carpeta cuando lo apruebe.`,
         });
       }
-      setConceptoNuevo("");
-      setCantidadNueva(1);
+      setElegido(null);
+      setCantidad(1);
       router.refresh();
     });
   }
 
-  function guardarCuotas(valor: number) {
-    if (valor === cuotasMes) return;
-    setCuotas(valor);
-    setGuardandoCuotas(true);
+  return (
+    <div className="space-y-3 border-t pt-5">
+      <div>
+        <p className="font-medium">Agregar algo que paga</p>
+        <p className="text-sm text-muted-foreground">Tocá lo que corresponde.</p>
+      </div>
+      <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Concepto para agregar">
+        {disponibles.map((c) => {
+          const activo = elegido === c.id;
+          return (
+            <button
+              key={c.id}
+              type="button"
+              role="radio"
+              aria-checked={activo}
+              onClick={() => {
+                setElegido(activo ? null : c.id);
+                setCantidad(1);
+              }}
+              className={cn(
+                "flex min-h-12 items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors",
+                activo
+                  ? "border-primary bg-accent text-accent-foreground ring-1 ring-primary"
+                  : "border-border bg-card hover:bg-accent/50"
+              )}
+            >
+              <Codigo codigo={c.codigo} />
+              <span>
+                <span className="block font-medium">{c.nombre}</span>
+                <span className="block text-xs text-muted-foreground">
+                  <Money monto={c.precio} /> por mes
+                </span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {concepto ? (
+        <div className="flex flex-wrap items-end gap-3 rounded-lg bg-muted/40 p-3">
+          <div className="space-y-1">
+            <Label htmlFor="cantidad-nueva" className="text-sm text-muted-foreground">
+              ¿Cuántos?
+            </Label>
+            <StepperCantidad
+              id="cantidad-nueva"
+              valor={cantidad}
+              min={PASO_CANTIDAD}
+              nombre={concepto.nombre}
+              onCambiar={setCantidad}
+            />
+          </div>
+          <p className="min-w-40 flex-1 pb-2.5 text-sm text-muted-foreground">
+            {AYUDA_CONCEPTO[concepto.codigo] ?? concepto.nombre} ·{" "}
+            <Money
+              monto={Math.round(cantidad * concepto.precio * 100) / 100}
+              className="font-semibold text-foreground"
+            />{" "}
+            por mes
+          </p>
+          <Button
+            size="lg"
+            className="h-12 px-5 text-base font-semibold"
+            onClick={agregar}
+            disabled={pendiente}
+          >
+            {pendiente ? (
+              <Spinner className="size-5" />
+            ) : directo ? (
+              <Plus className="size-5" />
+            ) : (
+              <Send className="size-5" />
+            )}
+            {directo ? `Agregar ${concepto.codigo}` : "Enviar a aprobación"}
+          </Button>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** "Cómo paga el mes": chips de cuotas según la categoría y vista previa por pago. */
+function CuotasCard({
+  clienteId,
+  categoria,
+  cuotasMes,
+  totalMes,
+  directo,
+}: {
+  clienteId: string;
+  categoria: CategoriaCliente;
+  cuotasMes: number;
+  totalMes: number;
+  directo: boolean;
+}) {
+  const router = useRouter();
+  const [pendiente, startTransition] = useTransition();
+  const [cuotas, setCuotas] = useState(cuotasMes);
+  const { opciones, permitirOtra } = cuotasDeCategoria(categoria);
+
+  function guardar() {
+    if (cuotas === cuotasMes) return;
+    const valor = cuotas;
     startTransition(async () => {
       const res = await editarCuotasMes({ clienteId, cuotas_mes: valor });
-      setGuardandoCuotas(false);
       if (!res.ok) {
         toast.error(res.error);
-        setCuotas(cuotasMes);
         return;
       }
       if (res.data.estado === "aplicado") {
         toast.success(
           valor === 1
             ? "Guardado: paga todo el mes junto"
-            : `Guardado: paga en ${valor} veces por mes`
+            : valor === CUOTAS_TODOS_LOS_DIAS
+              ? "Guardado: paga todos los días"
+              : `Guardado: paga en ${valor} veces por mes`
         );
       } else {
         toast.success(TOAST_ENVIADO_APROBACION, {
@@ -127,157 +353,64 @@ export function ConceptosCliente({
     });
   }
 
+  const actual = textoVistaPrevia(cuotasMes, totalMes);
+
   return (
-    <div className="space-y-6">
-      <Alert>
-        <Info className="size-4" />
-        <AlertDescription>
-          Los cambios rigen desde la próxima generación mensual; el mes en curso
-          no se modifica.
-          {!directo
-            ? " Cada cambio lo revisa y aprueba el Líder de Procesos."
-            : null}
-        </AlertDescription>
-      </Alert>
-
-      <Card className="text-base">
-        <CardHeader>
-          <CardTitle className="text-lg">Qué paga este cliente</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {items.length === 0 ? (
-            <EmptyState
-              icono={Tags}
-              titulo="Todavía no tiene conceptos asignados"
-              descripcion="Agregale abajo lo que paga cada mes (expensas, cocheras, galpón…)."
-            />
-          ) : (
-            <div className="divide-y">
-              {items.map((item) => (
-                <FilaConcepto
-                  key={`${item.id}-${item.cantidad}-${item.activo}`}
-                  item={item}
-                  clienteId={clienteId}
-                  directo={directo}
-                />
-              ))}
-            </div>
-          )}
-
-          <div className="mt-6 border-t pt-5">
-            <p className="mb-1 font-medium">Agregar un concepto</p>
-            <p className="mb-3 text-sm text-muted-foreground">
-              Se aceptan cuartos: ¼ · ½ · ¾ · 1 · 1¼...
-            </p>
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="min-w-56 flex-1 space-y-2">
-                <Label className="text-sm text-muted-foreground">Concepto</Label>
-                <Select value={conceptoNuevo} onValueChange={setConceptoNuevo}>
-                  <SelectTrigger className="h-12 w-full text-base">
-                    <SelectValue
-                      placeholder={
-                        disponibles.length === 0
-                          ? "Ya tiene todos los conceptos"
-                          : "Elegí el concepto"
-                      }
-                    />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {disponibles.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.codigo} — {c.nombre}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label
-                  htmlFor="cantidad-nueva"
-                  className="text-sm text-muted-foreground"
-                >
-                  Cantidad
-                </Label>
-                <StepperCantidad
-                  id="cantidad-nueva"
-                  valor={cantidadNueva}
-                  min={PASO_CANTIDAD}
-                  nombre="el concepto nuevo"
-                  onCambiar={setCantidadNueva}
-                />
-              </div>
-              <Button
-                size="lg"
-                className="h-12 px-5 text-base font-semibold"
-                onClick={agregar}
-                disabled={agregando || disponibles.length === 0}
-              >
-                {agregando ? (
-                  <Spinner className="size-5" />
-                ) : directo ? (
-                  <Plus className="size-5" />
-                ) : (
-                  <Send className="size-5" />
-                )}
-                {directo ? "Agregar" : "Enviar a aprobación"}
-              </Button>
-            </div>
+    <Card className="text-base">
+      <CardHeader>
+        <CardTitle className="text-lg">
+          {categoria === "quintero" ? "¿En cuántos pagos cobra la quinta?" : "Cómo paga el mes"}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <CuotasMesPicker
+          key={`cuotas-${cuotasMes}`}
+          valor={cuotas}
+          onCambiar={setCuotas}
+          disabled={pendiente}
+          idPrefix="cuotas-ficha"
+          opciones={opciones}
+          permitirOtra={permitirOtra}
+          totalMes={cuotas !== cuotasMes ? totalMes : undefined}
+        />
+        {cuotas !== cuotasMes ? (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              className="h-12 px-5 text-base font-semibold"
+              onClick={guardar}
+              disabled={pendiente}
+            >
+              {pendiente ? (
+                <Spinner className="size-5" />
+              ) : directo ? (
+                <Save className="size-5" />
+              ) : (
+                <Send className="size-5" />
+              )}
+              {directo ? "Guardar" : "Enviar a aprobación"}
+            </Button>
+            <Button
+              variant="ghost"
+              className="h-12 px-4 text-base"
+              onClick={() => setCuotas(cuotasMes)}
+              disabled={pendiente}
+            >
+              <Undo2 className="size-5" />
+              Dejar como estaba
+            </Button>
           </div>
-        </CardContent>
-      </Card>
-
-      <Card className="text-base">
-        <CardHeader>
-          <CardTitle className="text-lg">Cómo paga el mes</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <CuotasMesPicker
-            key={`cuotas-${cuotasMes}`}
-            valor={cuotas}
-            onCambiar={setCuotas}
-            disabled={guardandoCuotas}
-            idPrefix="cuotas-ficha"
-          />
-          {cuotas !== cuotasMes ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                className="h-11 px-4 font-semibold"
-                onClick={() => guardarCuotas(cuotas)}
-                disabled={guardandoCuotas}
-              >
-                {guardandoCuotas ? (
-                  <Spinner className="size-4" />
-                ) : directo ? (
-                  <Save className="size-4" />
-                ) : (
-                  <Send className="size-4" />
-                )}
-                {directo ? "Guardar" : "Enviar a aprobación"}
-              </Button>
-              <Button
-                variant="ghost"
-                className="h-11 px-3"
-                onClick={() => setCuotas(cuotasMes)}
-                disabled={guardandoCuotas}
-              >
-                <Undo2 className="size-4" />
-                Deshacer
-              </Button>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              {cuotasMes === 1
-                ? "Hoy paga todo el mes junto."
-                : `Hoy paga el mes en ${cuotasMes} veces.`}
-            </p>
-          )}
-        </CardContent>
-      </Card>
-    </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            {textoComoPaga(cuotasMes)}
+            {actual && cuotasMes > 1 ? ` ${actual}.` : ""}
+          </p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
-/** Un concepto de la carpeta: cantidad (de cuarto en cuarto) y si se factura. */
+/** Un concepto de la carpeta: precio, cantidad (de cuarto en cuarto) y si se factura. */
 function FilaConcepto({
   item,
   clienteId,
@@ -292,15 +425,12 @@ function FilaConcepto({
   const [cantidad, setCantidad] = useState(item.cantidad);
   const [activo, setActivo] = useState(item.activo);
   const sucio = cantidad !== item.cantidad;
+  const ayuda = AYUDA_CONCEPTO[item.codigo];
 
   function guardarCantidad() {
     if (!sucio) return;
     startTransition(async () => {
-      const res = await editarConceptoCliente({
-        id: item.id,
-        clienteId,
-        cantidad,
-      });
+      const res = await editarConceptoCliente({ id: item.id, clienteId, cantidad });
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -320,11 +450,7 @@ function FilaConcepto({
   function cambiarActivo(valor: boolean) {
     setActivo(valor);
     startTransition(async () => {
-      const res = await editarConceptoCliente({
-        id: item.id,
-        clienteId,
-        activo: valor,
-      });
+      const res = await editarConceptoCliente({ id: item.id, clienteId, activo: valor });
       if (!res.ok) {
         toast.error(res.error);
         setActivo(item.activo);
@@ -332,9 +458,7 @@ function FilaConcepto({
       }
       if (res.data.estado === "aplicado") {
         toast.success(
-          valor
-            ? `${item.nombre}: se vuelve a facturar`
-            : `${item.nombre}: no se factura más`
+          valor ? `${item.nombre}: se vuelve a facturar` : `${item.nombre}: no se factura más`
         );
       } else {
         toast.success(TOAST_ENVIADO_APROBACION, {
@@ -349,26 +473,31 @@ function FilaConcepto({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-3 py-3">
       {/* En pantallas angostas el nombre ocupa su propio renglón. */}
-      <div className="flex min-w-0 flex-1 basis-full items-center gap-3 sm:basis-0">
-        <Codigo codigo={item.codigo} />
-        <p
-          className={cn(
-            "min-w-0 flex-1 font-medium",
-            !activo && "text-muted-foreground line-through"
-          )}
-        >
-          {item.nombre}
-        </p>
+      <div className="flex min-w-0 flex-1 basis-full items-start gap-3 sm:basis-0">
+        <Codigo codigo={item.codigo} className="mt-0.5" />
+        <div className="min-w-0 flex-1">
+          <p className={cn("font-medium", !activo && "text-muted-foreground line-through")}>
+            {item.nombre}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            <Money monto={item.precio} /> c/u
+            {cantidad !== 1 ? (
+              <>
+                {" "}
+                · {formatFraccion(cantidad)} ={" "}
+                <Money
+                  monto={Math.round(cantidad * item.precio * 100) / 100}
+                  className="font-semibold text-foreground"
+                />
+              </>
+            ) : null}
+            {ayuda ? <span className="block text-xs">{ayuda}</span> : null}
+          </p>
+        </div>
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <Label
-          htmlFor={`cantidad-${item.id}`}
-          className="text-sm text-muted-foreground"
-        >
-          Cantidad
-        </Label>
         <StepperCantidad
           id={`cantidad-${item.id}`}
           valor={cantidad}
@@ -379,11 +508,7 @@ function FilaConcepto({
         />
         {sucio ? (
           <div className="flex items-center gap-1">
-            <Button
-              className="h-11 px-3 font-semibold"
-              onClick={guardarCantidad}
-              disabled={pendiente}
-            >
+            <Button className="h-11 px-3 font-semibold" onClick={guardarCantidad} disabled={pendiente}>
               {pendiente ? (
                 <Spinner className="size-4" />
               ) : directo ? (
@@ -406,7 +531,7 @@ function FilaConcepto({
           </div>
         ) : null}
       </div>
-      <div className="flex min-h-11 items-center gap-2 pl-2">
+      <div className="flex min-h-11 items-center gap-2 pl-1">
         <Switch
           id={`activo-${item.id}`}
           checked={activo}
@@ -414,10 +539,7 @@ function FilaConcepto({
           onCheckedChange={cambiarActivo}
           aria-label={`${item.nombre}: facturar o no`}
         />
-        <Label
-          htmlFor={`activo-${item.id}`}
-          className="text-sm text-muted-foreground"
-        >
+        <Label htmlFor={`activo-${item.id}`} className="text-sm text-muted-foreground">
           {activo ? "Se factura" : "No se factura"}
         </Label>
       </div>

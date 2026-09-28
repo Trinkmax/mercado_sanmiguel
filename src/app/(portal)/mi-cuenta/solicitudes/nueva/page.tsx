@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { ArrowLeft, UserX } from "lucide-react";
 import { requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -7,7 +6,6 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { FormSolicitudSocio } from "@/components/portal/form-solicitud-socio";
-import { contarCircularesPendientes } from "@/components/portal/circulares-pendientes";
 
 export const metadata = { title: "Nueva solicitud" };
 
@@ -21,11 +19,7 @@ export default async function NuevaSolicitudSocioPage() {
     .eq("auth_user_id", perfil.user_id)
     .maybeSingle();
 
-  // Con circulares obligatorias sin confirmar, el portal queda bloqueado en
-  // /mi-cuenta hasta que el socio las confirme.
-  if (cliente && (await contarCircularesPendientes(supabase, cliente.id)) > 0) {
-    redirect("/mi-cuenta");
-  }
+  // Las circulares obligatorias sin confirmar las bloquea GateCirculares en el layout.
 
   return (
     <div className="space-y-8">

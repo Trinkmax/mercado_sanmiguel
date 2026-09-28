@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Printer } from "lucide-react";
 import { formatFecha } from "@/lib/format";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -12,11 +12,12 @@ import {
 } from "@/components/ui/table";
 import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
-import type { CajaPrevia } from "@/components/caja/datos";
+import type { CajaPrevia, TipoCaja } from "@/components/caja/datos";
 
-/** Tabla compacta de las cajas anteriores de este tipo; cada fila abre ese día. */
-export function UltimosDias({ previas }: { previas: CajaPrevia[] }) {
+/** Cajas anteriores de este tipo: cada fila abre ese día; la impresora, su cierre. */
+export function UltimosDias({ previas, tipo }: { previas: CajaPrevia[]; tipo: TipoCaja }) {
   if (previas.length === 0) return null;
+  const porteria = tipo === "guardia";
 
   return (
     <Card>
@@ -29,53 +30,67 @@ export function UltimosDias({ previas }: { previas: CajaPrevia[] }) {
             <TableRow className="hover:bg-transparent">
               <TableHead>Fecha</TableHead>
               <TableHead className="text-right">Efectivo</TableHead>
-              <TableHead className="text-right">Transferencias</TableHead>
-              <TableHead className="text-right">Cheques</TableHead>
+              <TableHead className="hidden text-right sm:table-cell">Transferencias</TableHead>
+              {porteria ? null : <TableHead className="hidden text-right md:table-cell">Cheques</TableHead>}
               <TableHead className="text-right">Estado</TableHead>
-              <TableHead className="w-10">
-                <span className="sr-only">Ver</span>
+              <TableHead className="w-24">
+                <span className="sr-only">Imprimir y ver</span>
               </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {previas.map((caja) => (
-              <TableRow key={caja.id}>
-                <TableCell className="font-medium tabular">
-                  <Link
-                    href={`/caja?fecha=${caja.fecha}`}
-                    className="inline-flex min-h-11 items-center text-primary underline-offset-4 hover:underline"
-                  >
-                    {formatFecha(caja.fecha)}
-                  </Link>
-                </TableCell>
-                <TableCell className="text-right">
-                  <Money monto={caja.total_efectivo ?? 0} />
-                </TableCell>
-                <TableCell className="text-right">
-                  <Money monto={caja.total_transferencia ?? 0} />
-                </TableCell>
-                <TableCell className="text-right">
-                  <Money monto={caja.total_cheques ?? 0} />
-                </TableCell>
-                <TableCell className="text-right">
-                  <span className="inline-flex flex-wrap items-center justify-end gap-1">
-                    {caja.reapertura_solicitada_en ? (
-                      <Sello estado="reapertura_pedida" />
-                    ) : null}
-                    <Sello estado={caja.estado} />
-                  </span>
-                </TableCell>
-                <TableCell className="text-right">
-                  <Link
-                    href={`/caja?fecha=${caja.fecha}`}
-                    aria-label={`Ver la caja del ${formatFecha(caja.fecha)}`}
-                    className="inline-flex size-11 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-                  >
-                    <ChevronRight className="size-5" strokeWidth={2} />
-                  </Link>
-                </TableCell>
-              </TableRow>
-            ))}
+            {previas.map((caja) => {
+              const href = `/caja?fecha=${caja.fecha}&tipo=${tipo}`;
+              const abierta = caja.estado === "abierta";
+              return (
+                <TableRow key={caja.id}>
+                  <TableCell className="font-medium tabular">
+                    <Link
+                      href={href}
+                      className="inline-flex min-h-11 items-center text-primary underline-offset-4 hover:underline"
+                    >
+                      {formatFecha(caja.fecha)}
+                    </Link>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    {abierta ? <span className="text-muted-foreground">—</span> : <Money monto={caja.total_efectivo ?? 0} />}
+                  </TableCell>
+                  <TableCell className="hidden text-right sm:table-cell">
+                    {abierta ? <span className="text-muted-foreground">—</span> : <Money monto={caja.total_transferencia ?? 0} />}
+                  </TableCell>
+                  {porteria ? null : (
+                    <TableCell className="hidden text-right md:table-cell">
+                      {abierta ? <span className="text-muted-foreground">—</span> : <Money monto={caja.total_cheques ?? 0} />}
+                    </TableCell>
+                  )}
+                  <TableCell className="text-right">
+                    <span className="inline-flex flex-wrap items-center justify-end gap-1">
+                      {caja.reapertura_solicitada_en ? <Sello estado="reapertura_pedida" /> : null}
+                      <Sello estado={caja.estado} />
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <span className="inline-flex items-center">
+                      <Link
+                        href={`/cierre-caja/${caja.id}`}
+                        aria-label={`Imprimir el cierre del ${formatFecha(caja.fecha)}`}
+                        title="Imprimir el cierre"
+                        className="inline-flex size-11 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                      >
+                        <Printer className="size-5" strokeWidth={2} />
+                      </Link>
+                      <Link
+                        href={href}
+                        aria-label={`Ver la caja del ${formatFecha(caja.fecha)}`}
+                        className="inline-flex size-11 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+                      >
+                        <ChevronRight className="size-5" strokeWidth={2} />
+                      </Link>
+                    </span>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </CardContent>

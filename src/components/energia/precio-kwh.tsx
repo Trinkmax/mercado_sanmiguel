@@ -3,8 +3,9 @@
 import { useState, useTransition } from "react";
 import { Pencil, Send } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { formatARS } from "@/lib/format";
-import { cambiarPrecioKwh } from "@/lib/actions/energia";
+import { cambiarPrecioConcepto, type ConceptoEnergia } from "@/lib/actions/energia";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,23 +19,50 @@ import {
 } from "@/components/ui/dialog";
 import { Sello } from "@/components/shared/sello";
 
+/** Textos de cada concepto de energía editable desde /energia. */
+const TEXTOS: Record<
+  ConceptoEnergia,
+  { etiqueta: string; titulo: string; campo: string; unidad: string; rige: string; nombre: string }
+> = {
+  ENER: {
+    etiqueta: "Precio del kWh",
+    titulo: "Cambiar precio del kWh",
+    campo: "Precio por kWh, en pesos",
+    unidad: "por kWh",
+    rige: "vale para las próximas lecturas; las ya cargadas no cambian",
+    nombre: "del kWh",
+  },
+  ABEN: {
+    etiqueta: "Abono mensual",
+    titulo: "Cambiar el abono mensual de energía",
+    campo: "Abono por mes, en pesos",
+    unidad: "por mes",
+    rige: "rige desde la próxima generación del mes; lo ya generado no cambia",
+    nombre: "del abono",
+  },
+};
+
 /**
- * Precio vigente del kWh como dato grande, con edición en Dialog corto.
- * El precio nuevo vale para las próximas lecturas; las cargadas no cambian.
- * Si el que lo cambia no es el Líder, queda esperando aprobación y acá se ve
- * el precio propuesto junto al vigente.
+ * Precio vigente de un concepto de energía (kWh o abono mensual) como dato grande, con
+ * edición en un Dialog corto. Si quien lo cambia no es el Líder, queda esperando su
+ * aprobación y se ve el precio propuesto junto al vigente.
  */
-export function PrecioKwh({
+export function PrecioConcepto({
+  codigo,
   precio,
   propuesto = null,
   aplicaDirecto,
+  className,
 }: {
+  codigo: ConceptoEnergia;
   precio: number;
   /** Precio que espera la aprobación del Líder (null si no hay ninguno). */
   propuesto?: number | null;
   /** true = Líder de Procesos: el cambio se aplica en el acto. */
   aplicaDirecto: boolean;
+  className?: string;
 }) {
+  const t = TEXTOS[codigo];
   const [abierto, setAbierto] = useState(false);
   const [valor, setValor] = useState(String(precio));
   const [error, setError] = useState<string | null>(null);
@@ -49,39 +77,34 @@ export function PrecioKwh({
     }
     setError(null);
     startTransition(async () => {
-      const res = await cambiarPrecioKwh({ precio: numero });
+      const res = await cambiarPrecioConcepto({ codigo, precio: numero });
       if (!res.ok) {
-        toast.error(res.error);
+        setError(res.error);
         return;
       }
       if (res.data.estado === "sin_cambios") {
-        toast.info("Ese ya es el precio vigente del kWh.");
+        toast.info(`Ese ya es el precio vigente ${t.nombre}.`);
       } else if (res.data.estado === "pendiente") {
         toast.success("Enviado al Líder de Procesos para su aprobación.", {
-          description: `Precio propuesto: ${formatARS(res.data.precio)} por kWh.`,
+          description: `Precio propuesto: ${formatARS(res.data.precio)} ${t.unidad}.`,
         });
       } else {
-        toast.success(`Precio del kWh actualizado a ${formatARS(res.data.precio)}`);
+        toast.success(`Listo: ${t.etiqueta.toLowerCase()} quedó en ${formatARS(res.data.precio)} ${t.unidad}.`);
       }
       setAbierto(false);
     });
   }
 
   return (
-    <div className="flex items-center gap-2 rounded-lg border bg-card py-2 pr-2 pl-4">
+    <div className={cn("flex items-center gap-2 rounded-lg border bg-card py-2 pr-2 pl-4", className)}>
       <div>
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-          Precio del kWh
-        </p>
-        <p className="text-2xl font-bold tabular leading-tight">
-          {formatARS(precio)}
-        </p>
+        <p className="text-xs font-medium text-muted-foreground">{t.etiqueta}</p>
+        <p className="text-2xl leading-tight font-bold tabular">{formatARS(precio)}</p>
         {propuesto !== null ? (
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
             <Sello estado="pendiente_aprobacion" />
             <span className="text-xs text-muted-foreground">
-              Propuesto:{" "}
-              <strong className="tabular text-foreground">{formatARS(propuesto)}</strong>
+              Propuesto: <strong className="text-foreground tabular">{formatARS(propuesto)}</strong>
             </span>
           </div>
         ) : null}
@@ -97,31 +120,26 @@ export function PrecioKwh({
         }}
       >
         <DialogTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-lg"
-            className="size-11"
-            aria-label="Cambiar precio del kWh"
-          >
+          <Button variant="ghost" size="icon-lg" className="size-11" aria-label={t.titulo}>
             <Pencil className="size-5" strokeWidth={2} />
           </Button>
         </DialogTrigger>
         <DialogContent className="p-6">
           <DialogHeader>
-            <DialogTitle className="text-xl">Cambiar precio del kWh</DialogTitle>
+            <DialogTitle className="text-xl">{t.titulo}</DialogTitle>
             <DialogDescription className="text-sm">
               {aplicaDirecto
-                ? "El precio nuevo vale para las próximas lecturas. Las que ya cargaste no cambian."
-                : "El cambio lo aprueba el Líder de Procesos. Una vez aprobado, vale para las próximas lecturas; las ya cargadas no cambian."}
+                ? `El precio nuevo ${t.rige}.`
+                : `El cambio lo aprueba el Líder de Procesos. Una vez aprobado, ${t.rige}.`}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-5">
             <div className="space-y-2">
-              <Label htmlFor="precio-kwh" className="text-base">
-                Precio por kWh, en pesos
+              <Label htmlFor={`precio-${codigo}`} className="text-base">
+                {t.campo}
               </Label>
               <Input
-                id="precio-kwh"
+                id={`precio-${codigo}`}
                 inputMode="numeric"
                 autoComplete="off"
                 className="h-12 text-lg tabular"
@@ -142,17 +160,12 @@ export function PrecioKwh({
                 <p className="text-sm font-medium text-pendiente">{error}</p>
               ) : numero !== null ? (
                 <p className="text-sm text-muted-foreground">
-                  Queda en <strong className="tabular">{formatARS(numero)}</strong>{" "}
-                  por kWh. Hoy: <span className="tabular">{formatARS(precio)}</span>.
+                  Queda en <strong className="tabular">{formatARS(numero)}</strong> {t.unidad}. Hoy:{" "}
+                  <span className="tabular">{formatARS(precio)}</span>.
                 </p>
               ) : null}
             </div>
-            <Button
-              size="lg"
-              className="h-12 w-full text-base font-semibold"
-              onClick={guardar}
-              disabled={pendiente}
-            >
+            <Button size="lg" className="h-12 w-full text-base font-semibold" onClick={guardar} disabled={pendiente}>
               {aplicaDirecto ? null : <Send className="size-5" strokeWidth={2} />}
               {pendiente
                 ? aplicaDirecto
@@ -167,4 +180,9 @@ export function PrecioKwh({
       </Dialog>
     </div>
   );
+}
+
+/** Precio vigente del kWh (ENER). Misma pieza que el abono. */
+export function PrecioKwh(props: { precio: number; propuesto?: number | null; aplicaDirecto: boolean }) {
+  return <PrecioConcepto codigo="ENER" {...props} />;
 }

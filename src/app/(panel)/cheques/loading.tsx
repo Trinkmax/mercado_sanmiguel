@@ -3,31 +3,57 @@ import { Skeleton } from "@/components/ui/skeleton";
 export default function LoadingCheques() {
   return (
     <div className="space-y-8">
-      {/* PageHeader: título + total en cartera */}
+      {/* PageHeader: título + exportar + Por cobrar */}
       <div className="flex flex-wrap items-end justify-between gap-4 pb-5">
         <div className="space-y-2">
-          <Skeleton className="h-9 w-44" />
-          <Skeleton className="h-5 w-80 max-w-full" />
+          <Skeleton className="h-8 w-36" />
+          <Skeleton className="h-5 w-96 max-w-full" />
         </div>
         <div className="flex items-center gap-2">
-          <Skeleton className="h-11 w-40 rounded-md" />
-          <Skeleton className="h-[4.5rem] w-44 rounded-lg" />
+          <Skeleton className="h-11 w-44 rounded-md" />
+          <Skeleton className="h-[4.25rem] w-40 rounded-xl" />
         </div>
       </div>
 
-      {/* Filtros por estado */}
-      <div className="flex flex-wrap gap-2">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <Skeleton key={i} className={i === 0 ? "h-11 w-48 rounded-md" : "h-11 w-28 rounded-md"} />
-        ))}
-      </div>
+      {/* Aviso de listos para depositar */}
+      <Skeleton className="h-20 w-full rounded-xl" />
 
-      {/* Tabla de cheques */}
-      <div className="space-y-3 rounded-xl border bg-card p-4">
-        <Skeleton className="h-8 w-full" />
-        {Array.from({ length: 6 }).map((_, i) => (
-          <Skeleton key={i} className="h-14 w-full" />
-        ))}
+      {/* Filtros + buscador */}
+      <div className="space-y-4">
+        <div className="flex flex-wrap gap-2">
+          {[48, 32, 44, 28, 28, 24].map((w, i) => (
+            <Skeleton key={i} className="h-11 rounded-full" style={{ width: `${w * 4}px` }} />
+          ))}
+        </div>
+        <div className="flex max-w-xl gap-2">
+          <Skeleton className="h-12 flex-1 rounded-md" />
+          <Skeleton className="h-12 w-24 rounded-md" />
+        </div>
+
+        {/* Cartera */}
+        <div className="divide-y rounded-xl border bg-card">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div
+              key={i}
+              className="grid gap-3 px-4 py-4 lg:grid-cols-[minmax(10rem,1fr)_minmax(0,1.6fr)_auto] lg:items-center lg:gap-6"
+            >
+              <div className="space-y-2">
+                <Skeleton className="h-7 w-28" />
+                <Skeleton className="h-6 w-20 rounded-md" />
+                <Skeleton className="h-6 w-24" />
+              </div>
+              <div className="space-y-2">
+                <Skeleton className="h-5 w-64 max-w-full" />
+                <Skeleton className="h-4 w-80 max-w-full" />
+                <Skeleton className="h-7 w-28 rounded-md" />
+              </div>
+              <div className="flex gap-2 lg:justify-end">
+                <Skeleton className="h-11 w-28 rounded-md" />
+                <Skeleton className="h-11 w-44 rounded-md" />
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

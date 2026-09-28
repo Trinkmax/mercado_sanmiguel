@@ -13,8 +13,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Spinner } from "@/components/ui/spinner";
 import {
+  LABEL_SECTOR,
   LABEL_TIPO_CONTRATO,
+  SECTORES_PERSONAL,
+  SUGERENCIAS_CARGO,
   TIPOS_CONTRATO,
+  formatHorasNumero,
+  type SectorPersonal,
   type TipoContrato,
 } from "@/components/personal/constantes";
 
@@ -27,6 +32,8 @@ export type DatosEmpleado = {
   cargo: string | null;
   telefono: string | null;
   email: string | null;
+  sector: SectorPersonal;
+  horas_semanales: number | null;
   tipo_contrato: TipoContrato;
   fecha_ingreso: string | null;
   fecha_egreso: string | null;
@@ -60,24 +67,41 @@ function Bloque({
 export function FormEmpleado({
   empleado,
   cancelarHref,
+  horasSegunHorario,
 }: {
   empleado?: DatosEmpleado;
   /** A dónde vuelve "Cancelar" (listado en el alta, ficha en la edición). */
   cancelarHref?: string;
+  /** Horas por semana que suman sus horarios cargados (para "Usar este número"). */
+  horasSegunHorario?: number;
 }) {
   const router = useRouter();
   const [pendiente, startTransition] = useTransition();
   const [tipoContrato, setTipoContrato] = useState<TipoContrato>(
     empleado?.tipo_contrato ?? "planta_permanente"
   );
+  const [sector, setSector] = useState<SectorPersonal | null>(empleado?.sector ?? null);
+  const [cargo, setCargo] = useState(empleado?.cargo ?? "");
+  const [horas, setHoras] = useState(
+    empleado?.horas_semanales ? formatHorasNumero(empleado.horas_semanales) : ""
+  );
+  const horasNum = Number(horas.replace(/\./g, "").replace(",", "."));
+  const horasValidas = horas.trim() !== "" && Number.isFinite(horasNum) && horasNum > 0 && horasNum <= 84;
   const [error, setError] = useState<string | null>(null);
   const [nombreArchivo, setNombreArchivo] = useState<string | null>(null);
   const inputArchivo = useRef<HTMLInputElement>(null);
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (!sector) {
+      setError("Elegí el sector donde trabaja: define quién carga sus novedades.");
+      return;
+    }
     const fd = new FormData(e.currentTarget);
     fd.set("tipo_contrato", tipoContrato);
+    fd.set("sector", sector);
+    fd.set("cargo", cargo);
+    fd.set("horas_semanales", horasValidas ? String(horasNum) : horas.trim());
     // El DNI va sin puntos ni espacios, pase lo que pase.
     fd.set("dni", String(fd.get("dni") ?? "").replace(/\D/g, ""));
     if (empleado) fd.set("id", empleado.id);
@@ -169,17 +193,69 @@ export function FormEmpleado({
         </div>
 
         <div className="space-y-2">
+          <Label className="text-base" id="sector-label">
+            Sector
+          </Label>
+          <div className="flex flex-wrap gap-2" role="radiogroup" aria-labelledby="sector-label">
+            {SECTORES_PERSONAL.map((sec) => {
+              const activo = sec === sector;
+              return (
+                <button
+                  key={sec}
+                  type="button"
+                  role="radio"
+                  aria-checked={activo}
+                  onClick={() => {
+                    setSector(sec);
+                    setError(null);
+                  }}
+                  className={cn(
+                    "inline-flex min-h-12 items-center rounded-lg border px-5 text-base font-semibold transition-colors",
+                    activo
+                      ? "border-primary bg-primary text-primary-foreground"
+                      : "border-border bg-card text-foreground hover:bg-accent"
+                  )}
+                >
+                  {LABEL_SECTOR[sec]}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Define quién carga sus novedades: Portería la carga el Jefe de Portería; Limpieza y
+            Mantenimiento, Administración.
+          </p>
+        </div>
+
+        <div className="space-y-2">
           <Label htmlFor="cargo" className="text-base">
             Cargo
           </Label>
           <Input
             id="cargo"
-            name="cargo"
-            defaultValue={empleado?.cargo ?? ""}
-            placeholder="Ej.: Portería, Limpieza, Mantenimiento"
+            value={cargo}
+            onChange={(e) => setCargo(e.target.value)}
+            placeholder="Ej.: Encargado de turno, Sereno, Peón"
             className="h-12 text-base md:text-base"
             autoComplete="off"
           />
+          <div className="flex flex-wrap gap-2">
+            {SUGERENCIAS_CARGO.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setCargo(c)}
+                className={cn(
+                  "inline-flex min-h-11 items-center rounded-full border px-4 text-sm font-medium transition-colors",
+                  cargo === c
+                    ? "border-primary bg-accent text-accent-foreground"
+                    : "border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground"
+                )}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="grid gap-5 sm:grid-cols-2">
@@ -244,6 +320,43 @@ export function FormEmpleado({
               );
             })}
           </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="horas_semanales" className="text-base">
+            Horas por semana según contrato
+          </Label>
+          <div className="flex flex-wrap items-center gap-3">
+            <Input
+              id="horas_semanales"
+              inputMode="decimal"
+              value={horas}
+              onChange={(e) => setHoras(e.target.value.replace(/[^\d,]/g, "").slice(0, 5))}
+              placeholder="Ej.: 44"
+              className="h-12 w-32 text-base tabular md:text-base"
+              autoComplete="off"
+              aria-describedby="horas-ayuda"
+            />
+            {horasValidas ? (
+              <span className="text-sm text-muted-foreground tabular">
+                {formatHorasNumero(horasNum)} h por semana ≈ {formatHorasNumero(Math.round((horasNum / 7) * 10) / 10)} h por día
+              </span>
+            ) : null}
+            {horasSegunHorario && horasSegunHorario > 0 && (!horasValidas || horasNum !== horasSegunHorario) ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11"
+                onClick={() => setHoras(formatHorasNumero(horasSegunHorario))}
+              >
+                Según sus horarios: {formatHorasNumero(horasSegunHorario)} h · Usar este número
+              </Button>
+            ) : null}
+          </div>
+          <p id="horas-ayuda" className="text-sm text-muted-foreground">
+            Sirve para Novedades: cuántas horas tendría que haber trabajado en el mes. Si lo dejás
+            vacío, se calculan con sus horarios.
+          </p>
         </div>
 
         <div className="grid gap-5 sm:grid-cols-2">

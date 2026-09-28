@@ -1,0 +1,93 @@
+import Link from "next/link";
+import { Receipt, Settings2, Tag, Tractor, Truck, Users, type LucideIcon } from "lucide-react";
+import type { Rol } from "@/lib/auth";
+import { cn } from "@/lib/utils";
+
+/** Claves de `?tab=` (congeladas, contrato §6.10: las linkean Portería y Clientes). */
+export type PestanaConfiguracion = "precios" | "general" | "tarifas" | "quintas" | "usuarios" | "rubros";
+
+type DefPestana = { valor: PestanaConfiguracion; label: string; icono: LucideIcon };
+
+const TODAS: Record<PestanaConfiguracion, DefPestana> = {
+  precios: { valor: "precios", label: "Precios", icono: Tag },
+  general: { valor: "general", label: "General", icono: Settings2 },
+  tarifas: { valor: "tarifas", label: "Tarifas de transporte", icono: Truck },
+  quintas: { valor: "quintas", label: "Quintas y ambulantes", icono: Tractor },
+  usuarios: { valor: "usuarios", label: "Usuarios", icono: Users },
+  rubros: { valor: "rubros", label: "Rubros de gasto", icono: Receipt },
+};
+
+/** Qué pestañas ve cada rol, en orden (§6 M8.4). La primera es la de entrada. */
+export function pestanasDeRol(rol: Rol): PestanaConfiguracion[] {
+  switch (rol) {
+    case "lider":
+      return ["precios", "general", "tarifas", "quintas", "usuarios", "rubros"];
+    case "admin":
+      return ["precios", "general", "usuarios", "rubros"];
+    case "guardia":
+      return ["quintas", "usuarios"];
+    default:
+      return [];
+  }
+}
+
+function labelDe(p: PestanaConfiguracion, rol: Rol): string {
+  if (p === "usuarios" && rol === "guardia") return "Usuarios de Portería";
+  if (p === "usuarios" && rol === "admin") return "Usuarios de socios";
+  return TODAS[p].label;
+}
+
+/** Pestañas grandes por link: cada una arma su contenido en el server (una a la vez). */
+export function PestanasConfiguracion({
+  rol,
+  activa,
+  pendientes,
+}: {
+  rol: Rol;
+  activa: PestanaConfiguracion;
+  /** Globo por pestaña (p. ej. cambios de precio esperando aprobación). */
+  pendientes?: Partial<Record<PestanaConfiguracion, number>>;
+}) {
+  const pestanas = pestanasDeRol(rol);
+  return (
+    <nav
+      aria-label="Secciones de configuración"
+      className="-mx-4 overflow-x-auto px-4 pb-1 [scrollbar-width:none] md:mx-0 md:px-0"
+    >
+      <ul className="flex w-max gap-2 md:w-auto md:flex-wrap">
+        {pestanas.map((p, i) => {
+          const { icono: Icono } = TODAS[p];
+          const esActiva = p === activa;
+          const n = pendientes?.[p] ?? 0;
+          return (
+            <li key={p}>
+              <Link
+                href={i === 0 ? "/configuracion" : `/configuracion?tab=${p}`}
+                aria-current={esActiva ? "page" : undefined}
+                className={cn(
+                  "inline-flex min-h-12 items-center gap-2 rounded-lg border px-4 text-sm font-semibold whitespace-nowrap transition-colors",
+                  esActiva
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-card text-foreground hover:bg-accent"
+                )}
+              >
+                <Icono className="size-5" strokeWidth={2} />
+                {labelDe(p, rol)}
+                {n > 0 ? (
+                  <span
+                    className={cn(
+                      "ml-0.5 inline-flex min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] leading-5 font-bold tabular",
+                      esActiva ? "bg-primary-foreground/20" : "bg-parcial text-white"
+                    )}
+                  >
+                    {n}
+                  </span>
+                ) : null}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}

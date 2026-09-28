@@ -7,6 +7,7 @@ import { LayoutGrid, X, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   LABEL_GRUPO,
+  MAX_PLANO,
   ORDEN_GRUPOS,
   TABS_MOVIL,
   navParaRol,
@@ -107,7 +108,7 @@ export function BarraInferior({
     grupo: g,
     items: items.filter((i) => i.grupo === g),
   })).filter((g) => g.items.length > 0);
-  const conGrupos = grupos.length > 1 && items.length > 7;
+  const conGrupos = grupos.length > 1 && items.length > MAX_PLANO;
 
   return (
     <nav

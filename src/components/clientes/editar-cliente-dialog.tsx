@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Pencil } from "lucide-react";
 import type { Rol } from "@/lib/auth";
+import { LABEL_CATEGORIA } from "@/lib/segmentos";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -24,6 +25,7 @@ export function EditarClienteDialog({
   rol: Rol;
 }) {
   const [abierto, setAbierto] = useState(false);
+  const que = LABEL_CATEGORIA[cliente.categoria].toLowerCase();
 
   return (
     <Dialog open={abierto} onOpenChange={setAbierto}>
@@ -35,18 +37,14 @@ export function EditarClienteDialog({
       </DialogTrigger>
       <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Editar datos del cliente</DialogTitle>
+          <DialogTitle>Editar datos del {que}</DialogTitle>
           <DialogDescription>
             {aplicaDirectoRol(rol)
               ? "Corregí los datos de la carpeta y guardá."
               : "Corregí los datos de la carpeta y envialos: el Líder de Procesos los aprueba."}
           </DialogDescription>
         </DialogHeader>
-        <FormCliente
-          cliente={cliente}
-          rol={rol}
-          alGuardar={() => setAbierto(false)}
-        />
+        <FormCliente cliente={cliente} rol={rol} alGuardar={() => setAbierto(false)} />
       </DialogContent>
     </Dialog>
   );

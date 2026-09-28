@@ -2,12 +2,16 @@
 
 import { cn } from "@/lib/utils";
 import { formatFraccion, formatNumero } from "@/lib/format";
+import { Money } from "@/components/shared/money";
 import { MAT, RAYAS_DEBE } from "./plano-svg";
 
-export type Filtro = "al_dia" | "debe" | "vencido" | "libre";
+/** Estados de cobro que se pueden filtrar en el plano. */
+export type FiltroEstado = "al_dia" | "debe" | "vencido" | "libre";
+/** Filtro del plano: un estado o los puestos propios de la cooperativa (C3). */
+export type Filtro = FiltroEstado | "propio";
 
 /** Colores de la barra de ocupación. */
-const BARRA: Record<Exclude<Filtro, "libre">, string> = {
+const BARRA: Record<Exclude<FiltroEstado, "libre">, string> = {
   al_dia: "var(--pagado)",
   debe: "var(--pendiente)",
   vencido: "oklch(0.4 0.15 27)",
@@ -19,7 +23,7 @@ const RAYAS_MUESTRA = [1.5, 4.5, 7.5, 10.5, 13.5].map((x) => `M${x} 11h1.5l1 4h-
 /** Cada estado como se ve en el plano (se distinguen por forma, no solo por
  * color): faldón liso verde, faldón a rayas rojo, bloque rojo lleno y lote
  * punteado blanco. Un bloque en relieve chiquito: tapa, frente y costado. */
-function MuestraEstado({ estado }: { estado: Filtro }) {
+function MuestraEstado({ estado }: { estado: FiltroEstado }) {
   const m = MAT[estado];
   const libre = estado === "libre";
   return (
@@ -54,14 +58,29 @@ function MuestraEstado({ estado }: { estado: Filtro }) {
   );
 }
 
+/** Muestra del banderín azul del puesto propio (la misma forma que en el plano). */
+function MuestraPropio() {
+  return (
+    <svg aria-hidden viewBox="0 0 18 16" className="h-4 w-[18px] shrink-0">
+      <rect x={1} y={6} width={14} height={9} rx={2} fill={MAT.libre.tapa[1]} stroke={MAT.libre.bisel} />
+      <path d="M4 11V1.5" stroke="#fff" strokeWidth={3} strokeLinecap="round" />
+      <path d="M4 1.5L12 4L4 6.5Z" fill="#fff" stroke="#fff" strokeWidth={2} strokeLinejoin="round" />
+      <path d="M4 11V1.5" stroke="oklch(0.36 0.04 262)" strokeWidth={1.3} strokeLinecap="round" />
+      <path d="M4 1.5L12 4L4 6.5Z" fill="var(--primary)" />
+    </svg>
+  );
+}
+
 export type Resumen = {
   /** Unidades de puesto por estado (medio puesto = ½). */
-  puestos: Record<Filtro, number>;
+  puestos: Record<FiltroEstado, number>;
   totalPuestos: number;
   secundarios: { label: string; valor: string }[];
+  /** Puestos propios de la cooperativa marcados en el plano (C3). */
+  propios?: number;
 };
 
-const LEYENDA: { filtro: Filtro; label: string }[] = [
+const LEYENDA: { filtro: FiltroEstado; label: string }[] = [
   { filtro: "al_dia", label: "Al día" },
   { filtro: "debe", label: "Debe el mes" },
   { filtro: "vencido", label: "Deuda atrasada" },
@@ -139,6 +158,24 @@ export function ResumenMapa({
               </button>
             );
           })}
+          {(resumen.propios ?? 0) > 0 ? (
+            <button
+              type="button"
+              aria-pressed={filtro === "propio"}
+              onClick={() => onFiltro(filtro === "propio" ? null : "propio")}
+              title="Puestos propios de la cooperativa (pagan EXPP)"
+              className={cn(
+                "inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-3.5 text-[13px] font-medium whitespace-nowrap transition-colors",
+                filtro === "propio"
+                  ? "border-primary bg-accent text-accent-foreground"
+                  : "bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+            >
+              <MuestraPropio />
+              Propios
+              <span className="tabular font-semibold text-foreground">{formatFraccion(resumen.propios)}</span>
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -158,4 +195,77 @@ export function ResumenMapa({
 /** "3 de 23" */
 export function deTotal(n: number, total: number): string {
   return `${formatNumero(n)} de ${formatNumero(total)}`;
+}
+
+/** Cómo vienen los quinteros este mes (mapa del Jefe de Portería, G11). */
+export type ResumenQuinteros = {
+  total: number;
+  alDia: number;
+  debe: number;
+  vencido: number;
+  /** Lo que falta cobrar del mes (Σ `falta` de v_avance_mes). */
+  porCobrar: number;
+};
+
+const LEYENDA_QUINTEROS: { filtro: Exclude<FiltroEstado, "libre">; label: string; clave: keyof ResumenQuinteros }[] = [
+  { filtro: "al_dia", label: "Al día", clave: "alDia" },
+  { filtro: "debe", label: "Deben el mes", clave: "debe" },
+  { filtro: "vencido", label: "Deuda atrasada", clave: "vencido" },
+];
+
+/** Resumen del mapa del Jefe: sus quinteros (nada de puesteros) y lo que falta cobrar del
+ * mes, con la leyenda que filtra las fichas de la zona de quinteros. */
+export function ResumenQuintas({
+  resumen,
+  filtro,
+  onFiltro,
+  className,
+}: {
+  resumen: ResumenQuinteros;
+  filtro: Filtro | null;
+  onFiltro: (f: Filtro | null) => void;
+  className?: string;
+}) {
+  return (
+    <div className={cn("flex items-center gap-3 overflow-x-auto [scrollbar-width:none] max-md:-mx-3 max-md:px-3 md:gap-5 [&::-webkit-scrollbar]:hidden", className)}>
+      <div className="shrink-0">
+        <p className="text-sm whitespace-nowrap">
+          <span className="font-display text-lg font-bold tabular">{formatNumero(resumen.total)}</span>
+          <span className="text-muted-foreground"> {resumen.total === 1 ? "quintero" : "quinteros"}</span>
+        </p>
+        <p className="text-xs whitespace-nowrap text-muted-foreground">
+          {resumen.porCobrar > 0 ? (
+            <>
+              <Money monto={resumen.porCobrar} className="font-semibold text-pendiente" /> por cobrar este mes
+            </>
+          ) : (
+            "Nada por cobrar este mes"
+          )}
+        </p>
+      </div>
+      <div className="flex items-center gap-1.5 md:flex-1 md:flex-wrap" role="group" aria-label="Filtrar quinteros">
+        {LEYENDA_QUINTEROS.map((l) => {
+          const activo = filtro === l.filtro;
+          return (
+            <button
+              key={l.filtro}
+              type="button"
+              aria-pressed={activo}
+              onClick={() => onFiltro(activo ? null : l.filtro)}
+              className={cn(
+                "inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-3.5 text-[13px] font-medium whitespace-nowrap transition-colors",
+                activo
+                  ? "border-primary bg-accent text-accent-foreground"
+                  : "bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+            >
+              <MuestraEstado estado={l.filtro} />
+              {l.label}
+              <span className="tabular font-semibold text-foreground">{formatNumero(resumen[l.clave])}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 }

@@ -2,8 +2,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, HandCoins } from "lucide-react";
 import { requireRol } from "@/lib/auth";
+import { ROLES_COBRAN } from "@/lib/roles";
+import { categoriasDeRol, LABEL_CATEGORIA, type CategoriaCliente } from "@/lib/segmentos";
 import { createClient } from "@/lib/supabase/server";
-import { formatFecha, formatNumero, hoyISO, saldoCargo } from "@/lib/format";
+import { formatCuit, formatFecha, formatNumero, hoyISO, saldoCargo } from "@/lib/format";
+import { textoEspacios } from "@/components/mapa/geometria";
+import type { TipoEspacio } from "@/components/mapa/tipos";
 import { Button } from "@/components/ui/button";
 import { Marca } from "@/components/shared/marca";
 import { Sello } from "@/components/shared/sello";
@@ -15,19 +19,50 @@ export const metadata = { title: "Libre deuda" };
 
 type Props = { params: Promise<{ clienteId: string }> };
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export default async function LibreDeudaPage({ params }: Props) {
-  const perfil = await requireRol("admin", "tesoreria", "consejo", "lider");
+  // Lo emite quien gestiona al cliente: Administración (puesteros), el Jefe (quinteros y
+  // ambulantes) y el Líder (todos). Tesorería no (J4: no ve clientes).
+  const perfil = await requireRol("admin", "guardia", "lider");
   const { clienteId } = await params;
+  if (!UUID.test(clienteId)) notFound();
   const supabase = await createClient();
 
   const { data: cliente } = await supabase
     .from("clientes")
-    .select("id, codigo, nombre, cuit")
+    .select("id, codigo, nombre, cuit, categoria")
     .eq("id", clienteId)
+    .eq("org_id", perfil.org_id)
     .maybeSingle();
   if (!cliente) notFound();
 
-  const [cargosRes, itemsRes, configRes] = await Promise.all([
+  const categoria = cliente.categoria as CategoriaCliente;
+  if (!categoriasDeRol(perfil.rol).includes(categoria)) {
+    const quien = categoria === "puestero" ? "Administración" : "el Jefe de Portería";
+    return (
+      <div className="space-y-6 py-10">
+        <div className="etiqueta">
+          <div className="etiqueta-interior space-y-5 py-10 text-center">
+            <h1 className="font-display text-2xl font-semibold">El libre deuda lo emite {quien}</h1>
+            <p className="text-lg">
+              <strong>{cliente.nombre}</strong> es {LABEL_CATEGORIA[categoria].toLowerCase()}: su cuenta la
+              lleva {quien}.
+            </p>
+            <Button asChild variant="outline" size="lg" className="h-13 px-5 text-base">
+              <Link href="/clientes">
+                <ArrowLeft className="size-5" />
+                Volver
+              </Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  const puedeCobrar = ROLES_COBRAN.includes(perfil.rol);
+
+  const [cargosRes, itemsRes, configRes, espaciosRes] = await Promise.all([
     supabase
       .from("cargos")
       .select("estado, monto, monto_pagado, descuento_pronto_pago, vencimiento")
@@ -43,6 +78,13 @@ export default async function LibreDeudaPage({ params }: Props) {
       .select("impresion_directa")
       .eq("org_id", perfil.org_id)
       .maybeSingle(),
+    // Sus lugares en el plano ("Puesto 58 · Puesto propio 12"). El Jefe no lee espacios
+    // (0022) y sus quinteros no tienen puesto: le vuelve vacío.
+    supabase
+      .from("espacios")
+      .select("tipo, numero, medio, propio, x, y")
+      .eq("org_id", perfil.org_id)
+      .eq("cliente_id", clienteId),
   ]);
   const autoImprimir = Boolean(configRes.data?.impresion_directa);
 
@@ -72,12 +114,14 @@ export default async function LibreDeudaPage({ params }: Props) {
               </p>
             </div>
             <div className="flex flex-wrap justify-center gap-3">
-              <Button asChild size="lg" className="h-13 px-6 text-base font-semibold">
-                <Link href={`/cobranza/${cliente.id}`}>
-                  <HandCoins className="size-5" />
-                  Cobrar ahora
-                </Link>
-              </Button>
+              {puedeCobrar ? (
+                <Button asChild size="lg" className="h-13 px-6 text-base font-semibold">
+                  <Link href={`/cobranza/${cliente.id}`}>
+                    <HandCoins className="size-5" />
+                    Cobrar ahora
+                  </Link>
+                </Button>
+              ) : null}
               <Button asChild variant="outline" size="lg" className="h-13 px-5 text-base">
                 <Link href={`/clientes/${cliente.id}`}>
                   <ArrowLeft className="size-5" />
@@ -90,6 +134,17 @@ export default async function LibreDeudaPage({ params }: Props) {
       </div>
     );
   }
+
+  const lugares = textoEspacios(
+    (espaciosRes.data ?? []).map((e) => ({
+      tipo: e.tipo as TipoEspacio,
+      numero: e.numero,
+      medio: e.medio,
+      propio: e.propio,
+      x: Number(e.x),
+      y: Number(e.y),
+    }))
+  );
 
   const conceptos = (itemsRes.data ?? [])
     .map((i) => ({
@@ -124,7 +179,8 @@ export default async function LibreDeudaPage({ params }: Props) {
             <p className="text-2xl font-semibold">{cliente.nombre}</p>
             <div className="flex flex-wrap items-center gap-3 text-muted-foreground">
               <Codigo codigo={`N° ${cliente.codigo}`} />
-              {cliente.cuit ? <span>CUIT {cliente.cuit}</span> : null}
+              {cliente.cuit ? <span>CUIT {formatCuit(cliente.cuit)}</span> : null}
+              {lugares ? <span>{lugares}</span> : null}
             </div>
           </section>
 

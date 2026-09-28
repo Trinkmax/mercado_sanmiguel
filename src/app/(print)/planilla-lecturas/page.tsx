@@ -2,16 +2,28 @@ import { requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatNumero, labelPeriodo, periodoActual } from "@/lib/format";
 import { BotonImprimir } from "@/components/shared/boton-imprimir";
+import { etiquetaEspacio } from "@/components/mapa/geometria";
 
 export const metadata = { title: "Planilla de lecturas" };
 
+type EspacioMedidor = {
+  tipo: string;
+  numero: string | null;
+  medio: boolean;
+  propio: boolean;
+  x: number;
+  y: number;
+} | null;
+
 /**
- * La planilla PAPEL que se lleva el electricista: todos los medidores activos,
- * la última lectura conocida impresa y una columna ancha vacía para anotar
- * la lectura actual con lapicera.
+ * La planilla PAPEL que se lleva el electricista: todos los medidores activos en el
+ * orden en que se recorre el mercado (según su lugar en el plano; los que no tienen
+ * lugar, al final), la última lectura conocida impresa y una columna ancha vacía para
+ * anotar la lectura actual con lapicera.
  */
 export default async function PlanillaLecturasPage() {
-  const perfil = await requireRol("admin", "tesoreria", "consejo", "lider");
+  // J5: Tesorería ya no carga lecturas.
+  const perfil = await requireRol("admin", "lider");
   const supabase = await createClient();
   const periodo = periodoActual();
 
@@ -23,7 +35,8 @@ export default async function PlanillaLecturasPage() {
       .maybeSingle(),
     supabase
       .from("medidores")
-      .select("id, numero, ubicacion, cliente:clientes(nombre)")
+      .select("id, numero, ubicacion, espacio:espacios(tipo, numero, medio, propio, x, y), cliente:clientes(nombre)")
+      .eq("org_id", perfil.org_id)
       .eq("activo", true),
     supabase
       .from("lecturas")
@@ -55,9 +68,19 @@ export default async function PlanillaLecturasPage() {
     }
   }
 
-  const medidores = (medidoresRes.data ?? []).sort((a, b) =>
-    a.numero.localeCompare(b.numero, "es", { numeric: true })
-  );
+  // Recorrido: fila norte → isla → fila sur → contéiners (y, x del plano); sin lugar al final.
+  const medidores = [...(medidoresRes.data ?? [])].sort((a, b) => {
+    const ea = a.espacio as EspacioMedidor;
+    const eb = b.espacio as EspacioMedidor;
+    if (ea && eb) return Number(ea.y) - Number(eb.y) || Number(ea.x) - Number(eb.x);
+    if (ea) return -1;
+    if (eb) return 1;
+    return a.numero.localeCompare(b.numero, "es", { numeric: true });
+  });
+  const ubicacionDe = (m: (typeof medidores)[number]) => {
+    const e = m.espacio as EspacioMedidor;
+    return e ? etiquetaEspacio(e) : m.ubicacion ?? "Sin lugar en el plano";
+  };
 
   return (
     <div>
@@ -72,8 +95,8 @@ export default async function PlanillaLecturasPage() {
             Planilla de lecturas — {labelPeriodo(periodo)}
           </h1>
           <p className="text-sm text-muted-foreground">
-            {medidores.length} medidores · Anotá la lectura actual de cada uno en
-            la última columna.
+            {medidores.length} medidores, en el orden del recorrido · Anotá la lectura
+            actual de cada uno en la última columna.
           </p>
         </div>
       </div>
@@ -108,9 +131,7 @@ export default async function PlanillaLecturasPage() {
                   {m.numero}
                 </td>
                 <td className="pr-2 font-medium">{m.cliente?.nombre ?? "—"}</td>
-                <td className="pr-2 text-muted-foreground">
-                  {m.ubicacion ?? "—"}
-                </td>
+                <td className="pr-2 text-muted-foreground">{ubicacionDe(m)}</td>
                 <td className="pr-3 text-right text-base tabular">
                   {anterior !== null ? formatNumero(anterior) : "—"}
                 </td>

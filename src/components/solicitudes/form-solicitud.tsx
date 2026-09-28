@@ -2,22 +2,14 @@
 
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Check, Paperclip, Printer, Search, Store, X } from "lucide-react";
+import { Check, CircleAlert, MapPin, Paperclip, Printer, Search, Store, X } from "lucide-react";
 import type { Rol } from "@/lib/auth";
 import { crearSolicitud } from "@/lib/actions/solicitudes";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { Sello } from "@/components/shared/sello";
@@ -26,9 +18,12 @@ import {
   LABEL_ORIGEN,
   ORIGENES_SOLICITUD,
   TIPOS_SOLICITUD,
+  type EstadoSolicitud,
   type OrigenSolicitud,
   type TipoSolicitud,
 } from "./constantes";
+import { etiquetaLugar, type LugarSimple } from "./lugares";
+import { SelectorPuesto } from "./selector-puesto";
 
 export type ClienteBuscable = {
   id: string;
@@ -36,6 +31,8 @@ export type ClienteBuscable = {
   nombre: string;
   apodo: string | null;
 };
+
+type SobreQue = "cliente" | "puesto" | "general";
 
 function normalizar(texto: string): string {
   return texto
@@ -45,42 +42,70 @@ function normalizar(texto: string): string {
 }
 
 /**
- * Alta de solicitud desde el panel. Un solo camino: tipo → asunto → detalle →
- * ¿sobre un puesto? → adjunto → crear. Si el origen es portería, al crear se
- * ofrece imprimirla para derivarla en papel a Administración.
+ * Alta de solicitud desde el panel. Un solo camino: tipo → asunto → detalle → ¿sobre qué? →
+ * adjunto → crear. Portería, el Jefe de Portería y Tesorería eligen el puesto por número (no
+ * ven clientes); Administración y el Líder pueden además buscar un cliente. Al crear dice a
+ * quién le llegó ("Le llegó al Jefe de Portería" / "Le llegó al Líder de Procesos").
  */
-export function FormSolicitud({
+export function FormSolicitud(props: {
+  rol: Rol;
+  clientes: ClienteBuscable[];
+  lugares: LugarSimple[];
+  origenInicial: OrigenSolicitud;
+  clienteInicialId?: string;
+  espacioInicialId?: string;
+  tipoInicial?: TipoSolicitud;
+}) {
+  // Remonta el formulario limpio con "Cargar otra".
+  const [vuelta, setVuelta] = useState(0);
+  return <Formulario key={vuelta} {...props} onOtra={() => setVuelta((v) => v + 1)} primera={vuelta === 0} />;
+}
+
+function Formulario({
   rol,
   clientes,
+  lugares,
   origenInicial,
   clienteInicialId,
+  espacioInicialId,
+  tipoInicial,
+  onOtra,
+  primera,
 }: {
   rol: Rol;
   clientes: ClienteBuscable[];
+  lugares: LugarSimple[];
   origenInicial: OrigenSolicitud;
   clienteInicialId?: string;
+  espacioInicialId?: string;
+  tipoInicial?: TipoSolicitud;
+  onOtra: () => void;
+  primera: boolean;
 }) {
-  const router = useRouter();
   const [pendiente, startTransition] = useTransition();
-  const [tipo, setTipo] = useState<TipoSolicitud>("solicitud");
-  const [sobrePuesto, setSobrePuesto] = useState<boolean>(
-    Boolean(clienteInicialId)
+  const conClientes = rol === "admin" || rol === "lider";
+  const lugarInicial = primera ? (lugares.find((l) => l.id === espacioInicialId) ?? null) : null;
+  const clienteInicial = primera && conClientes ? (clientes.find((c) => c.id === clienteInicialId) ?? null) : null;
+
+  const [tipo, setTipo] = useState<TipoSolicitud>((primera && tipoInicial) || "solicitud");
+  const [sobreQue, setSobreQue] = useState<SobreQue>(
+    clienteInicial ? "cliente" : lugarInicial ? "puesto" : "general"
   );
   const [busqueda, setBusqueda] = useState("");
-  const [clienteId, setClienteId] = useState<string | null>(
-    clienteInicialId ?? null
-  );
+  const [clienteId, setClienteId] = useState<string | null>(clienteInicial?.id ?? null);
+  const [lugar, setLugar] = useState<LugarSimple | null>(lugarInicial);
   const [origen, setOrigen] = useState<OrigenSolicitud>(origenInicial);
   const [nombreAdjunto, setNombreAdjunto] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [creada, setCreada] = useState<{
-    id: string;
-    numero: number;
-    origen: OrigenSolicitud;
-  } | null>(null);
+  const [creada, setCreada] = useState<{ id: string; numero: number; estado: EstadoSolicitud } | null>(null);
 
-  const puedeElegirOrigen = rol === "admin" || rol === "lider";
+  const puedeElegirOrigen = conClientes;
   const clienteElegido = clientes.find((c) => c.id === clienteId) ?? null;
+  const opciones: { valor: SobreQue; label: string }[] = [
+    ...(conClientes ? [{ valor: "cliente" as const, label: "Un cliente" }] : []),
+    { valor: "puesto", label: conClientes ? "Un lugar del plano" : "Un puesto" },
+    { valor: "general", label: "Algo general" },
+  ];
 
   const resultados = useMemo(() => {
     const q = normalizar(busqueda.trim());
@@ -101,15 +126,26 @@ export function FormSolicitud({
     const fd = new FormData(e.currentTarget);
     fd.set("tipo", tipo);
     fd.set("origen", origen);
-    if (sobrePuesto) {
+    fd.delete("clienteId");
+    fd.delete("espacioId");
+    if (!String(fd.get("asunto") ?? "").trim()) {
+      setError("Poné un asunto corto (ej.: Luminaria rota frente al puesto 7)");
+      return;
+    }
+    if (sobreQue === "cliente") {
       if (!clienteId) {
-        setError("Elegí el puesto, o marcá que no es sobre un puesto.");
+        setError("Elegí el cliente, o marcá que es algo general.");
         return;
       }
       fd.set("clienteId", clienteId);
       fd.delete("referencia");
-    } else {
-      fd.delete("clienteId");
+    } else if (sobreQue === "puesto") {
+      if (!lugar) {
+        setError("Escribí el número y tocá el puesto, o marcá que es algo general.");
+        return;
+      }
+      fd.set("espacioId", lugar.id);
+      fd.delete("referencia");
     }
     startTransition(async () => {
       const res = await crearSolicitud(fd);
@@ -118,55 +154,45 @@ export function FormSolicitud({
         toast.error(res.error);
         return;
       }
-      toast.success(`Solicitud N° ${res.data.numero} creada`);
-      if (res.data.origen === "porteria") {
-        setCreada(res.data);
-        return;
-      }
-      router.push(`/solicitudes/${res.data.id}`);
+      toast.success(
+        res.data.estado === "con_jefe"
+          ? `Solicitud N° ${res.data.numero}: le llegó al Jefe de Portería`
+          : `Solicitud N° ${res.data.numero}: le llegó al Líder de Procesos`
+      );
+      setCreada(res.data);
+      window.scrollTo({ top: 0, behavior: "smooth" });
     });
   }
 
   if (creada) {
+    const alJefe = creada.estado === "con_jefe";
     return (
       <div className="etiqueta">
         <div className="etiqueta-interior flex flex-col items-center gap-5 py-10 text-center">
-          <Sello grande estado="nueva" className="animar-estampado" />
+          <Sello grande estado={creada.estado} className="animar-estampado" />
           <div className="space-y-1">
             <p className="font-display text-2xl font-bold tracking-tight">
-              Solicitud N° {creada.numero} creada
+              {alJefe ? "Le llegó al Jefe de Portería" : "Le llegó al Líder de Procesos"}
             </p>
             <p className="max-w-md text-muted-foreground">
-              Imprimila para derivarla a Administración en papel. Administración
-              firma el recibido y la sigue desde el sistema.
+              Solicitud N° {creada.numero}.{" "}
+              {alJefe
+                ? "El Jefe la resuelve o, si hace falta, la eleva al Líder de Procesos. Las respuestas las ves en Solicitudes."
+                : "Las respuestas y el avance los ves en Solicitudes."}
             </p>
           </div>
           <div className="flex w-full max-w-sm flex-col gap-2">
             <Button asChild size="lg" className="h-12 text-base font-semibold">
-              <Link href={`/solicitudes/${creada.id}/imprimir`}>
-                <Printer className="size-5" strokeWidth={2} />
-                Imprimir para derivar a Administración
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="h-11">
               <Link href={`/solicitudes/${creada.id}`}>Ver la solicitud</Link>
             </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              className="h-11"
-              onClick={() => {
-                // Mismo componente montado: volver al formulario limpio.
-                setCreada(null);
-                setTipo("solicitud");
-                setSobrePuesto(false);
-                setBusqueda("");
-                setClienteId(null);
-                setNombreAdjunto(null);
-                setError(null);
-              }}
-            >
+            <Button type="button" variant="outline" className="h-12 text-base" onClick={onOtra}>
               Cargar otra
+            </Button>
+            <Button asChild variant="ghost" className="h-11">
+              <Link href={`/solicitudes/${creada.id}/imprimir`}>
+                <Printer className="size-4" strokeWidth={2} />
+                Imprimir
+              </Link>
             </Button>
           </div>
         </div>
@@ -175,7 +201,7 @@ export function FormSolicitud({
   }
 
   return (
-    <form onSubmit={onSubmit} className="space-y-7">
+    <form onSubmit={onSubmit} className="space-y-7" noValidate>
       {/* Tipo */}
       <fieldset className="space-y-2">
         <legend className="text-base font-medium">¿Qué es?</legend>
@@ -190,9 +216,7 @@ export function FormSolicitud({
                 aria-pressed={activo}
                 className={cn(
                   "flex min-h-12 items-center justify-center gap-1.5 rounded-md border px-3 text-sm font-semibold transition-colors",
-                  activo
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-card hover:bg-accent"
+                  activo ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card hover:bg-accent"
                 )}
               >
                 {activo ? <Check className="size-4" strokeWidth={2.5} /> : null}
@@ -201,9 +225,7 @@ export function FormSolicitud({
             );
           })}
         </div>
-        <p className="text-sm text-muted-foreground">
-          {TIPOS_SOLICITUD.find((t) => t.valor === tipo)?.ayuda}
-        </p>
+        <p className="text-sm text-muted-foreground">{TIPOS_SOLICITUD.find((t) => t.valor === tipo)?.ayuda}</p>
       </fieldset>
 
       {/* Asunto */}
@@ -217,6 +239,7 @@ export function FormSolicitud({
           required
           maxLength={200}
           autoComplete="off"
+          defaultValue={lugarInicial ? `Aviso sobre el ${etiquetaLugar(lugarInicial)}` : undefined}
           placeholder="En pocas palabras, ¿de qué se trata?"
           className="h-12 text-base md:text-base"
         />
@@ -237,55 +260,45 @@ export function FormSolicitud({
         />
       </div>
 
-      {/* ¿Sobre un puesto? */}
+      {/* ¿Sobre qué? */}
       <fieldset className="space-y-3">
-        <legend className="text-base font-medium">¿Es sobre un puesto?</legend>
-        <div className="grid grid-cols-2 gap-2">
-          <button
-            type="button"
-            onClick={() => setSobrePuesto(true)}
-            aria-pressed={sobrePuesto}
-            className={cn(
-              "flex min-h-12 items-center justify-center gap-2 rounded-md border px-3 text-sm font-semibold transition-colors",
-              sobrePuesto
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-border bg-card hover:bg-accent"
-            )}
-          >
-            <Store className="size-4" strokeWidth={2} />
-            Sí, sobre un puesto
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setSobrePuesto(false);
-              setClienteId(null);
-            }}
-            aria-pressed={!sobrePuesto}
-            className={cn(
-              "flex min-h-12 items-center justify-center gap-2 rounded-md border px-3 text-sm font-semibold transition-colors",
-              !sobrePuesto
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-border bg-card hover:bg-accent"
-            )}
-          >
-            No, es general
-          </button>
+        <legend className="text-base font-medium">¿Sobre qué es?</legend>
+        <div className={cn("grid gap-2", opciones.length === 3 ? "grid-cols-3" : "grid-cols-2")}>
+          {opciones.map((o) => {
+            const activo = sobreQue === o.valor;
+            return (
+              <button
+                key={o.valor}
+                type="button"
+                onClick={() => {
+                  setSobreQue(o.valor);
+                  setError(null);
+                }}
+                aria-pressed={activo}
+                className={cn(
+                  "flex min-h-12 items-center justify-center gap-2 rounded-md border px-3 text-sm font-semibold transition-colors",
+                  activo ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card hover:bg-accent"
+                )}
+              >
+                {o.valor === "cliente" ? <Store className="size-4" strokeWidth={2} /> : null}
+                {o.valor === "puesto" ? <MapPin className="size-4" strokeWidth={2} /> : null}
+                {o.label}
+              </button>
+            );
+          })}
         </div>
 
-        {sobrePuesto ? (
+        {sobreQue === "puesto" ? (
+          <SelectorPuesto lugares={lugares} valor={lugar} onCambiar={(l) => { setLugar(l); setError(null); }} />
+        ) : sobreQue === "cliente" ? (
           clienteElegido ? (
             <div className="flex items-center justify-between gap-3 rounded-md border bg-accent/50 px-4 py-3">
               <div className="flex min-w-0 items-center gap-3">
-                <span className="font-display text-lg font-bold tabular">
-                  {clienteElegido.codigo}
-                </span>
+                <span className="font-display text-lg font-bold tabular">{clienteElegido.codigo}</span>
                 <div className="min-w-0">
                   <p className="truncate font-medium">{clienteElegido.nombre}</p>
                   {clienteElegido.apodo ? (
-                    <p className="truncate text-sm text-muted-foreground">
-                      {clienteElegido.apodo}
-                    </p>
+                    <p className="truncate text-sm text-muted-foreground">{clienteElegido.apodo}</p>
                   ) : null}
                 </div>
               </div>
@@ -313,17 +326,15 @@ export function FormSolicitud({
                   type="search"
                   value={busqueda}
                   onChange={(e) => setBusqueda(e.target.value)}
-                  placeholder="Buscá por N° de carpeta o nombre"
-                  aria-label="Buscar puesto por número de carpeta o nombre"
+                  placeholder="Buscá por N° de carpeta, nombre o apodo"
+                  aria-label="Buscar cliente por número de carpeta, nombre o apodo"
                   className="h-12 pl-11 text-base md:text-base"
                   autoComplete="off"
                 />
               </div>
               {busqueda.trim() ? (
                 resultados.length === 0 ? (
-                  <p className="px-1 text-sm text-muted-foreground">
-                    No encontramos ese puesto. Probá con el N° de carpeta.
-                  </p>
+                  <p className="px-1 text-sm text-muted-foreground">No encontramos ese cliente. Probá con el N° de carpeta.</p>
                 ) : (
                   <ul className="divide-y overflow-hidden rounded-md border bg-card">
                     {resultados.map((c) => (
@@ -333,19 +344,14 @@ export function FormSolicitud({
                           onClick={() => {
                             setClienteId(c.id);
                             setBusqueda("");
+                            setError(null);
                           }}
                           className="flex min-h-12 w-full items-center gap-3 px-4 text-left transition-colors hover:bg-muted/60"
                         >
-                          <span className="w-9 shrink-0 text-right font-display text-base font-bold tabular">
-                            {c.codigo}
-                          </span>
+                          <span className="w-9 shrink-0 text-right font-display text-base font-bold tabular">{c.codigo}</span>
                           <span className="min-w-0 flex-1 truncate font-medium">
                             {c.nombre}
-                            {c.apodo ? (
-                              <span className="ml-2 text-sm font-normal text-muted-foreground">
-                                {c.apodo}
-                              </span>
-                            ) : null}
+                            {c.apodo ? <span className="ml-2 text-sm font-normal text-muted-foreground">{c.apodo}</span> : null}
                           </span>
                         </button>
                       </li>
@@ -358,7 +364,7 @@ export function FormSolicitud({
         ) : (
           <div className="space-y-2">
             <Label htmlFor="sol-referencia" className="text-base">
-              Referencia (opcional)
+              ¿Dónde? (opcional)
             </Label>
             <Input
               id="sol-referencia"
@@ -375,7 +381,7 @@ export function FormSolicitud({
       {/* Adjunto */}
       <div className="space-y-2">
         <Label htmlFor="sol-adjunto" className="text-base">
-          Adjunto (opcional)
+          Foto o PDF (opcional)
         </Label>
         <div className="flex flex-wrap items-center gap-3">
           <Label
@@ -383,17 +389,11 @@ export function FormSolicitud({
             className="inline-flex min-h-12 cursor-pointer items-center gap-2 rounded-md border bg-card px-4 text-sm font-medium hover:bg-muted"
           >
             <Paperclip className="size-4" strokeWidth={2} />
-            {nombreAdjunto ?? "Elegir foto o PDF"}
+            {nombreAdjunto ?? "Sacá una foto o elegí un PDF"}
           </Label>
-          {nombreAdjunto ? (
-            <span className="text-sm text-muted-foreground">
-              Se adjunta al crear.
-            </span>
-          ) : (
-            <span className="text-sm text-muted-foreground">
-              PDF o foto (JPG, PNG, WEBP), hasta 20 MB.
-            </span>
-          )}
+          <span className="text-sm text-muted-foreground">
+            {nombreAdjunto ? "Se adjunta al crear." : "Foto (JPG, PNG, WEBP) o PDF, hasta 20 MB."}
+          </span>
         </div>
         <Input
           id="sol-adjunto"
@@ -407,43 +407,42 @@ export function FormSolicitud({
 
       {/* Origen (solo quien carga formularios de otros) */}
       {puedeElegirOrigen ? (
-        <div className="space-y-2">
-          <Label htmlFor="sol-origen" className="text-base">¿De dónde viene?</Label>
-          <Select
-            value={origen}
-            onValueChange={(v) => setOrigen(v as OrigenSolicitud)}
-          >
-            <SelectTrigger id="sol-origen" className="h-12 w-full text-base sm:max-w-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {ORIGENES_SOLICITUD.map((o) => (
-                <SelectItem key={o} value={o} className="min-h-11">
+        <fieldset className="space-y-2">
+          <legend className="text-base font-medium">¿De dónde viene?</legend>
+          <div className="flex flex-wrap gap-2">
+            {ORIGENES_SOLICITUD.map((o) => {
+              const activo = origen === o;
+              return (
+                <button
+                  key={o}
+                  type="button"
+                  onClick={() => setOrigen(o)}
+                  aria-pressed={activo}
+                  className={cn(
+                    "inline-flex min-h-11 items-center gap-1.5 rounded-full border px-4 text-sm font-semibold transition-colors",
+                    activo ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card hover:bg-accent"
+                  )}
+                >
+                  {activo ? <Check className="size-4" strokeWidth={2.5} /> : null}
                   {LABEL_ORIGEN[o]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <p className="text-sm text-muted-foreground">
-            Si estás cargando un formulario en papel, elegí de dónde vino.
-          </p>
-        </div>
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-sm text-muted-foreground">Si estás cargando un formulario en papel, elegí de dónde vino.</p>
+        </fieldset>
       ) : null}
 
       {error ? (
-        <p className="rounded-md bg-pendiente-suave px-4 py-3 text-sm font-medium text-pendiente">
+        <p className="flex items-start gap-2 rounded-md bg-pendiente-suave px-4 py-3 text-sm font-medium text-pendiente" role="alert">
+          <CircleAlert className="mt-0.5 size-4 shrink-0" strokeWidth={2} />
           {error}
         </p>
       ) : null}
 
-      <Button
-        type="submit"
-        size="lg"
-        disabled={pendiente}
-        className="h-12 w-full text-base font-semibold sm:w-auto sm:px-8"
-      >
+      <Button type="submit" size="lg" disabled={pendiente} className="h-12 w-full text-base font-semibold sm:w-auto sm:px-8">
         {pendiente ? <Spinner className="size-5" /> : null}
-        Crear solicitud
+        Enviar solicitud
       </Button>
     </form>
   );

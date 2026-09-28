@@ -7,6 +7,7 @@ import { ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   LABEL_GRUPO,
+  MAX_PLANO,
   NAVEGACION_SOCIO,
   ORDEN_GRUPOS,
   navParaRol,
@@ -16,8 +17,8 @@ import {
 } from "@/lib/navegacion";
 import type { Rol } from "@/lib/auth";
 
-/** Con esta cantidad o menos el menú va plano (Portería, Jefe de Portería). */
-const MAX_PLANO = 7;
+// Con MAX_PLANO entradas o menos el menú va plano (Portería, Jefe de Portería,
+// Tesorería). La constante es compartida con la barra inferior (navegacion.ts).
 /** Los grupos que el usuario abrió o cerró a mano se recuerdan en el dispositivo. */
 const CLAVE_ESTADO = "msm-nav-grupos";
 
@@ -67,7 +68,7 @@ function esActivo(pathname: string, href: string): boolean {
 
 /**
  * Navegación del panel.
- * - Pocas entradas (≤ 7): lista plana.
+ * - Pocas entradas (≤ MAX_PLANO): lista plana.
  * - Muchas: grupos plegables. "Hoy" (lo operativo) queda siempre abierto; Gestión,
  *   Plata y Dirección se pliegan. El grupo de la ruta actual se abre solo; lo que
  *   el usuario abre o cierra a mano se recuerda en el dispositivo. Un grupo plegado

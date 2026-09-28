@@ -7,7 +7,7 @@ import { desconciliarTransferencia } from "@/lib/actions/tesoreria";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 
-/** "Deshacer" de una conciliación marcada por error. Solo tesorería. */
+/** "Deshacer" de una conciliación marcada por error (Tesorería y el Líder). */
 export function BotonDesconciliar({ id, numero }: { id: string; numero: number }) {
   const [pendiente, startTransition] = useTransition();
 
@@ -25,7 +25,7 @@ export function BotonDesconciliar({ id, numero }: { id: string; numero: number }
   return (
     <Button
       variant="ghost"
-      className="h-10 px-3 text-muted-foreground hover:text-foreground"
+      className="h-11 px-3 text-sm text-muted-foreground hover:text-foreground"
       disabled={pendiente}
       onClick={deshacer}
       aria-label={`Deshacer conciliación del recibo N° ${numero}`}

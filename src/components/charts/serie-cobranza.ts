@@ -42,12 +42,13 @@ export function rangoUltimosDias(dias: number): { desde: string; hasta: string }
   return { desde: isoDe(d), hasta: hoy };
 }
 
-/** Suma pagos (timestamptz) + canon (date) por día argentino, con días en 0. */
+/** Suma pagos (timestamptz) + canon (date) por día argentino, con días en 0.
+ * Lo anulado no suma (canon anulado, pago anulado), aunque la consulta lo traiga. */
 export function armarSerieDiaria(
   desde: string,
   hasta: string,
-  pagos: { fecha: string; monto: number }[],
-  canon: { fecha: string; monto: number }[]
+  pagos: { fecha: string; monto: number; anulado?: boolean | null }[],
+  canon: { fecha: string; monto: number; anulado?: boolean | null }[]
 ): PuntoCobranza[] {
   const porDia = new Map<string, number>();
   const cursor = fechaLocal(desde);
@@ -57,11 +58,13 @@ export function armarSerieDiaria(
     iso = isoDe(cursor);
   }
   for (const p of pagos) {
+    if (p.anulado) continue;
     const dia = diaArgentino(p.fecha);
     const previo = porDia.get(dia);
     if (previo !== undefined) porDia.set(dia, previo + Number(p.monto));
   }
   for (const c of canon) {
+    if (c.anulado) continue;
     const dia = c.fecha.slice(0, 10);
     const previo = porDia.get(dia);
     if (previo !== undefined) porDia.set(dia, previo + Number(c.monto));

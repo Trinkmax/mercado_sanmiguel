@@ -1,21 +1,25 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, UserX } from "lucide-react";
 import { requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { formatARS, hoyISO, labelPeriodo, periodoActual, saldoCargo } from "@/lib/format";
 import {
-  formatARS,
-  hoyISO,
-  labelPeriodo,
-  periodoActual,
-  saldoCargo,
-} from "@/lib/format";
+  LABEL_CATEGORIA,
+  categoriasDeRol,
+  type AvanceMes,
+  type CategoriaCliente,
+} from "@/lib/segmentos";
+import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
 import { Codigo } from "@/components/shared/codigo";
 import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
-import { FormCobro } from "@/components/cobranza/form-cobro";
+import { FormCobro, type PlanDelMes } from "@/components/cobranza/form-cobro";
 import { AvisoDeuda } from "@/components/cobranza/aviso-deuda";
+import { CobroAmbulante } from "@/components/cobranza/cobro-ambulante";
+import { OtrasDeudas } from "@/components/cobranza/otras-deudas";
+import type { MedioPago } from "@/components/cobranza/tipos";
 
 export const metadata = { title: "Cobrar" };
 
@@ -34,83 +38,148 @@ function beneficioCargo(monto: number, descuentoPct: number): number {
   return Math.max((montoCents - objetivoCents) / 100, 0);
 }
 
+/** "Puesto 34½", "Local 3", "Contéiner 7": el puesto del cheque (mismo texto que la base). */
+function etiquetaEspacio(e: { tipo: string; numero: string | null; medio: boolean }): string {
+  const n = e.numero ?? "";
+  if (e.tipo === "puesto") return `Puesto ${n}${e.medio ? "½" : ""}`;
+  if (e.tipo === "local") return `Local ${n}`;
+  if (e.tipo === "contenedor") return `Contéiner ${n}`;
+  return `Bar ${n}`.trim();
+}
+
+/** El rol no cobra a esta categoría (Admin ↔ Jefe de Portería): pantalla simple, no 404. */
+function CobroAjeno({ mensaje, volverA }: { mensaje: string; volverA: string }) {
+  return (
+    <div className="mx-auto flex w-full max-w-md flex-col items-center gap-5 rounded-lg border bg-card px-6 py-12 text-center">
+      <UserX className="size-10 text-muted-foreground" strokeWidth={1.8} />
+      <div className="space-y-1">
+        <h1 className="font-display text-2xl font-bold tracking-tight">{mensaje}</h1>
+        <p className="text-sm text-muted-foreground">
+          Desde acá no se le puede cobrar. Buscá otro cliente en la lista.
+        </p>
+      </div>
+      <Button asChild size="lg" className="h-12 w-full text-base font-semibold">
+        <Link href={volverA}>
+          <ArrowLeft className="size-5" strokeWidth={2} />
+          Volver
+        </Link>
+      </Button>
+    </div>
+  );
+}
+
 export default async function CobrarClientePage({
   params,
 }: {
   params: Promise<{ clienteId: string }>;
 }) {
   const { clienteId } = await params;
-  await requireRol("admin", "guardia", "tesoreria");
+  const perfil = await requireRol("admin", "guardia", "lider");
   const supabase = await createClient();
+  const esJefe = perfil.rol === "guardia";
 
-  const [clienteRes, cargosRes, saldoFavorRes] = await Promise.all([
-    supabase
-      .from("clientes")
-      .select("id, codigo, nombre, cuotas_mes")
-      .eq("id", clienteId)
-      .maybeSingle(),
-    supabase
-      .from("cargos")
-      .select(
-        "id, codigo, descripcion, periodo, vencimiento, estado, monto, monto_pagado, descuento_pronto_pago, conceptos(orden_imputacion)"
-      )
-      .eq("cliente_id", clienteId)
-      .neq("estado", "anulado"),
-    supabase
-      .from("v_saldo_favor")
-      .select("saldo_favor")
-      .eq("cliente_id", clienteId)
-      .maybeSingle(),
-  ]);
+  const { data: cliente } = await supabase
+    .from("clientes")
+    .select("id, codigo, nombre, apodo, categoria, cuotas_mes, activo")
+    .eq("id", clienteId)
+    .maybeSingle();
 
-  const cliente = clienteRes.data;
-  if (!cliente) notFound();
+  // El Jefe no ve puesteros (RLS): si no lo encuentra, es de Administración.
+  if (!cliente) {
+    if (esJefe) return <CobroAjeno mensaje="A este cliente lo cobra Administración" volverA="/cobranza" />;
+    notFound();
+  }
+  const categoria = cliente.categoria as CategoriaCliente;
+  if (!categoriasDeRol(perfil.rol).includes(categoria)) {
+    return (
+      <CobroAjeno
+        mensaje={
+          categoria === "puestero"
+            ? "A este cliente lo cobra Administración"
+            : "A este cliente lo cobra el Jefe de Portería"
+        }
+        volverA="/cobranza"
+      />
+    );
+  }
 
   const hoy = hoyISO();
   const periodo = periodoActual();
+  const esAmbulante = categoria === "ambulante";
+  const recibeCheques = !esJefe;
+  const conPlan = !esAmbulante && cliente.cuotas_mes > 1;
 
-  // Saldo exigible hoy de cada cargo, ordenado por período y orden de imputación
-  // (el mismo orden en que la RPC imputa los cobros).
+  const [cargosRes, saldoFavorRes, avanceRes, espaciosRes, proveedoresRes, ambRes] =
+    await Promise.all([
+      supabase
+        .from("cargos")
+        .select(
+          "id, codigo, descripcion, periodo, vencimiento, estado, monto, monto_pagado, descuento_pronto_pago, origen, desde, hasta, conceptos(orden_imputacion)"
+        )
+        .eq("cliente_id", clienteId)
+        .neq("estado", "anulado"),
+      supabase.from("v_saldo_favor").select("saldo_favor").eq("cliente_id", clienteId).maybeSingle(),
+      conPlan
+        ? supabase
+            .from("v_avance_mes")
+            .select("total, pagado, falta, cuotas, cuotas_cubiertas, cuota_sugerida")
+            .eq("cliente_id", clienteId)
+            .eq("periodo", periodo)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+      // Puesto del cheque: solo quien recibe cheques (el Jefe no lee el plano con clientes).
+      recibeCheques
+        ? supabase
+            .from("espacios")
+            .select("tipo, numero, medio")
+            .eq("cliente_id", clienteId)
+        : Promise.resolve({ data: null }),
+      recibeCheques
+        ? supabase
+            .from("cheques")
+            .select("proveedor")
+            .not("proveedor", "is", null)
+            .order("creado_en", { ascending: false })
+            .limit(200)
+        : Promise.resolve({ data: null }),
+      esAmbulante
+        ? supabase
+            .from("conceptos")
+            .select("precio")
+            .eq("codigo", "AMB")
+            .eq("activo", true)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
+
+  // Saldo exigible hoy de cada cargo, en el orden en que la RPC imputa.
   const todos = (cargosRes.data ?? []).map((c) => ({
     id: c.id,
     codigo: c.codigo,
     descripcion: c.descripcion,
     periodo: c.periodo,
     vencimiento: c.vencimiento,
+    origen: c.origen,
+    desde: c.desde,
+    hasta: c.hasta,
     orden: Number(c.conceptos?.orden_imputacion ?? 0),
     saldo: saldoCargo(c),
-    pagado: Number(c.monto_pagado),
     monto: Number(c.monto),
     descuento: Number(c.descuento_pronto_pago ?? 0),
     vencido: c.vencimiento < hoy,
     enTermino: hoy <= c.vencimiento,
   }));
-
   const items = todos
     .filter((c) => c.saldo > 0)
     .sort((a, b) => a.periodo.localeCompare(b.periodo) || a.orden - b.orden);
 
   const deudaTotal = redondear2(items.reduce((acc, c) => acc + c.saldo, 0));
-  // Total ORIGINAL del período (pagado + saldo): la cuota sugerida no se achica
-  // a medida que el cliente va pagando; siempre es total / N.
-  const totalPeriodoActual = redondear2(
-    todos
-      .filter((c) => c.periodo === periodo)
-      .reduce((acc, c) => acc + c.pagado + c.saldo, 0)
-  );
-
-  // Crédito del cliente: la RPC lo aplica solo antes de imputar el cobro, así que
-  // lo que tiene que pagar hoy es la deuda neta de ese saldo.
   const saldoFavor = Number(saldoFavorRes.data?.saldo_favor ?? 0);
   const deudaNeta = Math.max(redondear2(deudaTotal - saldoFavor), 0);
 
-  // Aviso de deuda activa: beneficio que mantiene (en término) o que perdió (mora).
   const enTerminoConBeneficio = items.filter((c) => c.enTermino && c.descuento > 0);
   const ahorroEnTermino = redondear2(
-    enTerminoConBeneficio.reduce(
-      (acc, c) => acc + beneficioCargo(c.monto, c.descuento),
-      0
-    )
+    enTerminoConBeneficio.reduce((acc, c) => acc + beneficioCargo(c.monto, c.descuento), 0)
   );
   const vencimientoBeneficio = enTerminoConBeneficio.length
     ? enTerminoConBeneficio.map((c) => c.vencimiento).sort()[0]
@@ -120,99 +189,174 @@ export default async function CobrarClientePage({
     vencidos.reduce((acc, c) => acc + beneficioCargo(c.monto, c.descuento), 0)
   );
 
+  const medios: MedioPago[] = recibeCheques
+    ? ["efectivo", "transferencia", "cheque"]
+    : ["efectivo", "transferencia"];
+  const puestos = [...new Set((espaciosRes.data ?? []).map(etiquetaEspacio))].sort((a, b) =>
+    a.localeCompare(b, "es", { numeric: true })
+  );
+  const proveedores = [
+    ...new Set(
+      (proveedoresRes.data ?? [])
+        .map((c) => c.proveedor?.trim())
+        .filter((p): p is string => Boolean(p))
+    ),
+  ].slice(0, 40);
+
+  let plan: PlanDelMes | null = null;
+  if (conPlan) {
+    const a = avanceRes.data;
+    const avance: AvanceMes | null = a
+      ? {
+          total: Number(a.total ?? 0),
+          pagado: Number(a.pagado ?? 0),
+          falta: Number(a.falta ?? 0),
+          cuotas: Number(a.cuotas ?? cliente.cuotas_mes),
+          cuotas_cubiertas: Number(a.cuotas_cubiertas ?? 0),
+          cuota_sugerida: Number(a.cuota_sugerida ?? 0),
+        }
+      : null;
+    const viejos = items.filter((c) => c.periodo < periodo);
+    const montoViejo = redondear2(viejos.reduce((acc, c) => acc + c.saldo, 0));
+    plan = {
+      avance,
+      periodo,
+      esQuintero: categoria === "quintero",
+      atrasado:
+        montoViejo > 0
+          ? { meses: [...new Set(viejos.map((c) => c.periodo))].sort(), monto: montoViejo }
+          : null,
+    };
+  }
+
+  const volverA = `/cobranza?cat=${categoria}`;
+  const descripcion = [
+    `Carpeta N° ${cliente.codigo}`,
+    LABEL_CATEGORIA[categoria],
+    cliente.apodo ? `“${cliente.apodo}”` : null,
+    cliente.activo ? null : "Dado de baja",
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  const deudaDelDia = (
+    <section className="rounded-lg border bg-card">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b p-5">
+        <div>
+          <p className="text-sm text-muted-foreground">Debe hoy</p>
+          {deudaTotal > 0 ? (
+            <p className="text-3xl font-bold tabular text-pendiente">{formatARS(deudaTotal)}</p>
+          ) : (
+            <p className="text-3xl font-bold tabular text-pagado">$ 0 — Al día</p>
+          )}
+        </div>
+        <Sello
+          grande
+          estado={deudaTotal <= 0 ? "al_dia" : vencidos.length > 0 ? "vencido" : "en_termino"}
+        />
+      </div>
+
+      {items.length > 0 ? (
+        <div className="divide-y px-5">
+          {items.map((c) => (
+            <div key={c.id} className="flex items-center gap-3 py-3">
+              <Codigo codigo={c.codigo} />
+              <div className="min-w-0 flex-1">
+                <p className="truncate font-medium">{c.descripcion}</p>
+                <p className="text-sm text-muted-foreground">{labelPeriodo(c.periodo)}</p>
+              </div>
+              {c.vencido ? <Sello estado="vencido" className="shrink-0" /> : null}
+              <Money monto={c.saldo} className="shrink-0 font-semibold" />
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {saldoFavor > 0 ? (
+        <div className="space-y-2 border-t bg-pagado-suave/60 px-5 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <Sello estado="saldo_favor" />
+              <p className="text-sm">Crédito del cliente, se aplica solo</p>
+            </div>
+            <Money monto={-saldoFavor} className="font-semibold text-pagado" />
+          </div>
+          {deudaTotal > 0 ? (
+            <div className="flex flex-wrap items-baseline justify-between gap-3">
+              <p className="font-medium">Tiene que pagar hoy</p>
+              <p className="text-2xl font-bold tabular">{formatARS(deudaNeta)}</p>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </section>
+  );
+
+  // Siempre montado en la misma posición: tras registrar el cobro, si la página se vuelve a
+  // renderizar, la confirmación con el recibo no se pierde.
+  const formCobro = (
+    <FormCobro
+      clienteId={cliente.id}
+      clienteNombre={cliente.nombre}
+      deudaTotal={deudaNeta}
+      deudaBruta={deudaTotal}
+      saldoFavorPrevio={saldoFavor}
+      medios={medios}
+      puestos={puestos}
+      proveedores={proveedores}
+      plan={plan}
+      volverA={volverA}
+    />
+  );
+
+  const tieneOtrosCargos = todos.some((c) => c.origen !== "diario");
+  const pagados = todos
+    .filter((c) => c.origen === "diario" && c.desde && c.hasta)
+    .map((c) => ({ desde: c.desde as string, hasta: c.hasta as string }));
+
   return (
     <div className="mx-auto w-full max-w-2xl space-y-8">
       <div>
         <Link
-          href="/cobranza"
+          href={volverA}
           className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="size-4" strokeWidth={2} />
           Volver a la lista
         </Link>
-        <PageHeader
-          titulo={cliente.nombre}
-          descripcion={`Carpeta N° ${cliente.codigo}`}
-          className="pb-0"
-        />
+        <PageHeader titulo={cliente.nombre} descripcion={descripcion} className="pb-0" />
       </div>
 
-      {deudaTotal > 0 ? (
-        <AvisoDeuda
-          hayVencidos={vencidos.length > 0}
-          recargoPerdido={recargoPerdido}
-          ahorroEnTermino={ahorroEnTermino}
-          vencimientoBeneficio={vencimientoBeneficio}
-        />
-      ) : null}
-
-      {/* Deuda total HOY + desglose */}
-      <section className="rounded-lg border bg-card">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b p-5">
-          <div>
-            <p className="text-sm text-muted-foreground">Debe hoy</p>
-            {deudaTotal > 0 ? (
-              <p className="text-3xl font-bold tabular text-pendiente">
-                {formatARS(deudaTotal)}
-              </p>
-            ) : (
-              <p className="text-3xl font-bold tabular text-pagado">
-                $ 0 — Al día
-              </p>
-            )}
-          </div>
-          <Sello grande estado={deudaTotal > 0 ? "debe" : "al_dia"} />
-        </div>
-
-        {items.length > 0 ? (
-          <div className="divide-y px-5">
-            {items.map((c) => (
-              <div key={c.id} className="flex items-center gap-3 py-3">
-                <Codigo codigo={c.codigo} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium">{c.descripcion}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {labelPeriodo(c.periodo)}
-                  </p>
-                </div>
-                {c.vencido ? <Sello estado="vencido" className="shrink-0" /> : null}
-                <Money monto={c.saldo} className="shrink-0 font-semibold" />
-              </div>
-            ))}
-          </div>
-        ) : null}
-
-        {saldoFavor > 0 ? (
-          <div className="space-y-2 border-t bg-pagado-suave/60 px-5 py-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <Sello estado="saldo_favor" />
-                <p className="text-sm">Crédito del cliente, se aplica solo</p>
-              </div>
-              <Money monto={-saldoFavor} className="font-semibold text-pagado" />
-            </div>
-            {deudaTotal > 0 ? (
-              <div className="flex flex-wrap items-baseline justify-between gap-3">
-                <p className="font-medium">Tiene que pagar hoy</p>
-                <p className="text-2xl font-bold tabular">{formatARS(deudaNeta)}</p>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-      </section>
-
-      {/* Siempre montado en la misma posición: tras registrar el cobro, la
-          server action revalida y Next re-renderiza esta página; si el
-          componente cambiara de rama se perdería la confirmación con el
-          sello y el botón "Ver recibo". Con deuda 0 muestra "nada para pagar". */}
-      <FormCobro
-        clienteId={cliente.id}
-        deudaTotal={deudaNeta}
-        deudaBruta={deudaTotal}
-        cuotasMes={cliente.cuotas_mes}
-        totalPeriodoActual={totalPeriodoActual}
-        saldoFavorPrevio={saldoFavor}
-      />
+      {esAmbulante ? (
+        <>
+          <CobroAmbulante
+            clienteId={cliente.id}
+            clienteNombre={cliente.nombre}
+            precioDia={ambRes.data ? Number(ambRes.data.precio) : null}
+            pagados={pagados}
+            volverA={volverA}
+          />
+          {tieneOtrosCargos || deudaTotal > 0 ? (
+            <OtrasDeudas deuda={deudaNeta}>
+              {deudaDelDia}
+              {formCobro}
+            </OtrasDeudas>
+          ) : null}
+        </>
+      ) : (
+        <>
+          {deudaTotal > 0 ? (
+            <AvisoDeuda
+              hayVencidos={vencidos.length > 0}
+              recargoPerdido={recargoPerdido}
+              ahorroEnTermino={ahorroEnTermino}
+              vencimientoBeneficio={vencimientoBeneficio}
+            />
+          ) : null}
+          {deudaDelDia}
+          {formCobro}
+        </>
+      )}
     </div>
   );
 }

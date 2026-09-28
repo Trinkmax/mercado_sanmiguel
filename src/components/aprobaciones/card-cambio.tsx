@@ -74,7 +74,7 @@ export function CardCambio({
   function rechazar() {
     const texto = motivo.trim();
     if (texto.length < 3) {
-      setErrorMotivo("Contá por qué lo rechazás: así Administración sabe qué corregir.");
+      setErrorMotivo("Contá por qué lo rechazás: así quien lo pidió sabe qué corregir.");
       return;
     }
     setErrorMotivo(null);
@@ -198,7 +198,7 @@ export function CardCambio({
               <p className="text-sm font-medium text-pendiente">{errorMotivo}</p>
             ) : (
               <p className="text-sm text-muted-foreground">
-                Obligatorio. Lo ve Administración junto al cambio rechazado.
+                Obligatorio. Lo ve quien lo pidió junto al cambio rechazado.
               </p>
             )}
           </div>

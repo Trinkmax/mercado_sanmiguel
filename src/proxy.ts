@@ -42,11 +42,9 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && request.nextUrl.pathname === "/login") {
-    const url = request.nextUrl.clone();
-    url.pathname = "/";
-    return NextResponse.redirect(url);
-  }
+  // Con sesión en /login NO se redirige acá: lo decide login/page.tsx con el perfil.
+  // Si el usuario fue desactivado (o es del Consejo) con la sesión abierta, redirigir
+  // a "/" armaba un bucle /login → / → /login. El login avisa y deja entrar con otro.
 
   return respuesta;
 }

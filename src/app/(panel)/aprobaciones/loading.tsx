@@ -1,6 +1,6 @@
 import { Skeleton } from "@/components/ui/skeleton";
 
-/** Silueta de Aprobaciones: header, pestañas y dos cards de cambio con diff. */
+/** Silueta de Aprobaciones: header, cuatro pestañas y dos cards de cambio con diff. */
 export default function LoadingAprobaciones() {
   return (
     <div className="space-y-8">
@@ -13,6 +13,7 @@ export default function LoadingAprobaciones() {
       {/* Tabs */}
       <div className="flex flex-wrap gap-1">
         <Skeleton className="h-11 w-36 rounded-md" />
+        <Skeleton className="h-11 w-52 rounded-md" />
         <Skeleton className="h-11 w-32 rounded-md" />
         <Skeleton className="h-11 w-32 rounded-md" />
       </div>

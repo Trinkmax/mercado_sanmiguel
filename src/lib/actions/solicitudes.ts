@@ -12,11 +12,14 @@ import {
   TAMANO_MAX_BYTES,
 } from "@/lib/storage";
 import type { Enums } from "@/lib/database.types";
+import { etiquetaLugar } from "@/components/solicitudes/lugares";
 
 type Origen = Enums<"origen_solicitud">;
+type Estado = Enums<"estado_solicitud">;
+type Supabase = Awaited<ReturnType<typeof createClient>>;
 
 const TIPOS = ["solicitud", "informe", "reclamo", "consulta"] as const;
-const ORIGENES = ["portal", "porteria", "administracion", "lider"] as const;
+const ORIGENES = ["portal", "porteria", "administracion", "tesoreria", "lider"] as const;
 const ACCIONES = [
   "tomar",
   "derivar_consejo",
@@ -26,19 +29,27 @@ const ACCIONES = [
   "rechazar",
   "cerrar",
   "reabrir",
+  "elevar",
+  "resolver_jefe",
 ] as const;
 
-/** Origen por defecto según quién la carga (el socio siempre es `portal`). */
+/** Origen por defecto según quién la carga. El trigger `preparar_solicitud` lo impone igual. */
 function origenPorRol(rol: Rol): Origen {
   if (rol === "porteria" || rol === "guardia") return "porteria";
+  if (rol === "tesoreria") return "tesoreria";
   if (rol === "lider" || rol === "consejo") return "lider";
   if (rol === "socio") return "portal";
   return "administracion";
 }
 
+/** Portería, el Jefe y Tesorería eligen un puesto por número: nunca un cliente. */
+function veClientes(rol: Rol): boolean {
+  return rol === "admin" || rol === "lider";
+}
+
 /** Sube un adjunto opcional a la carpeta de solicitudes. Devuelve el path o null. */
 async function subirAdjunto(
-  supabase: Awaited<ReturnType<typeof createClient>>,
+  supabase: Supabase,
   orgId: string,
   archivo: FormDataEntryValue | null
 ): Promise<ActionResult<string | null>> {
@@ -55,6 +66,25 @@ async function subirAdjunto(
   return ok(ruta);
 }
 
+/**
+ * Un lugar del plano de mi organización, leído con `espacios_del_plano()` (el Jefe y Portería
+ * no leen la tabla `espacios`). Devuelve su etiqueta ("Puesto 58") o null si no existe.
+ */
+async function lugarDelPlano(
+  supabase: Supabase,
+  espacioId: string
+): Promise<{ id: string; etiqueta: string } | null> {
+  const { data } = await supabase.rpc("espacios_del_plano");
+  const e = (data ?? []).find((x) => x.id === espacioId);
+  return e ? { id: e.id, etiqueta: etiquetaLugar(e) } : null;
+}
+
+const idOpcional = z
+  .string()
+  .trim()
+  .optional()
+  .transform((v) => (v ? v : null));
+
 const schemaCrear = z.object({
   tipo: z.enum(TIPOS, { error: "Elegí qué tipo de solicitud es" }),
   asunto: z
@@ -68,11 +98,8 @@ const schemaCrear = z.object({
     .max(6000, "El detalle es demasiado largo")
     .optional()
     .transform((v) => (v ? v : null)),
-  clienteId: z
-    .string()
-    .trim()
-    .optional()
-    .transform((v) => (v ? v : null)),
+  clienteId: idOpcional,
+  espacioId: idOpcional,
   referencia: z
     .string()
     .trim()
@@ -83,27 +110,21 @@ const schemaCrear = z.object({
 });
 
 /**
- * Alta de solicitud desde el panel (portería, administración, líder, consejo,
- * tesorería). El origen sale del rol; admin y líder pueden indicar otro cuando
- * cargan al sistema un formulario físico.
+ * Alta de solicitud desde el panel. A quién le llega lo decide la base (trigger
+ * `preparar_solicitud`): lo de Portería va al Jefe de Portería ("con_jefe"); el resto
+ * (incluidos los avisos del Jefe) al Líder de Procesos ("nueva"). Devuelve el estado real.
  */
 export async function crearSolicitud(
   formData: FormData
-): Promise<ActionResult<{ id: string; numero: number; origen: Origen }>> {
-  const perfil = await requireRol(
-    "admin",
-    "guardia",
-    "porteria",
-    "tesoreria",
-    "consejo",
-    "lider"
-  );
+): Promise<ActionResult<{ id: string; numero: number; estado: Estado; origen: Origen }>> {
+  const perfil = await requireRol("admin", "guardia", "porteria", "tesoreria", "lider");
 
   const parsed = schemaCrear.safeParse({
     tipo: formData.get("tipo"),
     asunto: formData.get("asunto"),
     detalle: formData.get("detalle") ?? undefined,
     clienteId: formData.get("clienteId") ?? undefined,
+    espacioId: formData.get("espacioId") ?? undefined,
     referencia: formData.get("referencia") ?? undefined,
     origen: formData.get("origen") || undefined,
   });
@@ -111,24 +132,26 @@ export async function crearSolicitud(
 
   const puedeElegirOrigen = perfil.rol === "admin" || perfil.rol === "lider";
   const origen: Origen =
-    puedeElegirOrigen && parsed.data.origen
-      ? parsed.data.origen
-      : origenPorRol(perfil.rol);
+    puedeElegirOrigen && parsed.data.origen ? parsed.data.origen : origenPorRol(perfil.rol);
 
   const supabase = await createClient();
 
-  if (
-    parsed.data.clienteId &&
-    !(await clientePerteneceAOrg(supabase, parsed.data.clienteId, perfil.org_id))
-  ) {
-    return fallo("Ese puesto no existe. Buscalo de nuevo.");
+  // Portería, el Jefe y Tesorería no mandan clientes (no los ven): se ignora lo que venga.
+  const clienteId = veClientes(perfil.rol) ? parsed.data.clienteId : null;
+  if (clienteId && !(await clientePerteneceAOrg(supabase, clienteId, perfil.org_id))) {
+    return fallo("Ese cliente no existe. Buscalo de nuevo.");
   }
 
-  const adjunto = await subirAdjunto(
-    supabase,
-    perfil.org_id,
-    formData.get("adjunto")
-  );
+  let referencia = clienteId ? null : parsed.data.referencia;
+  let espacioId: string | null = null;
+  if (parsed.data.espacioId) {
+    const lugar = await lugarDelPlano(supabase, parsed.data.espacioId);
+    if (!lugar) return fallo("Ese puesto no está en el plano. Elegilo de nuevo.");
+    espacioId = lugar.id;
+    referencia = lugar.etiqueta;
+  }
+
+  const adjunto = await subirAdjunto(supabase, perfil.org_id, formData.get("adjunto"));
   if (!adjunto.ok) return fallo(adjunto.error);
 
   const { data, error } = await supabase
@@ -138,24 +161,80 @@ export async function crearSolicitud(
       tipo: parsed.data.tipo,
       asunto: parsed.data.asunto,
       detalle: parsed.data.detalle,
-      cliente_id: parsed.data.clienteId,
-      referencia: parsed.data.clienteId ? null : parsed.data.referencia,
+      cliente_id: clienteId,
+      espacio_id: espacioId,
+      referencia,
       origen,
       adjunto_path: adjunto.data,
       creada_por: perfil.user_id,
     })
-    .select("id, numero")
+    .select("id, numero, estado, origen")
     .single();
 
   if (error) {
-    if (adjunto.data)
-      await supabase.storage.from("documentos").remove([adjunto.data]);
+    if (adjunto.data) await supabase.storage.from("documentos").remove([adjunto.data]);
     return fallo(error);
   }
 
   revalidatePath("/solicitudes");
   revalidatePath("/porteria");
-  return ok({ id: data.id, numero: data.numero, origen });
+  revalidatePath("/inicio");
+  return ok({ id: data.id, numero: data.numero, estado: data.estado, origen: data.origen });
+}
+
+const schemaAviso = z.object({
+  espacioId: z.string().trim().min(1, "Elegí el puesto en el plano"),
+  motivo: z
+    .string()
+    .trim()
+    .min(1, "Elegí qué viste en el puesto")
+    .max(80, "El motivo es demasiado largo"),
+  detalle: z
+    .string()
+    .trim()
+    .max(2000, "El detalle es demasiado largo")
+    .optional()
+    .transform((v) => (v ? v : null)),
+});
+
+/**
+ * Aviso del Jefe de Portería al Líder sobre un puesto, desde el mapa (G11; lo usa M9).
+ * Crea un informe "Puesto 58: Luz / electricidad" con el espacio. Del Jefe nace "nueva"
+ * (va directo a la bandeja del Líder, nunca a "Para resolver" del Jefe).
+ */
+export async function avisarSobrePuesto(input: {
+  espacioId: string;
+  motivo: string;
+  detalle?: string;
+}): Promise<ActionResult<{ id: string; numero: number; estado: Estado }>> {
+  const perfil = await requireRol("guardia", "lider");
+  const parsed = schemaAviso.safeParse(input);
+  if (!parsed.success) return fallo(parsed.error.issues[0].message);
+
+  const supabase = await createClient();
+  const lugar = await lugarDelPlano(supabase, parsed.data.espacioId);
+  if (!lugar) return fallo("Ese puesto no está en el plano. Actualizá la página y probá de nuevo.");
+
+  const { data, error } = await supabase
+    .from("solicitudes")
+    .insert({
+      org_id: perfil.org_id,
+      tipo: "informe",
+      asunto: `${lugar.etiqueta}: ${parsed.data.motivo}`,
+      detalle: parsed.data.detalle,
+      referencia: lugar.etiqueta,
+      espacio_id: lugar.id,
+      origen: origenPorRol(perfil.rol),
+      creada_por: perfil.user_id,
+    })
+    .select("id, numero, estado")
+    .single();
+  if (error) return fallo(error);
+
+  revalidatePath("/solicitudes");
+  revalidatePath("/mapa");
+  revalidatePath("/inicio");
+  return ok({ id: data.id, numero: data.numero, estado: data.estado });
 }
 
 const schemaMensaje = z.object({
@@ -169,21 +248,14 @@ const schemaMensaje = z.object({
 });
 
 /**
- * Mensaje en el hilo de una solicitud. Lo usan el staff y el socio; el socio
- * nunca puede marcarlo interno (la RLS también lo impide). Devuelve el id.
+ * Mensaje en el hilo de una solicitud. Lo usan el staff y el socio; el socio nunca puede
+ * marcarlo interno (la RLS también lo impide). La bandeja sube sola: el trigger
+ * `tocar_solicitud` actualiza `actualizada_en` con cualquier mensaje.
  */
 export async function enviarMensaje(
   formData: FormData
 ): Promise<ActionResult<{ id: string }>> {
-  const perfil = await requireRol(
-    "admin",
-    "guardia",
-    "porteria",
-    "tesoreria",
-    "consejo",
-    "lider",
-    "socio"
-  );
+  const perfil = await requireRol("admin", "guardia", "porteria", "tesoreria", "lider", "socio");
 
   const parsed = schemaMensaje.safeParse({
     solicitudId: formData.get("solicitudId"),
@@ -197,16 +269,12 @@ export async function enviarMensaje(
   // La RLS de lectura ya recorta qué solicitudes ve cada uno.
   const { data: solicitud } = await supabase
     .from("solicitudes")
-    .select("id, cliente_id, estado")
+    .select("id")
     .eq("id", parsed.data.solicitudId)
     .maybeSingle();
   if (!solicitud) return fallo("No encontramos esa solicitud.");
 
-  const adjunto = await subirAdjunto(
-    supabase,
-    perfil.org_id,
-    formData.get("adjunto")
-  );
+  const adjunto = await subirAdjunto(supabase, perfil.org_id, formData.get("adjunto"));
   if (!adjunto.ok) return fallo(adjunto.error);
 
   const { data, error } = await supabase
@@ -225,18 +293,8 @@ export async function enviarMensaje(
     .single();
 
   if (error) {
-    if (adjunto.data)
-      await supabase.storage.from("documentos").remove([adjunto.data]);
+    if (adjunto.data) await supabase.storage.from("documentos").remove([adjunto.data]);
     return fallo(error);
-  }
-
-  // "Última actualización" de la bandeja: solo los roles con permiso de
-  // edición pueden tocarla; para el resto el listado usa el último mensaje.
-  if (perfil.rol === "admin" || perfil.rol === "lider" || perfil.rol === "consejo") {
-    await supabase
-      .from("solicitudes")
-      .update({ actualizada_en: new Date().toISOString() })
-      .eq("id", solicitud.id);
   }
 
   revalidatePath("/solicitudes");
@@ -263,13 +321,13 @@ const schemaAvanzar = z.object({
 });
 
 /**
- * Cambia el estado de una solicitud vía `avanzar_solicitud`. La RPC valida
- * quién puede hacer qué y deja el mensaje automático en el hilo.
+ * Cambia el estado de una solicitud vía `avanzar_solicitud`. La RPC valida quién puede
+ * hacer qué (el Jefe de Portería solo sobre las de Portería) y deja el mensaje automático.
  */
 export async function avanzarSolicitud(
   input: unknown
-): Promise<ActionResult<{ estado: Enums<"estado_solicitud"> }>> {
-  await requireRol("admin", "consejo", "lider");
+): Promise<ActionResult<{ estado: Estado }>> {
+  await requireRol("admin", "guardia", "lider");
   const parsed = schemaAvanzar.safeParse(input);
   if (!parsed.success) return fallo(parsed.error.issues[0].message);
 
@@ -284,6 +342,7 @@ export async function avanzarSolicitud(
 
   revalidatePath("/solicitudes");
   revalidatePath(`/solicitudes/${parsed.data.solicitudId}`);
+  revalidatePath("/inicio");
   revalidatePath("/mi-cuenta");
   revalidatePath(`/mi-cuenta/solicitudes/${parsed.data.solicitudId}`);
   return ok({ estado: data });

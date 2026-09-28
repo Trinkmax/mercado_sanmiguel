@@ -1,10 +1,16 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { formatARS, hoyISO, MEDIOS_SIN_CHEQUE } from "@/lib/format";
-import type { ActionResult } from "@/lib/actions/result";
-import { pagarGasto, anularGasto } from "@/lib/actions/gastos";
+import { Undo2 } from "lucide-react";
+import { formatARS, formatFecha } from "@/lib/format";
+import {
+  anularGasto,
+  pagarGasto,
+  revertirPagoGasto,
+  type ResultadoPagoGasto,
+} from "@/lib/actions/gastos";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,201 +20,300 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
-import { cn } from "@/lib/utils";
+import { Textarea } from "@/components/ui/textarea";
+import { Money } from "@/components/shared/money";
+import {
+  SelectorOrigen,
+  origenCompleto,
+  origenInicial,
+  textoBotonPago,
+} from "@/components/gastos/selector-origen";
+import { delDia, type CajaElegible, type OrigenPago } from "@/components/gastos/tipos";
 
-type Gasto = { id: string; descripcion: string; monto: number };
-type Dialogo = "pagar" | "anular" | null;
+export type GastoAcciones = {
+  id: string;
+  etiqueta: string;
+  monto: number;
+  estado: string;
+  pagadoDesde: string | null;
+};
 
-/** Acciones de un gasto pendiente: pagarlo o anularlo. */
+type Dialogo = "pagar" | "anular" | "deshacer" | null;
+
+const MOTIVOS_DESHACER = [
+  "Se cargó dos veces",
+  "Salió de otra caja",
+  "El monto estaba mal",
+  "Todavía no se pagó",
+];
+
+/** Mensaje del toast después de pagar, con el número que importa. */
+export function avisarPago(
+  r: ResultadoPagoGasto,
+  hoy: string,
+  irACaja: (href: string) => void
+) {
+  if (r.cajaId && r.cajaFecha) {
+    const frase = `Pagado desde la caja ${delDia(r.cajaFecha, hoy)}`;
+    toast.success(
+      r.efectivoCaja !== null
+        ? `${frase}: ahora tiene que tener ${formatARS(r.efectivoCaja)}`
+        : `${frase}.`,
+      {
+        action: {
+          label: "Ver caja",
+          onClick: () => irACaja(`/caja?fecha=${r.cajaFecha}&tipo=administracion`),
+        },
+      }
+    );
+  } else {
+    toast.success(`Pagado desde Tesorería el ${formatFecha(r.fechaPago).slice(0, 5)}.`);
+  }
+}
+
+/**
+ * Acciones de un gasto: Pagar (elige de dónde sale la plata) y Anular si está
+ * pendiente; "Deshacer pago" (con motivo) si está pagado y no fue con cheque.
+ */
 export function AccionesGasto({
   gasto,
-  hayCajaAbierta,
+  cajas,
+  hoy,
+  preferirCaja,
+  cajaPreseleccionadaId,
+  soloPagar = false,
 }: {
-  gasto: Gasto;
-  hayCajaAbierta: boolean;
+  gasto: GastoAcciones;
+  cajas: CajaElegible[];
+  hoy: string;
+  /** Administración (y el Líder con caja de hoy) arrancan en "Caja del día"; Tesorería en "Tesorería". */
+  preferirCaja: boolean;
+  /** Viene de la caja (`/gastos?caja=…`): esa caja queda elegida. */
+  cajaPreseleccionadaId?: string | null;
+  /** En listas compactas (Tesorería → Hoy) solo se ofrece Pagar. */
+  soloPagar?: boolean;
 }) {
+  const router = useRouter();
   const [dialogo, setDialogo] = useState<Dialogo>(null);
-  const [fecha, setFecha] = useState(hoyISO());
-  const [medio, setMedio] = useState<"efectivo" | "transferencia">("efectivo");
-  const [origen, setOrigen] = useState<"caja" | "tesoreria">(
-    hayCajaAbierta ? "caja" : "tesoreria"
+  const [origen, setOrigen] = useState<OrigenPago>(() =>
+    origenInicial({ cajas, preferirCaja, cajaPreseleccionadaId, hoy })
   );
+  const [motivo, setMotivo] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const [pendiente, startTransition] = useTransition();
 
   function abrir(cual: Dialogo) {
-    setFecha(hoyISO());
-    setMedio("efectivo");
-    setOrigen(hayCajaAbierta ? "caja" : "tesoreria");
+    setError(null);
+    setMotivo("");
+    if (cual === "pagar") {
+      setOrigen(origenInicial({ cajas, preferirCaja, cajaPreseleccionadaId, hoy }));
+    }
     setDialogo(cual);
   }
 
-  function ejecutar(accion: () => Promise<ActionResult>, exito: string) {
+  function pagar() {
+    setError(null);
     startTransition(async () => {
-      const res = await accion();
+      const res = await pagarGasto({
+        id: gasto.id,
+        origen: origen.origen,
+        cajaId: origen.origen === "caja" ? origen.caja?.id ?? null : null,
+        medio: origen.origen === "caja" ? "efectivo" : origen.medio,
+        fecha: origen.origen === "tesoreria" ? origen.fecha : null,
+      });
       if (!res.ok) {
-        toast.error(res.error);
+        setError(res.error);
         return;
       }
-      toast.success(exito);
       setDialogo(null);
+      avisarPago(res.data, hoy, (href) => router.push(href));
     });
   }
 
+  function anular() {
+    startTransition(async () => {
+      const res = await anularGasto({ id: gasto.id });
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      setDialogo(null);
+      toast.success(`Anulaste ${gasto.etiqueta}: ya no suma en el mes.`);
+    });
+  }
+
+  function deshacer() {
+    setError(null);
+    startTransition(async () => {
+      const res = await revertirPagoGasto({ id: gasto.id, motivo });
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      setDialogo(null);
+      toast.success(`Deshiciste el pago de ${gasto.etiqueta}: vuelve a Por pagar.`);
+    });
+  }
+
+  const puedePagar = origenCompleto(origen, hoy);
+
   return (
     <>
-      <div className="flex justify-end gap-2">
-        <Button className="h-11 px-4 font-semibold" onClick={() => abrir("pagar")}>
-          Pagar
-        </Button>
+      {gasto.estado === "pendiente" ? (
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button
+            className="h-11 min-w-24 px-5 text-base font-semibold"
+            onClick={() => abrir("pagar")}
+            aria-label={`Pagar ${gasto.etiqueta}`}
+          >
+            Pagar
+          </Button>
+          {!soloPagar ? (
+            <Button
+              variant="outline"
+              className="h-11 px-4 text-base text-destructive hover:text-destructive"
+              onClick={() => abrir("anular")}
+              aria-label={`Anular ${gasto.etiqueta}`}
+            >
+              Anular
+            </Button>
+          ) : null}
+        </div>
+      ) : gasto.estado === "pagado" && gasto.pagadoDesde !== "cheque" && !soloPagar ? (
         <Button
-          variant="outline"
-          className="h-11 px-4 text-destructive hover:text-destructive"
-          onClick={() => abrir("anular")}
+          variant="ghost"
+          className="h-11 px-3 text-base text-muted-foreground hover:text-foreground"
+          onClick={() => abrir("deshacer")}
+          aria-label={`Deshacer el pago de ${gasto.etiqueta}`}
         >
-          Anular
+          <Undo2 className="size-4" strokeWidth={2} />
+          Deshacer pago
         </Button>
-      </div>
+      ) : null}
 
       {/* Pagar */}
-      <Dialog open={dialogo === "pagar"} onOpenChange={(o) => !o && setDialogo(null)}>
-        <DialogContent className="sm:max-w-md">
+      <Dialog open={dialogo === "pagar"} onOpenChange={(o) => !o && !pendiente && setDialogo(null)}>
+        <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Pagar gasto</DialogTitle>
-            <DialogDescription>
-              {gasto.descripcion} · {formatARS(gasto.monto)}
+            <DialogTitle className="text-lg">Pagar {gasto.etiqueta}</DialogTitle>
+            <DialogDescription className="text-base">
+              <Money monto={gasto.monto} className="text-2xl font-bold text-foreground" />
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-5">
-            <div className="space-y-2">
-              <Label htmlFor={`fecha-pago-${gasto.id}`} className="text-base">
-                ¿Qué día se pagó?
-              </Label>
-              <Input
-                id={`fecha-pago-${gasto.id}`}
-                type="date"
-                className="h-11"
-                value={fecha}
-                onChange={(e) => setFecha(e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-base">Medio de pago</Label>
-              <Select
-                value={medio}
-                onValueChange={(v) => setMedio(v as typeof medio)}
-              >
-                <SelectTrigger className="min-h-11 w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {MEDIOS_SIN_CHEQUE.map((m) => (
-                    <SelectItem key={m.valor} value={m.valor}>
-                      {m.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label className="text-base">¿De dónde sale la plata?</Label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => hayCajaAbierta && setOrigen("caja")}
-                  disabled={!hayCajaAbierta}
-                  aria-pressed={origen === "caja"}
-                  className={cn(
-                    "h-11 rounded-md border text-sm font-medium transition-colors",
-                    origen === "caja"
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-input bg-card hover:bg-accent",
-                    !hayCajaAbierta && "cursor-not-allowed opacity-50 hover:bg-card"
-                  )}
-                >
-                  Caja del día
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setOrigen("tesoreria")}
-                  aria-pressed={origen === "tesoreria"}
-                  className={cn(
-                    "h-11 rounded-md border text-sm font-medium transition-colors",
-                    origen === "tesoreria"
-                      ? "border-primary bg-primary text-primary-foreground"
-                      : "border-input bg-card hover:bg-accent"
-                  )}
-                >
-                  Tesorería
-                </button>
-              </div>
-              {!hayCajaAbierta ? (
-                <p className="text-sm text-muted-foreground">
-                  No hay una caja de administración abierta hoy: sale de tesorería.
-                </p>
-              ) : null}
-            </div>
-          </div>
+          <SelectorOrigen
+            valor={origen}
+            onCambiar={(v) => {
+              setOrigen(v);
+              setError(null);
+            }}
+            cajas={cajas}
+            monto={gasto.monto}
+            hoy={hoy}
+            idBase={`pagar-${gasto.id}`}
+          />
+          {error ? (
+            <p role="alert" className="rounded-lg bg-pendiente-suave px-4 py-3 text-sm font-medium text-pendiente">
+              {error}
+            </p>
+          ) : null}
           <DialogFooter>
             <Button
               size="lg"
-              className="h-12 w-full font-semibold"
-              disabled={pendiente || !fecha}
-              onClick={() =>
-                ejecutar(
-                  () => pagarGasto({ id: gasto.id, fecha, medio, origen }),
-                  "Gasto pagado."
-                )
-              }
+              className="h-13 w-full text-base font-semibold"
+              disabled={pendiente || !puedePagar}
+              onClick={pagar}
             >
-              {pendiente ? <Spinner /> : null}
-              Registrar pago
+              {pendiente ? <Spinner className="size-5" /> : null}
+              {textoBotonPago(origen, gasto.monto, hoy)}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Anular */}
-      <Dialog open={dialogo === "anular"} onOpenChange={(o) => !o && setDialogo(null)}>
+      <Dialog open={dialogo === "anular"} onOpenChange={(o) => !o && !pendiente && setDialogo(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>¿Anular este gasto?</DialogTitle>
-            <DialogDescription>
-              {gasto.descripcion} · {formatARS(gasto.monto)}. Queda registrado
-              como anulado y no suma en el mes.
+            <DialogTitle className="text-lg">¿Anular {gasto.etiqueta}?</DialogTitle>
+            <DialogDescription className="text-base">
+              {formatARS(gasto.monto)}. Queda anotado como anulado y no suma en el mes.
             </DialogDescription>
           </DialogHeader>
+          {error ? (
+            <p role="alert" className="text-sm font-medium text-pendiente">
+              {error}
+            </p>
+          ) : null}
           <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              className="h-12"
-              disabled={pendiente}
-              onClick={() => setDialogo(null)}
-            >
+            <Button variant="outline" className="h-12 px-5 text-base" disabled={pendiente} onClick={() => setDialogo(null)}>
+              No, volver
+            </Button>
+            <Button variant="destructive" className="h-12 px-5 text-base font-semibold" disabled={pendiente} onClick={anular}>
+              {pendiente ? <Spinner className="size-5" /> : null}
+              Anular gasto
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Deshacer pago */}
+      <Dialog open={dialogo === "deshacer"} onOpenChange={(o) => !o && !pendiente && setDialogo(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-lg">¿Deshacer el pago de {gasto.etiqueta}?</DialogTitle>
+            <DialogDescription className="text-base">
+              {formatARS(gasto.monto)} vuelve a Por pagar. Si salió de una caja, su arqueo se
+              corrige y queda anotado con tu nombre.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Label htmlFor={`motivo-${gasto.id}`} className="text-base">
+              ¿Por qué lo deshacés?
+            </Label>
+            <div className="flex flex-wrap gap-2">
+              {MOTIVOS_DESHACER.map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setMotivo(m)}
+                  aria-pressed={motivo === m}
+                  className={
+                    motivo === m
+                      ? "min-h-11 rounded-full border border-primary bg-primary px-4 text-sm font-medium text-primary-foreground"
+                      : "min-h-11 rounded-full border bg-card px-4 text-sm font-medium hover:bg-accent"
+                  }
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+            <Textarea
+              id={`motivo-${gasto.id}`}
+              value={motivo}
+              onChange={(e) => setMotivo(e.target.value)}
+              placeholder="O contalo con tus palabras"
+              className="min-h-20 text-base"
+              maxLength={300}
+            />
+          </div>
+          {error ? (
+            <p role="alert" className="text-sm font-medium text-pendiente">
+              {error}
+            </p>
+          ) : null}
+          <DialogFooter className="gap-2">
+            <Button variant="outline" className="h-12 px-5 text-base" disabled={pendiente} onClick={() => setDialogo(null)}>
               No, volver
             </Button>
             <Button
-              variant="destructive"
-              size="lg"
-              className="h-12 font-semibold"
-              disabled={pendiente}
-              onClick={() =>
-                ejecutar(() => anularGasto({ id: gasto.id }), "Gasto anulado.")
-              }
+              className="h-12 px-5 text-base font-semibold"
+              disabled={pendiente || motivo.trim().length < 3}
+              onClick={deshacer}
             >
-              {pendiente ? <Spinner /> : null}
-              Anular gasto
+              {pendiente ? <Spinner className="size-5" /> : <Undo2 className="size-5" strokeWidth={2} />}
+              Deshacer el pago
             </Button>
           </DialogFooter>
         </DialogContent>

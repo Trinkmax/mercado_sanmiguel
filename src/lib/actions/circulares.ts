@@ -7,6 +7,16 @@ import { requireRol } from "@/lib/auth";
 import { ok, fallo, type ActionResult } from "@/lib/actions/result";
 import { rutaCircular, TAMANO_MAX_BYTES } from "@/lib/storage";
 import { hoyISO } from "@/lib/format";
+import {
+  armarPublico,
+  clienteEnPublico,
+  OPCIONES_PUBLICO,
+  type CategoriaCliente,
+  type SegmentoPublico,
+} from "@/lib/segmentos";
+
+const RE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const VALORES_SEGMENTO = OPCIONES_PUBLICO.map((o) => o.valor) as [SegmentoPublico, ...SegmentoPublico[]];
 
 const schemaCircular = z.object({
   titulo: z
@@ -27,12 +37,27 @@ const schemaCircular = z.object({
     .transform((v) => (v ? v : hoyISO()))
     .refine((v) => /^\d{4}-\d{2}-\d{2}$/.test(v), "La fecha no es válida"),
   obligatoria: z.boolean(),
+  todos: z.boolean(),
+  segmentos: z.array(z.enum(VALORES_SEGMENTO, { error: "Elegí a quién le llega" })),
+  soloSocios: z.boolean(),
 });
 
-/** Publica una circular (con PDF opcional). La ven todos los socios del portal. */
+function leerSegmentos(v: FormDataEntryValue | null): unknown {
+  if (typeof v !== "string" || !v) return [];
+  try {
+    return JSON.parse(v);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Publica una circular para un público (D2): "Todos" o la unión de segmentos elegidos,
+ * más el filtro "Solo socios". `publico = armarPublico(elección)` (null = todos).
+ */
 export async function crearCircular(
   formData: FormData
-): Promise<ActionResult<{ id: string; numero: number }>> {
+): Promise<ActionResult<{ id: string; numero: number; destinatarios: number }>> {
   const perfil = await requireRol("admin", "lider");
 
   const parsed = schemaCircular.safeParse({
@@ -40,10 +65,34 @@ export async function crearCircular(
     detalle: formData.get("detalle") ?? undefined,
     fecha: formData.get("fecha") ?? undefined,
     obligatoria: formData.get("obligatoria") === "true",
+    todos: formData.get("todos") === "true",
+    segmentos: leerSegmentos(formData.get("segmentos")),
+    soloSocios: formData.get("soloSocios") === "true",
   });
   if (!parsed.success) return fallo(parsed.error.issues[0].message);
+  const d = parsed.data;
+  if (!d.todos && d.segmentos.length === 0)
+    return fallo("Elegí a quién le llega: Todos o al menos un grupo");
+
+  const publico = armarPublico({ todos: d.todos, segmentos: d.segmentos, soloSocios: d.soloSocios });
 
   const supabase = await createClient();
+
+  // Nadie en el público = una circular que no le llega a nadie: se avisa antes de publicar.
+  const { data: clientes, error: errorClientes } = await supabase
+    .from("v_clientes_segmentos")
+    .select("cliente_id, categoria, segmentos, activo")
+    .eq("activo", true);
+  if (errorClientes) return fallo(errorClientes);
+  const destinatarios = (clientes ?? []).filter((c) =>
+    c.categoria
+      ? clienteEnPublico(
+          { categoria: c.categoria as CategoriaCliente, segmentos: c.segmentos ?? [] },
+          publico
+        )
+      : false
+  ).length;
+  if (destinatarios === 0) return fallo("Nadie entra en ese público: elegí otros grupos");
 
   let storagePath: string | null = null;
   const archivo = formData.get("archivo");
@@ -56,40 +105,38 @@ export async function crearCircular(
     const { error: errorSubida } = await supabase.storage
       .from("documentos")
       .upload(storagePath, archivo, { contentType: archivo.type });
-    if (errorSubida) return fallo("No pudimos subir el PDF. Probá de nuevo.");
+    if (errorSubida) return fallo("No pudimos subir el PDF. Revisá la conexión y probá de nuevo.");
   }
 
   const { data, error } = await supabase
     .from("circulares")
     .insert({
       org_id: perfil.org_id,
-      titulo: parsed.data.titulo,
-      detalle: parsed.data.detalle,
-      fecha: parsed.data.fecha,
-      obligatoria: parsed.data.obligatoria,
+      titulo: d.titulo,
+      detalle: d.detalle,
+      fecha: d.fecha,
+      obligatoria: d.obligatoria,
       storage_path: storagePath,
       creada_por: perfil.user_id,
+      publico,
     })
     .select("id, numero")
     .single();
 
   if (error) {
-    if (storagePath)
-      await supabase.storage.from("documentos").remove([storagePath]);
+    if (storagePath) await supabase.storage.from("documentos").remove([storagePath]);
     return fallo(error);
   }
 
   revalidatePath("/comunicaciones");
-  revalidatePath("/mi-cuenta");
-  return ok({ id: data.id, numero: data.numero });
+  revalidatePath("/mi-cuenta", "layout");
+  return ok({ id: data.id, numero: data.numero, destinatarios });
 }
 
 /** Da de baja una circular: deja de mostrarse en el portal y de bloquear. */
-export async function desactivarCircular(
-  input: unknown
-): Promise<ActionResult> {
+export async function desactivarCircular(input: unknown): Promise<ActionResult> {
   const perfil = await requireRol("admin", "lider");
-  const parsed = z.object({ id: z.string().min(1) }).safeParse(input);
+  const parsed = z.object({ id: z.string().regex(RE_UUID) }).safeParse(input);
   if (!parsed.success) return fallo("Circular inexistente.");
 
   const supabase = await createClient();
@@ -102,18 +149,16 @@ export async function desactivarCircular(
 
   revalidatePath("/comunicaciones");
   revalidatePath(`/comunicaciones/${parsed.data.id}`);
-  revalidatePath("/mi-cuenta");
+  revalidatePath("/mi-cuenta", "layout");
   return ok(undefined);
 }
 
-/** El socio confirma que recibió (leyó) una circular. */
-export async function confirmarRecepcionCircular(
-  input: unknown
-): Promise<ActionResult> {
+/**
+ * "La vio": una fila en circular_recepciones (la hora la pone el servidor).
+ * La RLS exige que la circular esté activa y le llegue a este socio.
+ */
+async function registrarRecepcion(circularId: string): Promise<ActionResult> {
   const perfil = await requireRol("socio");
-  const parsed = z.object({ circularId: z.string().min(1) }).safeParse(input);
-  if (!parsed.success) return fallo("Circular inexistente.");
-
   const supabase = await createClient();
   const { data: cliente } = await supabase
     .from("clientes")
@@ -121,21 +166,41 @@ export async function confirmarRecepcionCircular(
     .eq("auth_user_id", perfil.user_id)
     .maybeSingle();
   if (!cliente)
-    return fallo(
-      "Tu usuario no está vinculado a un puesto. Consultá en administración."
-    );
+    return fallo("Tu usuario no está vinculado a un puesto. Consultá en administración.");
 
   const { error } = await supabase.from("circular_recepciones").insert({
     org_id: perfil.org_id,
-    circular_id: parsed.data.circularId,
+    circular_id: circularId,
     cliente_id: cliente.id,
     recibida_por: perfil.user_id,
   });
-  // Si ya estaba confirmada (doble toque), no es un error para el socio.
-  if (error && error.code !== "23505") return fallo(error);
+  // Ya estaba (doble toque o la abrió antes): no es un error para el socio.
+  if (error && error.code !== "23505") {
+    if (error.code === "42501") return fallo("Esta circular ya no está disponible. Actualizá la página.");
+    return fallo(error);
+  }
+  return ok(undefined);
+}
 
-  revalidatePath("/mi-cuenta");
+/** El socio toca "Confirmo que la recibí" (obligatorias). */
+export async function confirmarRecepcionCircular(input: unknown): Promise<ActionResult> {
+  const parsed = z.object({ circularId: z.string().regex(RE_UUID) }).safeParse(input);
+  if (!parsed.success) return fallo("Circular inexistente.");
+  const res = await registrarRecepcion(parsed.data.circularId);
+  if (!res.ok) return res;
+  revalidatePath("/mi-cuenta", "layout");
   revalidatePath("/comunicaciones");
+  revalidatePath(`/comunicaciones/${parsed.data.circularId}`);
+  return ok(undefined);
+}
+
+/** Informativas: se registra "la vio" al abrirla (sin botón). */
+export async function registrarVistaCircular(input: unknown): Promise<ActionResult> {
+  const parsed = z.object({ circularId: z.string().regex(RE_UUID) }).safeParse(input);
+  if (!parsed.success) return fallo("Circular inexistente.");
+  const res = await registrarRecepcion(parsed.data.circularId);
+  if (!res.ok) return res;
+  revalidatePath("/mi-cuenta", "layout");
   revalidatePath(`/comunicaciones/${parsed.data.circularId}`);
   return ok(undefined);
 }

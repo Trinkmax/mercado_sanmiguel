@@ -73,7 +73,7 @@ function Comprobante({ fila }: { fila: FilaTransferencia }) {
 /**
  * Tabla de transferencias sin conciliar. Tesorería marca cada una cuando la
  * ve acreditada en el resumen del banco (de a una, o varias con los casilleros).
- * Consejo y líder la ven en solo lectura.
+ * Tesorería y el Líder de Procesos concilian (§1.3).
  */
 export function ConciliacionTransferencias({
   filas,
@@ -234,7 +234,7 @@ export function ConciliacionTransferencias({
                   {puedeOperar ? (
                     <Button
                       variant="outline"
-                      className="h-10 px-4 font-semibold"
+                      className="h-11 px-4 text-sm font-semibold"
                       disabled={pendiente}
                       onClick={() => conciliar([f.id])}
                       aria-label={`Conciliar recibo N° ${f.numero}`}

@@ -1,5 +1,11 @@
 import { ArrowRight } from "lucide-react";
 import { formatFraccion, OPCIONES_CUOTAS_MES } from "@/lib/format";
+import {
+  LABEL_CATEGORIA,
+  LABEL_SEGMENTO,
+  type CategoriaCliente,
+  type Segmento,
+} from "@/lib/segmentos";
 import { Codigo } from "@/components/shared/codigo";
 import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
@@ -16,12 +22,16 @@ const LABEL_CAMPO: Record<string, string> = {
   nombre: "Nombre",
   apodo: "Apodo",
   tipo_persona: "Tipo de persona",
-  cuit: "CUIT",
+  cuit: "CUIT / DNI",
   telefono: "Teléfono",
   email: "Email",
   direccion: "Dirección",
   notas: "Notas",
   cuotas_mes: "Paga el mes en",
+  categoria: "Categoría",
+  es_socio: "Socio de la cooperativa",
+  segmento: "Segmento",
+  motivo: "Motivo",
   activo: "Activo",
   cantidad: "Cantidad",
   precio: "Precio",
@@ -38,14 +48,17 @@ const LABEL_CAMPO_CONCEPTO: Record<string, string> = {
 
 const LABEL_TIPO_PERSONA: Record<string, string> = {
   fisica: "Persona física",
-  juridica: "Persona jurídica",
+  juridica: "Empresa",
 };
 
 const LABEL_TIPO_CONCEPTO: Record<string, string> = {
   recurrente: "Mensual",
-  energia: "Energía",
+  energia: "Energía (kWh)",
   canon_diario: "Canon diario",
   deuda: "Deuda",
+  diario: "Por día",
+  abono_energia: "Abono de energía",
+  eventual: "Eventual",
 };
 
 /** Claves internas que no se muestran como "campo" del diff. */
@@ -57,13 +70,16 @@ const CLAVES_OCULTAS = new Set([
   "auth_user_id",
   "creado_en",
   "conceptos",
+  "ref",
 ]);
 
 /** Orden de presentación de los campos (los que no están van al final). */
 const ORDEN_CAMPOS = [
   "codigo",
+  "categoria",
   "nombre",
   "apodo",
+  "es_socio",
   "tipo_persona",
   "cuit",
   "telefono",
@@ -72,6 +88,7 @@ const ORDEN_CAMPOS = [
   "cuotas_mes",
   "notas",
   "tipo",
+  "segmento",
   "precio",
   "descuento_pronto_pago",
   "orden_imputacion",
@@ -117,13 +134,23 @@ export function ValorCampo({
       const opcion = OPCIONES_CUOTAS_MES.find((o) => o.valor === Number(valor));
       return (
         <span>
-          {opcion ? opcion.label : `${Number(valor)} veces`}
+          {opcion ? opcion.label : `${Number(valor)} veces por mes`}
           {opcion ? (
             <span className="text-muted-foreground"> · {opcion.ayuda}</span>
           ) : null}
         </span>
       );
     }
+    case "categoria":
+      return (
+        <span className="font-medium">
+          {LABEL_CATEGORIA[String(valor) as CategoriaCliente] ?? String(valor)}
+        </span>
+      );
+    case "es_socio":
+      return <span className="font-medium">{valor === true || valor === "true" ? "Sí" : "No"}</span>;
+    case "segmento":
+      return <span>{LABEL_SEGMENTO[String(valor) as Segmento] ?? String(valor)}</span>;
     case "activo":
       return <Sello estado={valor ? "activo" : "inactivo"} />;
     case "tipo_persona":
@@ -220,8 +247,12 @@ function ListaAlta({
   datos: Datos;
   conceptosPorId: Record<string, ReferenciaConcepto>;
 }) {
+  // Al ambulante se le cobra por día: ni cuotas ni tipo de persona dicen nada en su alta.
+  const ocultasAmbulante = datos.categoria === "ambulante" ? ["cuotas_mes", "tipo_persona"] : [];
   const campos = ordenarCampos(
-    Object.keys(datos).filter((k) => !CLAVES_OCULTAS.has(k) && !esVacio(datos[k]))
+    Object.keys(datos).filter(
+      (k) => !CLAVES_OCULTAS.has(k) && !esVacio(datos[k]) && !ocultasAmbulante.includes(k)
+    )
   );
   const conceptos = Array.isArray(datos.conceptos)
     ? (datos.conceptos as { concepto_id?: string; cantidad?: number | string }[])
@@ -303,6 +334,22 @@ export function DiffCambio({
   }
 
   if (accion === "alta") {
+    if (entidad === "cliente_concepto" && datos.activo === false) {
+      // "Eximir del abono": un alta del concepto que nace sin facturarse.
+      return (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border px-4 py-3 text-sm">
+          <span className="text-muted-foreground">Queda eximido de</span>
+          <Codigo codigo={cambio.concepto?.codigo ?? "?"} />
+          <span className="font-medium">{cambio.concepto?.nombre ?? "Concepto"}</span>
+          {cambio.cliente ? (
+            <span className="text-muted-foreground">· {cambio.cliente.nombre}</span>
+          ) : null}
+          <span className="basis-full text-muted-foreground">
+            No se le genera más desde la próxima facturación.
+          </span>
+        </div>
+      );
+    }
     if (entidad === "cliente_concepto") {
       return (
         <div className="flex flex-wrap items-center gap-3 rounded-lg border px-4 py-3 text-sm">

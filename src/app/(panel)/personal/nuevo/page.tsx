@@ -21,7 +21,7 @@ export default async function NuevoEmpleadoPage() {
         </Link>
         <PageHeader
           titulo="Nuevo empleado"
-          descripcion="Cargá sus datos y el contrato. Los horarios de trabajo se arman después, desde su ficha."
+          descripcion="Cargá sus datos, el sector, las horas del contrato y el contrato firmado. Los horarios de trabajo se arman después, desde su ficha."
           className="pb-2"
         />
       </div>

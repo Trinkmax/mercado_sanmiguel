@@ -2,7 +2,8 @@ import Link from "next/link";
 import { ChevronRight, ClipboardClock, UserPlus, Users } from "lucide-react";
 import { aplicaDirecto, requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { periodoActual } from "@/lib/format";
+import { nivelDeuda, SELLO_NIVEL_DEUDA, type NivelDeuda } from "@/lib/format";
+import { categoriasDeRol, LABEL_SEGMENTO, type CategoriaCliente, type Segmento } from "@/lib/segmentos";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -13,169 +14,248 @@ import { Codigo } from "@/components/shared/codigo";
 import { EmptyState } from "@/components/shared/empty-state";
 import { BotonExportar } from "@/components/shared/boton-exportar";
 import { BuscadorClientes } from "@/components/clientes/buscador-clientes";
+import { ChipCategoria } from "@/components/clientes/chip-categoria";
 import {
-  FILTROS_CLIENTES,
-  TIPO_POR_FILTRO,
-  derivarTipoCliente,
-  extrasCliente,
-} from "@/components/clientes/tipo-cliente";
+  etiquetasCliente,
+  FILTROS_ESTADO,
+  leerFiltrosListado,
+  normalizarBusqueda,
+  segmentosDeRol,
+  type ConceptoDeCliente,
+  type EspacioDeCliente,
+  type FiltroEstado,
+} from "@/components/clientes/segmentos-cliente";
 
 export const metadata = { title: "Clientes" };
 
 type Props = {
-  searchParams: Promise<{ q?: string; filtro?: string; tipo?: string }>;
+  searchParams: Promise<{ q?: string; seg?: string; estado?: string; tipo?: string; filtro?: string }>;
 };
 
-function hrefListado(texto: string, tipo?: string): string {
+function hrefListado(p: { q?: string; seg?: string | null; estado?: string | null }): string {
   const params = new URLSearchParams();
-  if (texto) params.set("q", texto);
-  if (tipo) params.set("tipo", tipo);
+  if (p.q) params.set("q", p.q);
+  if (p.seg) params.set("seg", p.seg);
+  if (p.estado) params.set("estado", p.estado);
   const qs = params.toString();
   return qs ? `/clientes?${qs}` : "/clientes";
 }
 
-/** Patrón ilike seguro para usar dentro de `.or()` de PostgREST. */
-function patronBusqueda(texto: string): string {
-  return `%${texto.replace(/[,()"\\%_]/g, " ").trim()}%`;
+/** Chip de filtro: link de 44 px con su conteo; en 0 se atenúa (sigue tocable para salir). */
+function ChipFiltro({
+  href,
+  label,
+  cantidad,
+  activo,
+}: {
+  href: string;
+  label: string;
+  cantidad: number;
+  activo: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      scroll={false}
+      aria-current={activo ? "true" : undefined}
+      className={cn(
+        "inline-flex h-11 items-center gap-2 rounded-full border px-4 text-sm font-medium transition-colors",
+        activo
+          ? "border-primary bg-primary text-primary-foreground"
+          : cantidad === 0
+            ? "border-dashed bg-card text-muted-foreground/60 hover:bg-accent"
+            : "border-border bg-card text-foreground hover:bg-accent"
+      )}
+    >
+      {label}
+      <span
+        className={cn(
+          "tabular text-xs font-semibold",
+          activo ? "text-primary-foreground/85" : "text-muted-foreground"
+        )}
+      >
+        {cantidad}
+      </span>
+    </Link>
+  );
 }
 
 export default async function ClientesPage({ searchParams }: Props) {
-  const perfil = await requireRol("admin", "tesoreria", "consejo", "lider");
-  const { q = "", filtro, tipo: tipoParam } = await searchParams;
-  const texto = q.trim();
-  // Compat: ?filtro=vencidos (links viejos) equivale a ?tipo=vencidos.
-  const tipo = tipoParam ?? (filtro === "vencidos" ? "vencidos" : undefined);
+  const perfil = await requireRol("admin", "guardia", "lider");
+  const sp = await searchParams;
+  const texto = (sp.q ?? "").trim();
+  const filtros = leerFiltrosListado(sp);
+  const esJefe = perfil.rol === "guardia";
   const esLider = aplicaDirecto(perfil.rol);
+  const categorias = categoriasDeRol(perfil.rol);
+  const chipsSegmento = segmentosDeRol(perfil.rol);
+  // Un segmento que el rol no tiene como chip (link viejo) no filtra.
+  const seg = filtros.seg && chipsSegmento.includes(filtros.seg) ? filtros.seg : null;
+  const estado = filtros.estado;
 
   const supabase = await createClient();
-
-  let consulta = supabase
-    .from("clientes")
-    .select(
-      "id, codigo, nombre, apodo, telefono, activo, cliente_conceptos(cantidad, activo, conceptos(codigo))"
-    )
-    .order("codigo");
-  if (texto) {
-    if (/^\d+$/.test(texto)) {
-      consulta = consulta.eq("codigo", Number(texto));
-    } else {
-      const patron = patronBusqueda(texto);
-      consulta = consulta.or(`nombre.ilike.${patron},apodo.ilike.${patron}`);
-    }
-  }
-
-  const [clientesRes, deudaRes, saldoRes, cambiosRes] = await Promise.all([
-    consulta,
+  const [clientesRes, itemsRes, espaciosRes, deudaRes, saldoRes, cambiosRes] = await Promise.all([
+    // Administración lee todos (joins de caja y circulares) pero acá ve solo puesteros (G8).
     supabase
-      .from("v_deuda_clientes")
-      .select("cliente_id, deuda, periodo_mas_viejo"),
+      .from("v_clientes_segmentos")
+      .select("cliente_id, codigo, nombre, apodo, categoria, es_socio, activo, segmentos")
+      .in("categoria", categorias)
+      .order("codigo"),
+    supabase
+      .from("cliente_conceptos")
+      .select("cliente_id, cantidad, conceptos(codigo, activo)")
+      .eq("activo", true),
+    // El Jefe no lee la tabla espacios (0022): sus quinteros y ambulantes no están en el plano.
+    esJefe
+      ? Promise.resolve({ data: [] as (EspacioDeCliente & { cliente_id: string | null })[] })
+      : supabase
+          .from("espacios")
+          .select("cliente_id, tipo, numero, medio, propio")
+          .not("cliente_id", "is", null),
+    supabase.from("v_deuda_clientes").select("cliente_id, deuda, deuda_vencida"),
     supabase.from("v_saldo_favor").select("cliente_id, saldo_favor"),
     supabase
       .from("cambios_pendientes")
-      .select("cliente_id, entidad, accion, resumen")
+      .select("cliente_id, entidad, accion, resumen, datos")
       .eq("estado", "pendiente"),
   ]);
 
   const deudaPorCliente = new Map(
-    (deudaRes.data ?? [])
-      .filter((d) => d.cliente_id)
-      .map((d) => [d.cliente_id as string, d])
+    (deudaRes.data ?? []).flatMap((d) =>
+      d.cliente_id
+        ? [[d.cliente_id, { deuda: Number(d.deuda ?? 0), vencida: Number(d.deuda_vencida ?? 0) }] as const]
+        : []
+    )
   );
   const saldoPorCliente = new Map(
-    (saldoRes.data ?? [])
-      .filter((s) => s.cliente_id)
-      .map((s) => [s.cliente_id as string, Number(s.saldo_favor ?? 0)])
+    (saldoRes.data ?? []).flatMap((s) =>
+      s.cliente_id ? [[s.cliente_id, Number(s.saldo_favor ?? 0)] as const] : []
+    )
   );
-  // Cambios esperando aprobación: por cliente (sello en la fila) y altas
-  // de clientes que todavía no existen (aviso arriba de la lista).
-  const cambiosPendientes = cambiosRes.data ?? [];
-  const conPendientes = new Set(
-    cambiosPendientes.flatMap((c) => (c.cliente_id ? [c.cliente_id] : []))
-  );
-  const altasPendientes = cambiosPendientes.filter(
-    (c) => c.entidad === "cliente" && c.accion === "alta"
-  );
+  const conceptosPorCliente = new Map<string, ConceptoDeCliente[]>();
+  for (const i of itemsRes.data ?? []) {
+    if (!i.conceptos?.activo) continue;
+    const lista = conceptosPorCliente.get(i.cliente_id) ?? [];
+    lista.push({ codigo: i.conceptos.codigo, cantidad: Number(i.cantidad) });
+    conceptosPorCliente.set(i.cliente_id, lista);
+  }
+  const espaciosPorCliente = new Map<string, EspacioDeCliente[]>();
+  for (const e of espaciosRes.data ?? []) {
+    if (!e.cliente_id) continue;
+    const lista = espaciosPorCliente.get(e.cliente_id) ?? [];
+    lista.push({ tipo: e.tipo, numero: e.numero, medio: e.medio, propio: Boolean(e.propio) });
+    espaciosPorCliente.set(e.cliente_id, lista);
+  }
 
-  // Tipo y extras derivados de los conceptos activos, todo en memoria.
-  let clientes = (clientesRes.data ?? []).map((c) => {
-    const items = (c.cliente_conceptos ?? []).map((i) => ({
-      cantidad: Number(i.cantidad),
-      activo: i.activo,
-      codigo: i.conceptos?.codigo ?? "",
-    }));
-    return {
-      ...c,
-      tipoCliente: derivarTipoCliente(items),
-      extras: extrasCliente(items),
-      deuda: Number(deudaPorCliente.get(c.id)?.deuda ?? 0),
-      periodoMasViejo: deudaPorCliente.get(c.id)?.periodo_mas_viejo ?? null,
-      saldoFavor: saldoPorCliente.get(c.id) ?? 0,
-      tienePendientes: conPendientes.has(c.id),
-    };
+  // Cambios esperando aprobación: sello en la fila y altas de clientes que todavía no existen.
+  const cambiosPendientes = cambiosRes.data ?? [];
+  const conPendientes = new Set(cambiosPendientes.flatMap((c) => (c.cliente_id ? [c.cliente_id] : [])));
+  const altasPendientes = cambiosPendientes.filter((c) => {
+    if (c.entidad !== "cliente" || c.accion !== "alta") return false;
+    const cat = (c.datos as { categoria?: string } | null)?.categoria ?? "puestero";
+    return categorias.includes(cat as CategoriaCliente);
   });
 
-  if (tipo === "deuda") {
-    clientes = clientes.filter((c) => c.deuda > 0);
-  } else if (tipo === "vencidos") {
-    const periodo = periodoActual();
-    clientes = clientes.filter(
-      (c) => c.periodoMasViejo != null && c.periodoMasViejo < periodo && c.deuda > 0
+  const todos = (clientesRes.data ?? []).flatMap((c) => {
+    if (!c.cliente_id || !c.categoria) return [];
+    const d = deudaPorCliente.get(c.cliente_id);
+    const saldoFavor = saldoPorCliente.get(c.cliente_id) ?? 0;
+    const deuda = d?.deuda ?? 0;
+    const nivel: NivelDeuda = nivelDeuda({ deuda, deudaVencida: d?.vencida ?? 0, saldoFavor });
+    const espacios = espaciosPorCliente.get(c.cliente_id) ?? [];
+    return [
+      {
+        id: c.cliente_id,
+        codigo: c.codigo ?? 0,
+        nombre: c.nombre ?? "",
+        apodo: c.apodo,
+        categoria: c.categoria as CategoriaCliente,
+        esSocio: Boolean(c.es_socio),
+        activo: Boolean(c.activo),
+        segmentos: (c.segmentos ?? []) as string[],
+        etiquetas: etiquetasCliente(espacios, conceptosPorCliente.get(c.cliente_id) ?? []),
+        numerosPlano: espacios.map((e) => e.numero ?? ""),
+        deuda,
+        vencida: d?.vencida ?? 0,
+        saldoFavor,
+        nivel,
+        pendiente: conPendientes.has(c.cliente_id),
+      },
+    ];
+  });
+  type Fila = (typeof todos)[number];
+
+  // Búsqueda: número = carpeta o N° de puesto; texto = nombre o apodo (sin tildes).
+  const buscado = normalizarBusqueda(texto);
+  const coincideTexto = (c: Fila) => {
+    if (!buscado) return true;
+    if (/^\d+$/.test(buscado))
+      return String(c.codigo) === buscado || c.numerosPlano.includes(buscado);
+    return (
+      normalizarBusqueda(c.nombre).includes(buscado) ||
+      normalizarBusqueda(c.apodo ?? "").includes(buscado)
     );
-  } else if (tipo && TIPO_POR_FILTRO[tipo]) {
-    clientes = clientes.filter((c) => c.tipoCliente === TIPO_POR_FILTRO[tipo]);
-  }
+  };
+  const coincideEstado = (c: Fila, e: FiltroEstado | null) => {
+    if (e === "bajas") return !c.activo;
+    if (!c.activo) return false; // las bajas se ven solo con su chip
+    if (e === "deuda") return c.nivel !== "al_dia";
+    if (e === "vencidos") return c.nivel === "vencido";
+    return true;
+  };
+  const coincideSegmento = (c: Fila, s: Segmento | null) => !s || c.segmentos.includes(s);
+
+  const buscados = todos.filter(coincideTexto);
+  const conteoSegmento = (s: Segmento) =>
+    buscados.filter((c) => coincideEstado(c, estado) && coincideSegmento(c, s)).length;
+  const conteoEstado = (e: FiltroEstado) =>
+    buscados.filter((c) => coincideEstado(c, e) && coincideSegmento(c, seg)).length;
+
+  const clientes = buscados
+    .filter((c) => coincideEstado(c, estado) && coincideSegmento(c, seg))
+    .sort((a, b) =>
+      estado === "deuda" || estado === "vencidos" ? b.deuda - a.deuda : a.codigo - b.codigo
+    );
+  const totalDeuda = clientes.reduce((acc, c) => acc + (c.activo ? c.deuda : 0), 0);
+  const totalVencido = clientes.reduce((acc, c) => acc + (c.activo ? c.vencida : 0), 0);
+  const hayFiltro = Boolean(texto || seg || estado);
+  const hayClientes = todos.length > 0;
+
+  const titulo = esJefe ? "Quinteros y ambulantes" : "Clientes";
+  const nuevo = esJefe ? "Nuevo quintero o ambulante" : "Nuevo cliente";
 
   return (
     <div className="space-y-8">
       <PageHeader
-        titulo="Clientes"
-        descripcion="La carpeta de cada uno: sus datos, su cuenta, sus documentos y sus medidores."
+        titulo={titulo}
+        descripcion={
+          esJefe
+            ? "La carpeta de cada quintero y ambulante: sus datos, su cuenta y sus documentos."
+            : "La carpeta de cada uno: sus datos, su cuenta, sus documentos y sus medidores."
+        }
       >
-        <BotonExportar dataset="clientes" className="h-12 px-4 text-base" />
-        <Button asChild size="lg" className="h-13 px-6 text-base font-semibold">
+        {hayClientes ? <BotonExportar dataset="clientes" className="h-12 px-4 text-base" /> : null}
+        <Button asChild size="lg" className="h-12 px-6 text-base font-semibold">
           <Link href="/clientes/nuevo">
             <UserPlus className="size-5" />
-            Nuevo cliente
+            {nuevo}
           </Link>
         </Button>
       </PageHeader>
 
-      <div className="space-y-3">
-        <BuscadorClientes inicial={texto} tipo={tipo} />
-
-        <div className="flex flex-wrap gap-2" role="group" aria-label="Filtrar clientes">
-          {FILTROS_CLIENTES.map((f) => {
-            const activo = f.valor === tipo;
-            return (
-              <Link
-                key={f.label}
-                href={hrefListado(texto, f.valor)}
-                aria-current={activo ? "true" : undefined}
-                className={cn(
-                  "inline-flex h-9 items-center rounded-full border px-3.5 text-sm font-medium transition-colors",
-                  activo
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground"
-                )}
-              >
-                {f.label}
-              </Link>
-            );
-          })}
-        </div>
-      </div>
-
-      {altasPendientes.length > 0 && !texto && !tipo ? (
+      {altasPendientes.length > 0 && !hayFiltro ? (
         <div className="flex flex-wrap items-start gap-3 rounded-lg border border-parcial/30 bg-parcial-suave px-4 py-3 text-parcial">
           <ClipboardClock className="mt-0.5 size-5 shrink-0" strokeWidth={2} />
           <div className="min-w-0 flex-1 text-sm leading-snug">
             <p className="font-semibold">
               {altasPendientes.length === 1
-                ? "Hay 1 cliente nuevo esperando aprobación del Líder de Procesos"
-                : `Hay ${altasPendientes.length} clientes nuevos esperando aprobación del Líder de Procesos`}
+                ? "Hay 1 alta esperando la aprobación del Líder de Procesos"
+                : `Hay ${altasPendientes.length} altas esperando la aprobación del Líder de Procesos`}
             </p>
             <p className="text-parcial/90">
-              {altasPendientes.map((a) => a.resumen.replace(/^Alta de cliente /, "")).join(" · ")}
+              {altasPendientes
+                .map((a) => a.resumen.replace(/^Alta de (cliente|puestero|quintero|ambulante) /, ""))
+                .join(" · ")}
               {esLider ? (
                 <>
                   {" "}
@@ -190,109 +270,174 @@ export default async function ClientesPage({ searchParams }: Props) {
         </div>
       ) : null}
 
-      {clientes.length === 0 ? (
-        texto || tipo ? (
-          <EmptyState
-            icono={Users}
-            titulo="No encontramos clientes"
-            descripcion={
-              texto
-                ? "Probá con otra parte del nombre, el apodo o el número de carpeta."
-                : "No hay clientes con ese filtro. Tocá Todos para ver la lista completa."
+      {hayClientes ? (
+        <div className="space-y-4">
+          <BuscadorClientes
+            inicial={texto}
+            seg={seg}
+            estado={estado}
+            placeholder={
+              esJefe
+                ? "Buscá al quintero o ambulante por nombre, apodo o N° de carpeta"
+                : "Buscá por nombre, apodo, N° de carpeta o de puesto"
             }
           />
-        ) : (
-          <EmptyState
-            icono={Users}
-            titulo="Todavía no hay clientes cargados"
-            descripcion="Creá el primero para abrir su carpeta."
-          >
-            <Button asChild size="lg" className="h-12 px-5 font-semibold">
-              <Link href="/clientes/nuevo">
-                <UserPlus className="size-5" />
-                Nuevo cliente
-              </Link>
-            </Button>
-          </EmptyState>
-        )
+
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-muted-foreground">¿Qué tiene?</p>
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Filtrar por lo que tiene">
+              {chipsSegmento.map((s) => (
+                <ChipFiltro
+                  key={s}
+                  href={hrefListado({ q: texto, seg: seg === s ? null : s, estado })}
+                  label={LABEL_SEGMENTO[s]}
+                  cantidad={conteoSegmento(s)}
+                  activo={seg === s}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-sm font-medium text-muted-foreground">¿Cómo está?</p>
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Filtrar por cómo está">
+              {FILTROS_ESTADO.map((f) => (
+                <ChipFiltro
+                  key={f.valor}
+                  href={hrefListado({ q: texto, seg, estado: estado === f.valor ? null : f.valor })}
+                  label={f.label}
+                  cantidad={conteoEstado(f.valor)}
+                  activo={estado === f.valor}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {!hayClientes ? (
+        <EmptyState
+          icono={Users}
+          titulo={esJefe ? "Todavía no hay quinteros ni ambulantes" : "Todavía no hay clientes cargados"}
+          descripcion={
+            esJefe
+              ? "Dá de alta al primero. Al ambulante le podés cobrar apenas lo cargás."
+              : "Creá el primero para abrir su carpeta."
+          }
+        >
+          <Button asChild size="lg" className="h-12 px-5 font-semibold">
+            <Link href="/clientes/nuevo">
+              <UserPlus className="size-5" />
+              {nuevo}
+            </Link>
+          </Button>
+        </EmptyState>
+      ) : clientes.length === 0 ? (
+        <EmptyState
+          icono={Users}
+          titulo="No encontramos a nadie con eso"
+          descripcion={
+            texto
+              ? "Probá con otra parte del nombre, el apodo, el N° de carpeta o el de puesto."
+              : "Nadie cumple con los filtros elegidos. Tocá un chip marcado para sacarlo."
+          }
+        >
+          <Button asChild variant="outline" size="lg" className="h-11 px-5 text-base">
+            <Link href="/clientes">Ver todos</Link>
+          </Button>
+        </EmptyState>
       ) : (
-        <Card className="gap-0 divide-y overflow-hidden py-0">
-          {clientes.map((c) => {
-            const debe = c.deuda > 0;
-            const tieneSaldo = c.saldoFavor > 0.009;
-            const detalle = [
-              c.apodo ? `“${c.apodo}”` : null,
-              c.extras ?? c.telefono,
-            ]
-              .filter(Boolean)
-              .join(" · ");
-            return (
+        <div className="space-y-3">
+          <p className="flex flex-wrap items-baseline gap-x-2 text-sm text-muted-foreground">
+            <span>
+              {clientes.length === 1 ? "1 cliente" : `${clientes.length} clientes`}
+              {estado === "bajas" ? " dados de baja" : ""}
+            </span>
+            {totalDeuda > 0.009 ? (
+              <span>
+                · deben <Money monto={totalDeuda} className="font-semibold text-pendiente" />
+                {totalVencido > 0.009 ? (
+                  <>
+                    {" "}
+                    (<Money monto={totalVencido} className="font-semibold text-pendiente" /> vencido)
+                  </>
+                ) : null}
+              </span>
+            ) : null}
+            {hayFiltro ? (
               <Link
-                key={c.id}
-                href={`/clientes/${c.id}`}
-                className="flex min-h-12 items-center gap-3 px-4 py-2 transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+                href="/clientes"
+                scroll={false}
+                className="inline-flex min-h-11 items-center font-medium text-primary underline-offset-4 hover:underline"
               >
-                <Codigo codigo={String(c.codigo)} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                    <p
-                      className={cn(
-                        "truncate text-sm font-medium",
-                        !c.activo && "text-muted-foreground"
-                      )}
-                    >
-                      {c.nombre}
-                    </p>
-                    <span className="shrink-0 rounded-full border bg-muted px-2 py-px text-xs font-medium text-muted-foreground">
-                      {c.tipoCliente}
-                    </span>
-                    {!c.activo ? (
-                      <Sello estado="inactivo" texto="Dado de baja" className="px-1.5 py-1 text-[0.62rem]" />
-                    ) : null}
-                    {c.tienePendientes ? (
-                      <Sello
-                        estado="pendiente_aprobacion"
-                        className="px-1.5 py-1 text-[0.62rem]"
-                      />
-                    ) : null}
-                  </div>
-                  {detalle ? (
-                    <p className="truncate text-xs text-muted-foreground">
-                      {detalle}
-                    </p>
-                  ) : null}
-                </div>
-                <div className="flex shrink-0 items-center gap-3">
-                  <div className="text-right">
-                    <Money
-                      monto={debe ? c.deuda : tieneSaldo ? c.saldoFavor : 0}
-                      className={cn(
-                        "block text-sm font-semibold",
-                        debe
-                          ? "text-pendiente"
-                          : tieneSaldo
-                            ? "text-pagado"
-                            : "text-muted-foreground"
-                      )}
-                    />
-                    {debe && tieneSaldo ? (
-                      <span className="block text-xs text-pagado">
-                        a favor <Money monto={c.saldoFavor} />
-                      </span>
-                    ) : null}
-                  </div>
-                  <Sello
-                    estado={debe ? "debe" : tieneSaldo ? "saldo_favor" : "al_dia"}
-                  />
-                  <ChevronRight
-                    className="size-4 shrink-0 text-muted-foreground max-sm:hidden"
-                    strokeWidth={2}
-                  />
-                </div>
+                Sacar filtros
               </Link>
-            );
-          })}
-        </Card>
+            ) : null}
+          </p>
+
+          <Card className="gap-0 divide-y overflow-hidden py-0">
+            {clientes.map((c) => {
+              const tieneSaldo = c.saldoFavor > 0.009;
+              const detalle = [c.apodo ? `“${c.apodo}”` : null, ...c.etiquetas]
+                .filter(Boolean)
+                .join(" · ");
+              return (
+                <Link
+                  key={c.id}
+                  href={`/clientes/${c.id}`}
+                  className="flex min-h-16 items-center gap-3 px-4 py-2.5 transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+                >
+                  <Codigo codigo={String(c.codigo)} />
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                      <p
+                        className={cn(
+                          "truncate text-base font-medium",
+                          !c.activo && "text-muted-foreground"
+                        )}
+                      >
+                        {c.nombre}
+                      </p>
+                      {categorias.length > 1 ? <ChipCategoria categoria={c.categoria} /> : null}
+                      {c.esSocio ? <Sello estado="socio" className="px-1.5 py-1 text-[0.62rem]" /> : null}
+                      {!c.activo ? (
+                        <Sello estado="inactivo" texto="Dado de baja" className="px-1.5 py-1 text-[0.62rem]" />
+                      ) : null}
+                      {c.pendiente ? (
+                        <Sello estado="pendiente_aprobacion" className="px-1.5 py-1 text-[0.62rem]" />
+                      ) : null}
+                    </div>
+                    {detalle ? (
+                      <p className="truncate text-sm text-muted-foreground">{detalle}</p>
+                    ) : null}
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <div className="flex flex-col items-end gap-1 text-right">
+                      {c.deuda > 0.009 ? (
+                        <Money
+                          monto={c.deuda}
+                          className={cn(
+                            "text-base font-semibold",
+                            c.nivel === "vencido" ? "text-pendiente" : c.nivel === "en_termino" ? "text-parcial" : "text-muted-foreground"
+                          )}
+                        />
+                      ) : tieneSaldo ? (
+                        <span className="text-xs text-pagado">
+                          a favor <Money monto={c.saldoFavor} className="font-semibold" />
+                        </span>
+                      ) : null}
+                      <Sello estado={SELLO_NIVEL_DEUDA[c.nivel]} />
+                    </div>
+                    <ChevronRight
+                      className="size-4 shrink-0 text-muted-foreground max-sm:hidden"
+                      strokeWidth={2}
+                    />
+                  </div>
+                </Link>
+              );
+            })}
+          </Card>
+        </div>
       )}
     </div>
   );

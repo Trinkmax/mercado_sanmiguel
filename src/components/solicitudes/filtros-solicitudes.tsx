@@ -2,27 +2,68 @@ import Link from "next/link";
 import type { Rol } from "@/lib/auth";
 import { cn } from "@/lib/utils";
 import {
+  ESTADOS_CON_LIDER,
   ESTADOS_EN_CURSO,
   ESTADOS_TERMINADOS,
   type EstadoSolicitud,
+  type OrigenSolicitud,
 } from "./constantes";
+
+type SolicitudFiltrable = { estado: EstadoSolicitud; origen: OrigenSolicitud };
 
 export type FiltroSolicitud = {
   valor: string;
   label: string;
   /** null = todas las que el rol ve. */
   estados: EstadoSolicitud[] | null;
+  /** Condición extra (además de los estados). */
+  predicado?: (s: SolicitudFiltrable) => boolean;
   vacio: { titulo: string; descripcion: string };
 };
 
+/** ¿La solicitud entra en la pestaña? */
+export function cumpleFiltro(f: FiltroSolicitud, s: SolicitudFiltrable): boolean {
+  if (f.estados && !f.estados.includes(s.estado)) return false;
+  return f.predicado ? f.predicado(s) : true;
+}
+
 const F = {
+  para_resolver: {
+    valor: "para_resolver",
+    label: "Para resolver",
+    estados: ["con_jefe"],
+    predicado: (s) => s.origen === "porteria",
+    vacio: {
+      titulo: "No hay solicitudes de Portería esperando",
+      descripcion: "Cuando un portero cargue una, aparece acá para que la resuelvas o la eleves al Líder.",
+    },
+  },
+  en_lider: {
+    valor: "en_lider",
+    label: "En manos del Líder",
+    estados: ESTADOS_CON_LIDER,
+    vacio: {
+      titulo: "Nada en manos del Líder de Procesos",
+      descripcion: "Las que elevás y tus avisos sobre puestos aparecen acá mientras el Líder las ve.",
+    },
+  },
+  en_porteria: {
+    valor: "en_porteria",
+    label: "Con el Jefe de Portería",
+    estados: ["con_jefe"],
+    vacio: {
+      titulo: "No hay solicitudes esperando al Jefe de Portería",
+      descripcion: "Las que carga Portería pasan primero por el Jefe. Si hace falta, podés tomarlas vos.",
+    },
+  },
   nuevas: {
     valor: "nuevas",
     label: "Nuevas",
     estados: ["nueva"],
     vacio: {
       titulo: "No hay solicitudes nuevas",
-      descripcion: "Cuando entre una desde el portal, portería o administración, aparece acá.",
+      descripcion:
+        "Cuando entre una desde el portal, el Jefe de Portería, Tesorería o Administración, aparece acá.",
     },
   },
   revision: {
@@ -40,7 +81,7 @@ const F = {
     estados: ["en_consejo"],
     vacio: {
       titulo: "No hay solicitudes en el Consejo",
-      descripcion: "Las que el Líder de Procesos derive al Consejo aparecen acá.",
+      descripcion: "Las que derives al Consejo quedan acá hasta que registres lo que resolvió.",
     },
   },
   resueltas: {
@@ -49,7 +90,7 @@ const F = {
     estados: ["resuelta"],
     vacio: {
       titulo: "No hay resoluciones para asignar",
-      descripcion: "Cuando el Consejo o vos registren una resolución, aparece acá para asignarla a Administración.",
+      descripcion: "Cuando registres una resolución (tuya o del Consejo), aparece acá para asignarla a Administración.",
     },
   },
   asignadas: {
@@ -85,7 +126,7 @@ const F = {
     estados: ESTADOS_TERMINADOS,
     vacio: {
       titulo: "Todavía no hay solicitudes terminadas",
-      descripcion: "Las ejecutadas, rechazadas y cerradas quedan acá como historial.",
+      descripcion: "Las resueltas, ejecutadas, rechazadas y cerradas quedan acá como historial.",
     },
   },
   todas: {
@@ -97,13 +138,23 @@ const F = {
       descripcion: "Cargá la primera con el botón \"Nueva solicitud\".",
     },
   },
-  mias: {
+  mias_porteria: {
     valor: "todas",
     label: "Mis solicitudes",
     estados: null,
     vacio: {
       titulo: "Todavía no cargaste solicitudes",
-      descripcion: "Cargá la primera con el botón \"Nueva solicitud\": se imprime para derivar a Administración.",
+      descripcion:
+        "Cargá la primera con el botón \"Nueva solicitud\": le llega al Jefe de Portería, que la resuelve o la eleva al Líder.",
+    },
+  },
+  mias_tesoreria: {
+    valor: "todas",
+    label: "Mis solicitudes",
+    estados: null,
+    vacio: {
+      titulo: "Todavía no cargaste solicitudes",
+      descripcion: "Cargá la primera con el botón \"Nueva solicitud\": le llega al Líder de Procesos.",
     },
   },
 } satisfies Record<string, FiltroSolicitud>;
@@ -112,16 +163,17 @@ const F = {
 export function filtrosParaRol(rol: Rol): FiltroSolicitud[] {
   switch (rol) {
     case "lider":
-      return [F.nuevas, F.revision, F.consejo, F.resueltas, F.asignadas, F.terminadas, F.todas];
+      return [F.nuevas, F.revision, F.consejo, F.resueltas, F.asignadas, F.en_porteria, F.terminadas, F.todas];
     case "admin":
       return [F.asignadas_admin, F.nuevas, F.en_curso, F.terminadas, F.todas];
     case "consejo":
       return [F.consejo, F.nuevas, F.en_curso, F.terminadas, F.todas];
-    case "tesoreria":
-      return [F.nuevas, F.en_curso, F.terminadas, F.todas];
-    case "porteria":
     case "guardia":
-      return [F.mias, F.en_curso, F.terminadas];
+      return [F.para_resolver, F.en_lider, F.terminadas, F.todas];
+    case "tesoreria":
+      return [F.mias_tesoreria, F.en_curso, F.terminadas];
+    case "porteria":
+      return [F.mias_porteria, F.en_curso, F.terminadas];
     default:
       return [F.todas];
   }
@@ -141,6 +193,9 @@ export function FiltrosSolicitudes({
     <div className="flex flex-wrap gap-2" role="tablist" aria-label="Filtrar por estado">
       {filtros.map((f, i) => {
         const esActivo = activo === f.valor;
+        const cantidad = conteos[f.valor] ?? 0;
+        // "Para resolver (N)": lo que espera acción se nota aunque no sea la pestaña abierta.
+        const urgente = f.valor === "para_resolver" && cantidad > 0 && !esActivo;
         return (
           <Link
             key={f.valor}
@@ -151,17 +206,19 @@ export function FiltrosSolicitudes({
               "inline-flex min-h-11 items-center gap-2 rounded-md border px-4 text-sm font-medium transition-colors",
               esActivo
                 ? "border-primary bg-primary text-primary-foreground"
-                : "border-border bg-card text-foreground hover:bg-accent"
+                : urgente
+                  ? "border-parcial/50 bg-parcial-suave text-foreground hover:bg-accent"
+                  : "border-border bg-card text-foreground hover:bg-accent"
             )}
           >
             {f.label}
             <span
               className={cn(
                 "tabular text-xs font-semibold",
-                esActivo ? "text-primary-foreground/80" : "text-muted-foreground"
+                esActivo ? "text-primary-foreground/80" : urgente ? "text-parcial" : "text-muted-foreground"
               )}
             >
-              {conteos[f.valor] ?? 0}
+              {cantidad}
             </span>
           </Link>
         );

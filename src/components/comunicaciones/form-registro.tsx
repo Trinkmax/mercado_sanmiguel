@@ -1,0 +1,613 @@
+"use client";
+
+import { useMemo, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { Camera, Check, Eye, MapPin, Search, Send, UserX, X } from "lucide-react";
+import { emitirRegistro } from "@/lib/actions/sanciones";
+import { formatARS, formatFecha } from "@/lib/format";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Spinner } from "@/components/ui/spinner";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import { Money } from "@/components/shared/money";
+import { Sello } from "@/components/shared/sello";
+import {
+  ACCEPT_ADJUNTO_REGISTRO,
+  DIAS_VENCIMIENTO_MULTA,
+  infoTipoRegistro,
+  MULTAS_RAPIDAS,
+  TIPOS_REGISTRO,
+  TITULOS_SUGERIDOS,
+  type TipoRegistro,
+} from "./constantes";
+
+export type ClienteOpcion = {
+  id: string;
+  codigo: number;
+  nombre: string;
+  apodo: string | null;
+  lugares: { id: string; etiqueta: string; numero: string | null }[];
+  deuda: number;
+  tienePortal: boolean;
+};
+
+/** uuid v4 también fuera de https (tablet por la red local): crypto.randomUUID no siempre existe. */
+function nuevoRef(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return crypto.randomUUID();
+  const b = new Uint8Array(16);
+  crypto.getRandomValues(b);
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
+function sumarDias(iso: string, dias: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const f = new Date(y, m - 1, d + dias);
+  return `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, "0")}-${String(f.getDate()).padStart(2, "0")}`;
+}
+
+function normalizar(s: string): string {
+  return s
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+/**
+ * Nuevo registro (D3, D4): ¿A quién? → ¿Qué es? → título + detalle + foto/PDF → multa (si es
+ * apercibimiento o sanción) → "Así lo ve el socio" → "Notificar a {nombre} (Puesto N)".
+ * `ref` por intento: un doble toque manda la misma clave y la base crea UN registro y UNA multa.
+ */
+export function FormRegistro({
+  clientes,
+  clienteInicialId = null,
+  clienteFijo = false,
+  tipoInicial = "notificacion",
+  fechaHoy,
+  alTerminar = "detalle",
+}: {
+  clientes: ClienteOpcion[];
+  clienteInicialId?: string | null;
+  /** En la ficha del cliente: sin buscador. */
+  clienteFijo?: boolean;
+  tipoInicial?: TipoRegistro;
+  fechaHoy: string;
+  /** "detalle" = ir al registro creado; "quedarse" = limpiar y seguir en la misma pantalla. */
+  alTerminar?: "detalle" | "quedarse";
+}) {
+  const router = useRouter();
+  const formRef = useRef<HTMLFormElement>(null);
+  const archivoRef = useRef<HTMLInputElement>(null);
+  const [pendiente, startTransition] = useTransition();
+  const [ref, setRef] = useState(nuevoRef);
+
+  const [clienteId, setClienteId] = useState<string | null>(clienteInicialId);
+  const cliente = clientes.find((c) => c.id === clienteId) ?? null;
+  const [lugarId, setLugarId] = useState<string | null>(
+    cliente && cliente.lugares.length === 1 ? cliente.lugares[0].id : null
+  );
+  const [busqueda, setBusqueda] = useState("");
+  const [tipo, setTipo] = useState<TipoRegistro>(tipoInicial);
+  const [titulo, setTitulo] = useState("");
+  const [detalle, setDetalle] = useState("");
+  const [fecha, setFecha] = useState(fechaHoy);
+  const [nombreArchivo, setNombreArchivo] = useState<string | null>(null);
+  const [conMulta, setConMulta] = useState(false);
+  const [multa, setMulta] = useState("");
+  const [vence, setVence] = useState(sumarDias(fechaHoy, DIAS_VENCIMIENTO_MULTA));
+  const [venceTocado, setVenceTocado] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const info = infoTipoRegistro(tipo);
+  const montoMulta = Number(multa || 0);
+  const lleva = info.llevaMulta && conMulta && montoMulta > 0;
+  const lugar = cliente?.lugares.find((l) => l.id === lugarId) ?? null;
+
+  const resultados = useMemo(() => {
+    const q = normalizar(busqueda);
+    if (!q) return [];
+    const esNumero = /^\d+$/.test(q);
+    return clientes
+      .filter((c) => {
+        if (esNumero)
+          return String(c.codigo) === q || c.lugares.some((l) => (l.numero ?? "").replace(/\D/g, "") === q);
+        return normalizar(c.nombre).includes(q) || normalizar(c.apodo ?? "").includes(q);
+      })
+      .slice(0, 8);
+  }, [busqueda, clientes]);
+
+  function elegirCliente(c: ClienteOpcion) {
+    setClienteId(c.id);
+    setLugarId(c.lugares.length === 1 ? c.lugares[0].id : null);
+    setBusqueda("");
+    setError(null);
+  }
+
+  function cambiarFecha(v: string) {
+    setFecha(v);
+    if (!venceTocado && v) setVence(sumarDias(v, DIAS_VENCIMIENTO_MULTA));
+  }
+
+  function quitarArchivo() {
+    if (archivoRef.current) archivoRef.current.value = "";
+    setNombreArchivo(null);
+  }
+
+  function limpiar() {
+    formRef.current?.reset();
+    quitarArchivo();
+    setTitulo("");
+    setDetalle("");
+    setConMulta(false);
+    setMulta("");
+    setFecha(fechaHoy);
+    setVence(sumarDias(fechaHoy, DIAS_VENCIMIENTO_MULTA));
+    setVenceTocado(false);
+    setRef(nuevoRef());
+  }
+
+  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    if (!cliente) {
+      setError("Elegí a quién va dirigido: buscalo por nombre, apodo o número de puesto.");
+      return;
+    }
+    if (!titulo.trim()) {
+      setError("Poné un título (ej.: Falta de limpieza del puesto).");
+      return;
+    }
+    if (info.llevaMulta && conMulta && montoMulta <= 0) {
+      setError("Poné el monto de la multa, o apagá “¿Lleva multa?”.");
+      return;
+    }
+    const fd = new FormData(e.currentTarget);
+    fd.set("clienteId", cliente.id);
+    fd.set("tipo", tipo);
+    fd.set("titulo", titulo.trim());
+    fd.set("detalle", detalle.trim());
+    fd.set("fecha", fecha);
+    fd.set("ref", ref);
+    if (lugarId) fd.set("espacioId", lugarId);
+    else fd.delete("espacioId");
+    if (lleva) {
+      fd.set("multa", String(montoMulta));
+      fd.set("multaVencimiento", vence);
+    } else {
+      fd.delete("multa");
+      fd.delete("multaVencimiento");
+    }
+    const nombre = cliente.nombre;
+    startTransition(async () => {
+      const res = await emitirRegistro(fd);
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      const etiqueta = `${infoTipoRegistro(res.data.tipo).label} N° ${res.data.numero}`;
+      if (res.data.repetido) {
+        toast.info(`Ese registro ya estaba enviado (${etiqueta})`);
+      } else if (res.data.multa) {
+        toast.success(`${etiqueta} enviado · multa de ${formatARS(res.data.multa)} sumada a su cuenta`);
+      } else {
+        toast.success(`${etiqueta} enviado a ${nombre}`);
+      }
+      if (alTerminar === "detalle") {
+        router.push(`/comunicaciones/registros/${res.data.id}`);
+      } else {
+        limpiar();
+        router.refresh();
+      }
+    });
+  }
+
+  const textoBoton = cliente
+    ? `Notificar a ${cliente.nombre}${lugar ? ` (${lugar.etiqueta})` : ""}`
+    : "Notificar";
+
+  return (
+    <form ref={formRef} onSubmit={onSubmit} className="space-y-8">
+      {/* 1. ¿A quién? */}
+      {!clienteFijo ? (
+        <section className="space-y-3" aria-labelledby="reg-quien">
+          <h2 id="reg-quien" className="font-display text-lg font-bold tracking-tight">
+            ¿A quién?
+          </h2>
+          {cliente ? (
+            <div className="flex flex-wrap items-center gap-3 rounded-xl border-2 border-primary/40 bg-accent/50 p-4">
+              <div className="min-w-0 flex-1">
+                <p className="text-lg font-semibold leading-snug">
+                  {cliente.nombre}
+                  {cliente.apodo ? (
+                    <span className="font-normal text-muted-foreground"> · {cliente.apodo}</span>
+                  ) : null}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Carpeta N° <span className="tabular">{cliente.codigo}</span>
+                  {cliente.deuda > 0 ? (
+                    <>
+                      {" · Debe "}
+                      <Money monto={cliente.deuda} className="font-semibold text-pendiente" />
+                    </>
+                  ) : " · Al día"}
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="min-h-11"
+                onClick={() => {
+                  setClienteId(null);
+                  setLugarId(null);
+                }}
+              >
+                Cambiar
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="relative">
+                <Search
+                  className="pointer-events-none absolute top-1/2 left-3.5 size-5 -translate-y-1/2 text-muted-foreground"
+                  strokeWidth={2}
+                />
+                <Input
+                  autoFocus
+                  type="search"
+                  value={busqueda}
+                  onChange={(e) => setBusqueda(e.target.value)}
+                  placeholder="N° de puesto, nombre, apodo o carpeta…"
+                  aria-label="Buscar cliente"
+                  className="h-14 pl-11 text-lg md:text-lg"
+                />
+              </div>
+              {busqueda && resultados.length === 0 ? (
+                <p className="rounded-lg border border-dashed px-4 py-4 text-center text-sm text-muted-foreground">
+                  No encontramos a nadie con eso. Probá con el número de puesto o parte del nombre.
+                </p>
+              ) : null}
+              {resultados.length > 0 ? (
+                <ul className="divide-y overflow-hidden rounded-xl border bg-card">
+                  {resultados.map((c) => (
+                    <li key={c.id}>
+                      <button
+                        type="button"
+                        onClick={() => elegirCliente(c)}
+                        className="flex min-h-16 w-full items-center gap-3 px-4 py-2.5 text-left transition-colors hover:bg-accent active:bg-accent"
+                      >
+                        <span className="w-10 shrink-0 text-right font-display text-base font-bold tabular">
+                          {c.codigo}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-medium">
+                            {c.nombre}
+                            {c.apodo ? <span className="text-muted-foreground"> · {c.apodo}</span> : null}
+                          </span>
+                          <span className="mt-0.5 flex flex-wrap gap-1">
+                            {c.lugares.map((l) => (
+                              <span key={l.id} className="rounded bg-muted px-1.5 py-px text-xs font-medium">
+                                {l.etiqueta}
+                              </span>
+                            ))}
+                            {!c.tienePortal ? <Sello estado="sin_portal" /> : null}
+                          </span>
+                        </span>
+                        {c.deuda > 0 ? (
+                          <Money monto={c.deuda} className="shrink-0 text-sm font-semibold text-pendiente" />
+                        ) : (
+                          <Sello estado="al_dia" className="shrink-0" />
+                        )}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          )}
+        </section>
+      ) : null}
+
+      {cliente && cliente.lugares.length > 0 ? (
+        <section className="space-y-2" aria-labelledby="reg-lugar">
+          <h2 id="reg-lugar" className="text-base font-semibold">
+            ¿Sobre qué lugar? <span className="font-normal text-muted-foreground">(opcional)</span>
+          </h2>
+          <div className="flex flex-wrap gap-2">
+            {cliente.lugares.map((l) => {
+              const activo = lugarId === l.id;
+              return (
+                <button
+                  key={l.id}
+                  type="button"
+                  aria-pressed={activo}
+                  onClick={() => setLugarId(activo ? null : l.id)}
+                  className={cn(
+                    "inline-flex min-h-11 items-center gap-1.5 rounded-full border px-4 text-sm font-medium transition-colors",
+                    activo ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:bg-accent"
+                  )}
+                >
+                  <MapPin className="size-4" strokeWidth={2} />
+                  {l.etiqueta}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      ) : null}
+
+      {/* 2. ¿Qué es? */}
+      <section className="space-y-3" aria-labelledby="reg-tipo">
+        <h2 id="reg-tipo" className="font-display text-lg font-bold tracking-tight">
+          ¿Qué es?
+        </h2>
+        <div role="group" aria-label="Tipo de registro" className="grid gap-2 sm:grid-cols-3">
+          {TIPOS_REGISTRO.map((t) => {
+            const activo = tipo === t.valor;
+            return (
+              <button
+                key={t.valor}
+                type="button"
+                aria-pressed={activo}
+                onClick={() => {
+                  setTipo(t.valor);
+                  if (!t.llevaMulta) setConMulta(false);
+                }}
+                className={cn(
+                  "flex min-h-16 flex-col items-start justify-center gap-1 rounded-lg border px-4 py-3 text-left transition-colors",
+                  activo ? "border-primary bg-accent ring-2 ring-primary/30" : "bg-card hover:bg-accent/60"
+                )}
+              >
+                <span className="flex items-center gap-2">
+                  <Sello estado={t.valor} />
+                  {activo ? <Check className="size-4 text-primary" strokeWidth={2.5} /> : null}
+                </span>
+                <span className="text-xs leading-snug text-muted-foreground">{t.ayuda}</span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+
+      {/* 3. Qué pasó */}
+      <section className="space-y-5" aria-label="Qué pasó">
+        <div className="space-y-2">
+          <Label htmlFor="reg-titulo" className="text-base">
+            Título
+          </Label>
+          <Input
+            id="reg-titulo"
+            value={titulo}
+            onChange={(e) => setTitulo(e.target.value)}
+            maxLength={200}
+            autoComplete="off"
+            placeholder="Ej.: Falta de limpieza del puesto"
+            className="h-12 text-base md:text-base"
+          />
+          <div className="flex flex-wrap gap-2 pt-1">
+            {TITULOS_SUGERIDOS[tipo].map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => setTitulo(s)}
+                className={cn(
+                  "min-h-10 rounded-full border px-3 text-sm transition-colors",
+                  titulo === s ? "border-primary bg-accent" : "bg-card hover:bg-accent/60"
+                )}
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="reg-detalle" className="text-base">
+            Qué pasó <span className="font-normal text-muted-foreground">(opcional)</span>
+          </Label>
+          <Textarea
+            id="reg-detalle"
+            value={detalle}
+            onChange={(e) => setDetalle(e.target.value)}
+            rows={4}
+            maxLength={8000}
+            placeholder="Contalo como se lo dirías en persona: qué, cuándo y qué tiene que hacer."
+            className="min-h-28 text-base md:text-base"
+          />
+        </div>
+
+        <div className="grid gap-5 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label htmlFor="reg-fecha" className="text-base">
+              Fecha
+            </Label>
+            <Input
+              id="reg-fecha"
+              type="date"
+              value={fecha}
+              max={fechaHoy}
+              onChange={(e) => cambiarFecha(e.target.value)}
+              className="h-12 text-base md:text-base"
+            />
+          </div>
+          <div className="space-y-2">
+            <span className="block text-base font-medium">
+              Foto o PDF <span className="font-normal text-muted-foreground">(opcional)</span>
+            </span>
+            <div className="flex gap-2">
+              <Label
+                htmlFor="reg-archivo"
+                className="inline-flex h-12 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md border bg-card px-4 text-sm font-medium hover:bg-muted"
+              >
+                <Camera className="size-5 shrink-0" strokeWidth={2} />
+                <span className="truncate">{nombreArchivo ?? "Sacar una foto o elegir archivo"}</span>
+              </Label>
+              {nombreArchivo ? (
+                <Button type="button" variant="ghost" className="h-12" onClick={quitarArchivo} aria-label="Quitar el archivo">
+                  <X className="size-4" strokeWidth={2} />
+                </Button>
+              ) : null}
+            </div>
+            <input
+              ref={archivoRef}
+              id="reg-archivo"
+              name="archivo"
+              type="file"
+              accept={ACCEPT_ADJUNTO_REGISTRO}
+              className="sr-only"
+              onChange={(e) => setNombreArchivo(e.target.files?.[0]?.name ?? null)}
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* 4. Multa (apercibimiento o sanción) */}
+      {info.llevaMulta ? (
+        <section className="space-y-4" aria-label="Multa">
+          <label
+            className={cn(
+              "flex min-h-16 cursor-pointer items-center gap-4 rounded-lg border p-4 transition-colors select-none",
+              conMulta ? "border-pendiente/40 bg-pendiente-suave/60" : "bg-card"
+            )}
+          >
+            <Switch checked={conMulta} onCheckedChange={setConMulta} className="scale-125" />
+            <span className="space-y-0.5">
+              <span className="block text-base font-semibold">¿Lleva multa?</span>
+              <span className="block text-sm text-muted-foreground">
+                Se suma a la cuenta del cliente como un cargo más (Multas).
+              </span>
+            </span>
+          </label>
+
+          {conMulta ? (
+            <div className="grid gap-5 rounded-lg border p-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="reg-multa" className="text-base">
+                  Monto de la multa
+                </Label>
+                <Input
+                  id="reg-multa"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  value={multa}
+                  onChange={(e) => setMulta(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                  placeholder="0"
+                  className="h-12 text-lg tabular md:text-lg"
+                />
+                <p className="text-sm text-muted-foreground" aria-live="polite">
+                  {montoMulta > 0 ? (
+                    <>
+                      Son <Money monto={montoMulta} className="font-semibold text-foreground" />
+                    </>
+                  ) : (
+                    "Escribí solo números o elegí un monto:"
+                  )}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {MULTAS_RAPIDAS.map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setMulta(String(m))}
+                      className={cn(
+                        "min-h-10 rounded-full border px-3 text-sm font-medium tabular transition-colors",
+                        montoMulta === m ? "border-primary bg-accent" : "bg-card hover:bg-accent/60"
+                      )}
+                    >
+                      {formatARS(m)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="reg-vence" className="text-base">
+                  Vence el
+                </Label>
+                <Input
+                  id="reg-vence"
+                  type="date"
+                  value={vence}
+                  min={fecha}
+                  onChange={(e) => {
+                    setVence(e.target.value);
+                    setVenceTocado(true);
+                  }}
+                  className="h-12 text-base md:text-base"
+                />
+                <p className="text-sm text-muted-foreground">
+                  Si no lo cambiás, vence a los {DIAS_VENCIMIENTO_MULTA} días.
+                </p>
+              </div>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {/* 5. Así lo ve el socio */}
+      {cliente && titulo.trim() ? (
+        <section className="space-y-2" aria-labelledby="reg-vista">
+          <h2 id="reg-vista" className="flex items-center gap-2 text-base font-semibold">
+            <Eye className="size-4 text-primary" strokeWidth={2} />
+            Así lo ve el socio
+          </h2>
+          <div className="rounded-xl border bg-muted/30 p-4">
+            <div className="space-y-3 rounded-lg border bg-card p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <Sello estado={tipo} />
+                <Sello estado="nueva_comunicacion" />
+                {tipo !== "notificacion" ? <Sello estado="a_responder" /> : null}
+              </div>
+              <p className="text-lg font-semibold leading-snug">{titulo.trim()}</p>
+              <p className="text-sm text-muted-foreground">
+                {info.label} · <span className="tabular">{formatFecha(fecha)}</span>
+                {lugar ? ` · ${lugar.etiqueta}` : ""}
+              </p>
+              {detalle.trim() ? (
+                <p className="line-clamp-4 whitespace-pre-line text-[15px] leading-relaxed">{detalle.trim()}</p>
+              ) : null}
+              {lleva ? (
+                <p className="rounded-md bg-pendiente-suave px-3 py-2 text-[15px]">
+                  Multa <Money monto={montoMulta} className="font-bold text-pendiente" /> · Se sumó a tu cuenta
+                  · vence el <span className="tabular">{formatFecha(vence)}</span>
+                </p>
+              ) : null}
+              <p className="text-sm text-muted-foreground">
+                {tipo === "notificacion"
+                  ? "Abajo tiene un botón para responder."
+                  : "Abajo tiene el botón “Presentar mi descargo”."}
+              </p>
+            </div>
+            {!cliente.tienePortal ? (
+              <p className="mt-3 flex items-start gap-2 text-sm font-medium text-parcial">
+                <UserX className="mt-0.5 size-4 shrink-0" strokeWidth={2} />
+                {cliente.nombre} no tiene usuario del portal: queda registrado, pero avisale en persona.
+              </p>
+            ) : null}
+          </div>
+        </section>
+      ) : null}
+
+      {error ? (
+        <p role="alert" className="rounded-md bg-pendiente-suave px-4 py-3 text-sm font-medium text-pendiente">
+          {error}
+        </p>
+      ) : null}
+
+      <Button
+        type="submit"
+        size="lg"
+        disabled={pendiente || !cliente || !titulo.trim()}
+        className="h-14 w-full text-base font-semibold"
+      >
+        {pendiente ? <Spinner className="size-5" /> : <Send className="size-5" strokeWidth={2} />}
+        <span className="truncate">{textoBoton}</span>
+      </Button>
+    </form>
+  );
+}

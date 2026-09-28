@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { ArrowLeft, Paperclip } from "lucide-react";
 import { requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/shared/page-header";
 import { Sello } from "@/components/shared/sello";
-import { contarCircularesPendientes } from "@/components/portal/circulares-pendientes";
 import { ChipTipo } from "@/components/solicitudes/chip-tipo";
 import { LineaEstado } from "@/components/solicitudes/linea-estado";
 import {
@@ -55,14 +54,7 @@ export default async function SolicitudSocioPage({
     .maybeSingle();
   if (!s) notFound();
 
-  // Con circulares obligatorias sin confirmar, el portal queda bloqueado en
-  // /mi-cuenta hasta que el socio las confirme.
-  if (
-    s.cliente_id &&
-    (await contarCircularesPendientes(supabase, s.cliente_id)) > 0
-  ) {
-    redirect("/mi-cuenta");
-  }
+  // Las circulares obligatorias sin confirmar las bloquea GateCirculares en el layout.
 
   // Los mensajes internos no llegan: la RLS los filtra para el socio.
   const { data: mensajesCrudos } = await supabase

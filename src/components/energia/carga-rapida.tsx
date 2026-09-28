@@ -1,8 +1,10 @@
 "use client";
 
 import { Fragment, useEffect, useRef, useState } from "react";
-import { Check, Loader2, X } from "lucide-react";
+import Link from "next/link";
+import { Check, Loader2, MapPin, X } from "lucide-react";
 import { formatARS, formatNumero } from "@/lib/format";
+import { Sello } from "@/components/shared/sello";
 import { registrarLectura } from "@/lib/actions/energia";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,7 +22,12 @@ export type FilaMedidor = {
   id: string;
   numero: string;
   cliente: string;
+  /** "Puesto 58" (desde el plano) o el texto libre del medidor. */
   ubicacion: string | null;
+  /** Lugar del plano: la ubicación se ve como chip con link a /mapa?espacio= (C8). */
+  espacioId?: string | null;
+  /** I1: abono mensual del cliente (solo en su primer medidor) o "exento". */
+  abono?: { monto: number } | "exento" | null;
   /** Última lectura conocida de períodos anteriores (su lectura_actual). */
   anteriorConocida: number | null;
   /** Lectura ya cargada en este período, si existe. */
@@ -305,11 +312,29 @@ export function CargaRapida({
                   <TableCell className="font-display text-lg tracking-wide">
                     {fila.numero}
                   </TableCell>
-                  <TableCell className="max-w-44 truncate font-medium">
-                    {fila.cliente}
+                  <TableCell className="max-w-48 font-medium">
+                    <span className="block truncate">{fila.cliente}</span>
+                    {fila.abono === "exento" ? (
+                      <Sello estado="exento" texto="Exento de abono" className="mt-0.5" />
+                    ) : fila.abono ? (
+                      <span className="block text-xs font-normal text-muted-foreground">
+                        + abono {formatARS(fila.abono.monto)}
+                      </span>
+                    ) : null}
                   </TableCell>
-                  <TableCell className="max-w-36 truncate text-muted-foreground max-md:hidden">
-                    {fila.ubicacion ?? "—"}
+                  <TableCell className="max-w-40 text-muted-foreground max-md:hidden">
+                    {fila.espacioId ? (
+                      <Link
+                        href={`/mapa?espacio=${fila.espacioId}`}
+                        className="inline-flex min-h-11 max-w-full items-center gap-1.5 rounded-md border bg-card px-2.5 text-sm font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-accent"
+                        title="Ver en el plano"
+                      >
+                        <MapPin className="size-3.5 shrink-0 text-primary" strokeWidth={2} />
+                        <span className="truncate">{fila.ubicacion ?? "En el plano"}</span>
+                      </Link>
+                    ) : (
+                      <span className="block truncate">{fila.ubicacion ?? "Sin lugar en el plano"}</span>
+                    )}
                   </TableCell>
 
                   {/* Anterior */}

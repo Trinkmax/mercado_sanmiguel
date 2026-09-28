@@ -1,5 +1,5 @@
 import type { Enums } from "@/lib/database.types";
-import { DIAS_SEMANA, formatHora } from "@/lib/format";
+import { DIAS_SEMANA, formatHora, formatNumero } from "@/lib/format";
 
 export type TipoContrato = Enums<"tipo_contrato">;
 
@@ -76,11 +76,75 @@ export function resumirHorarios(franjas: Franja[]): string {
     .join(" · ");
 }
 
-/** URL del listado de personal conservando búsqueda y filtro (activos por defecto). */
-export function hrefPersonal(texto: string, filtro?: string): string {
+/** URL del listado de personal conservando búsqueda, filtro (activos por defecto) y sector. */
+export function hrefPersonal(texto: string, filtro?: string, sector?: string | null): string {
   const params = new URLSearchParams();
   if (texto) params.set("q", texto);
   if (filtro && filtro !== "activos") params.set("filtro", filtro);
+  if (sector) params.set("sector", sector);
   const qs = params.toString();
   return qs ? `/personal?${qs}` : "/personal";
+}
+
+// ---------------------------------------------------------------------------
+// Fase 3 (H4): sector y horas de contrato
+// ---------------------------------------------------------------------------
+
+export type SectorPersonal = Enums<"sector_personal">;
+
+/** Orden de los chips (el mismo del enum en la base). */
+export const SECTORES_PERSONAL: SectorPersonal[] = [
+  "porteria",
+  "limpieza",
+  "mantenimiento",
+  "administracion",
+  "otro",
+];
+
+export const LABEL_SECTOR: Record<SectorPersonal, string> = {
+  porteria: "Portería",
+  limpieza: "Limpieza",
+  mantenimiento: "Mantenimiento",
+  administracion: "Administración",
+  otro: "Otro",
+};
+
+export function esSector(v: string | null | undefined): v is SectorPersonal {
+  return typeof v === "string" && (SECTORES_PERSONAL as string[]).includes(v);
+}
+
+/** Cargos habituales: se ofrecen como chips que completan el campo. */
+export const SUGERENCIAS_CARGO = ["Encargado de turno", "Sereno", "Peón"];
+
+function aMinutos(hora: string): number {
+  const [h, m] = hora.split(":").map(Number);
+  return h * 60 + (m || 0);
+}
+
+/** Horas por semana que suman sus franjas horarias (lo que usa la planilla si no hay contrato). */
+export function horasSemanalesDeFranjas(franjas: Franja[]): number {
+  const minutos = franjas.reduce(
+    (acc, f) => acc + Math.max(aMinutos(f.hora_hasta) - aMinutos(f.hora_desde), 0),
+    0
+  );
+  return Math.round((minutos / 60) * 100) / 100;
+}
+
+/** 44 → "44", 37.5 → "37,5" (horas sin ceros de más). */
+export function formatHorasNumero(h: number | string | null | undefined): string {
+  return formatNumero(Math.round(Number(h ?? 0) * 100) / 100);
+}
+
+/** Minutos entre la entrada y la salida (timestamptz). Null si todavía no salió. */
+export function minutosTrabajados(ingreso: string, egreso: string | null): number | null {
+  if (!egreso) return null;
+  return Math.max(Math.round((new Date(egreso).getTime() - new Date(ingreso).getTime()) / 60000), 0);
+}
+
+/** 485 → "8 h 05 min" · 45 → "45 min". */
+export function formatDuracion(minutos: number): string {
+  const h = Math.floor(minutos / 60);
+  const m = minutos % 60;
+  if (h === 0) return `${m} min`;
+  return `${h} h ${String(m).padStart(2, "0")} min`;
 }

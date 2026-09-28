@@ -136,6 +136,7 @@ export const OPCIONES_CUOTAS_MES: { valor: number; label: string; ayuda: string 
   { valor: 2, label: "2 veces", ayuda: "Quincenal" },
   { valor: 3, label: "3 veces", ayuda: "Cada 10 días" },
   { valor: 4, label: "4 veces", ayuda: "Semanal" },
+  { valor: 30, label: "Todos los días", ayuda: "Paga por día" },
 ];
 
 /** Días de la semana (ISO: 1 = lunes … 7 = domingo), para horarios de personal. */
@@ -208,3 +209,120 @@ export const MEDIOS_SIN_CHEQUE = [
   { valor: "efectivo", label: "Efectivo" },
   { valor: "transferencia", label: "Transferencia" },
 ] as const;
+
+// ---------------------------------------------------------------------------
+// Fase 3 (docs/FASE3-CONTRATO.md §5.4)
+// ---------------------------------------------------------------------------
+
+/** Moneda de tesorería (enum `moneda` en la base). Los dólares NUNCA se suman a los pesos. */
+export type Moneda = "ARS" | "USD";
+
+export const LABEL_MONEDA: Record<Moneda, string> = { ARS: "Pesos", USD: "Dólares" };
+
+const usd = new Intl.NumberFormat("es-AR", {
+  style: "currency",
+  currency: "USD",
+  maximumFractionDigits: 0,
+});
+
+const usdConCentavos = new Intl.NumberFormat("es-AR", {
+  style: "currency",
+  currency: "USD",
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+});
+
+/** "$ 1.234" (pesos, igual que formatARS) o "US$ 1.234" (dólares). */
+export function formatMoneda(
+  monto: number | string | null | undefined,
+  moneda: Moneda = "ARS"
+): string {
+  if (moneda === "ARS") return formatARS(monto);
+  const n = Number(monto ?? 0);
+  return Number.isInteger(n) ? usd.format(n) : usdConCentavos.format(n);
+}
+
+/** DNI: solo dígitos ("12.345.678" → "12345678"). */
+export function normalizarDni(v: string): string {
+  return v.replace(/\D/g, "");
+}
+
+/** DNI de login: 7 u 8 dígitos (mismo check que perfiles.dni en la base). */
+export function esDniValido(v: string): boolean {
+  return /^[0-9]{7,8}$/.test(normalizarDni(v));
+}
+
+/** "12345678" → "12.345.678". Si no es un DNI válido lo devuelve tal cual. */
+export function formatDni(dni: string | null | undefined): string {
+  if (!dni) return "—";
+  const d = normalizarDni(dni);
+  if (!/^[0-9]{7,8}$/.test(d)) return dni;
+  return d.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+}
+
+/** CUIT: solo dígitos ("20-12345678-3" → "20123456783"). */
+export function limpiarCuit(v: string): string {
+  return v.replace(/\D/g, "");
+}
+
+/** Lo que exige la base (cheques.cuit): 11 dígitos. */
+export function cuitTieneOnceDigitos(v: string): boolean {
+  return /^[0-9]{11}$/.test(limpiarCuit(v));
+}
+
+/**
+ * 11 dígitos y dígito verificador correcto (módulo 11). En la UI es un AVISO, nunca un
+ * bloqueo: un CUIT atípico o mal leído no traba el cobro ("Está bien así, seguir").
+ */
+export function esCuitValido(v: string): boolean {
+  const c = limpiarCuit(v);
+  if (!/^[0-9]{11}$/.test(c)) return false;
+  const pesos = [5, 4, 3, 2, 7, 6, 5, 4, 3, 2];
+  const suma = pesos.reduce((acc, p, i) => acc + p * Number(c[i]), 0);
+  const resto = 11 - (suma % 11);
+  const verificador = resto === 11 ? 0 : resto;
+  if (verificador === 10) return false;
+  return verificador === Number(c[10]);
+}
+
+/** "20123456783" → "20-12345678-3". Si no tiene 11 dígitos lo devuelve tal cual. */
+export function formatCuit(cuit: string | null | undefined): string {
+  if (!cuit) return "—";
+  const c = limpiarCuit(cuit);
+  if (c.length !== 11) return cuit;
+  return `${c.slice(0, 2)}-${c.slice(2, 10)}-${c.slice(10)}`;
+}
+
+/** Semáforo de deuda (B3): verde al día · ámbar debe pero en término · rojo algo vencido. */
+export type NivelDeuda = "al_dia" | "en_termino" | "vencido";
+
+/**
+ * deuda y deudaVencida salen de v_deuda_clientes (deuda, deuda_vencida); saldoFavor de
+ * v_saldo_favor. Un cliente sin fila en v_deuda_clientes está al día.
+ */
+export function nivelDeuda(d: {
+  deuda: number;
+  deudaVencida: number;
+  saldoFavor?: number;
+}): NivelDeuda {
+  const neta = Number(d.deuda ?? 0) - Number(d.saldoFavor ?? 0);
+  if (neta <= 0.009) return "al_dia";
+  if (Number(d.deudaVencida ?? 0) > 0.009) return "vencido";
+  return "en_termino";
+}
+
+/** Clave de <Sello> para cada nivel. */
+export const SELLO_NIVEL_DEUDA: Record<NivelDeuda, "al_dia" | "en_termino" | "vencido"> = {
+  al_dia: "al_dia",
+  en_termino: "en_termino",
+  vencido: "vencido",
+};
+
+export const TEXTO_NIVEL_DEUDA: Record<NivelDeuda, string> = {
+  al_dia: "Al día",
+  en_termino: "Debe, en término",
+  vencido: "Vencido",
+};
+
+/** Cuotas por mes "Todos los días" (C5): se guarda 30 en clientes.cuotas_mes. */
+export const CUOTAS_TODOS_LOS_DIAS = 30;

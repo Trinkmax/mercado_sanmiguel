@@ -24,16 +24,32 @@ import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
 
 /** Botón primario de Facturación: confirma y dispara la generación del mes. */
+/** "12 cargos, 8 abonos de energía y 3 consumos" */
+function textoResultado(r: ResultadoGeneracion): string {
+  const cargos = Number(r.cargos ?? 0);
+  const abonos = Number(r.abonos ?? 0);
+  const energia = Number(r.energia ?? 0);
+  const partes = [
+    `${formatNumero(cargos)} ${cargos === 1 ? "cargo" : "cargos"}`,
+    `${formatNumero(abonos)} ${abonos === 1 ? "abono de energía" : "abonos de energía"}`,
+    `${formatNumero(energia)} ${energia === 1 ? "consumo" : "consumos"}`,
+  ];
+  return `${partes.slice(0, -1).join(", ")} y ${partes[partes.length - 1]}`;
+}
+
 export function GenerarPeriodoBoton({
   periodo,
   label,
   cargosEstimados,
   totalEstimado,
+  abonosEstimados = 0,
 }: {
   periodo: string;
   label: string;
   cargosEstimados: number;
   totalEstimado: number;
+  /** Cuántos abonos de energía se van a generar (clientes con medidor, sin exentos). */
+  abonosEstimados?: number;
 }) {
   const [abierto, setAbierto] = useState(false);
   const [pendiente, startTransition] = useTransition();
@@ -53,7 +69,7 @@ export function GenerarPeriodoBoton({
       const saldoAplicado = Number(res.data.saldo_favor_aplicado ?? 0);
       setUltimo({ ...res.data, saldo_favor_aplicado: saldoAplicado, label });
       toast.success(
-        `Listo: se generaron ${formatNumero(res.data.cargos)} cargos y ${formatNumero(res.data.energia)} de energía para ${label}.`,
+        `Listo: se generaron ${textoResultado(res.data)} para ${label}.`,
         saldoAplicado > 0
           ? { description: `Saldo a favor aplicado: ${formatARS(saldoAplicado)}.` }
           : undefined
@@ -73,8 +89,7 @@ export function GenerarPeriodoBoton({
           <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-pagado" strokeWidth={2} />
           <div className="min-w-0 flex-1 space-y-1">
             <p className="font-medium">
-              {ultimo.label} quedó generado: {formatNumero(ultimo.cargos)} cargos y{" "}
-              {formatNumero(ultimo.energia)} de energía. Vence el{" "}
+              {ultimo.label} quedó generado: {textoResultado(ultimo)}. Vence el{" "}
               {formatFecha(ultimo.vencimiento)}.
             </p>
             {saldoUltimo > 0 ? (
@@ -108,9 +123,13 @@ export function GenerarPeriodoBoton({
             <DialogTitle className="text-lg">¿Generar {label}?</DialogTitle>
             <DialogDescription className="text-sm/relaxed">
               Se van a crear aprox. {formatNumero(cargosEstimados)} cargos por{" "}
-              {formatARS(totalEstimado)}. Si algún cliente tiene saldo a favor, se
-              le descuenta solo. Esto se hace una vez por mes. Quedate tranquilo:
-              si se corre dos veces, no se duplica nada.
+              {formatARS(totalEstimado)}
+              {abonosEstimados > 0
+                ? ` (incluye ${formatNumero(abonosEstimados)} ${abonosEstimados === 1 ? "abono" : "abonos"} de energía)`
+                : ""}
+              . Si algún cliente tiene saldo a favor, se le descuenta solo. Esto se
+              hace una vez por mes. Quedate tranquilo: si se corre dos veces, no se
+              duplica nada (solo suma lo que falte, como un medidor nuevo).
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

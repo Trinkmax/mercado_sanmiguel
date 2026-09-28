@@ -25,7 +25,7 @@ import { Spinner } from "@/components/ui/spinner";
 export function AdjuntarFactura({
   gasto,
 }: {
-  gasto: { id: string; descripcion: string; monto: number };
+  gasto: { id: string; etiqueta: string; monto: number };
 }) {
   const [abierto, setAbierto] = useState(false);
   const [tieneArchivo, setTieneArchivo] = useState(false);
@@ -41,7 +41,7 @@ export function AdjuntarFactura({
         toast.error(res.error);
         return;
       }
-      toast.success("Factura adjuntada.");
+      toast.success(`Guardaste la factura de ${gasto.etiqueta}.`);
       setAbierto(false);
       setTieneArchivo(false);
     });
@@ -58,8 +58,8 @@ export function AdjuntarFactura({
       <DialogTrigger asChild>
         <Button
           variant="outline"
-          className="h-10 px-3 font-medium"
-          aria-label={`Adjuntar factura: ${gasto.descripcion}`}
+          className="h-11 px-3 text-sm font-medium"
+          aria-label={`Adjuntar factura: ${gasto.etiqueta}`}
         >
           <Paperclip className="size-4" strokeWidth={2} />
           Adjuntar factura
@@ -69,7 +69,7 @@ export function AdjuntarFactura({
         <DialogHeader>
           <DialogTitle>Adjuntar factura</DialogTitle>
           <DialogDescription>
-            {gasto.descripcion} · {formatARS(gasto.monto)}
+            {gasto.etiqueta} · {formatARS(gasto.monto)}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="space-y-5">

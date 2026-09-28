@@ -5,6 +5,8 @@ import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
 import { requireRol } from "@/lib/auth";
 import { ok, fallo, type ActionResult } from "@/lib/actions/result";
+import { cargarPlano } from "@/components/mapa/datos-plano";
+import type { ElementoPlano, Espacio } from "@/components/mapa/tipos";
 
 const idEspacio = z.uuid("No reconocemos el puesto. Recargá la página.");
 
@@ -29,6 +31,8 @@ const editarSchema = z.object({
     .nullable(),
   medio: z.boolean(),
   nota: z.string().trim().max(60, "La nota puede tener hasta 60 caracteres.").nullable(),
+  /** C3: puesto propio de la cooperativa (paga EXPP). Sin el campo, no se toca. */
+  propio: z.boolean().optional(),
 });
 
 /**
@@ -60,7 +64,7 @@ export async function asignarEspacios(
   return ok({ cambiados: Number(data ?? 0) });
 }
 
-/** Corrige número, medio puesto y nota de un espacio del plano. */
+/** Corrige número, medio puesto, nota y "puesto propio" (C3) de un espacio del plano. */
 export async function editarEspacio(input: unknown): Promise<ActionResult<void>> {
   await requireRol("admin", "lider");
   const parsed = editarSchema.safeParse(input);
@@ -72,9 +76,27 @@ export async function editarEspacio(input: unknown): Promise<ActionResult<void>>
     p_numero: parsed.data.numero ?? "",
     p_medio: parsed.data.medio,
     p_nota: parsed.data.nota ?? "",
+    ...(parsed.data.propio === undefined ? {} : { p_propio: parsed.data.propio }),
   });
   if (error) return fallo(error);
 
   revalidatePath("/mapa");
+  // "Puesto propio 12" se ve en la ficha, en Clientes (segmento) y en las solicitudes.
+  if (parsed.data.propio !== undefined) revalidatePath("/clientes", "layout");
   return ok(undefined);
+}
+
+/**
+ * El plano para elegir un lugar (C8: ubicación del medidor; H3: puesto de una solicitud).
+ * Guardia, Portería y Tesorería lo reciben sin clientes ni notas (`espacios_del_plano`);
+ * Administración y el Líder, con quién ocupa cada espacio. Interfaz congelada (§6.10).
+ */
+export async function planoParaSelector(): Promise<
+  ActionResult<{ espacios: Espacio[]; elementos: ElementoPlano[] }>
+> {
+  const perfil = await requireRol("admin", "guardia", "porteria", "tesoreria", "lider");
+  const supabase = await createClient();
+  const plano = await cargarPlano(supabase, perfil, { conClientes: true });
+  if (plano.error) return fallo("No pudimos cargar el plano. Probá de nuevo en un rato.");
+  return ok({ espacios: plano.espacios, elementos: plano.elementos });
 }

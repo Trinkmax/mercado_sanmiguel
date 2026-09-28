@@ -1,13 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { DoorOpen, Printer, ShieldCheck } from "lucide-react";
+import { Printer } from "lucide-react";
 import { toast } from "sonner";
-import {
-  guardarConfiguracionGeneral,
-  guardarPreciosPorteria,
-} from "@/lib/actions/configuracion";
-import { formatARS } from "@/lib/format";
+import { guardarConfiguracionGeneral } from "@/lib/actions/configuracion";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -19,37 +15,26 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Money } from "@/components/shared/money";
 
 function soloDigitos(valor: string): string {
   return valor.replace(/\D+/g, "");
 }
 
-export type PreciosPorteria = {
-  camion: number;
-  ambulante: number;
-  quintero: number;
-};
-
 /**
- * Pestaña General: vencimiento del mes, precios del cobro por día en portería
- * (solo los edita el Líder de Procesos) e impresión directa de recibos.
+ * Pestaña General: vencimiento del mes e impresión directa de recibos.
+ * (El canon de transporte va en "Tarifas de transporte"; el ambulante y la
+ * quinta, en "Quintas y ambulantes".)
  */
 export function FormGeneral({
   diaVencimiento,
-  preciosPorteria,
   impresionDirecta,
-  esLider,
 }: {
   diaVencimiento: number;
-  preciosPorteria: PreciosPorteria;
   impresionDirecta: boolean;
-  esLider: boolean;
 }) {
   return (
     <div className="max-w-2xl space-y-6">
       <CardVencimiento diaVencimiento={diaVencimiento} />
-      <CardPorteria precios={preciosPorteria} esLider={esLider} />
       <CardImpresionDirecta impresionDirecta={impresionDirecta} />
     </div>
   );
@@ -116,122 +101,6 @@ function CardVencimiento({ diaVencimiento }: { diaVencimiento: number }) {
         >
           {guardando ? "Guardando…" : "Guardar vencimiento"}
         </Button>
-      </CardContent>
-    </Card>
-  );
-}
-
-/* ---------- Cobro por día en portería ---------- */
-
-const CAMPOS_PORTERIA: {
-  clave: keyof PreciosPorteria;
-  label: string;
-  ayuda: string;
-}[] = [
-  { clave: "camion", label: "Canon por camión", ayuda: "por camión que entra" },
-  { clave: "ambulante", label: "Canon por ambulante", ayuda: "por ambulante, por día" },
-  { clave: "quintero", label: "Canon por quintero (por día)", ayuda: "por quintero, por día" },
-];
-
-function CardPorteria({
-  precios,
-  esLider,
-}: {
-  precios: PreciosPorteria;
-  esLider: boolean;
-}) {
-  const [valores, setValores] = useState<Record<keyof PreciosPorteria, string>>({
-    camion: String(Math.round(precios.camion)),
-    ambulante: String(Math.round(precios.ambulante)),
-    quintero: String(Math.round(precios.quintero)),
-  });
-  const [guardando, startGuardar] = useTransition();
-
-  const sinCambios =
-    Number(valores.camion || 0) === Math.round(precios.camion) &&
-    Number(valores.ambulante || 0) === Math.round(precios.ambulante) &&
-    Number(valores.quintero || 0) === Math.round(precios.quintero);
-
-  function guardar() {
-    startGuardar(async () => {
-      const res = await guardarPreciosPorteria({
-        precio_canon_camion: Number(valores.camion || 0),
-        precio_canon_ambulante: Number(valores.ambulante || 0),
-        precio_canon_quintero_dia: Number(valores.quintero || 0),
-      });
-      if (!res.ok) toast.error(res.error);
-      else toast.success("Precios de portería guardados. Rigen desde el próximo cobro.");
-    });
-  }
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <DoorOpen className="size-5 text-muted-foreground" strokeWidth={2} />
-          Cobro por día en portería
-        </CardTitle>
-        <CardDescription className="text-sm">
-          Lo cobra el Jefe de Portería en la garita: camiones que entran,
-          ambulantes y quinteros que pagan por día.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-5">
-        {esLider ? (
-          <>
-            {CAMPOS_PORTERIA.map((campo) => (
-              <div key={campo.clave} className="space-y-2">
-                <Label htmlFor={`precio-${campo.clave}`} className="text-sm">
-                  {campo.label}
-                </Label>
-                <Input
-                  id={`precio-${campo.clave}`}
-                  inputMode="numeric"
-                  autoComplete="off"
-                  className="h-12 text-base md:text-base"
-                  value={valores[campo.clave]}
-                  onChange={(e) =>
-                    setValores((prev) => ({
-                      ...prev,
-                      [campo.clave]: soloDigitos(e.target.value),
-                    }))
-                  }
-                />
-                <p className="text-sm text-muted-foreground tabular">
-                  {formatARS(Number(valores[campo.clave] || 0))} {campo.ayuda}.
-                </p>
-              </div>
-            ))}
-            <Button
-              size="lg"
-              className="h-12 w-full text-base font-semibold sm:w-auto sm:px-8"
-              disabled={guardando || sinCambios}
-              onClick={guardar}
-            >
-              {guardando ? "Guardando…" : "Guardar precios de portería"}
-            </Button>
-          </>
-        ) : (
-          <dl className="divide-y rounded-lg border">
-            {CAMPOS_PORTERIA.map((campo) => (
-              <div
-                key={campo.clave}
-                className="flex items-baseline justify-between gap-4 px-4 py-3"
-              >
-                <dt className="text-sm">{campo.label}</dt>
-                <dd>
-                  <Money monto={precios[campo.clave]} className="text-base font-semibold" />
-                </dd>
-              </div>
-            ))}
-          </dl>
-        )}
-        {esLider ? null : (
-          <p className="flex items-center gap-2 text-sm text-muted-foreground">
-            <ShieldCheck className="size-4" strokeWidth={2} />
-            Lo configura el Líder de Procesos. Acá lo ves para consulta.
-          </p>
-        )}
       </CardContent>
     </Card>
   );

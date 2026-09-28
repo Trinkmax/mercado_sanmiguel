@@ -3,8 +3,10 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { Check } from "lucide-react";
 import type { Rol } from "@/lib/auth";
 import { avanzarSolicitud } from "@/lib/actions/solicitudes";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -15,34 +17,29 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
-import { LABEL_ESTADO, type EstadoSolicitud } from "./constantes";
+import { LABEL_ESTADO, type EstadoSolicitud, type OrigenSolicitud } from "./constantes";
 import { accionesPara, type DefAccion } from "./acciones";
 
 export type UsuarioAsignable = { user_id: string; nombre: string };
 
 /**
- * Panel "Acciones" del detalle de una solicitud. Muestra solo lo que el rol
- * puede hacer en el estado actual; las que necesitan texto abren un Dialog
- * corto. Todo pasa por la RPC `avanzar_solicitud`.
+ * Panel "Acciones" del detalle de una solicitud. Muestra solo lo que el rol puede hacer en
+ * el estado actual; las que necesitan texto abren un Dialog corto. Todo pasa por la RPC
+ * `avanzar_solicitud`, que es la autoridad.
  */
 export function AccionesSolicitud({
   solicitudId,
   estado,
+  origen,
   rol,
   tieneResolucion,
   admins,
 }: {
   solicitudId: string;
   estado: EstadoSolicitud;
+  origen?: OrigenSolicitud;
   rol: Rol;
   tieneResolucion: boolean;
   admins: UsuarioAsignable[];
@@ -54,7 +51,7 @@ export function AccionesSolicitud({
   const [error, setError] = useState<string | null>(null);
   const [pendiente, startTransition] = useTransition();
 
-  const acciones = accionesPara(rol, estado);
+  const acciones = accionesPara(rol, { estado, origen });
   if (acciones.length === 0) return null;
 
   function ejecutar(def: DefAccion, conTexto?: string, conUsuario?: string) {
@@ -70,7 +67,11 @@ export function AccionesSolicitud({
         else toast.error(res.error);
         return;
       }
-      toast.success(`${def.exito} · ${LABEL_ESTADO[res.data.estado]}`);
+      toast.success(
+        def.accion === "resolver_jefe" || def.accion === "elevar"
+          ? def.exito
+          : `${def.exito} · ${LABEL_ESTADO[res.data.estado]}`
+      );
       cerrarDialogo();
       router.refresh();
     });
@@ -94,27 +95,17 @@ export function AccionesSolicitud({
     setError(null);
   }
 
+  const textoObligatorio = (def: DefAccion) =>
+    def.conTexto === "obligatorio" || (def.accion === "asignar" && !tieneResolucion);
+
   function confirmarDialogo() {
     if (!abierta) return;
     const t = texto.trim();
-    const textoObligatorio =
-      abierta.conTexto === "obligatorio" ||
-      (abierta.accion === "asignar" && !tieneResolucion);
-    if (textoObligatorio && !t) {
-      setError(
-        abierta.accion === "rechazar"
-          ? "Contá por qué se rechaza."
-          : abierta.accion === "asignar"
-            ? "Escribí qué tiene que hacer Administración."
-            : "Escribí la resolución."
-      );
+    if (textoObligatorio(abierta) && !t) {
+      setError(abierta.faltaTexto ?? "Escribí el texto.");
       return;
     }
-    ejecutar(
-      abierta,
-      t || undefined,
-      abierta.accion === "asignar" && usuarioId ? usuarioId : undefined
-    );
+    ejecutar(abierta, t || undefined, abierta.accion === "asignar" && usuarioId ? usuarioId : undefined);
   }
 
   return (
@@ -137,36 +128,44 @@ export function AccionesSolicitud({
                     : "h-11 w-full justify-start px-4 text-sm font-medium"
               }
             >
-              {pendiente && !abierta ? (
-                <Spinner className="size-4" />
-              ) : (
-                <Icono className="size-5" strokeWidth={2} />
-              )}
+              {pendiente && !abierta ? <Spinner className="size-4" /> : <Icono className="size-5" strokeWidth={2} />}
               {def.label}
             </Button>
           );
         })}
       </div>
 
-      <Dialog open={abierta !== null} onOpenChange={(o) => !o && cerrarDialogo()}>
+      <Dialog open={abierta !== null} onOpenChange={(o) => !o && !pendiente && cerrarDialogo()}>
         <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-lg">
           {abierta ? (
             <>
               <DialogHeader>
                 <DialogTitle className="text-lg">{abierta.titulo}</DialogTitle>
-                <DialogDescription className="text-sm">
-                  {abierta.descripcion}
-                </DialogDescription>
+                <DialogDescription className="text-sm">{abierta.descripcion}</DialogDescription>
               </DialogHeader>
 
               <div className="space-y-5">
                 <div className="space-y-2">
                   <Label htmlFor="accion-texto" className="text-base">
-                    {abierta.conTexto === "obligatorio" ||
-                    (abierta.accion === "asignar" && !tieneResolucion)
-                      ? "Texto"
-                      : "Texto (opcional)"}
+                    {textoObligatorio(abierta) ? "Texto" : "Texto (opcional)"}
                   </Label>
+                  {abierta.sugerencias?.length ? (
+                    <div className="flex flex-wrap gap-2">
+                      {abierta.sugerencias.map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => {
+                            setTexto(s);
+                            setError(null);
+                          }}
+                          className="inline-flex min-h-11 items-center rounded-full border bg-card px-4 text-sm font-medium hover:bg-accent"
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
                   <Textarea
                     id="accion-texto"
                     rows={4}
@@ -177,43 +176,41 @@ export function AccionesSolicitud({
                     className="min-h-28 text-base md:text-base"
                     autoFocus
                   />
-                  {error ? (
-                    <p className="text-sm font-medium text-pendiente">{error}</p>
-                  ) : null}
+                  {error ? <p className="text-sm font-medium text-pendiente">{error}</p> : null}
                 </div>
 
                 {abierta.accion === "asignar" && admins.length > 0 ? (
                   <div className="space-y-2">
-                    <Label htmlFor="accion-usuario" className="text-base">
-                      ¿A quién de Administración? (opcional)
-                    </Label>
-                    <Select value={usuarioId} onValueChange={setUsuarioId}>
-                      <SelectTrigger id="accion-usuario" className="h-12 w-full text-base">
-                        <SelectValue placeholder="Cualquiera de Administración" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {admins.map((a) => (
-                          <SelectItem
-                            key={a.user_id}
-                            value={a.user_id}
-                            className="min-h-11"
+                    <p className="text-base font-medium">¿A quién de Administración? (opcional)</p>
+                    <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Persona de Administración">
+                      {[{ user_id: "", nombre: "Cualquiera de Administración" }, ...admins].map((a) => {
+                        const activo = usuarioId === a.user_id;
+                        return (
+                          <button
+                            key={a.user_id || "cualquiera"}
+                            type="button"
+                            role="radio"
+                            aria-checked={activo}
+                            onClick={() => setUsuarioId(a.user_id)}
+                            className={cn(
+                              "inline-flex min-h-11 items-center gap-1.5 rounded-full border px-4 text-sm font-semibold transition-colors",
+                              activo
+                                ? "border-primary bg-primary text-primary-foreground"
+                                : "border-border bg-card hover:bg-accent"
+                            )}
                           >
+                            {activo ? <Check className="size-4" strokeWidth={2.5} /> : null}
                             {a.nombre}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 ) : null}
               </div>
 
               <DialogFooter className="gap-2">
-                <Button
-                  variant="outline"
-                  className="h-12"
-                  disabled={pendiente}
-                  onClick={cerrarDialogo}
-                >
+                <Button variant="outline" className="h-12" disabled={pendiente} onClick={cerrarDialogo}>
                   Volver
                 </Button>
                 <Button

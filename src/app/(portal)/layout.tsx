@@ -4,15 +4,20 @@ import { cerrarSesion } from "@/lib/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Marca } from "@/components/shared/marca";
 import { GateTerminos } from "@/components/portal/gate-terminos";
+import { GateCirculares } from "@/components/portal/gate-circulares";
+import { NavPortal } from "@/components/portal/nav-portal";
+import { getResumenComunicaciones } from "@/components/portal/datos-portal";
 
 /** Portal del socio: una sola columna, simple, pensado para el celular.
- * Antes de mostrar cualquier cosa, exige aceptar los términos vigentes. */
+ * Antes de mostrar cualquier cosa, exige aceptar los términos vigentes y confirmar las
+ * circulares obligatorias de su público. Navegación: "Mi cuenta" · "Comunicaciones". */
 export default async function PortalLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const perfil = await requireRol("socio");
+  const resumen = await getResumenComunicaciones(perfil.user_id);
 
   return (
     <div className="flex min-h-svh flex-col">
@@ -34,7 +39,12 @@ export default async function PortalLayout({
       </header>
       <main className="mx-auto w-full max-w-2xl flex-1 px-4 py-6">
         <p className="sr-only">Sesión de {perfil.nombre}</p>
-        <GateTerminos perfil={perfil}>{children}</GateTerminos>
+        <GateTerminos perfil={perfil}>
+          <GateCirculares perfil={perfil}>
+            <NavPortal nuevas={resumen.total} />
+            {children}
+          </GateCirculares>
+        </GateTerminos>
       </main>
     </div>
   );

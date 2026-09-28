@@ -18,6 +18,8 @@ export type DatasetExportable =
   | "empleados"
   | "ingresos_personal"
   | "circulares"
+  | "registros"
+  | "novedades_personal"
   | "balance_mensual";
 
 /**

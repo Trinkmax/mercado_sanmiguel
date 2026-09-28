@@ -51,7 +51,13 @@ export function TablaHistorial({ cambios }: { cambios: CambioFila[] }) {
                 <p className="text-muted-foreground">{formatFechaHora(c.solicitadoEn)}</p>
               </TableCell>
               <TableCell className="whitespace-normal py-3">
-                <Sello estado={c.estado === "aprobado" ? "aprobado" : "rechazado"} />
+                <Sello
+                  estado={c.estado === "aprobado" ? "aprobado" : "rechazado"}
+                  texto={c.revisarDespues ? "Revisada" : undefined}
+                />
+                {c.revisarDespues ? (
+                  <p className="mt-1 text-xs text-muted-foreground">Aplicada en el acto por el Jefe</p>
+                ) : null}
                 <p className="mt-1.5 text-muted-foreground">
                   {c.revisadoPor ?? "—"}
                   {c.revisadoEn ? ` · ${formatFechaHora(c.revisadoEn)}` : ""}

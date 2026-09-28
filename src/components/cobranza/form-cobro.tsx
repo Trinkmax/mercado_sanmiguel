@@ -1,29 +1,21 @@
 "use client";
 
-import {
-  useEffect,
-  useRef,
-  useState,
-  useTransition,
-  type ChangeEvent,
-  type FormEvent,
-} from "react";
+import { useRef, useState, useTransition, type FormEvent } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   AlertCircle,
-  Banknote,
-  Camera,
-  Check,
   FileText,
-  Landmark,
   PiggyBank,
   Plus,
+  Repeat,
   Users,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { formatARS, hoyISO, labelPeriodo } from "@/lib/format";
+import { cuitTieneOnceDigitos, formatARS, hoyISO, limpiarCuit } from "@/lib/format";
+import type { AvanceMes } from "@/lib/segmentos";
 import {
   registrarCobro,
   type InputCobro,
@@ -40,191 +32,243 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Spinner } from "@/components/ui/spinner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Codigo } from "@/components/shared/codigo";
 import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
 import { BotonAplicarSaldoFavor } from "@/components/cobranza/aplicar-saldo-favor";
+import { DatosCheque, cuitParaRevisar } from "@/components/cobranza/datos-cheque";
+import { DatosTransferencia } from "@/components/cobranza/datos-transferencia";
+import { PlanCuotas } from "@/components/cobranza/plan-cuotas";
+import { ReciboRegistrado } from "@/components/cobranza/recibo-registrado";
+import { SelectorMedio } from "@/components/cobranza/selector-medio";
+import {
+  LABEL_MEDIO,
+  MEDIOS,
+  montoATexto,
+  nuevaLinea,
+  parseMonto,
+  redondear2,
+  sanitizarMonto,
+  uuidV4,
+  type ChequeForm,
+  type ErroresLinea,
+  type LineaForm,
+  type MedioPago,
+} from "@/components/cobranza/tipos";
 
-type MedioPago = "efectivo" | "transferencia" | "cheque";
+const MAX_LINEAS = 6;
 
-const MEDIOS: { valor: MedioPago; label: string; Icono: typeof Banknote }[] = [
-  { valor: "efectivo", label: "Efectivo", Icono: Banknote },
-  { valor: "transferencia", label: "Transferencia", Icono: Landmark },
-  { valor: "cheque", label: "Cheque", Icono: FileText },
-];
-
-const ACCEPT_COMPROBANTE = "image/*,application/pdf";
-const MAX_COMPROBANTE = 20 * 1024 * 1024;
-
-type Errores = {
-  monto?: string;
-  chequeNumero?: string;
-  chequeTitular?: string;
-  titularTransferencia?: string;
-  comprobante?: string;
+export type PlanDelMes = {
+  avance: AvanceMes | null;
+  periodo: string;
+  esQuintero: boolean;
+  atrasado: { meses: string[]; monto: number } | null;
 };
 
-/** "12345,5" → 12345.5 (coma como separador decimal, es-AR). */
-function parseMonto(texto: string): number {
-  if (!texto) return 0;
-  return Number(texto.replace(",", "."));
+/** "efectivo + transferencia" */
+function textoMedios(lineas: LineaForm[]): string {
+  const vistos: MedioPago[] = [];
+  for (const l of lineas) if (!vistos.includes(l.medio)) vistos.push(l.medio);
+  return vistos.map((m) => LABEL_MEDIO[m].toLowerCase()).join(" + ");
 }
 
-/** Deja solo dígitos y una única coma decimal. */
-function sanitizarMonto(texto: string): string {
-  const limpio = texto.replace(/[^\d,]/g, "");
-  const [entero, ...resto] = limpio.split(",");
-  return resto.length > 0 ? `${entero},${resto.join("").slice(0, 2)}` : entero;
+function validarLineas(
+  lineas: LineaForm[],
+  mixto: boolean
+): { errores: Record<string, ErroresLinea>; cuitSinConfirmar: string | null } {
+  const errores: Record<string, ErroresLinea> = {};
+  const cheques = new Set<string>();
+  let cuitSinConfirmar: string | null = null;
+  const hoy = hoyISO();
+  for (const l of lineas) {
+    const e: ErroresLinea = {};
+    if (!(parseMonto(l.monto) > 0)) {
+      e.monto = mixto ? "Poné cuánto paga con este medio" : "Poné cuánto te pagan";
+    }
+    if (l.medio === "transferencia" && !l.titular.trim()) {
+      e.titular = "Poné a nombre de quién está la cuenta que transfirió";
+    }
+    if (l.medio === "cheque") {
+      const c = l.cheque;
+      if (!/^\d{1,20}$/.test(c.numero.trim())) e.chequeNumero = "Poné el número del cheque (solo números)";
+      if (!cuitTieneOnceDigitos(c.cuit)) e.chequeCuit = "El CUIT del cheque tiene que tener 11 números";
+      if (c.otraPersona && !c.recibidoDe.trim()) e.chequeRecibidoDe = "Poné quién te da el cheque";
+      if (c.fechaRecepcion > hoy) e.chequeFechaRecepcion = "La fecha de recepción no puede ser futura";
+      if (c.estado === "entregado" && !c.proveedor.trim()) {
+        e.chequeProveedor = "Poné a qué proveedor se lo diste";
+      }
+      const clave = `${limpiarCuit(c.cuit)}:${c.numero.trim()}`;
+      if (!e.chequeNumero && !e.chequeCuit) {
+        if (cheques.has(clave)) e.chequeNumero = "Ese cheque ya está en otra parte del cobro";
+        cheques.add(clave);
+      }
+      if (!e.chequeCuit && cuitParaRevisar(c) && !cuitSinConfirmar) cuitSinConfirmar = l.id;
+    }
+    if (Object.keys(e).length > 0) errores[l.id] = e;
+  }
+  return { errores, cuitSinConfirmar };
 }
 
-/** Número → texto del input (coma decimal). */
-function montoATexto(n: number): string {
-  return String(n).replace(".", ",");
-}
-
-function redondear2(n: number): number {
-  return Math.round(n * 100) / 100;
-}
-
+/**
+ * Formulario de cobro (A1, A2, G2, G5). Una línea = la pantalla de siempre (monto grande,
+ * "Cobrar todo", chips de medio). "Pagar una parte con otro medio" lo vuelve un cobro mixto:
+ * varias líneas, UN recibo. El `loteId` hace idempotente el registro: doble toque, reintento
+ * tras un corte de red o confirmar el saldo a favor usan el MISMO lote.
+ *
+ * Se monta SIEMPRE en el mismo lugar de la página: cuando la server action revalida, la
+ * confirmación con el recibo sigue en pantalla.
+ */
 export function FormCobro({
   clienteId,
+  clienteNombre,
   deudaTotal,
   deudaBruta = deudaTotal,
-  cuotasMes,
-  totalPeriodoActual,
   saldoFavorPrevio = 0,
+  medios,
+  puestos = [],
+  proveedores = [],
+  plan = null,
+  volverA = "/cobranza",
 }: {
   clienteId: string;
+  clienteNombre: string;
   /** Lo que tiene que pagar hoy (ya neto del saldo a favor que tuviera). */
   deudaTotal: number;
   /** Deuda exigible hoy ANTES de descontar el saldo a favor. */
   deudaBruta?: number;
-  cuotasMes: number;
-  totalPeriodoActual: number;
   /** Crédito que ya tenía el cliente antes de este cobro (se aplica solo). */
   saldoFavorPrevio?: number;
+  /** Medios que puede recibir quien cobra (el Jefe: sin cheque). */
+  medios: MedioPago[];
+  /** Espacios del cliente ("Puesto 52"): el puesto del cheque. */
+  puestos?: string[];
+  proveedores?: string[];
+  /** Plan del mes para quien paga en cuotas (cuotas_mes > 1). */
+  plan?: PlanDelMes | null;
+  /** "Cobrar a otro cliente" vuelve a esta lista. */
+  volverA?: string;
 }) {
-  const [monto, setMonto] = useState("");
-  const [medio, setMedio] = useState<MedioPago>("efectivo");
-  const [chequeNumero, setChequeNumero] = useState("");
-  const [chequeBanco, setChequeBanco] = useState("");
-  const [chequeTitular, setChequeTitular] = useState("");
-  const [esTercero, setEsTercero] = useState(false);
-  const [fechaCobro, setFechaCobro] = useState(hoyISO());
-  const [titularTransferencia, setTitularTransferencia] = useState("");
-  const [comprobante, setComprobante] = useState<File | null>(null);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const router = useRouter();
+  const [lineas, setLineas] = useState<LineaForm[]>(() => [nuevaLinea(medios[0] ?? "efectivo", 0, "l1")]);
+  const [errores, setErrores] = useState<Record<string, ErroresLinea>>({});
+  const [confirmarCuitEn, setConfirmarCuitEn] = useState<string | null>(null);
   const [notas, setNotas] = useState("");
   const [mostrarNotas, setMostrarNotas] = useState(false);
-  const [errores, setErrores] = useState<Errores>({});
   const [errorRpc, setErrorRpc] = useState<string | null>(null);
   const [confirmarSaldo, setConfirmarSaldo] = useState(false);
   // Cliente al día que quiere adelantar plata: el cobro entero queda como saldo a favor.
   const [modoAdelanto, setModoAdelanto] = useState(false);
   const [resultado, setResultado] = useState<ResultadoCobro | null>(null);
   const [isPending, startTransition] = useTransition();
-  const inputArchivoRef = useRef<HTMLInputElement>(null);
+  const [refrescando, startRefresh] = useTransition();
+  // Idempotencia: un lote por cobro (se crea al primer intento y se renueva al terminar).
+  const loteRef = useRef<string | null>(null);
 
-  const montoNumero = parseMonto(monto);
-  const sobrante =
-    montoNumero > deudaTotal ? redondear2(montoNumero - deudaTotal) : 0;
-  // Cuota fija: total del período / N, topeada por lo que realmente debe.
-  const cuotaSugerida =
-    cuotasMes > 1 && totalPeriodoActual > 0
-      ? Math.min(Math.round(totalPeriodoActual / cuotasMes), deudaTotal)
-      : 0;
+  const mixto = lineas.length > 1;
+  const total = redondear2(lineas.reduce((acc, l) => acc + parseMonto(l.monto), 0));
+  const resto = Math.max(redondear2(deudaTotal - total), 0);
+  const sobrante = Math.max(redondear2(total - deudaTotal), 0);
 
-  // Vista previa de la foto del comprobante: un object URL por archivo, que se
-  // libera al reemplazarlo, quitarlo o desmontar el formulario.
-  const previewRef = useRef<string | null>(null);
-  function actualizarPreview(archivo: File | null) {
-    if (previewRef.current) {
-      URL.revokeObjectURL(previewRef.current);
-      previewRef.current = null;
-    }
-    const url =
-      archivo && archivo.type.startsWith("image/")
-        ? URL.createObjectURL(archivo)
-        : null;
-    previewRef.current = url;
-    setPreviewUrl(url);
-  }
-  useEffect(() => {
-    return () => {
-      if (previewRef.current) URL.revokeObjectURL(previewRef.current);
-    };
-  }, []);
-
-  function elegirComprobante(e: ChangeEvent<HTMLInputElement>) {
-    const archivo = e.target.files?.[0] ?? null;
-    if (!archivo) return;
-    if (archivo.size > MAX_COMPROBANTE) {
-      setErrores((prev) => ({
-        ...prev,
-        comprobante: "La foto pesa más de 20 MB. Sacala de nuevo con menos calidad.",
-      }));
-      e.target.value = "";
-      return;
-    }
-    setErrores((prev) => ({ ...prev, comprobante: undefined }));
-    setComprobante(archivo);
-    actualizarPreview(archivo);
-  }
-
-  function quitarComprobante() {
-    setComprobante(null);
-    actualizarPreview(null);
-    if (inputArchivoRef.current) inputArchivoRef.current.value = "";
-  }
-
-  function validar(): boolean {
-    const nuevos: Errores = {};
-    if (!(montoNumero > 0)) nuevos.monto = "Poné cuánto te pagan";
-    if (medio === "cheque") {
-      if (!chequeNumero.trim())
-        nuevos.chequeNumero = "Poné el número del cheque";
-      if (!chequeTitular.trim())
-        nuevos.chequeTitular = "Poné a nombre de quién está el cheque";
-    }
-    if (medio === "transferencia" && !titularTransferencia.trim()) {
-      nuevos.titularTransferencia =
-        "Poné a nombre de quién está la cuenta que transfirió";
-    }
-    setErrores(nuevos);
-    return Object.keys(nuevos).length === 0;
-  }
-
-  function enviar(permitirSaldoFavor: boolean) {
+  // ---------- edición de líneas ----------
+  function cambiarLinea(id: string, parcial: Partial<LineaForm>) {
+    setLineas((prev) => prev.map((l) => (l.id === id ? { ...l, ...parcial } : l)));
     setErrorRpc(null);
+  }
+  function cambiarCheque(id: string, parcial: Partial<ChequeForm>) {
+    setLineas((prev) =>
+      prev.map((l) => (l.id === id ? { ...l, cheque: { ...l.cheque, ...parcial } } : l))
+    );
+    setErrorRpc(null);
+  }
+  function limpiarError(id: string, campo: keyof ErroresLinea) {
+    setErrores((prev) => {
+      if (!prev[id]?.[campo]) return prev;
+      const siguiente = { ...prev, [id]: { ...prev[id], [campo]: undefined } };
+      return siguiente;
+    });
+  }
+  function agregarLinea() {
+    if (lineas.length >= MAX_LINEAS) return;
+    const usados = new Set(lineas.map((l) => l.medio));
+    const medio = medios.find((m) => !usados.has(m)) ?? medios[medios.length > 1 ? 1 : 0];
+    setLineas((prev) => [...prev, nuevaLinea(medio, resto)]);
+  }
+  function quitarLinea(id: string) {
+    setLineas((prev) => (prev.length > 1 ? prev.filter((l) => l.id !== id) : prev));
+    setErrores((prev) => {
+      const siguiente = { ...prev };
+      delete siguiente[id];
+      return siguiente;
+    });
+  }
+  /** "El resto": esta línea completa lo que falta para cubrir la deuda. */
+  function elRestoEn(id: string) {
+    const otros = lineas.filter((l) => l.id !== id).reduce((acc, l) => acc + parseMonto(l.monto), 0);
+    cambiarLinea(id, { monto: montoATexto(Math.max(redondear2(deudaTotal - otros), 0)) });
+    limpiarError(id, "monto");
+  }
+  /** Un monto elegido desde el plan de cuotas: la última línea completa ese total. */
+  function cobrarMonto(monto: number) {
+    const ultima = lineas[lineas.length - 1];
+    const otros = lineas.slice(0, -1).reduce((acc, l) => acc + parseMonto(l.monto), 0);
+    cambiarLinea(ultima.id, { monto: montoATexto(Math.max(redondear2(monto - otros), 0)) });
+    limpiarError(ultima.id, "monto");
+  }
+
+  function reset() {
+    setLineas([nuevaLinea(medios[0] ?? "efectivo")]);
+    setErrores({});
+    setConfirmarCuitEn(null);
+    setNotas("");
+    setMostrarNotas(false);
+    setErrorRpc(null);
+    setModoAdelanto(false);
+    setResultado(null);
+    loteRef.current = null;
+  }
+
+  // ---------- registro ----------
+  function enviar(permitirSaldoFavor: boolean, lineasAEnviar: LineaForm[] = lineas) {
+    setErrorRpc(null);
+    loteRef.current ??= uuidV4();
     const datos: InputCobro = {
       clienteId,
-      monto: montoNumero,
-      medio,
-      cheque:
-        medio === "cheque"
-          ? {
-              numero: chequeNumero.trim(),
-              banco: chequeBanco.trim() || undefined,
-              titular: chequeTitular.trim(),
-              es_tercero: esTercero,
-              fecha_cobro: fechaCobro,
-            }
-          : undefined,
-      transferencia:
-        medio === "transferencia"
-          ? { titular: titularTransferencia.trim() }
-          : undefined,
+      loteId: loteRef.current,
+      lineas: lineasAEnviar.map((l) => {
+        const monto = parseMonto(l.monto);
+        if (l.medio === "transferencia") {
+          return { id: l.id, medio: "transferencia", monto, transferencia: { titular: l.titular.trim() } };
+        }
+        if (l.medio === "cheque") {
+          const c = l.cheque;
+          return {
+            id: l.id,
+            medio: "cheque",
+            monto,
+            cheque: {
+              numero: c.numero.trim(),
+              cuit: limpiarCuit(c.cuit),
+              recibido_de: c.otraPersona ? c.recibidoDe.trim() : undefined,
+              fecha_recepcion: c.fechaRecepcion || undefined,
+              fecha_cobro: c.fechaCobro || hoyISO(),
+              estado: c.estado,
+              proveedor: c.estado === "entregado" ? c.proveedor.trim() : undefined,
+            },
+          };
+        }
+        return { id: l.id, medio: "efectivo", monto };
+      }),
       notas: notas.trim() || undefined,
       permitirSaldoFavor,
     };
     const fd = new FormData();
     fd.set("datos", JSON.stringify(datos));
-    if (medio === "transferencia" && comprobante) {
-      fd.set("comprobante", comprobante, comprobante.name);
+    for (const l of lineasAEnviar) {
+      if (l.medio === "transferencia" && l.comprobante) {
+        fd.set(`comprobante:${l.id}`, l.comprobante, l.comprobante.name);
+      }
     }
 
     startTransition(async () => {
@@ -233,110 +277,101 @@ export function FormCobro({
         setErrorRpc(res.error);
         return;
       }
-      toast.success(`Cobro registrado — Recibo N° ${res.data.numero}`);
+      if (res.data.repetido) {
+        toast.info(`Ese cobro ya estaba registrado (Recibo N° ${res.data.numero})`);
+      } else {
+        toast.success(`Cobro registrado — Recibo N° ${res.data.numero}`);
+      }
       setResultado(res.data);
     });
   }
 
-  function onSubmit(e: FormEvent) {
-    e.preventDefault();
+  function intentar(lineasActuales: LineaForm[] = lineas) {
     setErrorRpc(null);
-    if (!validar()) return;
-    if (sobrante > 0) {
-      // Plata de más: se confirma explícitamente antes de dejarla a favor.
+    const { errores: nuevos, cuitSinConfirmar } = validarLineas(lineasActuales, lineasActuales.length > 1);
+    setErrores(nuevos);
+    if (Object.keys(nuevos).length > 0) {
+      setConfirmarCuitEn(null);
+      requestAnimationFrame(() => {
+        document.querySelector<HTMLElement>("[data-form-cobro] [aria-invalid=true]")?.focus();
+      });
+      return;
+    }
+    if (cuitSinConfirmar) {
+      // Aviso, no bloqueo: un toque en "Está bien así, seguir" y se registra.
+      setConfirmarCuitEn(cuitSinConfirmar);
+      return;
+    }
+    setConfirmarCuitEn(null);
+    const t = redondear2(lineasActuales.reduce((acc, l) => acc + parseMonto(l.monto), 0));
+    if (t - deudaTotal > 0.009) {
       setConfirmarSaldo(true);
       return;
     }
-    enviar(false);
+    enviar(false, lineasActuales);
   }
 
-  // La RPC avisa si sobra plata y no se autorizó el saldo a favor (por ejemplo,
-  // si la deuda cambió mientras se cargaba el cobro): se ofrece confirmar.
+  function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    intentar();
+  }
+
+  /** "Está bien así, seguir": confirma el CUIT de esa línea y, si se estaba registrando, sigue. */
+  function seguirConCuit(id: string) {
+    const actualizadas = lineas.map((l) =>
+      l.id === id ? { ...l, cheque: { ...l.cheque, cuitConfirmado: true } } : l
+    );
+    setLineas(actualizadas);
+    if (confirmarCuitEn === id) intentar(actualizadas);
+  }
+
+  // La RPC avisa si sobra plata y no se autorizó (p. ej. la deuda cambió mientras se cargaba).
   const errorPideSaldoFavor = Boolean(errorRpc && /saldo a favor/i.test(errorRpc));
 
-  // ---------- Éxito: la confirmación reemplaza al formulario ----------
-  if (resultado) {
+  // ---------- trayendo la deuda nueva después de "Cobrar otra vez" ----------
+  if (refrescando) {
     return (
-      <section className="space-y-6 rounded-lg border bg-card p-5 sm:p-6">
-        <div className="flex flex-col items-center gap-3 text-center">
-          <Sello
-            grande
-            estado="pagado"
-            texto="Cobro registrado"
-            className="animar-estampado"
-          />
-          <p className="text-lg">
-            Recibo{" "}
-            <span className="font-display text-xl font-bold">
-              N° {resultado.numero}
-            </span>
-          </p>
-        </div>
-
-        {resultado.imputaciones.length > 0 ? (
-          <div className="divide-y rounded-md border">
-            {resultado.imputaciones.map((imp) => (
-              <div key={imp.cargo_id} className="flex items-center gap-3 px-4 py-3">
-                <Codigo codigo={imp.codigo} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium">{imp.descripcion}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {labelPeriodo(imp.periodo)}
-                  </p>
-                </div>
-                {imp.saldado ? (
-                  <span className="flex shrink-0 items-center gap-1 text-sm font-medium text-pagado">
-                    <Check className="size-4" strokeWidth={2.2} />
-                    Saldado
-                  </span>
-                ) : null}
-                <Money monto={imp.monto} className="shrink-0 font-semibold" />
-              </div>
-            ))}
-          </div>
-        ) : null}
-
-        {resultado.saldo_favor > 0 ? (
-          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-pagado/40 bg-pagado-suave px-4 py-3">
-            <Sello estado="saldo_favor" />
-            <p className="min-w-0 flex-1 text-sm">
-              Quedan{" "}
-              <Money
-                monto={resultado.saldo_favor}
-                className="font-semibold text-foreground"
-              />{" "}
-              a favor del cliente. Se aplican solos al mes que viene.
-            </p>
-          </div>
-        ) : null}
-
-        <div className="space-y-3">
-          <Button asChild size="lg" className="h-14 w-full text-lg font-semibold">
-            <Link href={`/recibos/${resultado.pago_id}`}>
-              <FileText className="size-5" strokeWidth={2} />
-              Ver recibo
-            </Link>
-          </Button>
-          <Button
-            asChild
-            size="lg"
-            variant="outline"
-            className="h-12 w-full text-base"
-          >
-            <Link href="/cobranza">
-              <Users className="size-5" strokeWidth={2} />
-              Cobrar a otro cliente
-            </Link>
-          </Button>
-        </div>
+      <section className="flex min-h-48 flex-col items-center justify-center gap-3 rounded-lg border bg-card p-6 text-center">
+        <Spinner className="size-8 text-primary" />
+        <p className="font-medium">Trayendo lo que debe {clienteNombre} ahora…</p>
       </section>
     );
   }
 
-  // ---------- Sin nada que cobrar (o el saldo a favor cubre todo) ----------
-  // Se resuelve acá y no en la página para que este componente quede montado
-  // siempre en el mismo lugar: cuando la server action revalida y la página se
-  // re-renderiza con deuda 0, la confirmación de arriba sigue en pantalla.
+  // ---------- éxito ----------
+  if (resultado) {
+    return (
+      <ReciboRegistrado resultado={resultado}>
+        <Button asChild size="lg" className="h-14 w-full text-lg font-semibold">
+          <Link href={`/recibos/${resultado.pago_id}`}>
+            <FileText className="size-5" strokeWidth={2} />
+            Ver recibo
+          </Link>
+        </Button>
+        <Button
+          type="button"
+          size="lg"
+          variant="outline"
+          className="h-12 w-full text-base font-semibold"
+          onClick={() => {
+            reset();
+            startRefresh(() => router.refresh());
+          }}
+        >
+          <Repeat className="size-5" strokeWidth={2} />
+          Cobrar otra vez a {clienteNombre}
+        </Button>
+        <Button asChild size="lg" variant="ghost" className="h-12 w-full text-base">
+          <Link href={volverA}>
+            <Users className="size-5" strokeWidth={2} />
+            Cobrar a otro cliente
+          </Link>
+        </Button>
+      </ReciboRegistrado>
+    );
+  }
+
+  // ---------- sin nada que cobrar (o el saldo a favor cubre todo) ----------
   if (deudaTotal <= 0 && !modoAdelanto) {
     const cubreConSaldo = deudaBruta > 0 && saldoFavorPrevio > 0;
     return (
@@ -346,13 +381,13 @@ export function FormCobro({
             <p className="text-muted-foreground">
               El saldo a favor cubre toda la deuda: no hace falta cobrar nada.
             </p>
-            <BotonAplicarSaldoFavor
-              clienteId={clienteId}
-              saldoFavor={saldoFavorPrevio}
-            />
+            <BotonAplicarSaldoFavor clienteId={clienteId} saldoFavor={saldoFavorPrevio} />
           </>
         ) : (
-          <p className="text-muted-foreground">No tiene nada para pagar hoy.</p>
+          <div className="flex flex-col items-center gap-2">
+            <Sello grande estado="al_dia" />
+            <p className="text-muted-foreground">No tiene nada para pagar hoy.</p>
+          </div>
         )}
         <Button
           asChild
@@ -360,7 +395,7 @@ export function FormCobro({
           variant={cubreConSaldo ? "outline" : "default"}
           className="h-12 w-full text-base font-semibold"
         >
-          <Link href="/cobranza">
+          <Link href={volverA}>
             <Users className="size-5" strokeWidth={2} />
             Cobrar a otro cliente
           </Link>
@@ -369,7 +404,7 @@ export function FormCobro({
           <Button
             type="button"
             variant="ghost"
-            className="h-11 w-full text-sm text-muted-foreground"
+            className="h-auto min-h-11 w-full text-sm whitespace-normal text-muted-foreground"
             onClick={() => setModoAdelanto(true)}
           >
             Quiere adelantar plata: registrar un pago a cuenta (queda como saldo a favor)
@@ -379,305 +414,249 @@ export function FormCobro({
     );
   }
 
-  // ---------- Formulario de cobro ----------
+  const unaLinea = lineas[0];
+  const etiquetaBoton =
+    total > 0
+      ? `Registrar cobro de ${formatARS(total)}${mixto ? ` (${textoMedios(lineas)})` : ""}`
+      : "Registrar cobro";
+
+  function detalleMedio(l: LineaForm) {
+    const e = errores[l.id] ?? {};
+    if (l.medio === "transferencia") {
+      return (
+        <DatosTransferencia
+          titular={l.titular}
+          comprobante={l.comprobante}
+          sugerenciaTitular={clienteNombre}
+          errorTitular={e.titular}
+          errorComprobante={e.comprobante}
+          onTitular={(v) => {
+            cambiarLinea(l.id, { titular: v });
+            limpiarError(l.id, "titular");
+          }}
+          onComprobante={(archivo) => cambiarLinea(l.id, { comprobante: archivo })}
+          onErrorComprobante={(error) =>
+            setErrores((prev) => ({ ...prev, [l.id]: { ...prev[l.id], comprobante: error } }))
+          }
+        />
+      );
+    }
+    if (l.medio === "cheque") {
+      return (
+        <DatosCheque
+          valor={l.cheque}
+          onCambio={(parcial) => {
+            cambiarCheque(l.id, parcial);
+            for (const campo of Object.keys(parcial)) {
+              const mapa: Record<string, keyof ErroresLinea> = {
+                numero: "chequeNumero",
+                cuit: "chequeCuit",
+                recibidoDe: "chequeRecibidoDe",
+                otraPersona: "chequeRecibidoDe",
+                proveedor: "chequeProveedor",
+                estado: "chequeProveedor",
+                fechaRecepcion: "chequeFechaRecepcion",
+              };
+              if (mapa[campo]) limpiarError(l.id, mapa[campo]);
+            }
+          }}
+          clienteNombre={clienteNombre}
+          puestos={puestos}
+          proveedores={proveedores}
+          errores={e}
+          pedirConfirmacionCuit={confirmarCuitEn === l.id}
+          onSeguirConCuit={() => seguirConCuit(l.id)}
+        />
+      );
+    }
+    return null;
+  }
+
   return (
-    <form onSubmit={onSubmit} className="space-y-5" noValidate>
+    <form onSubmit={onSubmit} className="space-y-5" noValidate data-form-cobro>
       {saldoFavorPrevio > 0 ? (
         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-pagado/40 bg-pagado-suave px-4 py-3">
           <Sello estado="saldo_favor" />
           <p className="min-w-0 flex-1 text-sm">
-            Ya tiene{" "}
-            <Money monto={saldoFavorPrevio} className="font-semibold" /> a favor:
-            se aplican solos en este cobro. Hoy tiene que pagar{" "}
+            Ya tiene <Money monto={saldoFavorPrevio} className="font-semibold" /> a favor: se
+            aplican solos en este cobro. Hoy tiene que pagar{" "}
             <Money monto={deudaTotal} className="font-semibold" />.
           </p>
         </div>
       ) : null}
 
-      {cuotaSugerida > 0 ? (
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-parcial bg-parcial-suave px-4 py-3">
-          <p className="text-sm">
-            Paga en <strong>{cuotasMes} veces</strong>{" "}
-            <span className="text-muted-foreground">
-              (frecuencia configurada en su ficha)
-            </span>{" "}
-            — cuota sugerida ≈{" "}
-            <strong className="tabular">{formatARS(cuotaSugerida)}</strong>
-          </p>
-          <Button
-            type="button"
-            variant="outline"
-            className="h-11 shrink-0 bg-card px-4 text-sm font-semibold"
-            onClick={() => {
-              setMonto(montoATexto(cuotaSugerida));
-              setErrores((prev) => ({ ...prev, monto: undefined }));
-            }}
-          >
-            Usar
-          </Button>
-        </div>
+      {plan ? (
+        <PlanCuotas
+          avance={plan.avance}
+          periodo={plan.periodo}
+          esQuintero={plan.esQuintero}
+          atrasado={plan.atrasado}
+          onCobrar={cobrarMonto}
+          deshabilitado={isPending}
+        />
       ) : null}
 
-      <div className="space-y-2">
-        <Label htmlFor="monto" className="text-base font-medium">
-          ¿Cuánto te pagan?
-        </Label>
-        <div className="flex gap-2">
-          <Input
-            id="monto"
-            inputMode="numeric"
-            autoComplete="off"
-            placeholder="0"
-            value={monto}
-            onChange={(e) => {
-              setMonto(sanitizarMonto(e.target.value));
-              setErrores((prev) => ({ ...prev, monto: undefined }));
-            }}
-            aria-invalid={Boolean(errores.monto)}
-            className="h-14 flex-1 text-2xl font-semibold tabular"
-          />
-          <Button
-            type="button"
-            variant="outline"
-            className="h-14 shrink-0 px-4 text-sm font-semibold"
-            onClick={() => {
-              setMonto(montoATexto(deudaTotal));
-              setErrores((prev) => ({ ...prev, monto: undefined }));
-            }}
-          >
-            Cobrar todo
-          </Button>
-        </div>
-        {errores.monto ? (
-          <p className="text-sm font-medium text-destructive">{errores.monto}</p>
-        ) : montoNumero > 0 ? (
-          <p className="text-sm text-muted-foreground tabular">
-            Vas a cobrar {formatARS(montoNumero)}
-          </p>
-        ) : null}
-        {sobrante > 0 ? (
-          <div className="flex items-start gap-2.5 rounded-lg border border-parcial bg-parcial-suave px-4 py-3 text-sm">
-            <PiggyBank
-              className="mt-0.5 size-5 shrink-0 text-parcial"
-              strokeWidth={2}
-            />
-            <p>
-              Sobran <strong className="tabular">{formatARS(sobrante)}</strong>.
-              Quedan como saldo a favor del cliente y se aplican solos al mes
-              que viene.
-            </p>
-          </div>
-        ) : null}
-      </div>
-
-      <div className="space-y-2">
-        <Label className="text-base font-medium">¿Cómo te pagan?</Label>
-        <div role="radiogroup" aria-label="Medio de pago" className="grid grid-cols-3 gap-2">
-          {MEDIOS.map(({ valor, label, Icono }) => (
-            <button
-              key={valor}
-              type="button"
-              role="radio"
-              aria-checked={medio === valor}
-              onClick={() => setMedio(valor)}
-              className={cn(
-                "flex h-14 flex-col items-center justify-center gap-1 rounded-lg border-2 text-sm font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
-                medio === valor
-                  ? "border-primary bg-primary/5 text-primary"
-                  : "border-border bg-card text-muted-foreground hover:bg-muted/50"
-              )}
-            >
-              <Icono className="size-5" strokeWidth={2} />
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {medio === "transferencia" ? (
-        <div className="space-y-5 rounded-lg border bg-card p-4">
+      {!mixto ? (
+        // ---------- camino simple: una línea ----------
+        <>
           <div className="space-y-2">
-            <Label htmlFor="transferencia-titular" className="text-base font-medium">
-              A nombre de quién está la cuenta
+            <Label htmlFor="monto-cobro" className="text-base font-medium">
+              ¿Cuánto te pagan?
             </Label>
-            <Input
-              id="transferencia-titular"
-              autoComplete="off"
-              placeholder="Ej.: Juan Pérez"
-              value={titularTransferencia}
-              onChange={(e) => {
-                setTitularTransferencia(e.target.value);
-                setErrores((prev) => ({ ...prev, titularTransferencia: undefined }));
-              }}
-              aria-invalid={Boolean(errores.titularTransferencia)}
-              className="h-12 text-base md:text-base"
-            />
-            {errores.titularTransferencia ? (
-              <p className="text-sm font-medium text-destructive">
-                {errores.titularTransferencia}
-              </p>
-            ) : null}
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="comprobante" className="text-base font-medium">
-              Foto del comprobante{" "}
-              <span className="font-normal text-muted-foreground">(opcional)</span>
-            </Label>
-            <input
-              ref={inputArchivoRef}
-              id="comprobante"
-              type="file"
-              accept={ACCEPT_COMPROBANTE}
-              capture="environment"
-              className="sr-only"
-              onChange={elegirComprobante}
-            />
-            {comprobante ? (
-              <div className="flex items-center gap-3 rounded-lg border bg-muted/30 p-3">
-                {previewUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={previewUrl}
-                    alt="Vista previa del comprobante"
-                    className="size-20 shrink-0 rounded-md border object-cover"
-                  />
-                ) : (
-                  <div className="flex size-20 shrink-0 items-center justify-center rounded-md border bg-card">
-                    <FileText className="size-8 text-muted-foreground" strokeWidth={1.8} />
-                  </div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium">{comprobante.name}</p>
-                  <p className="text-sm text-muted-foreground">
-                    Se guarda junto con el recibo.
-                  </p>
-                </div>
+            <div className="flex gap-2">
+              <Input
+                id="monto-cobro"
+                inputMode="decimal"
+                autoComplete="off"
+                placeholder="0"
+                value={unaLinea.monto}
+                onChange={(e) => {
+                  cambiarLinea(unaLinea.id, { monto: sanitizarMonto(e.target.value) });
+                  limpiarError(unaLinea.id, "monto");
+                }}
+                aria-invalid={Boolean(errores[unaLinea.id]?.monto)}
+                className="h-14 flex-1 text-2xl font-semibold tabular md:text-2xl"
+              />
+              {deudaTotal > 0 ? (
                 <Button
                   type="button"
-                  variant="ghost"
-                  className="h-11 px-3 text-sm"
-                  onClick={quitarComprobante}
+                  variant="outline"
+                  className="h-14 shrink-0 px-4 text-sm font-semibold"
+                  onClick={() => {
+                    cambiarLinea(unaLinea.id, { monto: montoATexto(deudaTotal) });
+                    limpiarError(unaLinea.id, "monto");
+                  }}
                 >
-                  <X className="size-4" strokeWidth={2} />
-                  Quitar
+                  Cobrar todo
                 </Button>
-              </div>
-            ) : (
-              <label
-                htmlFor="comprobante"
-                className="flex h-14 cursor-pointer items-center justify-center gap-2 rounded-lg border-2 border-dashed border-primary/40 bg-primary/5 px-4 text-base font-semibold text-primary transition-colors hover:bg-primary/10"
-              >
-                <Camera className="size-6" strokeWidth={2} />
-                Sacar foto del comprobante
-              </label>
-            )}
-            {errores.comprobante ? (
-              <p className="text-sm font-medium text-destructive">
-                {errores.comprobante}
-              </p>
-            ) : null}
-          </div>
-        </div>
-      ) : null}
-
-      {medio === "cheque" ? (
-        <div className="space-y-5 rounded-lg border bg-card p-4">
-          <div className="grid gap-5 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="cheque-numero" className="text-base font-medium">
-                Número del cheque
-              </Label>
-              <Input
-                id="cheque-numero"
-                inputMode="numeric"
-                autoComplete="off"
-                value={chequeNumero}
-                onChange={(e) => {
-                  setChequeNumero(e.target.value);
-                  setErrores((prev) => ({ ...prev, chequeNumero: undefined }));
-                }}
-                aria-invalid={Boolean(errores.chequeNumero)}
-                className="h-12 text-base md:text-base"
-              />
-              {errores.chequeNumero ? (
-                <p className="text-sm font-medium text-destructive">
-                  {errores.chequeNumero}
-                </p>
               ) : null}
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="cheque-banco" className="text-base font-medium">
-                Banco
-              </Label>
-              <Input
-                id="cheque-banco"
-                autoComplete="off"
-                value={chequeBanco}
-                onChange={(e) => setChequeBanco(e.target.value)}
-                className="h-12 text-base md:text-base"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="cheque-titular" className="text-base font-medium">
-              A nombre de quién
-            </Label>
-            <Input
-              id="cheque-titular"
-              autoComplete="off"
-              value={chequeTitular}
-              onChange={(e) => {
-                setChequeTitular(e.target.value);
-                setErrores((prev) => ({ ...prev, chequeTitular: undefined }));
-              }}
-              aria-invalid={Boolean(errores.chequeTitular)}
-              className="h-12 text-base md:text-base"
-            />
-            {errores.chequeTitular ? (
-              <p className="text-sm font-medium text-destructive">
-                {errores.chequeTitular}
+            {errores[unaLinea.id]?.monto ? (
+              <p className="text-sm font-medium text-destructive">{errores[unaLinea.id]?.monto}</p>
+            ) : total > 0 ? (
+              <p className="text-sm text-muted-foreground tabular">
+                Vas a cobrar {formatARS(total)}
+                {resto > 0 ? ` · queda debiendo ${formatARS(resto)}` : ""}
               </p>
+            ) : null}
+            {sobrante > 0 ? (
+              <div className="flex items-start gap-2.5 rounded-lg border border-parcial bg-parcial-suave px-4 py-3 text-sm">
+                <PiggyBank className="mt-0.5 size-5 shrink-0 text-parcial" strokeWidth={2} />
+                <p>
+                  Sobran <strong className="tabular">{formatARS(sobrante)}</strong>: quedan como
+                  saldo a favor de {clienteNombre} y se aplican solos a lo próximo que deba.
+                </p>
+              </div>
             ) : null}
           </div>
 
-          <div className="flex min-h-11 items-center justify-between gap-3">
-            <Label htmlFor="cheque-tercero" className="text-base font-medium">
-              Es cheque de tercero
-            </Label>
-            <Switch
-              id="cheque-tercero"
-              checked={esTercero}
-              onCheckedChange={setEsTercero}
+          <div className="space-y-2">
+            <Label className="text-base font-medium">¿Cómo te paga?</Label>
+            <SelectorMedio
+              medios={medios}
+              valor={unaLinea.medio}
+              onCambio={(m) => cambiarLinea(unaLinea.id, { medio: m })}
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="cheque-fecha" className="text-base font-medium">
-              Fecha en que se puede cobrar
-            </Label>
-            <Input
-              id="cheque-fecha"
-              type="date"
-              value={fechaCobro}
-              onChange={(e) => setFechaCobro(e.target.value)}
-              className="h-12 text-base md:text-base"
-            />
-          </div>
-        </div>
+          {unaLinea.medio !== "efectivo" ? (
+            <div className="rounded-lg border bg-card p-4">{detalleMedio(unaLinea)}</div>
+          ) : null}
+        </>
+      ) : (
+        // ---------- cobro mixto: varias líneas, un recibo ----------
+        <>
+          <ResumenMixto lineas={lineas} total={total} deuda={deudaTotal} />
+          <ol className="space-y-4">
+            {lineas.map((l, i) => {
+              const e = errores[l.id] ?? {};
+              return (
+                <li key={l.id} className="space-y-4 rounded-lg border bg-card p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="font-display text-lg font-bold">Parte {i + 1}</p>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="h-11 px-3 text-sm text-muted-foreground"
+                      onClick={() => quitarLinea(l.id)}
+                    >
+                      <X className="size-4" strokeWidth={2} />
+                      Quitar
+                    </Button>
+                  </div>
+                  <SelectorMedio
+                    compacto
+                    medios={medios}
+                    valor={l.medio}
+                    onCambio={(m) => cambiarLinea(l.id, { medio: m })}
+                    etiqueta={`Medio de la parte ${i + 1}`}
+                  />
+                  <div className="space-y-2">
+                    <Label htmlFor={`monto-${l.id}`} className="text-base font-medium">
+                      ¿Cuánto paga con {LABEL_MEDIO[l.medio].toLowerCase()}?
+                    </Label>
+                    <div className="flex gap-2">
+                      <Input
+                        id={`monto-${l.id}`}
+                        inputMode="decimal"
+                        autoComplete="off"
+                        placeholder="0"
+                        value={l.monto}
+                        onChange={(ev) => {
+                          cambiarLinea(l.id, { monto: sanitizarMonto(ev.target.value) });
+                          limpiarError(l.id, "monto");
+                        }}
+                        aria-invalid={Boolean(e.monto)}
+                        className="h-12 flex-1 text-xl font-semibold tabular md:text-xl"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-12 shrink-0 px-3 text-sm font-semibold"
+                        onClick={() => elRestoEn(l.id)}
+                      >
+                        El resto
+                      </Button>
+                    </div>
+                    {e.monto ? (
+                      <p className="text-sm font-medium text-destructive">{e.monto}</p>
+                    ) : parseMonto(l.monto) > 0 ? (
+                      <p className="text-sm text-muted-foreground tabular">
+                        {formatARS(parseMonto(l.monto))} en {LABEL_MEDIO[l.medio].toLowerCase()}
+                      </p>
+                    ) : null}
+                  </div>
+                  {detalleMedio(l)}
+                </li>
+              );
+            })}
+          </ol>
+        </>
+      )}
+
+      {lineas.length < MAX_LINEAS ? (
+        <Button
+          type="button"
+          variant="outline"
+          className="h-12 w-full border-dashed text-base font-semibold text-primary"
+          onClick={agregarLinea}
+        >
+          <Plus className="size-5" strokeWidth={2} />
+          {mixto ? "Agregar otro medio" : "Pagar una parte con otro medio"}
+        </Button>
       ) : null}
 
       {mostrarNotas ? (
         <div className="space-y-2">
-          <Label htmlFor="notas" className="text-base font-medium">
+          <Label htmlFor="notas-cobro" className="text-base font-medium">
             Nota
           </Label>
           <Textarea
-            id="notas"
+            id="notas-cobro"
             value={notas}
             onChange={(e) => setNotas(e.target.value)}
             placeholder="Algo para acordarse de este cobro…"
+            maxLength={500}
             className="min-h-20 text-base md:text-base"
           />
         </div>
@@ -718,8 +697,8 @@ export function FormCobro({
       <Button
         type="submit"
         size="lg"
-        disabled={isPending || montoNumero <= 0}
-        className="h-13 w-full text-lg font-semibold"
+        disabled={isPending || total <= 0}
+        className="h-auto min-h-14 w-full py-3 text-lg font-semibold whitespace-normal"
       >
         {isPending ? (
           <>
@@ -727,21 +706,20 @@ export function FormCobro({
             Registrando…
           </>
         ) : (
-          <>Registrar cobro{montoNumero > 0 ? ` de ${formatARS(montoNumero)}` : ""}</>
+          etiquetaBoton
         )}
       </Button>
 
-      {/* Confirmación corta: plata de más que queda a favor del cliente. */}
+      {/* Plata de más: se confirma antes de dejarla a favor (mismo lote al reintentar). */}
       <Dialog open={confirmarSaldo} onOpenChange={setConfirmarSaldo}>
         <DialogContent className="gap-5 p-6 sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="text-xl">
-              ¿Dejar {formatARS(sobrante)} como saldo a favor?
+              Sobran {formatARS(sobrante)}: ¿los dejamos como saldo a favor de {clienteNombre}?
             </DialogTitle>
             <DialogDescription className="text-base">
-              Hoy debe {formatARS(deudaTotal)} y te pagan {formatARS(montoNumero)}.
-              Los {formatARS(sobrante)} de más quedan a favor del cliente y se
-              aplican solos al mes que viene.
+              Hoy debe {formatARS(deudaTotal)} y te paga {formatARS(total)}. Lo que sobra se
+              aplica solo a lo próximo que deba.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -772,5 +750,85 @@ export function FormCobro({
         </DialogContent>
       </Dialog>
     </form>
+  );
+}
+
+/**
+ * Cobro mixto: "Total del cobro" grande y una barra apilada contra "Debe hoy": cada medio es un
+ * tramo verde sobre la pista roja suave de lo que falta; si sobra, la marca de "Debe hoy" queda
+ * adentro de la barra y el excedente se ve pasando la marca.
+ */
+function ResumenMixto({
+  lineas,
+  total,
+  deuda,
+}: {
+  lineas: LineaForm[];
+  total: number;
+  deuda: number;
+}) {
+  const escala = Math.max(total, deuda, 1);
+  const falta = Math.max(redondear2(deuda - total), 0);
+  const sobra = Math.max(redondear2(total - deuda), 0);
+  const marca = deuda > 0 && sobra > 0 ? (deuda / escala) * 100 : null;
+  return (
+    <section className="space-y-3 rounded-lg border bg-card p-5" aria-live="polite">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="text-sm text-muted-foreground">Total del cobro</p>
+          <Money monto={total} className="text-3xl font-bold" />
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Debe hoy <Money monto={deuda} className="font-semibold text-foreground" />
+        </p>
+      </div>
+      <div className="relative">
+        <div className="flex h-5 w-full overflow-hidden rounded-full bg-pendiente-suave" aria-hidden>
+          {lineas.map((l) => {
+            const m = parseMonto(l.monto);
+            if (!(m > 0)) return null;
+            return (
+              <div
+                key={l.id}
+                className="h-full border-r-2 border-card bg-pagado last:border-r-0"
+                style={{ width: `${(m / escala) * 100}%` }}
+              />
+            );
+          })}
+        </div>
+        {marca !== null ? (
+          <div
+            className="absolute -top-1 -bottom-1 w-0.5 rounded bg-foreground"
+            style={{ left: `${marca}%` }}
+            aria-hidden
+          />
+        ) : null}
+      </div>
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+        {lineas.map((l) => {
+          const m = parseMonto(l.monto);
+          const Icono = MEDIOS.find((x) => x.valor === l.medio)?.Icono;
+          return (
+            <span key={l.id} className="inline-flex items-center gap-1.5 text-muted-foreground">
+              {Icono ? <Icono className="size-4" strokeWidth={2} /> : null}
+              {LABEL_MEDIO[l.medio]}{" "}
+              <Money monto={m} className="font-medium text-foreground" />
+            </span>
+          );
+        })}
+      </div>
+      <p
+        className={cn(
+          "text-sm font-semibold",
+          falta > 0 ? "text-pendiente" : sobra > 0 ? "text-parcial" : "text-pagado"
+        )}
+      >
+        {falta > 0
+          ? `Queda debiendo ${formatARS(falta)}`
+          : sobra > 0
+            ? `Sobran ${formatARS(sobra)}: quedan como saldo a favor`
+            : "Cubre todo lo que debe hoy"}
+      </p>
+    </section>
   );
 }

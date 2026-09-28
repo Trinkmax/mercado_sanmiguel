@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, DoorOpen, FileText, Pencil } from "lucide-react";
+import { ArrowLeft, ClipboardList, DoorOpen, FileText, Pencil, Plus } from "lucide-react";
 import { requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { formatFecha } from "@/lib/format";
+import { formatFecha, formatFechaTS, hoyISO, labelPeriodo, periodoActual } from "@/lib/format";
 import { fechaHoraAR, horaAR } from "@/components/porteria/fechas";
 import { Button } from "@/components/ui/button";
 import {
@@ -18,10 +18,19 @@ import { Sello } from "@/components/shared/sello";
 import { EditorHorarios } from "@/components/personal/editor-horarios";
 import { DarDeBaja } from "@/components/personal/dar-de-baja";
 import {
+  LABEL_SECTOR,
   LABEL_TIPO_CONTRATO,
+  formatDuracion,
+  formatHorasNumero,
+  horasSemanalesDeFranjas,
+  minutosTrabajados,
   nombreCompleto,
   resumirHorarios,
 } from "@/components/personal/constantes";
+import { BarraHoras } from "@/components/novedades/barra-horas";
+import { Contadores } from "@/components/novedades/contadores";
+import { FilaNovedad } from "@/components/novedades/fila-novedad";
+import { armarVistas, novedadesDelMes } from "@/components/novedades/datos";
 
 export const metadata = { title: "Ficha del empleado" };
 
@@ -44,14 +53,15 @@ export default async function FichaEmpleadoPage({ params }: Props) {
   const { data: empleado } = await supabase
     .from("empleados")
     .select(
-      "id, nombre, apellido, dni, cuil, cargo, telefono, email, tipo_contrato, fecha_ingreso, fecha_egreso, observaciones, contrato_path, activo, creado_en"
+      "id, nombre, apellido, dni, cuil, cargo, telefono, email, sector, horas_semanales, tipo_contrato, fecha_ingreso, fecha_egreso, observaciones, contrato_path, activo, creado_en"
     )
     .eq("id", id)
     .eq("org_id", perfil.org_id)
     .maybeSingle();
   if (!empleado) notFound();
 
-  const [horariosRes, ingresosRes] = await Promise.all([
+  const periodo = periodoActual();
+  const [horariosRes, ingresosRes, resumenRes, novedadesMes] = await Promise.all([
     supabase
       .from("empleado_horarios")
       .select("dia_semana, hora_desde, hora_hasta")
@@ -64,9 +74,16 @@ export default async function FichaEmpleadoPage({ params }: Props) {
       .eq("empleado_id", id)
       .order("ingreso_en", { ascending: false })
       .limit(8),
+    supabase.rpc("resumen_novedades", { p_periodo: periodo }),
+    novedadesDelMes(supabase, periodo, id),
   ]);
   const horarios = horariosRes.data ?? [];
   const ingresos = ingresosRes.data ?? [];
+  const delMes = (resumenRes.data ?? []).find((r) => r.empleado_id === id) ?? null;
+  const vistas = await armarVistas(supabase, novedadesMes);
+  const segunHorario = horasSemanalesDeFranjas(horarios);
+  const hoy = hoyISO();
+  const mes = labelPeriodo(periodo).split(" ")[0].toLowerCase();
 
   let urlContrato: string | null = null;
   if (empleado.contrato_path) {
@@ -124,6 +141,7 @@ export default async function FichaEmpleadoPage({ params }: Props) {
                 label="CUIL"
                 valor={empleado.cuil ? <span className="tabular">{empleado.cuil}</span> : null}
               />
+              <Dato label="Sector" valor={LABEL_SECTOR[empleado.sector]} />
               <Dato label="Cargo" valor={empleado.cargo} />
               <Dato label="Teléfono" valor={empleado.telefono} />
               <Dato label="Email" valor={empleado.email} />
@@ -144,6 +162,18 @@ export default async function FichaEmpleadoPage({ params }: Props) {
               <Dato
                 label="Fecha de egreso"
                 valor={empleado.fecha_egreso ? formatFecha(empleado.fecha_egreso) : "Sigue trabajando"}
+              />
+              <Dato
+                label="Horas por semana"
+                valor={
+                  empleado.horas_semanales ? (
+                    <span className="tabular">{formatHorasNumero(empleado.horas_semanales)} h (contrato)</span>
+                  ) : segunHorario > 0 ? (
+                    <span className="tabular">{formatHorasNumero(segunHorario)} h según sus horarios</span>
+                  ) : (
+                    <span className="text-parcial">Sin horas de contrato</span>
+                  )
+                }
               />
             </dl>
             <div className="flex flex-wrap items-center gap-3">
@@ -187,6 +217,67 @@ export default async function FichaEmpleadoPage({ params }: Props) {
 
       <Card className="text-base">
         <CardHeader>
+          <CardTitle className="font-display text-lg font-bold">Novedades de {mes}</CardTitle>
+          <CardDescription className="text-sm">
+            Horas que debería tener contra las que registró en Portería, y lo que se cargó en el mes.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {delMes ? (
+            <>
+              <BarraHoras
+                registradas={Number(delMes.horas_registradas)}
+                esperadas={Number(delMes.horas_esperadas)}
+                horasSemanales={delMes.horas_semanales === null ? null : Number(delMes.horas_semanales)}
+                hastaHoy
+                className="max-w-xl"
+              />
+              {delMes.ingresos_sin_salida > 0 ? (
+                <p className="flex items-center gap-1.5 text-sm font-medium text-parcial">
+                  <DoorOpen className="size-4 shrink-0" strokeWidth={2} />
+                  {delMes.ingresos_sin_salida === 1
+                    ? "1 ingreso sin salida marcada: esas horas no suman"
+                    : `${delMes.ingresos_sin_salida} ingresos sin salida marcada: esas horas no suman`}
+                </p>
+              ) : null}
+              <Contadores
+                contadores={{
+                  ...delMes,
+                  horas_tarde: Number(delMes.horas_tarde),
+                  horas_feriado: Number(delMes.horas_feriado),
+                  horas_extra: Number(delMes.horas_extra),
+                }}
+              />
+            </>
+          ) : (
+            <p className="text-sm text-muted-foreground">No figura como vigente este mes (revisá las fechas de ingreso y egreso).</p>
+          )}
+          {vistas.length > 0 ? (
+            <div className="divide-y border-t">
+              {vistas.map((n) => (
+                <FilaNovedad key={`${n.id}-${n.estado}`} n={n} puedeRevisar miUserId={perfil.user_id} />
+              ))}
+            </div>
+          ) : null}
+          <div className="flex flex-wrap gap-2 pt-1">
+            <Button asChild size="lg" className="h-12 px-5 text-base font-semibold">
+              <Link href={`/novedades/nueva?empleado=${empleado.id}`}>
+                <Plus className="size-5" strokeWidth={2.2} />
+                Cargar novedad
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="h-12 px-4">
+              <Link href="/novedades">
+                <ClipboardList className="size-4" strokeWidth={2} />
+                Ver la planilla del mes
+              </Link>
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="text-base">
+        <CardHeader>
           <CardTitle className="font-display text-lg font-bold">Últimos ingresos por portería</CardTitle>
           <CardDescription className="text-sm">
             Lo que registró la garita con su firma. Los últimos {ingresos.length || 8}.
@@ -200,18 +291,29 @@ export default async function FichaEmpleadoPage({ params }: Props) {
             </p>
           ) : (
             <div className="divide-y">
-              {ingresos.map((i) => (
-                <div key={i.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 py-3">
-                  <p className="min-w-0 flex-1 font-medium tabular">
-                    {fechaHoraAR(i.ingreso_en)}
-                    <span className="text-muted-foreground">
-                      {" "}
-                      {i.egreso_en ? `· salió ${horaAR(i.egreso_en)}` : "· sigue adentro"}
-                    </span>
-                  </p>
-                  <Sello estado={i.fuera_de_horario ? "fuera_horario" : "en_horario"} />
-                </div>
-              ))}
+              {ingresos.map((i) => {
+                const minutos = minutosTrabajados(i.ingreso_en, i.egreso_en);
+                const deOtroDia = !i.egreso_en && formatFechaTS(i.ingreso_en) !== formatFecha(hoy);
+                return (
+                  <div key={i.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 py-3">
+                    <p className="min-w-0 flex-1 font-medium tabular">
+                      {fechaHoraAR(i.ingreso_en)}
+                      <span className="text-muted-foreground">
+                        {" "}
+                        {i.egreso_en ? `· salió ${horaAR(i.egreso_en)}` : deOtroDia ? "· no marcó la salida" : "· sigue adentro"}
+                      </span>
+                    </p>
+                    {minutos !== null ? (
+                      <span className="text-base font-semibold tabular">{formatDuracion(minutos)}</span>
+                    ) : deOtroDia ? (
+                      <Sello estado="parcial" texto="Sin salida marcada" />
+                    ) : (
+                      <Sello estado="adentro" />
+                    )}
+                    <Sello estado={i.fuera_de_horario ? "fuera_horario" : "en_horario"} />
+                  </div>
+                );
+              })}
             </div>
           )}
         </CardContent>

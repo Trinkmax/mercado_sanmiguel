@@ -19,23 +19,18 @@ export function BotonAbrirCaja({ tipo }: { tipo: Enums<"tipo_caja"> }) {
         toast.error(res.error);
         return;
       }
-      toast.success("Caja abierta. Ya podés registrar cobros.");
+      toast.success(
+        tipo === "guardia"
+          ? "Caja de portería abierta. Ya podés cobrar a quinteros y ambulantes."
+          : "Caja abierta. Ya podés registrar cobros."
+      );
     });
   }
 
   return (
-    <Button
-      size="lg"
-      onClick={abrir}
-      disabled={enviando}
-      className="h-13 px-8 text-base font-semibold"
-    >
-      {enviando ? (
-        <Spinner className="size-5" />
-      ) : (
-        <CajaRegistradora className="size-5" strokeWidth={2} />
-      )}
-      Abrir caja
+    <Button size="lg" onClick={abrir} disabled={enviando} className="h-13 px-8 text-base font-semibold">
+      {enviando ? <Spinner className="size-5" /> : <CajaRegistradora className="size-5" strokeWidth={2} />}
+      {tipo === "guardia" ? "Abrir la caja de portería" : "Abrir caja"}
     </Button>
   );
 }

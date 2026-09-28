@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronRight, Clock, UserPlus, Users } from "lucide-react";
+import { ChevronRight, ClipboardList, Clock, TriangleAlert, UserPlus, Users } from "lucide-react";
 import { requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
@@ -11,7 +11,12 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { BotonExportar } from "@/components/shared/boton-exportar";
 import { BuscadorEmpleados } from "@/components/personal/buscador-empleados";
 import {
+  LABEL_SECTOR,
   LABEL_TIPO_CONTRATO,
+  SECTORES_PERSONAL,
+  esSector,
+  formatHorasNumero,
+  horasSemanalesDeFranjas,
   hrefPersonal,
   nombreCompleto,
   resumirHorarios,
@@ -20,7 +25,7 @@ import {
 export const metadata = { title: "Personal" };
 
 type Props = {
-  searchParams: Promise<{ q?: string | string[]; filtro?: string | string[] }>;
+  searchParams: Promise<{ q?: string | string[]; filtro?: string | string[]; sector?: string | string[] }>;
 };
 
 const FILTROS = [
@@ -35,12 +40,14 @@ export default async function PersonalPage({ searchParams }: Props) {
   const filtroParam = Array.isArray(sp.filtro) ? sp.filtro[0] : sp.filtro;
   const texto = q.trim();
   const filtro = filtroParam === "todos" ? "todos" : "activos";
+  const sectorParam = Array.isArray(sp.sector) ? sp.sector[0] : sp.sector;
+  const sector = esSector(sectorParam) ? sectorParam : null;
 
   const supabase = await createClient();
   let consulta = supabase
     .from("empleados")
     .select(
-      "id, nombre, apellido, dni, cargo, tipo_contrato, activo, empleado_horarios(dia_semana, hora_desde, hora_hasta)"
+      "id, nombre, apellido, dni, cargo, sector, horas_semanales, tipo_contrato, activo, empleado_horarios(dia_semana, hora_desde, hora_hasta)"
     )
     .eq("org_id", perfil.org_id)
     .order("apellido")
@@ -55,15 +62,25 @@ export default async function PersonalPage({ searchParams }: Props) {
     }
   }
   const { data } = await consulta;
-  const empleados = data ?? [];
+  const todos = data ?? [];
+  // Chips de sector con su conteo (sobre la búsqueda y el filtro activos/todos).
+  const conteoSector = new Map<string, number>();
+  for (const e of todos) conteoSector.set(e.sector, (conteoSector.get(e.sector) ?? 0) + 1);
+  const empleados = sector ? todos.filter((e) => e.sector === sector) : todos;
 
   return (
     <div className="space-y-8">
       <PageHeader
         titulo="Personal"
-        descripcion="Empleados de la cooperativa: contrato, franjas horarias y horarios de trabajo."
+        descripcion="Empleados de la cooperativa: sector, horas de contrato, horarios de trabajo y su contrato."
       >
         <BotonExportar dataset="empleados" />
+        <Button asChild variant="outline" className="min-h-11">
+          <Link href="/novedades">
+            <ClipboardList className="size-4" strokeWidth={2} />
+            Novedades del mes
+          </Link>
+        </Button>
         <Button asChild size="lg" className="h-13 px-6 text-base font-semibold">
           <Link href="/personal/nuevo">
             <UserPlus className="size-5" />
@@ -73,14 +90,14 @@ export default async function PersonalPage({ searchParams }: Props) {
       </PageHeader>
 
       <div className="space-y-3">
-        <BuscadorEmpleados inicial={texto} filtro={filtro} />
+        <BuscadorEmpleados inicial={texto} filtro={filtro} sector={sector} />
         <div className="flex flex-wrap gap-2" role="group" aria-label="Filtrar empleados">
           {FILTROS.map((f) => {
             const activo = f.valor === filtro;
             return (
               <Link
                 key={f.valor}
-                href={hrefPersonal(texto, f.valor)}
+                href={hrefPersonal(texto, f.valor, sector)}
                 aria-current={activo ? "true" : undefined}
                 className={cn(
                   "inline-flex h-10 items-center rounded-full border px-4 text-sm font-medium transition-colors",
@@ -93,11 +110,49 @@ export default async function PersonalPage({ searchParams }: Props) {
               </Link>
             );
           })}
+          {todos.length > 0 ? (
+            <>
+              <span className="mx-1 hidden h-10 w-px bg-border sm:block" aria-hidden />
+              <Link
+                href={hrefPersonal(texto, filtro)}
+                aria-current={!sector ? "true" : undefined}
+                className={cn(
+                  "inline-flex h-10 items-center gap-2 rounded-full border px-4 text-sm font-medium transition-colors",
+                  !sector
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground"
+                )}
+              >
+                Todos los sectores
+              </Link>
+              {SECTORES_PERSONAL.filter((sec) => conteoSector.has(sec)).map((sec) => {
+                const activo = sec === sector;
+                return (
+                  <Link
+                    key={sec}
+                    href={hrefPersonal(texto, filtro, sec)}
+                    aria-current={activo ? "true" : undefined}
+                    className={cn(
+                      "inline-flex h-10 items-center gap-2 rounded-full border px-4 text-sm font-medium transition-colors",
+                      activo
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground"
+                    )}
+                  >
+                    {LABEL_SECTOR[sec]}
+                    <span className={cn("text-xs font-semibold tabular", activo ? "text-primary-foreground/80" : "")}>
+                      {conteoSector.get(sec)}
+                    </span>
+                  </Link>
+                );
+              })}
+            </>
+          ) : null}
         </div>
       </div>
 
       {empleados.length === 0 ? (
-        texto || filtro === "todos" ? (
+        texto || filtro === "todos" || sector ? (
           <EmptyState
             icono={Users}
             titulo="No encontramos empleados"
@@ -126,6 +181,7 @@ export default async function PersonalPage({ searchParams }: Props) {
           {empleados.map((e) => {
             const horarios = resumirHorarios(e.empleado_horarios ?? []);
             const sinHorarios = (e.empleado_horarios ?? []).length === 0;
+            const segunHorario = horasSemanalesDeFranjas(e.empleado_horarios ?? []);
             return (
               <Link
                 key={e.id}
@@ -146,11 +202,26 @@ export default async function PersonalPage({ searchParams }: Props) {
                       DNI {e.dni}
                     </span>
                   </div>
-                  <p className="truncate text-sm text-muted-foreground">
-                    {[e.cargo, LABEL_TIPO_CONTRATO[e.tipo_contrato]]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </p>
+                  <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="inline-flex items-center rounded-full border bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground/80">
+                      {LABEL_SECTOR[e.sector]}
+                    </span>
+                    {e.horas_semanales ? (
+                      <span className="text-sm font-semibold tabular">{formatHorasNumero(e.horas_semanales)} h/sem</span>
+                    ) : segunHorario > 0 ? (
+                      <span className="text-sm tabular text-foreground/80">
+                        {formatHorasNumero(segunHorario)} h/sem según horario
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 text-sm font-medium text-parcial">
+                        <TriangleAlert className="size-3.5" strokeWidth={2.2} />
+                        Sin horas de contrato
+                      </span>
+                    )}
+                    <span className="truncate text-sm text-muted-foreground">
+                      {[e.cargo, LABEL_TIPO_CONTRATO[e.tipo_contrato]].filter(Boolean).join(" · ")}
+                    </span>
+                  </div>
                   <p
                     className={cn(
                       "mt-0.5 flex items-center gap-1.5 text-sm",

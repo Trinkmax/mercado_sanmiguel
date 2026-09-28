@@ -36,8 +36,8 @@ export default async function ReportesPage({
 }: {
   searchParams: Promise<{ periodo?: string | string[] }>;
 }) {
-  // Reportes es de Dirección: Tesorería, Consejo y Líder de Procesos (sin Administración).
-  const perfil = await requireRol("tesoreria", "consejo", "lider");
+  // J7: Reportes es solo del Líder de Procesos.
+  const perfil = await requireRol("lider");
   const sp = await searchParams;
   const crudo = typeof sp.periodo === "string" ? sp.periodo : "";
   const periodo = /^\d{4}-\d{2}-01$/.test(crudo) ? crudo : periodoActual();
@@ -55,9 +55,11 @@ export default async function ReportesPage({
       .eq("anulado", false)
       .gte("fecha", `${periodo}T00:00:00-03:00`)
       .lt("fecha", `${siguiente}T00:00:00-03:00`),
+    // Bono camioneros del mes, sin los anulados (se anulan, no se borran).
     supabase
       .from("canon_camiones")
-      .select("fecha, monto")
+      .select("fecha, monto, anulado")
+      .eq("anulado", false)
       .gte("fecha", periodo)
       .lt("fecha", siguiente),
   ]);

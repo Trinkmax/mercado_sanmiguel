@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Info, Pencil, Send } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, Info, Pencil, Send } from "lucide-react";
 import { toast } from "sonner";
 import {
   actualizarConcepto,
@@ -9,6 +10,7 @@ import {
   type EstadoSolicitud,
 } from "@/lib/actions/configuracion";
 import { formatARS } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,23 +24,25 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Codigo } from "@/components/shared/codigo";
 import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
+
+export type TipoConcepto =
+  | "recurrente"
+  | "energia"
+  | "canon_diario"
+  | "deuda"
+  | "diario"
+  | "abono_energia"
+  | "eventual";
 
 export type ConceptoFila = {
   id: string;
   codigo: string;
   nombre: string;
-  tipo: "recurrente" | "energia" | "canon_diario" | "deuda";
+  tipo: TipoConcepto;
+  segmento: string | null;
   precio: number;
   descuento_pronto_pago: number;
   orden_imputacion: number;
@@ -51,12 +55,46 @@ export type CambioPendienteConcepto = {
   solicitadoEn: string;
 };
 
-const LABEL_TIPO: Record<ConceptoFila["tipo"], string> = {
-  recurrente: "Mensual",
-  energia: "Energía",
-  canon_diario: "Canon diario",
-  deuda: "Deuda",
+const LABEL_TIPO: Record<TipoConcepto, string> = {
+  recurrente: "Por mes",
+  energia: "Por kWh consumido",
+  canon_diario: "Por vehículo (tarifas)",
+  deuda: "Deuda anterior",
+  diario: "Por día",
+  abono_energia: "Abono de energía, por mes",
+  eventual: "Eventual",
 };
+
+/** Unidad que acompaña al precio. */
+const UNIDAD: Partial<Record<TipoConcepto, string>> = {
+  recurrente: "por mes",
+  energia: "por kWh",
+  diario: "por día",
+  abono_energia: "por mes",
+};
+
+/** Conceptos cuyo monto no sale del precio del catálogo. */
+const SIN_PRECIO: TipoConcepto[] = ["deuda", "eventual", "canon_diario"];
+const TEXTO_SIN_PRECIO: Partial<Record<TipoConcepto, string>> = {
+  deuda: "Según cada deuda",
+  eventual: "Según cada registro",
+  canon_diario: "Por tarifa",
+};
+
+type Grupo = { clave: string; titulo: string; ayuda: string };
+const GRUPOS: Grupo[] = [
+  { clave: "puestos", titulo: "Puestos y espacios", ayuda: "Lo que paga cada mes quien ocupa un puesto, local, galpón, contéiner o cochera." },
+  { clave: "quintas", titulo: "Quintas y ambulantes", ayuda: "Los propone el Jefe de Portería." },
+  { clave: "energia", titulo: "Energía", ayuda: "Abono mensual a quien tiene medidor, más el consumo." },
+  { clave: "otros", titulo: "Otros", ayuda: "Montos que no salen de esta lista: deudas, multas y el bono camioneros." },
+];
+
+function grupoDe(c: ConceptoFila): string {
+  if (c.segmento === "quinteros" || c.segmento === "ambulantes") return "quintas";
+  if (c.tipo === "energia" || c.tipo === "abono_energia") return "energia";
+  if (c.tipo === "recurrente") return "puestos";
+  return "otros";
+}
 
 const TOAST_ENVIADO = "Enviado al Líder de Procesos para su aprobación.";
 
@@ -68,12 +106,15 @@ export function TablaConceptos({
   conceptos,
   pendientes,
   aplicaDirecto,
+  verTarifas = false,
 }: {
   conceptos: ConceptoFila[];
   /** Cambios pendientes por id de concepto (para el sello "Esperando aprobación"). */
   pendientes: Record<string, CambioPendienteConcepto[]>;
   /** true = Líder de Procesos: sus cambios se aplican en el acto. */
   aplicaDirecto: boolean;
+  /** Muestra el link a Tarifas de transporte en el bono camioneros (Líder). */
+  verTarifas?: boolean;
 }) {
   const [editando, setEditando] = useState<ConceptoFila | null>(null);
   const [precio, setPrecio] = useState("");
@@ -134,8 +175,15 @@ export function TablaConceptos({
     });
   }
 
+  const porGrupo = GRUPOS.map((g) => ({
+    ...g,
+    items: conceptos.filter((c) => grupoDe(c) === g.clave),
+  })).filter((g) => g.items.length > 0);
+
+  const sinPrecioEditando = editando ? SIN_PRECIO.includes(editando.tipo) : false;
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <Alert className="px-4 py-3">
         <Info strokeWidth={2} />
         <AlertTitle className="text-sm">
@@ -143,90 +191,102 @@ export function TablaConceptos({
           generado no cambia.
         </AlertTitle>
         <AlertDescription className="text-sm">
-          Cuando un cliente paga, la plata entra sola en el orden de esta tabla
+          Cuando un cliente paga, la plata entra sola en el orden de esta lista
           (primero la deuda más vieja; dentro del mes, el número de orden más
-          bajo cobra primero). Cambiá el orden acá y rige para los próximos
-          cobros. Para que un concepto no se le aplique a un cliente puntual,
-          desactivalo desde su carpeta, pestaña Conceptos.
+          bajo cobra primero). Para que un concepto no se le cobre a un cliente
+          puntual, sacáselo desde su carpeta.
           {aplicaDirecto
             ? ""
             : " Cada cambio queda esperando la aprobación del Líder de Procesos antes de aplicarse."}
         </AlertDescription>
       </Alert>
 
-      <div className="overflow-x-auto rounded-lg border bg-card">
-        <Table className="text-sm">
-          <TableHeader>
-            <TableRow>
-              <TableHead className="pl-4">Código</TableHead>
-              <TableHead>Concepto</TableHead>
-              <TableHead>Tipo</TableHead>
-              <TableHead className="text-right">Precio</TableHead>
-              <TableHead className="text-right">Beneficio pago en término</TableHead>
-              <TableHead className="text-right">Orden</TableHead>
-              <TableHead>Activo</TableHead>
-              <TableHead className="pr-4" />
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {conceptos.map((concepto) => {
+      {porGrupo.map((grupo) => (
+        <section key={grupo.clave} className="space-y-2">
+          <div>
+            <h2 className="font-display text-lg font-bold">{grupo.titulo}</h2>
+            <p className="text-sm text-muted-foreground">{grupo.ayuda}</p>
+          </div>
+          <ul className="divide-y overflow-hidden rounded-xl border bg-card">
+            {grupo.items.map((concepto) => {
               const enEspera = pendientes[concepto.id] ?? [];
+              const sinPrecio = SIN_PRECIO.includes(concepto.tipo);
+              const esBC = concepto.codigo === "BC";
               return (
-                <TableRow key={concepto.id} className="h-14">
-                  <TableCell className="pl-4">
-                    <Codigo codigo={concepto.codigo} />
-                  </TableCell>
-                  <TableCell className="font-medium">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span>{concepto.nombre}</span>
-                      {enEspera.length > 0 ? (
-                        <Sello estado="pendiente_aprobacion" />
-                      ) : null}
-                    </div>
+                <li
+                  key={concepto.id}
+                  className={cn(
+                    "grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3 px-4 py-4 sm:grid-cols-[auto_1fr_auto_auto] sm:px-5",
+                    !concepto.activo && "bg-muted/40"
+                  )}
+                >
+                  <Codigo codigo={concepto.codigo} />
+                  <div className="min-w-0">
+                    <p className="flex flex-wrap items-center gap-2 font-semibold">
+                      <span className={cn(!concepto.activo && "text-muted-foreground")}>{concepto.nombre}</span>
+                      {enEspera.length > 0 ? <Sello estado="pendiente_aprobacion" /> : null}
+                      {!concepto.activo ? <Sello estado="inactivo" /> : null}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {LABEL_TIPO[concepto.tipo]}
+                      {Number(concepto.descuento_pronto_pago) > 0
+                        ? ` · ${concepto.descuento_pronto_pago} % de beneficio pagando en término`
+                        : ""}
+                      {` · orden ${concepto.orden_imputacion}`}
+                    </p>
                     {enEspera.length > 0 ? (
-                      <p className="mt-0.5 text-xs font-normal text-muted-foreground">
-                        {enEspera.map((c) => c.resumen).join(" · ")}
+                      <p className="mt-0.5 text-sm text-parcial">
+                        Esperando al Líder: {enEspera.map((c) => c.resumen).join(" · ")}
                       </p>
                     ) : null}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {LABEL_TIPO[concepto.tipo]}
-                  </TableCell>
-                  <TableCell className="text-right tabular">
-                    <Money monto={concepto.precio} />
-                  </TableCell>
-                  <TableCell className="text-right tabular">
-                    {Number(concepto.descuento_pronto_pago) > 0
-                      ? `${concepto.descuento_pronto_pago} %`
-                      : "—"}
-                  </TableCell>
-                  <TableCell className="text-right tabular">
-                    {concepto.orden_imputacion}
-                  </TableCell>
-                  <TableCell>
-                    <Switch
-                      checked={concepto.activo}
-                      disabled={togglePendiente === concepto.id}
-                      onCheckedChange={(activo) => cambiarActivo(concepto, activo)}
-                      aria-label={`${concepto.nombre} activo`}
-                    />
-                  </TableCell>
-                  <TableCell className="pr-4 text-right">
-                    <Button
-                      variant="outline"
-                      className="min-h-11 px-4 text-sm"
-                      onClick={() => abrirEdicion(concepto)}
-                    >
-                      <Pencil className="size-4" strokeWidth={2} />
-                      Editar
-                    </Button>
-                  </TableCell>
-                </TableRow>
+                  </div>
+                  <div className="col-start-2 sm:col-start-3 sm:text-right">
+                    {sinPrecio ? (
+                      esBC && verTarifas ? (
+                        <Link
+                          href="/configuracion?tab=tarifas"
+                          className="inline-flex min-h-11 items-center gap-1 text-sm font-medium text-primary hover:underline"
+                        >
+                          Ver tarifas de transporte
+                          <ArrowRight className="size-4" />
+                        </Link>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">{TEXTO_SIN_PRECIO[concepto.tipo]}</span>
+                      )
+                    ) : (
+                      <>
+                        <Money monto={concepto.precio} className="font-display text-xl font-bold" />
+                        <span className="block text-sm text-muted-foreground">{UNIDAD[concepto.tipo]}</span>
+                      </>
+                    )}
+                  </div>
+                  <div className="col-start-2 flex items-center gap-3 sm:col-start-4">
+                    <label className="flex min-h-11 items-center gap-2 text-sm text-muted-foreground">
+                      <Switch
+                        checked={concepto.activo}
+                        disabled={togglePendiente === concepto.id}
+                        onCheckedChange={(activo) => cambiarActivo(concepto, activo)}
+                        aria-label={`${concepto.nombre} activo`}
+                      />
+                      Activo
+                    </label>
+                    {esBC ? null : (
+                      <Button
+                        variant="outline"
+                        className="min-h-11 px-4 text-sm"
+                        onClick={() => abrirEdicion(concepto)}
+                      >
+                        <Pencil className="size-4" strokeWidth={2} />
+                        Editar
+                      </Button>
+                    )}
+                  </div>
+                </li>
               );
             })}
-          </TableBody>
-        </Table>
-      </div>
+          </ul>
+        </section>
+      ))}
 
       <Dialog
         open={editando !== null}
@@ -247,24 +307,25 @@ export function TablaConceptos({
           </DialogHeader>
 
           <div className="space-y-5">
-            <div className="space-y-2">
-              <Label htmlFor="precio-concepto" className="text-sm">
-                Precio
-              </Label>
-              <Input
-                id="precio-concepto"
-                inputMode="numeric"
-                autoComplete="off"
-                className="h-12 text-base md:text-base"
-                value={precio}
-                onChange={(e) => setPrecio(soloDigitos(e.target.value))}
-              />
-              <p className="text-sm text-muted-foreground tabular">
-                {formatARS(Number(precio || 0))}
-                {editando?.tipo === "energia" ? " por kWh" : ""}
-                {editando?.tipo === "canon_diario" ? " por día" : ""}
-              </p>
-            </div>
+            {sinPrecioEditando ? null : (
+              <div className="space-y-2">
+                <Label htmlFor="precio-concepto" className="text-sm">
+                  Precio
+                </Label>
+                <Input
+                  id="precio-concepto"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  className="h-12 text-base md:text-base"
+                  value={precio}
+                  onChange={(e) => setPrecio(soloDigitos(e.target.value))}
+                />
+                <p className="text-sm text-muted-foreground tabular">
+                  {formatARS(Number(precio || 0))}
+                  {editando ? ` ${UNIDAD[editando.tipo] ?? ""}` : ""}
+                </p>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="descuento-concepto" className="text-sm">
@@ -307,7 +368,7 @@ export function TablaConceptos({
             <Button
               size="lg"
               className="h-12 w-full text-base font-semibold"
-              disabled={guardando || !precio || !orden}
+              disabled={guardando || (!sinPrecioEditando && !precio) || !orden}
               onClick={guardar}
             >
               {aplicaDirecto ? null : <Send className="size-5" strokeWidth={2} />}

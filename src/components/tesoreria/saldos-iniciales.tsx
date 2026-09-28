@@ -1,0 +1,76 @@
+import { ChevronDown } from "lucide-react";
+import { formatFecha, type Moneda } from "@/lib/format";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
+import { Sello } from "@/components/shared/sello";
+import { MontoMoneda } from "@/components/tesoreria/monto";
+import { SaldoInicialForm } from "@/components/tesoreria/saldo-inicial-form";
+
+export type SaldoInicial = {
+  medio: "efectivo" | "transferencia";
+  moneda: Moneda;
+  monto: number;
+  fecha: string;
+  notas: string | null;
+};
+
+const CUENTAS: { medio: "efectivo" | "transferencia"; moneda: Moneda; titulo: string }[] = [
+  { medio: "efectivo", moneda: "ARS", titulo: "Pesos en efectivo" },
+  { medio: "transferencia", moneda: "ARS", titulo: "Pesos en el banco" },
+  { medio: "efectivo", moneda: "USD", titulo: "Dólares en efectivo" },
+  { medio: "transferencia", moneda: "USD", titulo: "Dólares en el banco" },
+];
+
+/**
+ * Los 4 saldos iniciales (pesos/dólares × efectivo/banco). Los que faltan se
+ * muestran abiertos para cargar; los cargados, compactos con "Corregir".
+ */
+export function SaldosIniciales({ saldos }: { saldos: SaldoInicial[] }) {
+  return (
+    <div className="grid gap-4 md:grid-cols-2">
+      {CUENTAS.map((c) => {
+        const s = saldos.find((x) => x.medio === c.medio && x.moneda === c.moneda) ?? null;
+        return (
+          <section key={`${c.medio}-${c.moneda}`} className="rounded-xl border bg-card p-5" aria-label={c.titulo}>
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+              <h3 className="font-display text-base font-bold tracking-tight">{c.titulo}</h3>
+              {s ? <Sello estado="pagado" texto="Cargado" /> : <Sello estado="pendiente" texto="Falta cargar" />}
+            </div>
+            {s ? (
+              <div className="space-y-2">
+                <MontoMoneda monto={s.monto} moneda={c.moneda} className="block text-2xl font-bold" />
+                <p className="text-sm text-muted-foreground">
+                  Al comenzar el {formatFecha(s.fecha)}
+                  {s.notas ? ` · ${s.notas}` : ""}
+                </p>
+                <Collapsible>
+                  <CollapsibleTrigger className="group flex min-h-11 items-center gap-1.5 text-base font-medium text-primary">
+                    <ChevronDown
+                      className="size-4 transition-transform group-data-[state=open]:rotate-180"
+                      strokeWidth={2}
+                    />
+                    Corregir
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="pt-3">
+                    <SaldoInicialForm
+                      medio={c.medio}
+                      moneda={c.moneda}
+                      monto={s.monto}
+                      fecha={s.fecha}
+                      notas={s.notas}
+                    />
+                  </CollapsibleContent>
+                </Collapsible>
+              </div>
+            ) : (
+              <SaldoInicialForm medio={c.medio} moneda={c.moneda} monto={null} fecha={null} notas={null} />
+            )}
+          </section>
+        );
+      })}
+    </div>
+  );
+}

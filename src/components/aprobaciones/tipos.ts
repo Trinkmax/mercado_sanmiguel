@@ -10,6 +10,8 @@ export type ReferenciaCliente = {
   id: string;
   codigo: number;
   nombre: string;
+  /** Si sigue activo (para las altas aplicadas por el Jefe que el Líder revisa). */
+  activo?: boolean;
 };
 
 export type ReferenciaConcepto = {
@@ -38,6 +40,8 @@ export type CambioFila = {
   revisadoEn: string | null;
   motivoRechazo: string | null;
   resultadoId: string | null;
+  /** Alta de ambulante aplicada en el acto por el Jefe (§1.3 D-P1): el Líder la revisa después. */
+  revisarDespues: boolean;
 };
 
 export const LABEL_ENTIDAD: Record<EntidadCambio, string> = {

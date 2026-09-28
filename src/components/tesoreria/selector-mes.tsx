@@ -10,27 +10,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-/** Selector de mes para los movimientos bancarios: navega con ?mes=YYYY-MM-01. */
+/** Mes de los movimientos: navega con ?tab=movimientos&mes=YYYY-MM-01. */
 export function SelectorMes({ mes }: { mes: string }) {
   const router = useRouter();
 
   const opciones: string[] = [];
   const actual = periodoActual();
-  for (let i = 0; i < 12; i++) {
-    opciones.push(sumarMeses(actual, -i));
-  }
-  // Si el mes elegido no está en la lista (link viejo), lo sumamos igual.
+  for (let i = 0; i < 12; i++) opciones.push(sumarMeses(actual, -i));
   if (!opciones.includes(mes)) opciones.push(mes);
 
   return (
     <Select
       value={mes}
-      onValueChange={(v) => router.replace(`/tesoreria?mes=${v}`, { scroll: false })}
+      onValueChange={(v) => router.replace(`/tesoreria?tab=movimientos&mes=${v}`, { scroll: false })}
     >
-      <SelectTrigger
-        className="h-11 min-w-44 px-3 text-base"
-        aria-label="Elegí el mes"
-      >
+      <SelectTrigger className="h-11 min-w-48 px-3 text-base" aria-label="Elegí el mes">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>

@@ -1,33 +1,44 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useOptimistic, useRef, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Check, Maximize2, Minimize2, MousePointerClick, Paintbrush } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatFraccion, formatNumero } from "@/lib/format";
+import type { CategoriaCliente } from "@/lib/segmentos";
 import { Button } from "@/components/ui/button";
 import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
 import { asignarEspacios, editarEspacio } from "@/lib/actions/mapa";
+import { agregarConceptoCliente, editarConceptoCliente } from "@/lib/actions/clientes";
 import { BuscadorMapa, type ResultadoBusqueda } from "./buscador-mapa";
 import {
   alturaDe,
   armarBloques,
   cantidad,
+  CODIGO_DIFERENCIA,
   diferencias,
+  etiquetaEspacio,
   etiquetaEspacios,
   limitesPlano,
   NOMBRE_TIPO,
-  numeroVisible,
   REPOSO,
-  unidades,
+  unidadesPuestos,
   unir,
   type Bloque,
+  type Diferencia,
   type EstadoBloque,
   type Marca,
 } from "./geometria";
 import { LienzoPlano, type ControlLienzo } from "./lienzo-plano";
-import { PanelAsignacion, type Confirmacion, type Revision, type Sugerencia } from "./panel-asignacion";
+import {
+  PanelAsignacion,
+  type Confirmacion,
+  type DatosEspacio,
+  type Revision,
+  type Sugerencia,
+} from "./panel-asignacion";
 import { PanelDetalle } from "./panel-detalle";
 import {
   anilloDe,
@@ -38,8 +49,26 @@ import {
   type EstiloBloque,
   type FichaQuintero,
 } from "./plano-svg";
-import { deTotal, ResumenMapa, type Filtro, type Resumen } from "./resumen-mapa";
-import type { ClienteMapa, Destinos, ElementoPlano, Espacio, EstadoCobro, Rect } from "./tipos";
+import {
+  deTotal,
+  ResumenMapa,
+  ResumenQuintas,
+  type Filtro,
+  type FiltroEstado,
+  type Resumen,
+  type ResumenQuinteros,
+} from "./resumen-mapa";
+import type {
+  AvisoPuestoPrevio,
+  ClienteMapa,
+  CodigoPlano,
+  Destinos,
+  ElementoPlano,
+  Espacio,
+  EstadoCobro,
+  Rect,
+  VistaMapa,
+} from "./tipos";
 
 /** Plano real del mercado: cada puesto pintado según el estado de cobro de
  * quien lo ocupa. Tocar un puesto ilumina todos los espacios de ese puestero.
@@ -51,7 +80,7 @@ type Modo = "ver" | "asignar";
 
 type Cambio =
   | { tipo: "asignar"; ids: string[]; clienteId: string | null }
-  | { tipo: "editar"; id: string; numero: string | null; medio: boolean; nota: string | null };
+  | { tipo: "editar"; id: string; numero: string | null; medio: boolean; nota: string | null; propio?: boolean };
 
 function aplicarCambio(actual: Espacio[], c: Cambio): Espacio[] {
   if (c.tipo === "asignar") {
@@ -59,8 +88,15 @@ function aplicarCambio(actual: Espacio[], c: Cambio): Espacio[] {
     return actual.map((e) => (ids.has(e.id) ? { ...e, clienteId: c.clienteId } : e));
   }
   return actual.map((e) =>
-    e.id === c.id ? { ...e, numero: c.numero, medio: c.medio, nota: c.nota } : e
+    e.id === c.id
+      ? { ...e, numero: c.numero, medio: c.medio, nota: c.nota, propio: c.propio ?? e.propio }
+      : e
   );
+}
+
+/** Quintero: por categoría (fase 3) o, si no viene, porque factura la quinta. */
+function esQuintero(c: ClienteMapa): boolean {
+  return c.categoria ? c.categoria === "quintero" : c.facturado.quintas > 0;
 }
 
 const TEXTO_ESTADO: Record<EstadoCobro, string> = {
@@ -96,7 +132,7 @@ function agruparPorDuenio(espacios: Espacio[]): [string | null, string[]][] {
 }
 
 function nombreEspacio(e: Espacio): string {
-  return e.tipo === "bar" ? "Bar" : `${NOMBRE_TIPO[e.tipo]} ${numeroVisible(e)}`;
+  return etiquetaEspacio(e);
 }
 
 /** "Puesto 52", "Puestos 50 · 48 · 46", "3 espacios". */
@@ -114,6 +150,10 @@ export function MapaMercado({
   destinos,
   soloQuinteros,
   inicial,
+  vista = "completa",
+  avisos,
+  conceptosPlano,
+  categoriasGestion,
 }: {
   espacios: Espacio[];
   elementos: ElementoPlano[];
@@ -122,21 +162,33 @@ export function MapaMercado({
   destinos: Destinos;
   /** Jefe de Portería: solo cobra quinteros. */
   soloQuinteros: boolean;
-  inicial: { clienteId: string | null; puesto: string | null; editar: boolean };
+  inicial: { clienteId: string | null; puesto: string | null; editar: boolean; espacioId?: string | null };
+  /** "porteria" = mapa del Jefe (G11): puestos anónimos y solo la zona de quinteros. */
+  vista?: VistaMapa;
+  /** Avisos ya hechos por puesto (espacioId → avisos), para el mapa del Jefe. */
+  avisos?: Record<string, AvisoPuestoPrevio[]>;
+  /** ids de los conceptos EXME/EXPP/EXPL/EXPE ("Facturar en la carpeta", C6). */
+  conceptosPlano?: Partial<Record<CodigoPlano, string>>;
+  /** Categorías que gestiona el rol (Cobrar, Ver ficha y ajustar la carpeta solo en esas). */
+  categoriasGestion?: CategoriaCliente[];
 }) {
   const [plano, cambiarPlano] = useOptimistic(espacios, aplicarCambio);
   const [guardando, startTransition] = useTransition();
+  const [facturando, setFacturando] = useState<string | null>(null);
+  const router = useRouter();
   const lienzo = useRef<ControlLienzo>(null);
+  const esPorteria = vista === "porteria";
 
   const clientePorId = useMemo(() => new Map(clientes.map((c) => [c.id, c])), [clientes]);
   const clienteInicial =
     inicial.clienteId && clientePorId.has(inicial.clienteId) ? inicial.clienteId : null;
   const espacioInicial = useMemo(
     () =>
-      inicial.puesto
+      (inicial.espacioId ? espacios.find((e) => e.id === inicial.espacioId) : null) ??
+      (inicial.puesto
         ? espacios.find((e) => e.tipo === "puesto" && e.numero === inicial.puesto) ?? null
-        : null,
-    [espacios, inicial.puesto]
+        : null),
+    [espacios, inicial.puesto, inicial.espacioId]
   );
 
   const [modo, setModo] = useState<Modo>(() =>
@@ -195,16 +247,26 @@ export function MapaMercado({
   }, [plano]);
 
   const estadoDe = useCallback(
-    (clienteId: string | null): EstadoBloque => {
+    (clienteId: string | null): EstadoCobro | "libre" | "ocupado" => {
       if (!clienteId) return "libre";
       return clientePorId.get(clienteId)?.estado ?? "ocupado";
     },
     [clientePorId]
   );
+  /** Cómo se pinta un espacio: en el mapa del Jefe, todos iguales (sin libre/ocupado). */
+  const estadoEspacio = useCallback(
+    (clienteId: string | null): EstadoBloque => (esPorteria ? "anonimo" : estadoDe(clienteId)),
+    [esPorteria, estadoDe]
+  );
+  /** ¿El rol gestiona a este cliente? (Cobrar, ficha, carpeta). */
+  const gestiona = useCallback(
+    (c: ClienteMapa) => !categoriasGestion || !c.categoria || categoriasGestion.includes(c.categoria),
+    [categoriasGestion]
+  );
 
   // Quinteros: fichas repartidas en las zonas verdes (no tienen puesto numerado).
   const { fichasBase, restos } = useMemo(() => {
-    const quinteros = clientes.filter((c) => c.facturado.quintas > 0);
+    const quinteros = clientes.filter(esQuintero);
     const zonas = elementos.filter((e) => e.tipo === "quinteros").sort((a, b) => a.x - b.x);
     if (zonas.length === 0 || quinteros.length === 0) return { fichasBase: [], restos: [] };
     const porZona = Math.ceil(quinteros.length / zonas.length);
@@ -246,9 +308,10 @@ export function MapaMercado({
     const m = new Map<string, EstiloBloque>();
     for (const b of bloques) {
       const cli = b.clienteId ? clientePorId.get(b.clienteId) ?? null : null;
-      const estado = estadoDe(b.clienteId);
+      const estado = estadoEspacio(b.clienteId);
       let atenuado = false;
-      if (filtro) atenuado = estado !== filtro;
+      if (filtro === "propio") atenuado = !b.espacios.some((e) => e.propio);
+      else if (filtro) atenuado = estado !== filtro;
       else if (modo === "ver" && clienteSel) atenuado = b.clienteId !== clienteSel;
       let marca: Marca = null;
       if (
@@ -269,7 +332,7 @@ export function MapaMercado({
       });
     }
     return m;
-  }, [bloques, clientePorId, estadoDe, filtro, modo, clienteSel, espacioSelId, pincel, confirmacion, sugerencia]);
+  }, [bloques, clientePorId, estadoEspacio, filtro, modo, clienteSel, espacioSelId, pincel, confirmacion, sugerencia]);
 
   const fichas = useMemo<FichaQuintero[]>(
     () =>
@@ -278,7 +341,9 @@ export function MapaMercado({
         return {
           ...f,
           estado,
-          atenuado: filtro ? estado !== filtro : modo === "ver" && clienteSel !== null && clienteSel !== f.clienteId,
+          atenuado: filtro
+            ? filtro === "propio" || estado !== filtro
+            : modo === "ver" && clienteSel !== null && clienteSel !== f.clienteId,
           seleccionado: clienteSel === f.clienteId,
           pincel: modo === "asignar" && pincel === f.clienteId,
         };
@@ -325,7 +390,8 @@ export function MapaMercado({
     if (!cli || !suyos?.length) return null;
     const partes = (
       [
-        ["puesto", unidades(suyos)],
+        ["puesto", unidadesPuestos(suyos, false)],
+        ["propio", unidadesPuestos(suyos, true)],
         // El bar se concesiona como un local.
         ["local", suyos.filter((e) => e.tipo === "local" || e.tipo === "bar").length],
         ["contenedor", suyos.filter((e) => e.tipo === "contenedor").length],
@@ -340,8 +406,9 @@ export function MapaMercado({
   }, [modo, clienteSel, clientePorId, porCliente]);
 
   const resumen = useMemo<Resumen>(() => {
-    const puestos: Record<Filtro, number> = { al_dia: 0, debe: 0, vencido: 0, libre: 0 };
+    const puestos: Record<FiltroEstado, number> = { al_dia: 0, debe: 0, vencido: 0, libre: 0 };
     let totalPuestos = 0;
+    let propios = 0;
     let locales = 0;
     let localesOcupados = 0;
     let contenedores = 0;
@@ -350,6 +417,7 @@ export function MapaMercado({
       if (e.tipo === "puesto") {
         const u = e.medio ? 0.5 : 1;
         totalPuestos += u;
+        if (e.propio) propios += u;
         const est = estadoDe(e.clienteId);
         puestos[est === "ocupado" ? "al_dia" : est] += u;
       } else if (e.tipo === "local") {
@@ -364,22 +432,35 @@ export function MapaMercado({
       .filter((el) => el.tipo === "cocheras")
       .reduce((acc, el) => acc + (el.capacidad ?? 0), 0);
     const cocheras = clientes.reduce((acc, c) => acc + c.facturado.cocheras, 0);
-    const quinteros = clientes.filter((c) => c.facturado.quintas > 0).length;
+    const quinteros = clientes.filter(esQuintero).length;
     const galpones = clientes.reduce((acc, c) => acc + c.facturado.galpones, 0);
     const secundarios = [
       { label: "Locales", valor: deTotal(localesOcupados, locales) },
-      { label: "Contenedores", valor: deTotal(contenedoresOcupados, contenedores) },
+      { label: "Contéiners", valor: deTotal(contenedoresOcupados, contenedores) },
       ...(capacidadCocheras > 0
         ? [{ label: "Cocheras", valor: `${formatFraccion(cocheras)} de ${formatNumero(capacidadCocheras)}` }]
         : []),
       { label: "Quinteros", valor: formatNumero(quinteros) },
       ...(galpones > 0 ? [{ label: "Galpones", valor: formatFraccion(galpones) }] : []),
     ];
-    return { puestos, totalPuestos, secundarios };
+    return { puestos, totalPuestos, secundarios, propios };
   }, [plano, elementos, clientes, estadoDe]);
+
+  // Mapa del Jefe: cómo vienen sus quinteros este mes (v_avance_mes, misma cuenta que Cobrar).
+  const resumenQuintas = useMemo<ResumenQuinteros>(() => {
+    const qs = clientes.filter(esQuintero);
+    return {
+      total: qs.length,
+      alDia: qs.filter((c) => c.estado === "al_dia").length,
+      debe: qs.filter((c) => c.estado === "debe").length,
+      vencido: qs.filter((c) => c.estado === "vencido").length,
+      porCobrar: qs.reduce((acc, c) => acc + Number(c.mes?.falta ?? 0), 0),
+    };
+  }, [clientes]);
 
   const revisiones = useMemo<Revision[]>(() => {
     const r: Revision[] = [];
+    if (esPorteria) return r;
     for (const c of clientes) {
       for (const d of diferencias(c, porCliente.get(c.id) ?? [])) {
         r.push({ tipo: d.enPlano < d.facturado ? "falta" : "sobra", cliente: c, dif: d });
@@ -407,7 +488,7 @@ export function MapaMercado({
       });
     }
     return r;
-  }, [clientes, porCliente, plano]);
+  }, [clientes, porCliente, plano, esPorteria]);
 
   // ---------- Acciones ----------
 
@@ -424,7 +505,8 @@ export function MapaMercado({
         return;
       }
       // Quintero que no entró en las fichas: se muestra la zona de quinteros.
-      if ((clientePorId.get(clienteId)?.facturado.quintas ?? 0) > 0) {
+      const cli = clientePorId.get(clienteId);
+      if (cli && esQuintero(cli)) {
         const zonas = elementos.filter((el) => el.tipo === "quinteros");
         if (zonas.length > 0) lienzo.current?.enfocar(unir(zonas));
       }
@@ -519,6 +601,12 @@ export function MapaMercado({
 
   const tocarEspacio = useCallback(
     (e: Espacio) => {
+      if (esPorteria) {
+        // El Jefe no ve de quién es: tocar un puesto es para avisarle algo al Líder.
+        setFiltro(null);
+        setSeleccion((s) => (s?.tipo === "espacio" && s.id === e.id ? null : { tipo: "espacio", id: e.id }));
+        return;
+      }
       if (modo === "asignar") {
         if (pincel) {
           tocarConPincel(e, pincel);
@@ -537,17 +625,18 @@ export function MapaMercado({
         setSeleccion((s) => (s?.tipo === "espacio" && s.id === e.id ? null : { tipo: "espacio", id: e.id }));
       }
     },
-    [modo, pincel, tocarConPincel]
+    [modo, pincel, tocarConPincel, esPorteria]
   );
 
   const describir = useCallback(
     (e: Espacio) => {
       const nombre = nombreEspacio(e);
+      if (esPorteria) return `${nombre}. Tocá para avisarle algo al Líder`;
       if (!e.clienteId) return `${nombre}, libre${e.nota ? ` (${e.nota})` : ""}`;
       const c = clientePorId.get(e.clienteId);
       return c ? `${nombre}, ${c.nombre}, ${TEXTO_ESTADO[c.estado]}` : `${nombre}, ocupado`;
     },
-    [clientePorId]
+    [clientePorId, esPorteria]
   );
 
   const acciones = useMemo(
@@ -626,12 +715,73 @@ export function MapaMercado({
     lienzo.current?.enfocar(e);
   };
 
-  const editar = (e: Espacio, datos: { numero: string | null; medio: boolean; nota: string | null }) => {
+  const editar = (e: Espacio, datos: DatosEspacio) => {
     startTransition(async () => {
       cambiarPlano({ tipo: "editar", id: e.id, ...datos });
       const res = await editarEspacio({ id: e.id, ...datos });
       if (!res.ok) toast.error(res.error);
-      else toast.success("Listo, quedó corregido.");
+      else if (datos.propio !== undefined) {
+        const n = datos.numero ?? e.numero ?? "?";
+        // Si está ocupado, la carpeta de quien lo ocupa tiene que acompañar (EXME ↔ EXPP):
+        // el ajuste aparece en "Para revisar" con su botón "Facturar … en la carpeta".
+        const duenio = e.clienteId ? clientePorId.get(e.clienteId) ?? null : null;
+        const quien = duenio ? duenio.apodo ?? duenio.nombre : null;
+        toast.success(
+          datos.propio ? `Listo: el ${n} quedó como puesto propio` : `Listo: el ${n} ya no es puesto propio`,
+          {
+            description: quien
+              ? `${quien} ahora tiene que facturar ${datos.propio ? "EXPP" : "EXME"} por este puesto: ajustalo en “Para revisar”.`
+              : datos.propio
+                ? "Paga EXPP (Expensas Puestos Propios)."
+                : "Paga EXME como un puesto común.",
+          }
+        );
+      } else toast.success("Listo, quedó corregido.");
+    });
+  };
+
+  /** C6: lleva la carpeta del cliente a lo que muestra el plano (con la aprobación del
+   * Líder si no es el Líder quien lo pide). Nunca cambia el plano. */
+  const facturarEnCarpeta = (c: ClienteMapa, d: Diferencia) => {
+    const codigo = CODIGO_DIFERENCIA[d.tipo];
+    const item = c.carpeta?.[codigo];
+    const conceptoId = conceptosPlano?.[codigo];
+    const cantidadNueva = d.enPlano;
+    const clave = `${c.id}:${d.tipo}`;
+    const que = cantidadNueva > 0 ? `${cantidad(cantidadNueva, d.tipo)} (${codigo})` : `sin ${codigo}`;
+    setFacturando(clave);
+    startTransition(async () => {
+      const res =
+        cantidadNueva <= 0
+          ? item
+            ? await editarConceptoCliente({ id: item.id, clienteId: c.id, activo: false })
+            : null
+          : item
+            ? await editarConceptoCliente({
+                id: item.id,
+                clienteId: c.id,
+                cantidad: cantidadNueva,
+                ...(item.activo ? {} : { activo: true }),
+              })
+            : conceptoId
+              ? await agregarConceptoCliente({ clienteId: c.id, conceptoId, cantidad: cantidadNueva })
+              : null;
+      setFacturando(null);
+      if (!res) {
+        toast.error(`No encontramos el concepto ${codigo} en la carpeta. Revisalo desde la ficha.`);
+        return;
+      }
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      const nombre = c.apodo ?? c.nombre;
+      toast.success(
+        res.data.estado === "aplicado"
+          ? `Listo: ${nombre} ahora factura ${que}`
+          : `Enviado al Líder para aprobar: ${nombre} factura ${que}`
+      );
+      router.refresh();
     });
   };
 
@@ -699,6 +849,14 @@ export function MapaMercado({
   // ---------- Tooltip (mouse) ----------
   const tooltip = useCallback(
     (e: Espacio, b: Bloque) => {
+      if (esPorteria) {
+        return (
+          <>
+            <p className="text-sm font-semibold">{nombreEspacio(e)}</p>
+            <p className="text-xs text-muted-foreground">Tocá para avisarle algo al Líder</p>
+          </>
+        );
+      }
       const cli = e.clienteId ? clientePorId.get(e.clienteId) : null;
       if (!cli) {
         return (
@@ -706,6 +864,7 @@ export function MapaMercado({
             <p className="text-sm font-semibold">{nombreEspacio(e)}</p>
             <p className="text-xs text-muted-foreground">
               {e.clienteId ? "Ocupado" : "Libre"}
+              {e.propio ? " · puesto propio de la cooperativa" : ""}
               {e.medio ? " · medio puesto" : ""}
               {e.nota ? ` · ${e.nota}` : ""}
             </p>
@@ -719,6 +878,7 @@ export function MapaMercado({
           <p className="mt-0.5 text-xs text-muted-foreground">
             {b.espacios.length > 1 ? etiquetaEspacios(b.espacios) : nombreEspacio(e)}
             {cli.apodo ? ` · “${cli.apodo}”` : ""}
+            {e.propio && b.espacios.length > 1 ? " · con puesto propio" : ""}
           </p>
           <div className="mt-2 flex items-center justify-between gap-3">
             <Sello estado={sello.estado} texto={sello.texto} />
@@ -730,7 +890,7 @@ export function MapaMercado({
         </>
       );
     },
-    [clientePorId]
+    [clientePorId, esPorteria]
   );
 
   const cliPincel = pincel ? clientePorId.get(pincel) ?? null : null;
@@ -753,6 +913,8 @@ export function MapaMercado({
             clientes={clientes}
             espacios={plano}
             onElegir={elegirBusqueda}
+            anonimo={esPorteria}
+            placeholder={esPorteria ? "Buscá un quintero o un número de puesto" : undefined}
             className="min-w-0 flex-1 sm:max-w-md"
           />
           <div className="ml-auto flex shrink-0 items-center gap-2">
@@ -793,15 +955,27 @@ export function MapaMercado({
           </div>
         </div>
 
-        <ResumenMapa
-          resumen={resumen}
-          filtro={filtro}
-          onFiltro={(f) => {
-            setFiltro(f);
-            if (f) setSeleccion(null);
-          }}
-          className="border-b px-3 py-2.5 sm:px-4 md:py-3"
-        />
+        {esPorteria ? (
+          <ResumenQuintas
+            resumen={resumenQuintas}
+            filtro={filtro}
+            onFiltro={(f) => {
+              setFiltro(f);
+              if (f) setSeleccion(null);
+            }}
+            className="border-b px-3 py-2.5 sm:px-4 md:py-3"
+          />
+        ) : (
+          <ResumenMapa
+            resumen={resumen}
+            filtro={filtro}
+            onFiltro={(f) => {
+              setFiltro(f);
+              if (f) setSeleccion(null);
+            }}
+            className="border-b px-3 py-2.5 sm:px-4 md:py-3"
+          />
+        )}
 
         {/* El plano ocupa todo lo que queda y nunca cambia de tamaño al elegir
             algo: el detalle flota encima (hoja abajo en el celular, tarjeta
@@ -848,7 +1022,9 @@ export function MapaMercado({
           {!hayPanel ? (
             <p className="pointer-events-none absolute right-3 bottom-3 hidden items-center gap-2 rounded-full bg-card/90 px-3.5 py-2 text-xs text-muted-foreground shadow-sm ring-1 ring-foreground/10 backdrop-blur-sm md:flex">
               <MousePointerClick className="size-4 shrink-0" strokeWidth={1.8} />
-              Tocá un puesto para ver quién lo ocupa y cuánto debe
+              {esPorteria
+                ? "Tocá un puesto para avisarle algo al Líder"
+                : "Tocá un puesto para ver quién lo ocupa y cuánto debe"}
             </p>
           ) : null}
         </LienzoPlano>
@@ -907,6 +1083,9 @@ export function MapaMercado({
               }}
               onCerrarEspacio={() => setSeleccion(null)}
               onEnfocar={(r) => lienzo.current?.enfocar(r)}
+              onFacturar={facturarEnCarpeta}
+              puedeFacturar={(c) => gestiona(c) && !esQuintero(c)}
+              facturando={facturando}
             />
           ) : (
             <PanelDetalle
@@ -920,6 +1099,9 @@ export function MapaMercado({
               onAsignarEspacio={(id) => entrarAsignar({ pincel: null, espacio: id })}
               onEnfocar={(r) => lienzo.current?.enfocar(r)}
               onCerrar={limpiar}
+              vista={vista}
+              avisos={espacioSel ? avisos?.[espacioSel.id] ?? [] : []}
+              categoriasGestion={categoriasGestion}
             />
           )}
         </div>

@@ -80,7 +80,7 @@ export async function subirDocumentoSocio(
       categoria: parsed.data.categoria,
       storage_path: ruta,
       mime: archivo.type,
-      subido_por: perfil.user_id,
+      // subido_por lo pone el servidor (default auth.uid(); fuera del grant de INSERT, 0022).
     })
     .select("id")
     .single();
@@ -92,6 +92,7 @@ export async function subirDocumentoSocio(
   }
 
   revalidatePath("/mi-cuenta");
+  revalidatePath(`/clientes/${cliente.id}`);
   return ok({ id: data.id });
 }
 

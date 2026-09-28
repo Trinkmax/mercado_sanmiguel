@@ -5,7 +5,7 @@ import { requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { PageHeader } from "@/components/shared/page-header";
 import { FormEmpleado } from "@/components/personal/form-empleado";
-import { nombreCompleto } from "@/components/personal/constantes";
+import { horasSemanalesDeFranjas, nombreCompleto } from "@/components/personal/constantes";
 
 export const metadata = { title: "Editar empleado" };
 
@@ -19,12 +19,14 @@ export default async function EditarEmpleadoPage({ params }: Props) {
   const { data: empleado } = await supabase
     .from("empleados")
     .select(
-      "id, nombre, apellido, dni, cuil, cargo, telefono, email, tipo_contrato, fecha_ingreso, fecha_egreso, observaciones, contrato_path"
+      "id, nombre, apellido, dni, cuil, cargo, telefono, email, sector, horas_semanales, tipo_contrato, fecha_ingreso, fecha_egreso, observaciones, contrato_path, empleado_horarios(dia_semana, hora_desde, hora_hasta)"
     )
     .eq("id", id)
     .eq("org_id", perfil.org_id)
     .maybeSingle();
   if (!empleado) notFound();
+  const { empleado_horarios: franjas, ...datos } = empleado;
+  const horasSegunHorario = horasSemanalesDeFranjas(franjas ?? []);
 
   return (
     <div className="space-y-8">
@@ -43,7 +45,11 @@ export default async function EditarEmpleadoPage({ params }: Props) {
         />
       </div>
       <div className="max-w-2xl">
-        <FormEmpleado empleado={empleado} cancelarHref={`/personal/${empleado.id}`} />
+        <FormEmpleado
+          empleado={{ ...datos, horas_semanales: datos.horas_semanales === null ? null : Number(datos.horas_semanales) }}
+          cancelarHref={`/personal/${empleado.id}`}
+          horasSegunHorario={horasSegunHorario}
+        />
       </div>
     </div>
   );

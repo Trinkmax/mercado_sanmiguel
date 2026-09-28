@@ -42,6 +42,14 @@ export type ControlLienzo = {
 
 type Hover = { espacio: Espacio; bloque: Bloque; x: number; y: number; ancho: number };
 
+// Valores por defecto estables (el selector de lugar usa el lienzo sin quinteros ni pastilla).
+const SIN_FICHAS: FichaQuintero[] = [];
+const SIN_RESTOS: Resto[] = [];
+const SIN_ARBOLES: Arbol[] = [];
+const SIN_FIN_FICHAS = new Map<string, number>();
+const NADA = () => {};
+const QUINTERO = () => "Quintero";
+
 const seTocan = (a: Rect, b: Rect) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 
 /**
@@ -55,19 +63,19 @@ export function LienzoPlano({
   bloques,
   estilos,
   anillos,
-  fichas,
-  restos,
-  atenuar,
-  pastilla,
-  arboles,
-  finFichas,
+  fichas = SIN_FICHAS,
+  restos = SIN_RESTOS,
+  atenuar = false,
+  pastilla = null,
+  arboles = SIN_ARBOLES,
+  finFichas = SIN_FIN_FICHAS,
   acciones,
-  onTocarFicha,
-  describirFicha,
+  onTocarFicha = NADA,
+  describirFicha = QUINTERO,
   onTocarFondo,
   tooltip,
   enfoqueInicial,
-  resaltarBorde,
+  resaltarBorde = false,
   insetInferior = 0,
   children,
 }: {
@@ -77,25 +85,25 @@ export function LienzoPlano({
   bloques: Bloque[];
   estilos: Map<string, EstiloBloque>;
   anillos: Anillo[];
-  fichas: FichaQuintero[];
+  fichas?: FichaQuintero[];
   /** Fichas "+N" de quinteros que no entraron en su zona. */
-  restos: Resto[];
+  restos?: Resto[];
   /** Hay selección o filtro: un velo apaga el fondo. */
-  atenuar: boolean;
+  atenuar?: boolean;
   /** Texto de la pastilla del cliente seleccionado (null: sin pastilla). */
-  pastilla: DatosPastilla | null;
-  arboles: Arbol[];
+  pastilla?: DatosPastilla | null;
+  arboles?: Arbol[];
   /** Hasta dónde llegan las fichas de cada cantero (id → y). */
-  finFichas: Map<string, number>;
+  finFichas?: Map<string, number>;
   acciones: Pick<AccionesEspacio, "alTocar" | "describir">;
-  onTocarFicha: (clienteId: string) => void;
-  describirFicha: (clienteId: string) => string;
+  onTocarFicha?: (clienteId: string) => void;
+  describirFicha?: (clienteId: string) => string;
   onTocarFondo: () => void;
-  /** Contenido del cartel al pasar el mouse por un espacio. */
-  tooltip: (espacio: Espacio, bloque: Bloque) => React.ReactNode;
+  /** Contenido del cartel al pasar el mouse por un espacio (sin esto, no hay cartel). */
+  tooltip?: (espacio: Espacio, bloque: Bloque) => React.ReactNode;
   enfoqueInicial: Rect | null;
   /** Marco azul: el plano está en modo asignar. */
-  resaltarBorde: boolean;
+  resaltarBorde?: boolean;
   /** px de abajo tapados por el panel flotante: la cámara los descuenta al enfocar. */
   insetInferior?: number;
   /** Carteles flotantes sobre el plano (modo asignar, etc.). */
@@ -353,7 +361,7 @@ export function LienzoPlano({
       {children}
 
       {/* Cartel al pasar el mouse */}
-      {hover ? (
+      {hover && tooltip ? (
         <div
           className="pointer-events-none absolute z-20 w-68 rounded-lg border bg-popover p-3 text-popover-foreground shadow-lg"
           style={{

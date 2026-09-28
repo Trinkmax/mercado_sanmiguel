@@ -1,4 +1,7 @@
-/** Tipos compartidos del plano del mercado (server → cliente). */
+/** Tipos compartidos del plano del mercado (server → cliente).
+ * Interfaz congelada (FASE3 §6.10): solo se suman campos OPCIONALES. */
+
+import type { AvanceMes, CategoriaCliente } from "@/lib/segmentos";
 
 export type EstadoCobro = "al_dia" | "debe" | "vencido";
 
@@ -24,8 +27,10 @@ export type Espacio = Rect & {
   tipo: TipoEspacio;
   /** Número visible; null = sin número (el plano muestra "?"). */
   numero: string | null;
-  /** Medio puesto: cuenta 0,5 para la expensa de puestos. */
+  /** Medio puesto: cuenta 0,5 para la expensa (EXME, o EXPP si es propio). */
   medio: boolean;
+  /** Puesto propio de la cooperativa (C3): paga EXPP en vez de EXME. Solo puestos. */
+  propio?: boolean;
   /** Puestos que el plano original dibuja juntos (un mismo puestero). */
   grupo: string | null;
   nota: string | null;
@@ -41,13 +46,21 @@ export type ElementoPlano = Rect & {
 
 /** Lo que el cliente tiene facturado (cantidades activas por concepto). */
 export type Facturado = {
-  puestos: number; // EXPP
+  puestos: number; // EXME (expensa del puesto común)
   locales: number; // EXPL
-  contenedores: number; // EXPE
+  contenedores: number; // EXPE (contéiners)
   quintas: number; // EXPQ
   cocheras: number; // EXPC
   galpones: number; // EXPG
+  /** EXPP: expensa de los puestos propios de la cooperativa (C6). */
+  propios?: number;
 };
+
+/** Códigos que el plano cruza contra la carpeta ("Facturar en la carpeta"). */
+export type CodigoPlano = "EXME" | "EXPP" | "EXPL" | "EXPE";
+
+/** Fila de cliente_conceptos del cliente para un código del plano. */
+export type ItemCarpeta = { id: string; cantidad: number; activo: boolean };
 
 export type ClienteMapa = {
   id: string;
@@ -57,6 +70,27 @@ export type ClienteMapa = {
   deuda: number;
   estado: EstadoCobro;
   facturado: Facturado;
+  /** Quién lo gestiona (puestero → Administración; quintero/ambulante → Jefe). */
+  categoria?: CategoriaCliente;
+  /** Avance del mes (v_avance_mes del período actual): "2 de 4 · Falta $165.000". */
+  mes?: AvanceMes | null;
+  /** Sus filas de cliente_conceptos de EXME/EXPP/EXPL/EXPE (para proponer el ajuste). */
+  carpeta?: Partial<Record<CodigoPlano, ItemCarpeta>>;
+  /** Hay un cambio de conceptos esperando al Líder. */
+  cambioPendiente?: boolean;
+};
+
+/** "completa": Administración y Líder. "porteria": el Jefe de Portería (G11): puestos
+ * sin datos de clientes y solo la zona de quinteros con su estado. */
+export type VistaMapa = "completa" | "porteria";
+
+/** Aviso ya hecho sobre un puesto (solicitud con espacio_id), para no repetirlo. */
+export type AvisoPuestoPrevio = {
+  id: string;
+  numero: number;
+  asunto: string;
+  estado: string;
+  creadaEn: string;
 };
 
 /** A qué ir al tocar a un cliente: su ficha y/o la pantalla de cobro. */

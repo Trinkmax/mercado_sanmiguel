@@ -1,13 +1,29 @@
 import type { Metadata } from "next";
 import Image from "next/image";
+import { redirect } from "next/navigation";
+import { UserX } from "lucide-react";
+import { getPerfil, rutaInicio, sesionSinAcceso } from "@/lib/auth";
 import { Marca } from "@/components/shared/marca";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { FormLogin } from "./form-login";
 import { AccesoDemo } from "./acceso-demo";
 import logoFull from "../../../public/logo_full.png";
 
 export const metadata: Metadata = { title: "Entrar" };
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ motivo?: string | string[] }>;
+}) {
+  // Con sesión y acceso, el login no tiene sentido: a su inicio. Con sesión pero
+  // SIN acceso (desactivado, Consejo) se queda acá con el aviso: nada de bucles.
+  const perfil = await getPerfil();
+  if (perfil) redirect(rutaInicio(perfil.rol));
+
+  const { motivo } = await searchParams;
+  const desactivado = motivo === "inactivo" && (await sesionSinAcceso());
+
   return (
     <div className="grid min-h-svh lg:grid-cols-2">
       {/* Izquierda: el formulario */}
@@ -21,9 +37,21 @@ export default function LoginPage() {
                 Hola de nuevo
               </h1>
               <p className="text-muted-foreground">
-                Entrá con el usuario que te dio la cooperativa.
+                Entrá con tu DNI y la contraseña que te dio la cooperativa.
               </p>
             </div>
+
+            {desactivado ? (
+              <Alert className="border-parcial bg-parcial-suave px-4 py-3">
+                <UserX strokeWidth={2} />
+                <AlertTitle className="text-sm">
+                  Tu usuario está desactivado. Consultá en Administración.
+                </AlertTitle>
+                <AlertDescription className="text-sm">
+                  Si tenés otro usuario, podés entrar con ese acá abajo.
+                </AlertDescription>
+              </Alert>
+            ) : null}
 
             <FormLogin />
 
@@ -31,8 +59,9 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <p className="text-center text-xs text-muted-foreground">
-          ¿No podés entrar? Consultá en administración.
+        <p className="mx-auto max-w-sm text-center text-sm text-muted-foreground text-balance">
+          ¿Te olvidaste la contraseña? Pedí una nueva en Administración (socios) o
+          al Líder de Procesos (equipo).
         </p>
       </div>
 

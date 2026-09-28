@@ -142,6 +142,24 @@ export const MAT: Record<Material, Pintura> = {
     tambor: ["oklch(0.95 0.004 258)", "oklch(0.9 0.006 258)", "oklch(0.84 0.008 258)"],
     disco: ["oklch(0.975 0.003 258)", "oklch(0.965 0.004 258)", "oklch(0.952 0.005 258)"],
   },
+  // Jefe de Portería (G11): el puesto se ve (con su número) pero no dice nada de quién lo
+  // ocupa: cartón cálido, parejo para todos, lejos del verde/rojo del cobro y del gris del atenuado.
+  anonimo: {
+    tapa: ["oklch(0.962 0.009 78)", "oklch(0.938 0.013 74)"],
+    bisel: "oklch(0.74 0.02 70)",
+    grosor: 1.1,
+    faldon: ["oklch(0.82 0.02 72)", "oklch(0.74 0.024 68)"],
+    faldonBorde: "oklch(0.62 0.024 64)",
+    lado: "oklch(0.68 0.022 66)",
+    frente: "oklch(0.74 0.024 68)",
+    lote: "oklch(0.74 0.02 70)",
+    texto: "oklch(0.38 0.03 262)",
+    halo: "oklch(0.962 0.009 78)",
+    canto: 0.9,
+    ranura: "oklch(0.8 0.016 70)",
+    tambor: ["oklch(0.9 0.014 76)", "oklch(0.8 0.02 72)", "oklch(0.68 0.022 66)"],
+    disco: ["oklch(0.975 0.007 78)", "oklch(0.955 0.01 76)", "oklch(0.935 0.013 74)"],
+  },
   // Cliente sin estado de cobro: el azul de la marca, con la misma regla.
   ocupado: {
     tapa: ["oklch(0.955 0.02 262)", "oklch(0.93 0.03 262)"],
@@ -161,9 +179,11 @@ export const MAT: Record<Material, Pintura> = {
   },
 };
 
-const MATERIALES: Material[] = ["al_dia", "debe", "vencido", "libre", "neutro", "ocupado"];
+const MATERIALES: Material[] = ["al_dia", "debe", "vencido", "libre", "neutro", "ocupado", "anonimo"];
 /** Los que llevan faldón (los demás son lotes o están sin pintura). */
-const CON_FALDON: Material[] = ["al_dia", "debe", "vencido", "ocupado"];
+const CON_FALDON: Material[] = ["al_dia", "debe", "vencido", "ocupado", "anonimo"];
+/** Banderín del puesto propio de la cooperativa (C3): se distingue por FORMA, no por color. */
+const BANDERA = { mastil: "oklch(0.36 0.04 262)", pano: "var(--primary)" } as const;
 /** Rayas del faldón de "debe" (el blanco lo pone el faldón de abajo). */
 export const RAYAS_DEBE = "oklch(0.6 0.17 27)";
 const TINTA_SOMBRA = "oklch(0.3 0.035 262)";
@@ -1709,6 +1729,54 @@ const Numeros = memo(function Numeros({
   );
 });
 
+/** Banderín azul en la esquina de la tapa de cada puesto propio de la cooperativa (C3):
+ * mástil + paño, con halo blanco para leerse sobre cualquier estado. Con zoom, si la tapa
+ * no lleva apodo, además la micro-etiqueta "Propio". Va en la capa de números: se mueve
+ * con el bloque (hover, selección) y queda arriba de todos los cuerpos. */
+const Banderines = memo(function Banderines({
+  bloque,
+  alto,
+  detalle,
+  conApodo,
+  atenuado,
+}: {
+  bloque: Bloque;
+  /** Altura de la tapa con el bloque en su lugar (z0 = 0). */
+  alto: number;
+  detalle: boolean;
+  conApodo: boolean;
+  atenuado: boolean;
+}) {
+  const propios = bloque.espacios.filter((e) => e.propio);
+  if (propios.length === 0) return null;
+  return (
+    <g opacity={atenuado ? 0.5 : undefined}>
+      {propios.map((e) => {
+        const x0 = e.x + 5;
+        const y0 = e.y + 4;
+        const base = P(x0, y0, alto);
+        const tope = P(x0, y0, alto + 13);
+        const punta = P(x0 + 9, y0, alto + 10);
+        const bajo = P(x0, y0, alto + 7);
+        const pano = `M${pt(tope)}L${pt(punta)}L${pt(bajo)}Z`;
+        const etiqueta = detalle && !conApodo && bloque.rect.h >= 36 && bloque.tipo === "puesto";
+        const [lx, ly] = P(e.x + e.w / 2, e.y + bloque.rect.h * 0.8, alto);
+        return (
+          <g key={e.id}>
+            <path d={`M${pt(base)}L${pt(tope)}`} stroke="#fff" strokeWidth={3.2} strokeLinecap="round" />
+            <path d={pano} fill="#fff" stroke="#fff" strokeWidth={2.4} strokeLinejoin="round" />
+            <path d={`M${pt(base)}L${pt(tope)}`} stroke={BANDERA.mastil} strokeWidth={1.3} strokeLinecap="round" />
+            <path d={pano} fill={BANDERA.pano} />
+            {etiqueta ? (
+              <Texto x={lx} y={ly} t="Propio" clase="apodo" tam={8.5} fill={BANDERA.pano} halo="#fff" grosorHalo={2.2} />
+            ) : null}
+          </g>
+        );
+      })}
+    </g>
+  );
+});
+
 export type AccionesEspacio = {
   alTocar: (espacio: Espacio, bloque: Bloque) => void;
   alEntrar: (espacio: Espacio, bloque: Bloque, ev: React.PointerEvent) => void;
@@ -1851,6 +1919,13 @@ export const CapaBloques = memo(function CapaBloques({
                 zt={al.zTexto - al.z0}
                 detalle={detalle}
                 etiqueta={estilo.etiqueta}
+                atenuado={estilo.atenuado}
+              />
+              <Banderines
+                bloque={b}
+                alto={al.zTop - al.z0}
+                detalle={detalle}
+                conApodo={detalle && estilo.etiqueta !== null && b.rect.h >= 36 && !estilo.atenuado}
                 atenuado={estilo.atenuado}
               />
             </g>

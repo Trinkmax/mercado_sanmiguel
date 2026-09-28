@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { ArrowRight, MapPin } from "lucide-react";
-import { espaciosPorTipo, etiquetaEspacios } from "./geometria";
+import { textoEspacios } from "./geometria";
 import type { Espacio } from "./tipos";
 
 /**
  * Línea "dónde está" de la ficha del cliente: sus espacios en el plano con
  * link al mapa (que lo enfoca), o el atajo para ubicarlo si todavía no tiene.
+ * Interfaz congelada (FASE3 §6.10): `id` y `propio` son opcionales.
  */
 export function EnElPlano({
   clienteId,
@@ -14,17 +15,17 @@ export function EnElPlano({
   puedeUbicar,
 }: {
   clienteId: string;
-  espacios: Pick<Espacio, "tipo" | "numero" | "medio" | "x" | "y">[];
+  espacios: (Pick<Espacio, "tipo" | "numero" | "medio" | "x" | "y"> & { id?: string; propio?: boolean })[];
   facturaPuestos: boolean;
   puedeUbicar: boolean;
 }) {
   if (espacios.length > 0) {
-    const texto = espaciosPorTipo(espacios)
-      .map((g) => etiquetaEspacios(g.espacios))
-      .join(" · ");
+    const texto = textoEspacios(espacios);
+    // Con un solo lugar, el link lo enfoca exacto (hay números repetidos en el dibujo).
+    const unico = espacios.length === 1 && espacios[0].id ? espacios[0].id : null;
     return (
       <Link
-        href={`/mapa?cliente=${clienteId}`}
+        href={unico ? `/mapa?espacio=${unico}` : `/mapa?cliente=${clienteId}`}
         className="group inline-flex min-h-11 max-w-full items-center gap-2.5 rounded-lg border bg-card px-3.5 py-2 text-sm transition-colors hover:border-primary/35 hover:bg-accent/50"
       >
         <MapPin className="size-4 shrink-0 text-primary" strokeWidth={2} />
