@@ -682,17 +682,17 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "cheques_vuelto_movimiento_id_fkey"
-            columns: ["vuelto_movimiento_id"]
-            isOneToOne: false
-            referencedRelation: "movimientos_tesoreria"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "cheques_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizaciones"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cheques_vuelto_movimiento_id_fkey"
+            columns: ["vuelto_movimiento_id"]
+            isOneToOne: false
+            referencedRelation: "movimientos_tesoreria"
             referencedColumns: ["id"]
           },
         ]
@@ -2951,6 +2951,10 @@ export type Database = {
         Args: { p_canon: string; p_motivo: string }
         Returns: undefined
       }
+      anular_cargo_manual: {
+        Args: { p_cargo: string; p_motivo: string }
+        Returns: Json
+      }
       anular_movimiento_tesoreria: {
         Args: { p_id: string; p_motivo: string }
         Returns: Json
@@ -2958,10 +2962,6 @@ export type Database = {
       anular_novedad: {
         Args: { p_motivo: string; p_novedad: string }
         Returns: undefined
-      }
-      anular_cargo_manual: {
-        Args: { p_cargo: string; p_motivo: string }
-        Returns: Json
       }
       anular_pago: {
         Args: { p_motivo: string; p_pago: string }
@@ -3015,8 +3015,8 @@ export type Database = {
         }
         Returns: Json
       }
-      datos_recibo: { Args: { p_pago: string }; Returns: Json }
       conciliar_canon: { Args: { p_ids: string[] }; Returns: Json }
+      datos_recibo: { Args: { p_pago: string }; Returns: Json }
       dejar_sin_efecto_multa: {
         Args: { p_motivo: string; p_registro: string }
         Returns: undefined
@@ -3133,10 +3133,7 @@ export type Database = {
         Args: { p_solicitud: string }
         Returns: boolean
       }
-      ocultar_rechazo_novedad: {
-        Args: { p_novedad: string }
-        Returns: boolean
-      }
+      ocultar_rechazo_novedad: { Args: { p_novedad: string }; Returns: boolean }
       pagar_gasto: {
         Args: {
           p_caja?: string
@@ -3149,10 +3146,6 @@ export type Database = {
       }
       reabrir_caja: {
         Args: { p_caja: string; p_motivo?: string }
-        Returns: undefined
-      }
-      reincorporar_empleado: {
-        Args: { p_desde?: string; p_empleado: string }
         Returns: undefined
       }
       rechazar_cambio: {
@@ -3190,7 +3183,6 @@ export type Database = {
         }
         Returns: Json
       }
-      registrar_contrasena_nueva: { Args: { p_user: string }; Returns: undefined }
       registrar_cobro: {
         Args: {
           p_caja: string
@@ -3201,6 +3193,10 @@ export type Database = {
           p_permitir_saldo_favor?: boolean
         }
         Returns: Json
+      }
+      registrar_contrasena_nueva: {
+        Args: { p_user: string }
+        Returns: undefined
       }
       registrar_lectura: {
         Args: {
@@ -3236,6 +3232,10 @@ export type Database = {
           p_transferencia?: Json
         }
         Returns: Json
+      }
+      reincorporar_empleado: {
+        Args: { p_desde?: string; p_empleado: string }
+        Returns: undefined
       }
       replicar_gastos_fijos: {
         Args: {
@@ -3314,7 +3314,6 @@ export type Database = {
         Returns: Database["public"]["Enums"]["estado_novedad"]
       }
       siguiente_codigo_cliente: { Args: never; Returns: number }
-      solicitudes_con_respuesta: { Args: never; Returns: string[] }
       solicitar_cambio: {
         Args: {
           p_accion: string
@@ -3330,6 +3329,7 @@ export type Database = {
         Args: { p_caja: string; p_motivo: string }
         Returns: undefined
       }
+      solicitudes_con_respuesta: { Args: never; Returns: string[] }
       sumar_abonos_energia: { Args: { p_periodo: string }; Returns: Json }
       ultimas_lecturas: {
         Args: { p_antes: string }
