@@ -322,15 +322,27 @@ export function useVista(limites: Rect, insetInferior = 0) {
   useEffect(() => {
     const el = contRef.current;
     if (!el) return;
+    /** Alto del lienzo (para la rueda que avanza "de a página"). */
+    const t0Alto = () => tamRef.current?.h ?? 600;
     const alRodar = (ev: WheelEvent) => {
-      // Sin modificador la rueda desplaza la página (no se secuestra el scroll).
-      // El pellizco del trackpad llega como rueda con ctrlKey.
-      if (!ev.ctrlKey && !ev.metaKey) return;
+      // El mapa ocupa toda la pantalla: la rueda (o dos dedos en el trackpad)
+      // mueve el plano, como en Figma; ⌘/Ctrl + rueda y el pellizco del
+      // trackpad (llega como rueda con ctrlKey) acercan o alejan.
       ev.preventDefault();
-      const r = el.getBoundingClientRect();
-      const delta = ev.deltaMode === 1 ? ev.deltaY * 16 : ev.deltaY;
+      const escalaDelta = ev.deltaMode === 1 ? 16 : ev.deltaMode === 2 ? t0Alto() : 1;
+      const dx = ev.deltaX * escalaDelta;
+      const dy = ev.deltaY * escalaDelta;
       marcarRueda();
-      zoomEn(Math.exp(-delta * 0.0045), ev.clientX - r.left, ev.clientY - r.top);
+      if (ev.ctrlKey || ev.metaKey) {
+        const r = el.getBoundingClientRect();
+        zoomEn(Math.exp(-dy * 0.0045), ev.clientX - r.left, ev.clientY - r.top);
+        return;
+      }
+      const c = camRef.current;
+      if (!c) return;
+      cortarAnimacion();
+      ajustadoRef.current = false;
+      aplicar({ cx: c.cx + dx / c.k, cy: c.cy + dy / c.k, k: c.k });
     };
     let escala0 = 1;
     const gestoInicio = (ev: Event) => {
@@ -362,7 +374,7 @@ export function useVista(limites: Rect, insetInferior = 0) {
       el.removeEventListener("gesturestart", gestoInicio);
       el.removeEventListener("gesturechange", gestoCambio);
     };
-  }, [zoomEn, marcarRueda]);
+  }, [zoomEn, marcarRueda, aplicar, cortarAnimacion]);
 
   useEffect(() => cortarAnimacion, [cortarAnimacion]);
 

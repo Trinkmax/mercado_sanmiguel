@@ -164,6 +164,12 @@
     padding-left: env(safe-area-inset-left);
     padding-right: env(safe-area-inset-right);
   }
+  /* Como una app: la página no rebota ni ofrece "arrastrar para recargar"
+     al pasarse de los bordes (Safari de Mac y celulares). */
+  html,
+  body {
+    overscroll-behavior: none;
+  }
   html {
     @apply font-sans;
     /* Densidad general contenida: todo lo rem escala un paso hacia abajo. */
