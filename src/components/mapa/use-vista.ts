@@ -66,6 +66,33 @@ export function useVista(limites: Rect) {
   const gesto = useRef<Gesto>({ tipo: "nada" });
   /** Verdadero si el último gesto movió el plano (para no tomarlo como toque). */
   const arrastro = useRef(false);
+  /** Qué está moviendo la cámara cuadro a cuadro ahora: un gesto de punteros,
+   * una animación o la rueda / el pellizco del trackpad (hasta un rato después
+   * del último evento). */
+  const moviendo = useRef({ gesto: false, anim: false, rueda: null as number | null });
+
+  // Mientras la cámara se mueve cuadro a cuadro, el <svg> lleva
+  // data-arrastrando (sin estado de React): el CSS apaga el desenfoque de las
+  // sombras del fondo, que si no se volvería a rasterizar en cada cuadro.
+  const marcarMovimiento = useCallback(() => {
+    const svg = contRef.current?.querySelector(":scope > svg");
+    if (!svg) return;
+    const m = moviendo.current;
+    if (m.gesto || m.anim || m.rueda !== null) svg.setAttribute("data-arrastrando", "");
+    else svg.removeAttribute("data-arrastrando");
+  }, []);
+
+  /** Rueda y pellizco del trackpad: no tienen fin explícito, se da por
+   * terminado 150 ms después del último evento. */
+  const marcarRueda = useCallback(() => {
+    const m = moviendo.current;
+    if (m.rueda !== null) window.clearTimeout(m.rueda);
+    m.rueda = window.setTimeout(() => {
+      m.rueda = null;
+      marcarMovimiento();
+    }, 150);
+    marcarMovimiento();
+  }, [marcarMovimiento]);
 
   // Los límites se comparan por valor: datos nuevos del servidor (mismo plano)
   // no tienen que mover la cámara.
@@ -110,7 +137,11 @@ export function useVista(limites: Rect) {
   const cortarAnimacion = useCallback(() => {
     if (animRef.current !== null) cancelAnimationFrame(animRef.current);
     animRef.current = null;
-  }, []);
+    if (moviendo.current.anim) {
+      moviendo.current.anim = false;
+      marcarMovimiento();
+    }
+  }, [marcarMovimiento]);
 
   const animarA = useCallback(
     (destino: Camara, ms = 420) => {
@@ -131,11 +162,18 @@ export function useVista(limites: Rect) {
           // Escala interpolada en logaritmo: el zoom se siente parejo.
           k: Math.exp(Math.log(ini.k) + (Math.log(fin.k) - Math.log(ini.k)) * e),
         });
-        animRef.current = t < 1 ? requestAnimationFrame(paso) : null;
+        if (t < 1) animRef.current = requestAnimationFrame(paso);
+        else {
+          animRef.current = null;
+          moviendo.current.anim = false;
+          marcarMovimiento();
+        }
       };
       animRef.current = requestAnimationFrame(paso);
+      moviendo.current.anim = true;
+      marcarMovimiento();
     },
-    [aplicar, cortarAnimacion, normalizar]
+    [aplicar, cortarAnimacion, normalizar, marcarMovimiento]
   );
 
   // Tamaño del contenedor: encuadra al montar y acompaña los cambios.
@@ -278,6 +316,7 @@ export function useVista(limites: Rect) {
       ev.preventDefault();
       const r = el.getBoundingClientRect();
       const delta = ev.deltaMode === 1 ? ev.deltaY * 16 : ev.deltaY;
+      marcarRueda();
       zoomEn(Math.exp(-delta * 0.0045), ev.clientX - r.left, ev.clientY - r.top);
     };
     let escala0 = 1;
@@ -295,18 +334,22 @@ export function useVista(limites: Rect) {
       const r = el.getBoundingClientRect();
       const sx = Number.isFinite(g.clientX) ? (g.clientX as number) - r.left : r.width / 2;
       const sy = Number.isFinite(g.clientY) ? (g.clientY as number) - r.top : r.height / 2;
+      marcarRueda();
       zoomEn(g.scale / escala0, sx, sy);
       escala0 = g.scale;
     };
     el.addEventListener("wheel", alRodar, { passive: false });
     el.addEventListener("gesturestart", gestoInicio);
     el.addEventListener("gesturechange", gestoCambio);
+    const m = moviendo.current;
     return () => {
+      if (m.rueda !== null) window.clearTimeout(m.rueda);
+      m.rueda = null;
       el.removeEventListener("wheel", alRodar);
       el.removeEventListener("gesturestart", gestoInicio);
       el.removeEventListener("gesturechange", gestoCambio);
     };
-  }, [zoomEn]);
+  }, [zoomEn, marcarRueda]);
 
   useEffect(() => cortarAnimacion, [cortarAnimacion]);
 
@@ -314,6 +357,11 @@ export function useVista(limites: Rect) {
   // El rectángulo del contenedor se mide al empezar el gesto (medirlo en cada
   // movimiento forzaría un recálculo de layout por cuadro).
   const rectGesto = useRef<DOMRect | null>(null);
+  // Mientras dura el gesto (arrastre o pellizco), el <svg> lleva data-arrastrando.
+  const marcarArrastre = (activo: boolean) => {
+    moviendo.current.gesto = activo;
+    marcarMovimiento();
+  };
   const posicion = (ev: React.PointerEvent) => {
     const r = rectGesto.current ?? contRef.current?.getBoundingClientRect() ?? null;
     return { x: ev.clientX - (r?.left ?? 0), y: ev.clientY - (r?.top ?? 0) };
@@ -336,6 +384,7 @@ export function useVista(limites: Rect) {
       const [a, b] = [...punteros.current.values()];
       arrastro.current = true;
       ev.currentTarget.setPointerCapture(ev.pointerId);
+      marcarArrastre(true);
       gesto.current = {
         tipo: "pinch",
         d0: Math.hypot(a.x - b.x, a.y - b.y) || 1,
@@ -357,6 +406,7 @@ export function useVista(limites: Rect) {
       arrastro.current = true;
       ajustadoRef.current = false;
       ev.currentTarget.setPointerCapture(ev.pointerId);
+      marcarArrastre(true);
       gesto.current = { ...g, tipo: "pan" };
     }
     const actual = gesto.current;
@@ -398,6 +448,7 @@ export function useVista(limites: Rect) {
     } else if (punteros.current.size === 0) {
       gesto.current = { tipo: "nada" };
       rectGesto.current = null;
+      marcarArrastre(false);
       // El click llega justo después del pointerup: recién después se limpia
       // el flag, así Enter/Espacio sobre un puesto no quedan bloqueados.
       window.setTimeout(() => {

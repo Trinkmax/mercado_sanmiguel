@@ -12,22 +12,30 @@ import { Sello } from "@/components/shared/sello";
 import { asignarEspacios, editarEspacio } from "@/lib/actions/mapa";
 import { BuscadorMapa, type ResultadoBusqueda } from "./buscador-mapa";
 import {
+  alturaDe,
   armarBloques,
+  cantidad,
   diferencias,
   etiquetaEspacios,
   limitesPlano,
   NOMBRE_TIPO,
   numeroVisible,
+  REPOSO,
+  unidades,
   unir,
   type Bloque,
+  type EstadoBloque,
+  type Marca,
 } from "./geometria";
 import { LienzoPlano, type ControlLienzo } from "./lienzo-plano";
 import { PanelAsignacion, type Confirmacion, type Revision, type Sugerencia } from "./panel-asignacion";
 import { PanelDetalle } from "./panel-detalle";
 import {
+  anilloDe,
   repartirFichas,
+  sembrarArboles,
   type Anillo,
-  type EstadoBloque,
+  type DatosPastilla,
   type EstiloBloque,
   type FichaQuintero,
 } from "./plano-svg";
@@ -60,6 +68,13 @@ const TEXTO_ESTADO: Record<EstadoCobro, string> = {
   al_dia: "al día",
   debe: "debe el mes",
   vencido: "con deuda atrasada",
+};
+
+/** Estado en la pastilla de la selección ("Don Pedro · 4 puestos · al día"). */
+const ESTADO_PASTILLA: Record<EstadoCobro, string> = {
+  al_dia: "al día",
+  debe: "debe el mes",
+  vencido: "deuda atrasada",
 };
 
 const SELLO: Record<EstadoCobro, { estado: string; texto?: string }> = {
@@ -147,8 +162,15 @@ export function MapaMercado({
 
   // ---------- Derivados ----------
   const limites = useMemo(() => limitesPlano(elementos, espacios), [elementos, espacios]);
+  // Decorado del fondo: árboles en el espacio libre (no dependen de la ocupación).
+  const arboles = useMemo(() => sembrarArboles(elementos, espacios, limites), [elementos, espacios, limites]);
   const bloques = useMemo(() => armarBloques(plano), [plano]);
   const espacioPorId = useMemo(() => new Map(plano.map((e) => [e.id, e])), [plano]);
+  const bloquePorEspacio = useMemo(() => {
+    const m = new Map<string, Bloque>();
+    for (const b of bloques) for (const e of b.espacios) m.set(e.id, b);
+    return m;
+  }, [bloques]);
   const porCliente = useMemo(() => {
     const m = new Map<string, Espacio[]>();
     for (const e of plano) {
@@ -188,9 +210,27 @@ export function MapaMercado({
     };
   }, [clientes, elementos]);
 
+  // Hasta dónde llegan las fichas en cada cantero: debajo, el plano dibuja surcos.
+  const finFichas = useMemo(() => {
+    const m = new Map<string, number>();
+    const rects = [...fichasBase.map((f) => f.rect), ...restos.map((r) => r.rect)];
+    for (const z of elementos) {
+      if (z.tipo !== "quinteros") continue;
+      for (const r of rects) {
+        if (r.x < z.x || r.x >= z.x + z.w || r.y < z.y || r.y >= z.y + z.h) continue;
+        m.set(z.id, Math.max(m.get(z.id) ?? r.y + r.h, r.y + r.h));
+      }
+    }
+    return m;
+  }, [fichasBase, restos, elementos]);
+
   const clienteSel = seleccion?.tipo === "cliente" ? seleccion.id : null;
+  const espacioSelId = seleccion?.tipo === "espacio" ? seleccion.id : null;
+  // Con selección o filtro, lo que no coincide pierde la pintura (y el fondo se vela).
+  const atenuar = filtro !== null || (modo === "ver" && clienteSel !== null);
 
   const estilos = useMemo(() => {
+    const avisos = new Set(confirmacion ? [confirmacion.espacioId] : sugerencia?.espacioIds ?? []);
     const m = new Map<string, EstiloBloque>();
     for (const b of bloques) {
       const cli = b.clienteId ? clientePorId.get(b.clienteId) ?? null : null;
@@ -198,14 +238,26 @@ export function MapaMercado({
       let atenuado = false;
       if (filtro) atenuado = estado !== filtro;
       else if (modo === "ver" && clienteSel) atenuado = b.clienteId !== clienteSel;
+      let marca: Marca = null;
+      if (
+        (modo === "ver" && clienteSel !== null && b.clienteId === clienteSel) ||
+        (espacioSelId !== null && b.espacios.some((e) => e.id === espacioSelId))
+      ) {
+        marca = "seleccion";
+      } else if (modo === "asignar" && pincel !== null && b.clienteId === pincel) {
+        marca = "pincel";
+      } else if (b.espacios.some((e) => avisos.has(e.id))) {
+        marca = "aviso";
+      }
       m.set(b.clave, {
         estado,
         atenuado,
+        marca,
         etiqueta: cli ? cli.apodo ?? cli.nombre : b.espacios.find((e) => e.nota)?.nota ?? null,
       });
     }
     return m;
-  }, [bloques, clientePorId, estadoDe, filtro, modo, clienteSel]);
+  }, [bloques, clientePorId, estadoDe, filtro, modo, clienteSel, espacioSelId, pincel, confirmacion, sugerencia]);
 
   const fichas = useMemo<FichaQuintero[]>(
     () =>
@@ -215,39 +267,65 @@ export function MapaMercado({
           ...f,
           estado,
           atenuado: filtro ? estado !== filtro : modo === "ver" && clienteSel !== null && clienteSel !== f.clienteId,
-          seleccionado: clienteSel === f.clienteId || (modo === "asignar" && pincel === f.clienteId),
+          seleccionado: clienteSel === f.clienteId,
+          pincel: modo === "asignar" && pincel === f.clienteId,
         };
       }),
     [fichasBase, estadoDe, filtro, modo, clienteSel, pincel]
   );
 
+  // Anillos sobre la tapa de cada bloque destacado, a su altura en reposo (el
+  // lienzo los levanta con el hover y el foco de teclado).
   const anillos = useMemo<Anillo[]>(() => {
     const a: Anillo[] = [];
-    const forma = (e: { tipo: string }) => (e.tipo === "contenedor" ? "elipse" : "rect");
+    const poner = (b: Bloque | undefined, rect: Rect, tono: Anillo["tono"]) => {
+      const estilo = b ? estilos.get(b.clave) : undefined;
+      if (b && estilo) a.push(anilloDe(b, rect, tono, alturaDe(b, estilo, REPOSO)));
+    };
     const destacado = modo === "asignar" ? pincel : clienteSel;
     if (destacado) {
       for (const b of bloques) {
-        if (b.clienteId === destacado) {
-          a.push({ rect: b.rect, forma: forma(b), tono: modo === "asignar" ? "pincel" : "seleccion" });
-        }
+        if (b.clienteId === destacado) poner(b, b.rect, modo === "asignar" ? "pincel" : "seleccion");
       }
     }
-    if (seleccion?.tipo === "espacio") {
-      const e = espacioPorId.get(seleccion.id);
-      if (e) a.push({ rect: e, forma: forma(e), tono: "seleccion" });
+    if (espacioSelId) {
+      const e = espacioPorId.get(espacioSelId);
+      if (e) poner(bloquePorEspacio.get(e.id), e, "seleccion");
     }
     if (confirmacion) {
       const e = espacioPorId.get(confirmacion.espacioId);
-      if (e) a.push({ rect: e, forma: forma(e), tono: "aviso" });
+      if (e) poner(bloquePorEspacio.get(e.id), e, "aviso");
     }
     if (sugerencia && !confirmacion) {
       for (const id of sugerencia.espacioIds) {
         const e = espacioPorId.get(id);
-        if (e) a.push({ rect: e, forma: forma(e), tono: "aviso" });
+        if (e) poner(bloquePorEspacio.get(e.id), e, "aviso");
       }
     }
     return a;
-  }, [bloques, espacioPorId, modo, pincel, clienteSel, seleccion, confirmacion, sugerencia]);
+  }, [bloques, bloquePorEspacio, espacioPorId, estilos, modo, pincel, clienteSel, espacioSelId, confirmacion, sugerencia]);
+
+  // Pastilla de la selección: "Don Pedro · 4 puestos · al día".
+  const pastilla = useMemo<DatosPastilla | null>(() => {
+    if (modo !== "ver" || !clienteSel) return null;
+    const cli = clientePorId.get(clienteSel);
+    const suyos = porCliente.get(clienteSel);
+    if (!cli || !suyos?.length) return null;
+    const partes = (
+      [
+        ["puesto", unidades(suyos)],
+        // El bar se concesiona como un local.
+        ["local", suyos.filter((e) => e.tipo === "local" || e.tipo === "bar").length],
+        ["contenedor", suyos.filter((e) => e.tipo === "contenedor").length],
+      ] as const
+    )
+      .filter(([, n]) => n > 0)
+      .map(([tipo, n]) => cantidad(n, tipo));
+    return {
+      texto: `${cli.apodo ?? cli.nombre} · ${partes.join(" + ")} · ${ESTADO_PASTILLA[cli.estado]}`,
+      estado: cli.estado,
+    };
+  }, [modo, clienteSel, clientePorId, porCliente]);
 
   const resumen = useMemo<Resumen>(() => {
     const puestos: Record<Filtro, number> = { al_dia: 0, debe: 0, vencido: 0, libre: 0 };
@@ -702,6 +780,10 @@ export function MapaMercado({
           anillos={anillos}
           fichas={fichas}
           restos={restos}
+          atenuar={atenuar}
+          pastilla={pastilla}
+          arboles={arboles}
+          finFichas={finFichas}
           acciones={acciones}
           onTocarFicha={tocarFicha}
           describirFicha={describirFicha}

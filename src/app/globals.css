@@ -176,10 +176,45 @@
   }
 }
 
-/* Plano del mercado: foco de teclado visible sobre puestos y fichas (SVG). */
-.mapa-foco:focus-visible > :is(rect, ellipse):first-child {
-  stroke: var(--ring);
-  stroke-width: 3px;
+/* Plano del mercado: el foco de teclado de un espacio lo dibuja el plano (anillo
+   sobre la tapa elevada); en las fichas de quinteros, un anillo doble por fuera
+   de la tapa (distinto del borde de la ficha seleccionada). */
+.mapa-foco:focus-visible > :first-child {
+  stroke: none;
+}
+.mapa-ficha-foco {
+  display: none;
+}
+.mapa-foco:focus-visible > .mapa-ficha-foco {
+  display: inline;
+}
+
+/* Plano: un bloque despega (selección, hover, foco) con una traslación pura. */
+.mapa-mov {
+  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+/* Lo que aparece ya despegado (los anillos de un bloque que estaba en reposo)
+   sube desde el piso a la par del bloque: una transición no corre al montar. */
+.mapa-mov-entra {
+  animation: mapa-despegue 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes mapa-despegue {
+  from {
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mapa-mov {
+    transition: none;
+  }
+  .mapa-mov-entra {
+    animation: none;
+  }
+}
+
+/* Plano: mientras se arrastra o pellizca, las sombras del fondo van sin desenfoque. */
+svg[data-arrastrando] .mapa-sombras-fondo {
+  filter: none;
 }
 
 /* Toasts: en tablet/celular (hay barra superior) bajan para no tapar el menú ni "Salir". */

@@ -1,348 +1,242 @@
 "use client";
 
-import { memo } from "react";
-import type { Bloque } from "./geometria";
-import { numeroVisible } from "./geometria";
+import { Fragment, memo, useMemo, type CSSProperties, type ReactNode } from "react";
+import {
+  ALT,
+  alturaDe,
+  radioTapa,
+  REPOSO,
+  type Alturas,
+  type Bloque,
+  type EstadoBloque,
+  type Marca,
+  type Material,
+} from "./geometria";
+import {
+  A_SO,
+  arco,
+  barridoElipse,
+  canto,
+  caraEste,
+  caraSur,
+  circulo,
+  elPath,
+  envolvente,
+  esq,
+  f,
+  hash,
+  K,
+  P,
+  poly,
+  pt,
+  rrPath,
+  SESGO_RAYAS,
+  type Pt,
+} from "./geometria-3d";
 import type { ElementoPlano, Espacio, EstadoCobro, Rect } from "./tipos";
 
-/* Piezas de dibujo del plano (SVG puro, sin estado). El orquestador
- * (`mapa-mercado.tsx`) decide colores, atenuados y anillos; acá solo se pinta. */
+/* Piezas de dibujo del plano en relieve (SVG puro, sin estado). El orquestador
+ * (`mapa-mercado.tsx`) decide estados, atenuados y marcas; el lienzo, la cámara,
+ * el hover y el foco; acá solo se pinta. */
 
-// ---------- Paleta del terreno (paisaje, no estados) ----------
-const TINTA_SUAVE = "oklch(0.55 0.02 262)";
-const ASFALTO = "oklch(0.94 0.006 258)";
-const ASFALTO_BORDE = "oklch(0.885 0.009 258)";
-const VERDE_ZONA = "oklch(0.962 0.034 146)";
-const VERDE_BORDE = "oklch(0.86 0.06 146)";
-const VERDE_TINTA = "oklch(0.43 0.09 146)";
-const VIDRIO = "oklch(0.967 0.028 160)";
-const VIDRIO_BORDE = "oklch(0.84 0.055 160)";
-const VIDRIO_TRAMA = "oklch(0.86 0.05 160)";
+// ---------- Materiales (oklch precalculado: nada de color-mix en atributos) ----------
 
-const DISPLAY: React.CSSProperties = { fontFamily: "var(--font-display)", fontWeight: 700 };
-const SANS: React.CSSProperties = { fontFamily: "var(--font-sans)" };
+type Pintura = {
+  tapa: [string, string];
+  bisel: string;
+  grosor: number;
+  faldon: [string, string];
+  faldonBorde: string;
+  lado: string;
+  /** Cara sur sin faldón (libre o atenuado). */
+  frente: string;
+  lote: string;
+  texto: string;
+  halo: string;
+  /** Opacidad del canto iluminado. */
+  canto: number;
+  ranura: string;
+  tambor: [string, string, string];
+  disco: [string, string, string];
+};
 
-/** Estado visual de un bloque: el de cobro de su cliente, o libre. */
-export type EstadoBloque = EstadoCobro | "libre" | "ocupado";
-
-export const ASPECTO: Record<
-  EstadoBloque,
-  { fill: string; stroke: string; strokeOpacity: number; texto: string; grosor: number }
-> = {
-  libre: {
-    fill: "var(--card)",
-    stroke: "oklch(0.8 0.014 258)",
-    strokeOpacity: 1,
-    texto: "oklch(0.5 0.022 262)",
-    grosor: 1,
-  },
+export const MAT: Record<Material, Pintura> = {
   al_dia: {
-    fill: "var(--pagado-suave)",
-    stroke: "var(--pagado)",
-    strokeOpacity: 0.6,
-    texto: "var(--pagado)",
+    tapa: ["oklch(0.972 0.028 148)", "oklch(0.946 0.046 148)"],
+    bisel: "oklch(0.64 0.1 148)",
     grosor: 1.2,
+    faldon: ["oklch(0.62 0.13 148)", "oklch(0.51 0.12 150)"],
+    faldonBorde: "oklch(0.42 0.1 150)",
+    lado: "oklch(0.45 0.1 150)",
+    frente: "oklch(0.51 0.12 150)",
+    lote: "oklch(0.64 0.1 148)",
+    texto: "oklch(0.46 0.12 148)",
+    halo: "oklch(0.96 0.036 148)",
+    canto: 0.85,
+    ranura: "oklch(0.58 0.1 148)",
+    tambor: ["oklch(0.72 0.11 148)", "oklch(0.58 0.12 150)", "oklch(0.45 0.1 152)"],
+    disco: ["oklch(0.985 0.02 148)", "oklch(0.957 0.04 148)", "oklch(0.93 0.055 148)"],
   },
   debe: {
-    fill: "var(--pendiente-suave)",
-    stroke: "var(--pendiente)",
-    strokeOpacity: 0.6,
-    texto: "var(--pendiente)",
-    grosor: 1.2,
+    tapa: ["oklch(0.982 0.013 27)", "oklch(0.962 0.026 27)"],
+    bisel: "oklch(0.6 0.17 27)",
+    grosor: 1.5,
+    faldon: ["oklch(0.99 0.006 27)", "oklch(0.95 0.018 27)"],
+    faldonBorde: "oklch(0.5 0.16 27)",
+    lado: "oklch(0.56 0.15 27)",
+    frente: "oklch(0.95 0.018 27)",
+    lote: "oklch(0.6 0.17 27)",
+    texto: "oklch(0.52 0.19 27)",
+    halo: "oklch(0.972 0.018 27)",
+    canto: 0.85,
+    ranura: "oklch(0.62 0.15 27)",
+    tambor: ["oklch(0.99 0.006 27)", "oklch(0.95 0.016 27)", "oklch(0.86 0.035 27)"],
+    disco: ["oklch(0.99 0.008 27)", "oklch(0.972 0.02 27)", "oklch(0.95 0.032 27)"],
   },
   vencido: {
-    fill: "var(--pendiente)",
-    stroke: "oklch(0.4 0.15 27)",
-    strokeOpacity: 1,
+    tapa: ["oklch(0.595 0.19 27)", "oklch(0.525 0.19 27)"],
+    bisel: "oklch(0.42 0.15 27)",
+    grosor: 1.2,
+    faldon: ["oklch(0.46 0.155 27)", "oklch(0.385 0.13 27)"],
+    faldonBorde: "oklch(0.3 0.1 27)",
+    lado: "oklch(0.34 0.11 27)",
+    frente: "oklch(0.385 0.13 27)",
+    lote: "oklch(0.42 0.15 27)",
     texto: "#ffffff",
-    grosor: 1.2,
+    halo: "oklch(0.55 0.19 27)",
+    canto: 0.35,
+    ranura: "oklch(0.42 0.14 27)",
+    tambor: ["oklch(0.54 0.17 27)", "oklch(0.45 0.15 27)", "oklch(0.34 0.11 27)"],
+    disco: ["oklch(0.63 0.19 27)", "oklch(0.56 0.19 27)", "oklch(0.5 0.185 27)"],
   },
+  libre: {
+    tapa: ["#ffffff", "oklch(0.978 0.004 258)"],
+    bisel: "oklch(0.79 0.014 258)",
+    grosor: 1,
+    faldon: ["oklch(0.885 0.01 258)", "oklch(0.885 0.01 258)"],
+    faldonBorde: "oklch(0.79 0.014 258)",
+    lado: "oklch(0.8 0.013 260)",
+    frente: "oklch(0.885 0.01 258)",
+    lote: "oklch(0.74 0.018 258)",
+    texto: "oklch(0.5 0.022 262)",
+    halo: "#ffffff",
+    canto: 1,
+    ranura: "oklch(0.84 0.01 258)",
+    tambor: ["oklch(0.965 0.004 258)", "oklch(0.9 0.008 258)", "oklch(0.8 0.013 260)"],
+    disco: ["#ffffff", "oklch(0.985 0.003 258)", "oklch(0.965 0.005 258)"],
+  },
+  // Atenuado: "sin pintura".
+  neutro: {
+    tapa: ["oklch(0.972 0.004 258)", "oklch(0.958 0.005 258)"],
+    bisel: "oklch(0.86 0.008 258)",
+    grosor: 1,
+    faldon: ["oklch(0.9 0.006 258)", "oklch(0.9 0.006 258)"],
+    faldonBorde: "oklch(0.86 0.008 258)",
+    lado: "oklch(0.845 0.008 258)",
+    frente: "oklch(0.9 0.006 258)",
+    lote: "oklch(0.84 0.01 258)",
+    texto: "oklch(0.6 0.014 262)",
+    halo: "oklch(0.965 0.004 258)",
+    canto: 0.6,
+    ranura: "oklch(0.89 0.006 258)",
+    tambor: ["oklch(0.95 0.004 258)", "oklch(0.9 0.006 258)", "oklch(0.84 0.008 258)"],
+    disco: ["oklch(0.975 0.003 258)", "oklch(0.965 0.004 258)", "oklch(0.952 0.005 258)"],
+  },
+  // Cliente sin estado de cobro: el azul de la marca, con la misma regla.
   ocupado: {
-    fill: "var(--accent)",
-    stroke: "var(--primary)",
-    strokeOpacity: 0.45,
-    texto: "var(--accent-foreground)",
+    tapa: ["oklch(0.955 0.02 262)", "oklch(0.93 0.03 262)"],
+    bisel: "oklch(0.6 0.08 265)",
     grosor: 1.2,
+    faldon: ["oklch(0.62 0.08 265)", "oklch(0.52 0.09 266)"],
+    faldonBorde: "oklch(0.42 0.08 266)",
+    lado: "oklch(0.48 0.08 266)",
+    frente: "oklch(0.52 0.09 266)",
+    lote: "oklch(0.6 0.08 265)",
+    texto: "var(--accent-foreground)",
+    halo: "oklch(0.95 0.02 262)",
+    canto: 0.85,
+    ranura: "oklch(0.6 0.07 265)",
+    tambor: ["oklch(0.74 0.07 262)", "oklch(0.6 0.08 265)", "oklch(0.48 0.08 266)"],
+    disco: ["oklch(0.975 0.012 262)", "oklch(0.955 0.02 262)", "oklch(0.93 0.03 262)"],
   },
 };
 
-/** Texto con halo del color de fondo (legible sobre tramas y líneas). */
-function Rotulo({
+const MATERIALES: Material[] = ["al_dia", "debe", "vencido", "libre", "neutro", "ocupado"];
+/** Los que llevan faldón (los demás son lotes o están sin pintura). */
+const CON_FALDON: Material[] = ["al_dia", "debe", "vencido", "ocupado"];
+/** Rayas del faldón de "debe" (el blanco lo pone el faldón de abajo). */
+export const RAYAS_DEBE = "oklch(0.6 0.17 27)";
+const TINTA_SOMBRA = "oklch(0.3 0.035 262)";
+const TINTA_ROTULO = "oklch(0.5 0.02 262)";
+const PUNTO_ESTADO: Record<EstadoCobro, string> = {
+  al_dia: "oklch(0.8 0.15 148)",
+  debe: "oklch(0.72 0.17 27)",
+  vencido: "oklch(0.66 0.2 27)",
+};
+
+// ---------- Texto (siempre horizontal; el halo es un trazo debajo del relleno) ----------
+
+type ClaseTexto = "num" | "apodo" | "rot" | "rot7";
+
+const FUENTE: Record<ClaseTexto, CSSProperties> = {
+  num: { fontFamily: "var(--font-sans)", fontWeight: 700, fontVariantNumeric: "tabular-nums" },
+  apodo: { fontFamily: "var(--font-sans)", fontWeight: 600 },
+  rot: { fontFamily: "var(--font-display)", fontWeight: 800, letterSpacing: "0.01em" },
+  rot7: { fontFamily: "var(--font-display)", fontWeight: 700, letterSpacing: "0.01em" },
+};
+
+function Texto({
   x,
   y,
-  texto,
-  tamano = 15,
-  color = TINTA_SUAVE,
-  halo = "var(--background)",
+  t,
+  clase = "num",
+  tam,
+  fill,
+  halo,
+  grosorHalo = 3,
   anchor = "middle",
   vertical = false,
+  opacidad,
+  espaciado,
 }: {
   x: number;
   y: number;
-  texto: string;
-  tamano?: number;
-  color?: string;
+  t: string;
+  clase?: ClaseTexto;
+  tam: number;
+  fill: string;
   halo?: string;
+  grosorHalo?: number;
   anchor?: "start" | "middle" | "end";
   vertical?: boolean;
+  opacidad?: number;
+  espaciado?: number;
 }) {
+  const fx = f(x);
+  const fy = f(y);
   return (
     <text
-      x={x}
-      y={y}
+      x={fx}
+      y={fy}
       textAnchor={anchor}
       dominantBaseline="central"
-      transform={vertical ? `rotate(-90 ${x} ${y})` : undefined}
-      fill={color}
+      fill={fill}
       stroke={halo}
-      strokeWidth={3.5}
-      strokeLinejoin="round"
-      paintOrder="stroke"
-      style={{ ...DISPLAY, fontSize: tamano, letterSpacing: "0.01em" }}
+      strokeWidth={halo ? grosorHalo : undefined}
+      strokeLinejoin={halo ? "round" : undefined}
+      paintOrder={halo ? "stroke" : undefined}
+      opacity={opacidad}
+      transform={vertical ? `rotate(-90 ${fx} ${fy})` : undefined}
+      style={
+        espaciado === undefined
+          ? { ...FUENTE[clase], fontSize: tam }
+          : { ...FUENTE[clase], fontSize: tam, letterSpacing: espaciado }
+      }
     >
-      {texto}
+      {t}
     </text>
   );
 }
-
-// ---------- Fondo: terreno + elementos fijos ----------
-
-function Elemento({ el }: { el: ElementoPlano }) {
-  const { x, y, w, h } = el;
-  const cx = x + w / 2;
-  const cy = y + h / 2;
-  switch (el.tipo) {
-    case "nave":
-      return (
-        <rect
-          x={x}
-          y={y}
-          width={w}
-          height={h}
-          rx={18}
-          fill="var(--card)"
-          stroke="oklch(0.87 0.01 258)"
-          strokeWidth={1.2}
-          filter="url(#mapa-sombra)"
-        />
-      );
-    case "pasillo":
-      return (
-        <g>
-          <rect x={x} y={y} width={w} height={h} fill="oklch(0.955 0.007 258 / 0.75)" />
-          {[x, x + w].map((lx) => (
-            <line
-              key={lx}
-              x1={lx}
-              y1={y}
-              x2={lx}
-              y2={y + h}
-              stroke="oklch(0.6 0.025 262)"
-              strokeWidth={1.4}
-              strokeDasharray="0.1 7"
-              strokeLinecap="round"
-            />
-          ))}
-          <Rotulo x={cx} y={cy} texto={el.etiqueta ?? "Pasillo"} vertical tamano={15} halo="oklch(0.96 0.006 258)" />
-        </g>
-      );
-    case "cocheras": {
-      const n = Math.max(0, el.capacidad ?? 0);
-      const horizontal = w >= h;
-      const etiqueta = el.etiqueta ?? `${n} cocheras`;
-      const anchoPill = etiqueta.length * 8.3 + 30;
-      return (
-        <g>
-          <rect x={x} y={y} width={w} height={h} rx={9} fill={ASFALTO} stroke={ASFALTO_BORDE} />
-          {Array.from({ length: Math.max(0, n - 1) }, (_, i) => {
-            const t = (i + 1) / n;
-            return horizontal ? (
-              <line
-                key={i}
-                x1={x + w * t}
-                y1={y + 7}
-                x2={x + w * t}
-                y2={y + h - 7}
-                stroke="var(--card)"
-                strokeWidth={1.8}
-                strokeLinecap="round"
-              />
-            ) : (
-              <line
-                key={i}
-                x1={x + 7}
-                y1={y + h * t}
-                x2={x + w - 7}
-                y2={y + h * t}
-                stroke="var(--card)"
-                strokeWidth={1.8}
-                strokeLinecap="round"
-              />
-            );
-          })}
-          <rect
-            x={cx - anchoPill / 2}
-            y={cy - 13.5}
-            width={anchoPill}
-            height={27}
-            rx={13.5}
-            fill="var(--card)"
-            stroke={ASFALTO_BORDE}
-          />
-          <text
-            x={cx}
-            y={cy}
-            textAnchor="middle"
-            dominantBaseline="central"
-            fill={TINTA_SUAVE}
-            style={{ ...DISPLAY, fontSize: 15 }}
-          >
-            {etiqueta}
-          </text>
-        </g>
-      );
-    }
-    case "quinteros":
-      return (
-        <g>
-          <rect x={x} y={y} width={w} height={h} rx={12} fill={VERDE_ZONA} stroke={VERDE_BORDE} />
-          <text
-            x={x + 14}
-            y={y + 21}
-            dominantBaseline="central"
-            fill={VERDE_TINTA}
-            style={{ ...DISPLAY, fontSize: 16 }}
-          >
-            {el.etiqueta ?? "Quinteros"}
-          </text>
-        </g>
-      );
-    case "administracion":
-      return (
-        <g>
-          <rect
-            x={x}
-            y={y}
-            width={w}
-            height={h}
-            rx={10}
-            fill="var(--accent)"
-            stroke="var(--primary)"
-            strokeOpacity={0.22}
-          />
-          {/* Isotipo simple: edificio con frontón */}
-          <path
-            d={`M${cx - 11} ${cy - 4} L${cx} ${cy - 13} L${cx + 11} ${cy - 4} M${cx - 8} ${cy - 3} V${cy + 6} M${cx} ${cy - 3} V${cy + 6} M${cx + 8} ${cy - 3} V${cy + 6} M${cx - 12} ${cy + 8} H${cx + 12}`}
-            fill="none"
-            stroke="var(--primary)"
-            strokeOpacity={0.55}
-            strokeWidth={1.8}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-          <text
-            x={cx}
-            y={cy + 26}
-            textAnchor="middle"
-            dominantBaseline="central"
-            fill="var(--accent-foreground)"
-            style={{ ...DISPLAY, fontSize: 11.5 }}
-          >
-            {el.etiqueta ?? "Administración"}
-          </text>
-        </g>
-      );
-    case "invernadero":
-      return (
-        <g>
-          <rect x={x} y={y} width={w} height={h} rx={8} fill={VIDRIO} stroke={VIDRIO_BORDE} />
-          <rect x={x} y={y} width={w} height={h} rx={8} fill="url(#mapa-vidrio)" />
-          <Rotulo x={cx} y={cy} texto={el.etiqueta ?? "Invernadero"} vertical color={VERDE_TINTA} halo={VIDRIO} tamano={16} />
-        </g>
-      );
-    case "recinto":
-      return (
-        <g>
-          <rect
-            x={x}
-            y={y}
-            width={w}
-            height={h}
-            rx={14}
-            fill="oklch(0.99 0.002 258 / 0.55)"
-            stroke="oklch(0.66 0.02 262)"
-            strokeOpacity={0.7}
-            strokeWidth={1.2}
-            strokeDasharray="6 5"
-          />
-          {el.etiqueta ? <Rotulo x={x + 4} y={y - 12} texto={el.etiqueta} anchor="start" tamano={14} /> : null}
-        </g>
-      );
-    case "rotulo":
-      return el.etiqueta ? <Rotulo x={cx} y={cy + 2} texto={el.etiqueta} tamano={15} /> : null;
-    default:
-      return null;
-  }
-}
-
-/** Terreno punteado + todo lo fijo del predio. Memo: no se repinta al hacer zoom. */
-export const Fondo = memo(function Fondo({
-  elementos,
-  limites,
-}: {
-  elementos: ElementoPlano[];
-  limites: Rect;
-}) {
-  const extra = 4000;
-  return (
-    <g aria-hidden>
-      <defs>
-        <pattern id="mapa-puntos" width={22} height={22} patternUnits="userSpaceOnUse">
-          <circle cx={1.4} cy={1.4} r={1.25} fill="oklch(0.855 0.012 258)" />
-        </pattern>
-        <pattern
-          id="mapa-vidrio"
-          width={11}
-          height={11}
-          patternUnits="userSpaceOnUse"
-          patternTransform="rotate(45)"
-        >
-          <line x1={0} y1={0} x2={0} y2={11} stroke={VIDRIO_TRAMA} strokeWidth={1.3} />
-        </pattern>
-        <filter id="mapa-sombra" x="-4%" y="-12%" width="108%" height="130%">
-          <feDropShadow dx={0} dy={4} stdDeviation={9} floodColor="rgb(28 36 78)" floodOpacity={0.07} />
-        </filter>
-      </defs>
-      <rect
-        x={limites.x - extra}
-        y={limites.y - extra}
-        width={limites.w + extra * 2}
-        height={limites.h + extra * 2}
-        fill="var(--background)"
-      />
-      <rect
-        x={limites.x - extra}
-        y={limites.y - extra}
-        width={limites.w + extra * 2}
-        height={limites.h + extra * 2}
-        fill="url(#mapa-puntos)"
-      />
-      {elementos.map((el) => (
-        <Elemento key={el.id} el={el} />
-      ))}
-    </g>
-  );
-});
-
-// ---------- Bloques (puestos, bar, locales, contenedores) ----------
-
-export type EstiloBloque = {
-  estado: EstadoBloque;
-  /** Se atenúa cuando hay una selección o un filtro que no lo incluye. */
-  atenuado: boolean;
-  /** Segunda línea (apodo, nombre o nota) cuando el zoom lo permite. */
-  etiqueta: string | null;
-};
 
 /** Recorta un texto al ancho disponible (aprox. por cantidad de caracteres). */
 function recortar(texto: string, ancho: number, tamano: number): string {
@@ -351,168 +245,1467 @@ function recortar(texto: string, ancho: number, tamano: number): string {
   return limpio.length <= max ? limpio : `${limpio.slice(0, max - 1).trimEnd()}…`;
 }
 
-const Cuerpo = memo(function Cuerpo({
-  bloque,
-  estilo,
-  detalle,
-  resaltado,
-}: {
-  bloque: Bloque;
-  estilo: EstiloBloque;
-  detalle: boolean;
-  resaltado: boolean;
-}) {
-  const a = ASPECTO[estilo.estado];
-  const { x, y, w, h } = bloque.rect;
-  const grosor = a.grosor + (resaltado ? 1 : 0);
-  const conEtiqueta = detalle && estilo.etiqueta !== null && h >= 36;
+/** Apodo: se achica hasta 9 u antes de recortar (así entra "Bar de Mary"). */
+function apodoAjustado(texto: string, ancho: number): { t: string; tam: number } {
+  let tam = 10.5;
+  while (tam > 9 && texto.length > Math.floor(ancho / (tam * 0.56))) tam -= 0.5;
+  return { t: recortar(texto, ancho, tam), tam };
+}
 
-  if (bloque.tipo === "contenedor") {
-    const e = bloque.espacios[0];
-    return (
-      <g style={{ opacity: estilo.atenuado ? 0.28 : 1, transition: "opacity 180ms ease" }}>
-        <ellipse
-          cx={x + w / 2}
-          cy={y + h / 2}
-          rx={w / 2}
-          ry={h / 2}
-          fill={a.fill}
-          stroke={a.stroke}
-          strokeOpacity={a.strokeOpacity}
-          strokeWidth={grosor}
-        />
-        {/* Tapa del contenedor: un aro interior, como en el dibujo */}
-        <ellipse
-          cx={x + w / 2}
-          cy={y + h / 2}
-          rx={w / 2 - 5}
-          ry={h / 2 - 5}
-          fill="none"
-          stroke={a.stroke}
-          strokeOpacity={a.strokeOpacity * 0.35}
-        />
-        <text
-          x={x + w / 2}
-          y={y + h / 2}
-          textAnchor="middle"
-          dominantBaseline="central"
-          fill={a.texto}
-          className="tabular"
-          style={{ ...SANS, fontWeight: 700, fontSize: 16 }}
-        >
-          {numeroVisible(e)}
-        </text>
-      </g>
+// ---------- Defs compartidas (una sola vez, prefijo mapa-) ----------
+
+function Lineal({
+  id,
+  stops,
+  horizontal = false,
+}: {
+  id: string;
+  stops: [number, string, number?][];
+  horizontal?: boolean;
+}) {
+  return (
+    <linearGradient id={id} x1={0} y1={0} x2={horizontal ? 1 : 0} y2={horizontal ? 0 : 1}>
+      {stops.map(([o, c, op]) => (
+        <stop key={o} offset={o} stopColor={c} stopOpacity={op} />
+      ))}
+    </linearGradient>
+  );
+}
+
+/** Mercadería bajo el faldón: naranja, amarillo, verdura, berenjena y papa (sin rojos). */
+const MERCADERIA = [
+  "oklch(0.76 0.14 62)",
+  "oklch(0.86 0.13 95)",
+  "oklch(0.74 0.12 130)",
+  "oklch(0.52 0.1 310)",
+  "oklch(0.8 0.05 75)",
+];
+
+export const DefsPlano = memo(function DefsPlano() {
+  return (
+    <defs>
+      {MATERIALES.map((k) => {
+        const m = MAT[k];
+        return (
+          <Fragment key={k}>
+            <Lineal id={`mapa-tapa-${k}`} stops={[[0, m.tapa[0]], [1, m.tapa[1]]]} />
+            <Lineal
+              id={`mapa-tambor-${k}`}
+              horizontal
+              stops={[[0, m.tambor[0]], [0.3, m.tambor[1]], [1, m.tambor[2]]]}
+            />
+            <radialGradient id={`mapa-disco-${k}`} cx={0.36} cy={0.3} r={0.8}>
+              <stop offset={0} stopColor={m.disco[0]} />
+              <stop offset={0.55} stopColor={m.disco[1]} />
+              <stop offset={1} stopColor={m.disco[2]} />
+            </radialGradient>
+            {CON_FALDON.includes(k) ? (
+              <Lineal id={`mapa-faldon-${k}`} stops={[[0, m.faldon[0]], [1, m.faldon[1]]]} />
+            ) : null}
+          </Fragment>
+        );
+      })}
+      {/* "Debe": rayas que siguen la arista inclinada de la cara sur */}
+      <pattern
+        id="mapa-rayas-debe"
+        width={8}
+        height={8}
+        patternUnits="userSpaceOnUse"
+        patternTransform={`skewX(${f(SESGO_RAYAS)})`}
+      >
+        <rect width={4} height={8} fill={RAYAS_DEBE} />
+      </pattern>
+      <linearGradient
+        id="mapa-mercaderia"
+        gradientUnits="userSpaceOnUse"
+        x1={0}
+        y1={0}
+        x2={35}
+        y2={0}
+        spreadMethod="repeat"
+      >
+        {MERCADERIA.flatMap((c, i) => [
+          <stop key={`${i}a`} offset={i / 5} stopColor={c} />,
+          <stop key={`${i}b`} offset={(i + 1) / 5} stopColor={c} />,
+        ])}
+      </linearGradient>
+      <Lineal id="mapa-mostrador" stops={[[0, "oklch(0.78 0.06 66)"], [1, "oklch(0.63 0.065 56)"]]} />
+      <Lineal id="mapa-hueco" stops={[[0, "oklch(0.3 0.04 50)"], [1, "oklch(0.42 0.05 55)"]]} />
+      {/* Terreno */}
+      <pattern id="mapa-puntos" width={22} height={22} patternUnits="userSpaceOnUse">
+        <circle cx={1.4} cy={1.4} r={1.25} fill="oklch(0.87 0.01 258)" />
+      </pattern>
+      <radialGradient id="mapa-luz" cx={0.18} cy={0.02} r={1}>
+        <stop offset={0} stopColor="#fff" stopOpacity={0.9} />
+        <stop offset={0.5} stopColor="#fff" stopOpacity={0.25} />
+        <stop offset={1} stopColor="#fff" stopOpacity={0} />
+      </radialGradient>
+      <Lineal id="mapa-canto-predio" stops={[[0, "oklch(0.9 0.01 82)"], [1, "oklch(0.8 0.016 75)"]]} />
+      {/* Nave */}
+      <Lineal id="mapa-piso" stops={[[0, "oklch(0.968 0.006 82)"], [1, "oklch(0.956 0.007 80)"]]} />
+      <pattern id="mapa-juntas" width={48} height={48} patternUnits="userSpaceOnUse">
+        <path d="M48 0H0V48" fill="none" stroke="oklch(0.935 0.008 80)" strokeWidth={0.9} />
+      </pattern>
+      <Lineal id="mapa-zocalo" stops={[[0, "oklch(0.86 0.014 78)"], [1, "oklch(0.76 0.018 72)"]]} />
+      <Lineal id="mapa-muro" stops={[[0, "oklch(0.985 0.005 85)"], [1, "oklch(0.93 0.011 80)"]]} />
+      <Lineal id="mapa-ventana" stops={[[0, "oklch(0.9 0.03 228)"], [1, "oklch(0.79 0.045 240)"]]} />
+      <pattern id="mapa-adoquin" width={15} height={10} patternUnits="userSpaceOnUse">
+        <rect width={15} height={10} fill="oklch(0.925 0.01 75)" />
+        <path d="M0 10H15M0 5H15M7.5 0V5M0 5V10M15 5V10" stroke="oklch(0.885 0.012 70)" strokeWidth={0.9} />
+      </pattern>
+      {/* Cocheras */}
+      <Lineal id="mapa-asfalto" stops={[[0, "oklch(0.83 0.009 258)"], [1, "oklch(0.865 0.008 258)"]]} />
+      <Lineal id="mapa-hundido" stops={[[0, TINTA_SOMBRA, 0.16], [1, TINTA_SOMBRA, 0]]} />
+      {/* Recintos */}
+      <pattern id="mapa-ripio" width={12} height={12} patternUnits="userSpaceOnUse">
+        <rect width={12} height={12} fill="oklch(0.95 0.006 80)" />
+        <circle cx={3} cy={3} r={1.1} fill="oklch(0.86 0.01 75)" />
+        <circle cx={9} cy={8.5} r={1.2} fill="oklch(0.88 0.01 70)" />
+        <circle cx={8} cy={2} r={0.8} fill="oklch(0.84 0.012 70)" />
+      </pattern>
+      <pattern id="mapa-malla" width={6} height={6} patternUnits="userSpaceOnUse">
+        <path d="M0 0L6 6M6 0L0 6" stroke="oklch(0.55 0.015 262)" strokeWidth={0.55} />
+      </pattern>
+      {/* Canteros de quinteros: tierra, no el verde de los estados */}
+      <Lineal id="mapa-tierra" stops={[[0, "oklch(0.925 0.03 80)"], [1, "oklch(0.9 0.037 74)"]]} />
+      <pattern id="mapa-surcos" width={14} height={12} patternUnits="userSpaceOnUse">
+        <rect y={7.5} width={14} height={3.2} rx={1.6} fill="oklch(0.83 0.045 70)" />
+        <rect y={6.6} width={14} height={1} fill="oklch(0.95 0.02 82)" />
+      </pattern>
+      <pattern id="mapa-brotes" width={14} height={12} patternUnits="userSpaceOnUse">
+        <circle cx={4} cy={6.4} r={2.3} fill="oklch(0.74 0.075 128)" />
+        <circle cx={11} cy={6.4} r={2.1} fill="oklch(0.7 0.07 132)" />
+      </pattern>
+      <Lineal id="mapa-madera" stops={[[0, "oklch(0.72 0.06 62)"], [1, "oklch(0.6 0.06 55)"]]} />
+      {/* Invernaderos */}
+      <Lineal
+        id="mapa-vidrio"
+        horizontal
+        stops={[
+          [0, "#ffffff", 0.78],
+          [0.3, "oklch(0.95 0.03 185)", 0.5],
+          [0.46, "#ffffff", 0.86],
+          [0.64, "oklch(0.92 0.04 185)", 0.46],
+          [1, "oklch(0.8 0.05 195)", 0.62],
+        ]}
+      />
+      <pattern id="mapa-plantas" width={21.5} height={13} patternUnits="userSpaceOnUse">
+        <ellipse cx={10.75} cy={6.5} rx={6.2} ry={4.2} fill="oklch(0.72 0.08 130)" />
+        <ellipse cx={9.4} cy={5.3} rx={2.6} ry={1.7} fill="oklch(0.84 0.07 125)" />
+      </pattern>
+      {/* Administración: la marca solo en la puerta y el isotipo */}
+      <Lineal id="mapa-admin-frente" stops={[[0, "oklch(0.95 0.02 262)"], [1, "oklch(0.9 0.03 262)"]]} />
+      {/* Árboles: salvia apagado, lejos del verde de "al día" */}
+      <radialGradient id="mapa-copa" cx={0.34} cy={0.28} r={0.78}>
+        <stop offset={0} stopColor="oklch(0.88 0.05 118)" />
+        <stop offset={0.55} stopColor="oklch(0.78 0.06 124)" />
+        <stop offset={1} stopColor="oklch(0.67 0.06 130)" />
+      </radialGradient>
+      {/* El único filtro del plano: las sombras de lo fijo */}
+      <filter id="mapa-desenfoque" x="-2%" y="-2%" width="104%" height="104%">
+        <feGaussianBlur stdDeviation={4.5} />
+      </filter>
+    </defs>
+  );
+});
+
+// ---------- Fondo: placa del predio + todo lo fijo ----------
+
+/** Árbol sembrado en el espacio libre (pie del tronco y radio de la copa). */
+export type Arbol = { x: number; y: number; r: number };
+
+/** Pieza con volumen del fondo: se pinta por su base sur (z) y de oeste a este. */
+type Objeto = { z: number; x: number; k: string; n: ReactNode };
+type Capas = { suelos: ReactNode[]; sombras: ReactNode[]; objetos: Objeto[]; rotulos: ReactNode[] };
+
+function placa(lim: Rect): ReactNode {
+  // El predio como maqueta: una placa apenas cálida, con canto (sur y este) y sombra suave.
+  const bx = lim.x + 4;
+  const by = lim.y + 4;
+  const bw = lim.w - 8;
+  const bh = lim.h - 8;
+  const r = 22;
+  return (
+    <>
+      <rect x={bx + 3} y={by + 6} width={bw + 5} height={bh + 12} rx={r + 4} fill={TINTA_SOMBRA} fillOpacity={0.05} />
+      <rect x={bx + 7} y={by + 12} width={bw + 9} height={bh + 18} rx={r + 8} fill={TINTA_SOMBRA} fillOpacity={0.04} />
+      <path d={caraSur(bx, by, bw, bh, r, 0, -9)} fill="url(#mapa-canto-predio)" />
+      <path d={caraEste(bx, by, bw, bh, r, 0, -9)} fill="oklch(0.84 0.012 80)" />
+      <rect x={bx} y={by} width={bw} height={bh} rx={r} fill="oklch(0.972 0.005 88)" />
+      <rect x={bx} y={by} width={bw} height={bh} rx={r} fill="url(#mapa-puntos)" />
+      <rect x={bx} y={by} width={bw} height={bh} rx={r} fill="url(#mapa-luz)" />
+      <rect
+        x={f(bx + 0.6)}
+        y={f(by + 0.6)}
+        width={f(bw - 1.2)}
+        height={f(bh - 1.2)}
+        rx={r}
+        fill="none"
+        stroke="#fff"
+        strokeWidth={1.4}
+      />
+    </>
+  );
+}
+
+function cocheras(el: ElementoPlano, norte: boolean, c: Capas) {
+  const { x, y, w, h } = el;
+  const n = Math.max(0, el.capacidad ?? 0);
+  const horizontal = w >= h;
+  let lineas = "";
+  for (let i = 1; i < n; i++) {
+    lineas += horizontal
+      ? `M${f(x + (w * i) / n)} ${y + 7}V${y + h - 7}`
+      : `M${x + 7} ${f(y + (h * i) / n)}H${x + w - 7}`;
+  }
+  // Tachas azules sobre el borde que mira a la nave (la marca, sutil).
+  const yl = norte ? y + h - 4.5 : y + 4.5;
+  const tachas = `M${x + 12} ${yl}H${x + w - 12}`;
+  c.suelos.push(
+    <Fragment key={el.id}>
+      <rect x={x} y={y} width={w} height={h} rx={6} fill="url(#mapa-asfalto)" />
+      <rect x={x + 3} y={y} width={w - 6} height={7} rx={3} fill="url(#mapa-hundido)" />
+      {lineas ? <path d={lineas} stroke="#fff" strokeWidth={1.8} strokeLinecap="round" /> : null}
+      {horizontal && n > 0 ? (
+        <>
+          <path d={tachas} stroke="var(--primary)" strokeOpacity={0.1} strokeWidth={5} strokeLinecap="round" />
+          <path
+            d={tachas}
+            stroke="oklch(0.6 0.15 262)"
+            strokeWidth={3}
+            strokeDasharray={`0.1 ${f(w / n)}`}
+            strokeDashoffset={f(-(w / n) / 2 + 12)}
+            strokeLinecap="round"
+          />
+        </>
+      ) : null}
+    </Fragment>
+  );
+  if (horizontal) {
+    // Cordones norte y sur: bordes elevados 3 u.
+    for (const [lado, cy] of [
+      ["n", y - 4],
+      ["s", y + h],
+    ] as const) {
+      const yb = cy + 4;
+      c.objetos.push({
+        z: yb,
+        x,
+        k: `${el.id}:${lado}`,
+        n: (
+          <>
+            <path
+              d={poly([P(x, yb, 0), P(x + w, yb, 0), P(x + w, yb, ALT.cordon), P(x, yb, ALT.cordon)])}
+              fill="oklch(0.83 0.008 80)"
+            />
+            <rect
+              x={f(x - K * ALT.cordon)}
+              y={cy - ALT.cordon}
+              width={w}
+              height={4}
+              rx={1.5}
+              fill="oklch(0.955 0.005 85)"
+            />
+          </>
+        ),
+      });
+    }
+  }
+  const etiqueta = el.etiqueta ?? `${n} cocheras`;
+  const ancho = etiqueta.length * 8.3 + 30;
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  c.rotulos.push(
+    <Fragment key={el.id}>
+      <rect
+        x={f(cx - ancho / 2)}
+        y={f(cy - 13.5)}
+        width={f(ancho)}
+        height={27}
+        rx={13.5}
+        fill="#fff"
+        stroke="oklch(0.87 0.01 258)"
+      />
+      <Texto x={cx} y={cy} t={etiqueta} clase="rot7" tam={15} fill={TINTA_ROTULO} />
+    </Fragment>
+  );
+}
+
+/** Tramo de cerco de malla (10 u) con postes, baranda y brillo. */
+function tramoCerco(x0: number, y0: number, x1: number, y1: number): ReactNode {
+  const z = ALT.cerco;
+  const n = Math.max(1, Math.round(Math.hypot(x1 - x0, y1 - y0) / 22));
+  let postes = "";
+  for (let i = 0; i <= n; i++) {
+    const px = x0 + ((x1 - x0) * i) / n;
+    const py = y0 + ((y1 - y0) * i) / n;
+    postes += `M${pt(P(px, py, 0))}L${pt(P(px, py, z + 1))}`;
+  }
+  return (
+    <>
+      <path d={poly([P(x0, y0, 0), P(x1, y1, 0), P(x1, y1, z), P(x0, y0, z)])} fill="url(#mapa-malla)" fillOpacity={0.8} />
+      <path d={postes} stroke="oklch(0.52 0.016 262)" strokeWidth={1.4} strokeLinecap="round" />
+      <path
+        d={`M${pt(P(x0, y0, z))}L${pt(P(x1, y1, z))}`}
+        stroke="oklch(0.56 0.016 262)"
+        strokeWidth={1.5}
+        strokeLinecap="round"
+      />
+      <path d={`M${pt(P(x0, y0, z + 0.8))}L${pt(P(x1, y1, z + 0.8))}`} stroke="#fff" strokeOpacity={0.8} strokeWidth={0.6} />
+    </>
+  );
+}
+
+function recinto(el: ElementoPlano, c: Capas) {
+  const { x, y, w, h } = el;
+  c.suelos.push(<rect key={el.id} x={x} y={y} width={w} height={h} rx={5} fill="url(#mapa-ripio)" />);
+  c.objetos.push({
+    z: y,
+    x,
+    k: `${el.id}:no`,
+    n: (
+      <>
+        {tramoCerco(x, y, x + w, y)}
+        {tramoCerco(x, y, x, y + h)}
+      </>
+    ),
+  });
+  c.objetos.push({ z: y + h, x: x + w, k: `${el.id}:e`, n: tramoCerco(x + w, y, x + w, y + h) });
+  // Sur, con portón.
+  c.objetos.push({
+    z: y + h,
+    x,
+    k: `${el.id}:s`,
+    n: (
+      <>
+        {tramoCerco(x, y + h, x + w * 0.4, y + h)}
+        {tramoCerco(x + w * 0.62, y + h, x + w, y + h)}
+      </>
+    ),
+  });
+  if (el.etiqueta) {
+    c.rotulos.push(
+      <Texto
+        key={el.id}
+        x={x - K * ALT.cerco + 2}
+        y={y - ALT.cerco - 12}
+        t={el.etiqueta}
+        clase="rot7"
+        tam={15}
+        fill={TINTA_ROTULO}
+        halo="var(--background)"
+        grosorHalo={4}
+        anchor="start"
+      />
     );
   }
+}
 
-  const etiquetaY = y + h * 0.74;
-  return (
-    <g style={{ opacity: estilo.atenuado ? 0.28 : 1, transition: "opacity 180ms ease" }}>
-      <rect
-        x={x}
-        y={y}
-        width={w}
-        height={h}
-        rx={6}
-        fill={a.fill}
-        stroke={a.stroke}
-        strokeOpacity={a.strokeOpacity}
-        strokeWidth={grosor}
+/** Dónde corta el pasillo a la nave (x de sus bordes), si la cruza. */
+function cortePasillo(nave: ElementoPlano, pasillo: ElementoPlano | null): [number, number] | null {
+  if (!pasillo) return null;
+  const cruza =
+    pasillo.x > nave.x &&
+    pasillo.x + pasillo.w < nave.x + nave.w &&
+    pasillo.y < nave.y + nave.h &&
+    pasillo.y + pasillo.h > nave.y;
+  return cruza ? [pasillo.x, pasillo.x + pasillo.w] : null;
+}
+
+const SOMBRA_NAVE: [number, number, number, number, number][] = [
+  [3, 9, 4, 4, 0.06],
+  [6, 13, 9, 8, 0.05],
+  [10, 17, 15, 13, 0.04],
+];
+
+/** La nave es una plataforma: sombra (sin filtro), zócalo partido por el pasillo y piso. */
+function nave(el: ElementoPlano, corte: [number, number] | null, c: Capas) {
+  const { x, y, w, h } = el;
+  const zc = -ALT.zocalo;
+  const r = 6;
+  const so: Pt = [x + r, y + h - r];
+  const se: Pt = [x + w - r, y + h - r];
+  const zocalo = corte ? (
+    <>
+      {/* Tramo oeste (esquina SO redondeada), corte que mira al pasillo y tramo este */}
+      <path
+        d={
+          `M${pt(esq(so, r, A_SO, 0))}${arco(r, esq(so, r, 90, 0), 0)}` +
+          `L${pt(P(corte[0], y + h, 0))}L${pt(P(corte[0], y + h, zc))}` +
+          `L${pt(esq(so, r, 90, zc))}${arco(r, esq(so, r, A_SO, zc), 1)}Z`
+        }
+        fill="url(#mapa-zocalo)"
       />
-      {/* Divisiones entre los puestos de un mismo bloque */}
-      {bloque.espacios.slice(1).map((e, i) => {
-        const previo = bloque.espacios[i];
-        const lx = (previo.x + previo.w + e.x) / 2;
-        return (
-          <line
-            key={e.id}
-            x1={lx}
-            y1={y + 7}
-            x2={lx}
-            y2={y + h - 7}
-            stroke={a.stroke}
-            strokeOpacity={estilo.estado === "vencido" ? 0.55 : 0.32}
-            strokeWidth={1}
+      <path
+        d={poly([P(corte[0], y, 0), P(corte[0], y + h, 0), P(corte[0], y + h, zc), P(corte[0], y, zc)])}
+        fill="oklch(0.74 0.018 72)"
+      />
+      <path
+        d={
+          `M${pt(P(corte[1], y + h, 0))}L${pt(esq(se, r, 90, 0))}${arco(r, esq(se, r, 45, 0), 0)}` +
+          `L${pt(esq(se, r, 45, zc))}${arco(r, esq(se, r, 90, zc), 1)}L${pt(P(corte[1], y + h, zc))}Z`
+        }
+        fill="url(#mapa-zocalo)"
+      />
+    </>
+  ) : (
+    <path d={caraSur(x, y, w, h, r, 0, zc)} fill="url(#mapa-zocalo)" />
+  );
+  c.suelos.push(
+    <Fragment key={el.id}>
+      {SOMBRA_NAVE.map(([dx, dy, ew, eh, o]) => (
+        <rect
+          key={dx}
+          x={x + dx}
+          y={y + dy}
+          width={w + ew}
+          height={h + eh}
+          rx={12 + dx}
+          fill={TINTA_SOMBRA}
+          fillOpacity={o}
+        />
+      ))}
+      {zocalo}
+      <path d={caraEste(x, y, w, h, r, 0, zc)} fill="oklch(0.74 0.018 72)" />
+      <rect x={x} y={y} width={w} height={h} rx={r} fill="url(#mapa-piso)" />
+      <rect x={x} y={y} width={w} height={h} rx={r} fill="url(#mapa-juntas)" />
+      <path d={`M${x + r} ${f(y + h - 0.7)}H${x + w - r}`} stroke="#fff" strokeOpacity={0.9} strokeWidth={1.2} />
+    </Fragment>
+  );
+}
+
+function pasillo(el: ElementoPlano, nave: ElementoPlano | null, c: Capas) {
+  const { x, w } = el;
+  const y0 = el.y;
+  const y1 = el.y + el.h;
+  const cx = x + w / 2;
+  const guia = `M${cx} ${y0 + 10}V${y1 - 10}`;
+  c.suelos.push(
+    <Fragment key={el.id}>
+      <rect x={x} y={y0} width={w} height={y1 - y0} fill="url(#mapa-adoquin)" />
+      <path d={`M${x + 1} ${y0}V${y1}M${x + w - 1} ${y0}V${y1}`} stroke="oklch(0.84 0.012 70)" strokeWidth={2} />
+      <path d={`M${f(x + 2.6)} ${y0}V${y1}`} stroke="#fff" strokeOpacity={0.7} strokeWidth={1} />
+      {/* Guía central: el azul de la marca, sutil */}
+      <path d={guia} stroke="var(--primary)" strokeOpacity={0.1} strokeWidth={7} strokeLinecap="round" />
+      <path
+        d={guia}
+        stroke="oklch(0.6 0.13 262)"
+        strokeOpacity={0.8}
+        strokeWidth={1.7}
+        strokeDasharray="9 9"
+        strokeLinecap="round"
+      />
+    </Fragment>
+  );
+  c.rotulos.push(
+    <Texto
+      key={el.id}
+      x={cx}
+      y={nave ? nave.y + nave.h / 2 + 4 : el.y + el.h / 2}
+      t={el.etiqueta ?? "Pasillo"}
+      clase="rot"
+      tam={15}
+      fill={TINTA_ROTULO}
+      halo="oklch(0.925 0.01 75)"
+      grosorHalo={4.5}
+      vertical
+    />
+  );
+}
+
+/** Nave en corte: muro norte alto con ventanas, pilastras y cabriadas cortadas;
+ * muros este y oeste bajos y antepecho sur (abiertos en el pasillo). */
+function muros(el: ElementoPlano, corte: [number, number] | null, c: Capas) {
+  const { x, y, w, h } = el;
+  const t = 7;
+  const tb = 5;
+  const zN = ALT.muroNorte;
+  const zB = ALT.muroBajo;
+  const zA = ALT.antepecho;
+  c.sombras.push(
+    <path
+      key={`${el.id}:muro`}
+      d={poly([
+        [x + t, y + t],
+        [x + w, y + t],
+        [x + w + 8, y + t + 14],
+        [x + t + 8, y + t + 14],
+      ])}
+      fill={TINTA_SOMBRA}
+      fillOpacity={0.16}
+    />
+  );
+  const tramos: [number, number][] = corte ? [[x, corte[0]], [corte[1], x + w]] : [[x, x + w]];
+  const norte = tramos.map(([a, b]) => {
+    const bahias: number[] = [];
+    for (let p = a + 10; p < b - 10; p += 94) bahias.push(p);
+    let pil = "";
+    let ven = "";
+    let luz = "";
+    let cab = "";
+    for (const p of bahias) pil += poly([P(p, y + t, 0), P(p + 7, y + t, 0), P(p + 7, y + t, zN), P(p, y + t, zN)]);
+    for (const p of bahias) {
+      for (const u of [15, 53]) {
+        const u0 = p + u;
+        const u1 = Math.min(p + u + 32, b - 8);
+        if (u1 - u0 < 12) continue;
+        ven += poly([P(u0, y + t, 15), P(u1, y + t, 15), P(u1, y + t, 25), P(u0, y + t, 25)]);
+        luz += `M${pt(P(u0, y + t, 24.6))}L${pt(P(u1, y + t, 24.6))}`;
+      }
+    }
+    for (const p of bahias) {
+      // Cabriada cortada: cordón superior, pendolón y dos diagonales.
+      const cc = p + 3.5;
+      if (cc - 34 < a || cc + 34 > b) continue;
+      const ym = y + t / 2;
+      const cu = P(cc, ym, zN + ALT.cabriada);
+      const pie = P(cc, ym, zN);
+      cab +=
+        `M${pt(P(cc - 34, ym, zN))}L${pt(cu)}L${pt(P(cc + 34, ym, zN))}M${pt(cu)}L${pt(pie)}` +
+        `M${pt(P(cc - 17, ym, zN + 6))}L${pt(pie)}L${pt(P(cc + 17, ym, zN + 6))}`;
+    }
+    return (
+      <Fragment key={a}>
+        <path d={poly([P(a, y + t, 0), P(b, y + t, 0), P(b, y + t, zN), P(a, y + t, zN)])} fill="url(#mapa-muro)" />
+        {pil ? <path d={pil} fill="oklch(0.925 0.01 80)" stroke="oklch(0.88 0.012 78)" strokeWidth={0.6} /> : null}
+        {ven ? <path d={ven} fill="url(#mapa-ventana)" stroke="oklch(0.74 0.02 250)" strokeWidth={0.7} /> : null}
+        {luz ? <path d={luz} stroke="#fff" strokeOpacity={0.85} strokeWidth={0.9} /> : null}
+        {cab ? (
+          <path
+            d={cab}
+            fill="none"
+            stroke="oklch(0.72 0.018 262)"
+            strokeWidth={1.5}
+            strokeLinejoin="round"
+            strokeLinecap="round"
           />
-        );
-      })}
-      {bloque.espacios.map((e) => {
-        const ecx = e.x + e.w / 2;
-        if (e.tipo === "bar") {
-          return (
-            <text
-              key={e.id}
-              x={ecx}
-              y={conEtiqueta ? y + h * 0.4 : y + h / 2}
-              textAnchor="middle"
-              dominantBaseline="central"
-              fill={a.texto}
-              style={{ ...DISPLAY, fontSize: 18 }}
-            >
-              {e.numero ?? "Bar"}
-            </text>
-          );
-        }
-        if (e.medio) {
-          return (
-            <g key={e.id}>
-              <text
-                x={ecx}
-                y={y + h * 0.4}
-                textAnchor="middle"
-                dominantBaseline="central"
-                fill={a.texto}
-                className="tabular"
-                style={{ ...SANS, fontWeight: 700, fontSize: 14 }}
-              >
-                {e.numero ?? "?"}
-              </text>
-              <text
-                x={ecx}
-                y={y + h * 0.7}
-                textAnchor="middle"
-                dominantBaseline="central"
-                fill={a.texto}
-                opacity={0.8}
-                style={{ ...SANS, fontWeight: 600, fontSize: 12 }}
-              >
-                ½
-              </text>
-            </g>
-          );
-        }
-        const tamano = e.tipo === "local" ? 19 : h < 45 ? 19 : 22;
-        return (
-          <text
-            key={e.id}
-            x={ecx}
-            y={conEtiqueta ? y + h * 0.4 : y + h / 2}
-            textAnchor="middle"
-            dominantBaseline="central"
-            fill={a.texto}
-            opacity={e.numero === null ? 0.7 : 1}
-            className="tabular"
-            style={{ ...SANS, fontWeight: 700, fontSize: tamano }}
-          >
-            {e.numero ?? "?"}
-          </text>
-        );
-      })}
-      {conEtiqueta && estilo.etiqueta && !bloque.espacios.every((e) => e.medio) ? (
-        <text
-          x={x + w / 2}
-          y={etiquetaY}
-          textAnchor="middle"
-          dominantBaseline="central"
-          fill={a.texto}
-          opacity={0.88}
-          style={{ ...SANS, fontWeight: 600, fontSize: 10.5 }}
-        >
-          {recortar(estilo.etiqueta, w - 6, 10.5)}
-        </text>
-      ) : null}
+        ) : null}
+        {/* Corte (poché) en gris medio y cabeza este del tramo */}
+        <path d={poly([P(a, y, zN), P(b, y, zN), P(b, y + t, zN), P(a, y + t, zN)])} fill="oklch(0.76 0.016 262)" />
+        <path d={poly([P(b, y, 0), P(b, y + t, 0), P(b, y + t, zN), P(b, y, zN)])} fill="oklch(0.86 0.012 80)" />
+      </Fragment>
+    );
+  });
+  c.objetos.push({ z: y + t, x, k: `${el.id}:muro-n`, n: norte });
+  // Cara que se ve, cabeza sur y tapa (en corte).
+  const bajo = (mx: number, cara: string) => {
+    const x1 = mx + tb;
+    return (
+      <>
+        <path d={poly([P(x1, y + t, 0), P(x1, y + h, 0), P(x1, y + h, zB), P(x1, y + t, zB)])} fill={cara} />
+        <path d={poly([P(mx, y + h, 0), P(x1, y + h, 0), P(x1, y + h, zB), P(mx, y + h, zB)])} fill="oklch(0.91 0.01 80)" />
+        <path
+          d={poly([P(mx, y + t, zB), P(x1, y + t, zB), P(x1, y + h, zB), P(mx, y + h, zB)])}
+          fill="oklch(0.83 0.012 262)"
+        />
+      </>
+    );
+  };
+  c.objetos.push({ z: y + h, x, k: `${el.id}:muro-o`, n: bajo(x, "oklch(0.95 0.007 82)") });
+  c.objetos.push({ z: y + h, x: x + w - tb, k: `${el.id}:muro-e`, n: bajo(x + w - tb, "oklch(0.88 0.012 80)") });
+  const huecos: [number, number][] = corte ? [[x + tb, corte[0]], [corte[1], x + w - tb]] : [[x + tb, x + w - tb]];
+  c.objetos.push({
+    z: y + h,
+    x: x + t,
+    k: `${el.id}:antepecho`,
+    n: huecos.map(([a, b]) => (
+      <Fragment key={a}>
+        <path d={poly([P(a, y + h, 0), P(b, y + h, 0), P(b, y + h, zA), P(a, y + h, zA)])} fill="oklch(0.92 0.009 80)" />
+        <path
+          d={poly([P(a, y + h - 4, zA), P(b, y + h - 4, zA), P(b, y + h, zA), P(a, y + h, zA)])}
+          fill="oklch(0.84 0.012 262)"
+        />
+      </Fragment>
+    )),
+  });
+}
+
+/** Cantero de quinteros: cajón de madera con tierra y surcos (paleta de tierra). */
+function cantero(el: ElementoPlano, finFichas: number | undefined, detalle: boolean, c: Capas) {
+  const { x, y, w, h } = el;
+  const H = ALT.cantero;
+  const r = 8;
+  const tx = x - K * H;
+  const ty = y - H;
+  c.sombras.push(
+    <rect key={el.id} x={x + 1} y={y + 2} width={w + 4} height={h + 5} rx={r + 2} fill={TINTA_SOMBRA} fillOpacity={0.2} />
+  );
+  // Surcos (y brotes con zoom) en la franja libre bajo las fichas.
+  const yc = (finFichas ?? y + 58) + 2;
+  const hc = ty + h - 8 - yc;
+  c.objetos.push({
+    z: y + h,
+    x,
+    k: el.id,
+    n: (
+      <>
+        <path d={caraEste(x, y, w, h, r, H, 0)} fill="oklch(0.56 0.055 55)" />
+        <path d={caraSur(x, y, w, h, r, H, 0)} fill="url(#mapa-madera)" />
+        <path
+          d={`M${pt(P(x + r, y + h, H * 0.5))}L${pt(P(x + w - r, y + h, H * 0.5))}`}
+          stroke="oklch(0.55 0.05 55)"
+          strokeOpacity={0.5}
+          strokeWidth={0.8}
+        />
+        <rect
+          x={f(tx)}
+          y={ty}
+          width={w}
+          height={h}
+          rx={r}
+          fill="url(#mapa-tierra)"
+          stroke="oklch(0.8 0.04 70)"
+          strokeWidth={1}
+        />
+        {hc > 10 ? <rect x={f(tx + 10)} y={f(yc)} width={w - 20} height={f(hc)} fill="url(#mapa-surcos)" /> : null}
+        {hc > 10 && detalle ? (
+          <rect x={f(tx + 10)} y={f(yc)} width={w - 20} height={f(hc)} fill="url(#mapa-brotes)" />
+        ) : null}
+        <path d={canto(tx, ty, w, h, r)} fill="none" stroke="#fff" strokeOpacity={0.7} strokeWidth={1.1} />
+      </>
+    ),
+  });
+  c.rotulos.push(
+    <Texto
+      key={el.id}
+      x={tx + 14}
+      y={ty + 19}
+      t={el.etiqueta ?? "Quinteros"}
+      clase="rot"
+      tam={16}
+      fill="oklch(0.42 0.05 60)"
+      halo="oklch(0.93 0.028 82)"
+      grosorHalo={3.5}
+      anchor="start"
+    />
+  );
+}
+
+/** Administración: casa a dos aguas (cumbrera este-oeste). Sin alero al oeste,
+ * para no invadir el puesto vecino; el azul, solo en la puerta y el isotipo. */
+function administracion(el: ElementoPlano, detalle: boolean, c: Capas) {
+  const { x, y, w, h } = el;
+  const zp = ALT.adminPared;
+  const zc = ALT.adminCumbrera;
+  const ym = y + h / 2;
+  const al = 2.5;
+  c.sombras.push(
+    <path
+      key={el.id}
+      d={poly([
+        [x, y],
+        [x + w, y],
+        [x + w + 9, y + 13],
+        [x + w + 9, y + h + 13],
+        [x + 9, y + h + 13],
+        [x, y + h],
+      ])}
+      fill={TINTA_SOMBRA}
+      fillOpacity={0.22}
+    />
+  );
+  const fr = (u0: number, u1: number, z0: number, z1: number) =>
+    poly([P(x + u0, y + h, z0), P(x + u1, y + h, z0), P(x + u1, y + h, z1), P(x + u0, y + h, z1)]);
+  const NO = P(x, y - al, zp - 0.5);
+  const NE = P(x + w + al, y - al, zp - 0.5);
+  const SO = P(x, y + h + al, zp - 0.5);
+  const SE = P(x + w + al, y + h + al, zp - 0.5);
+  const CO = P(x, ym, zc);
+  const CE = P(x + w + al, ym, zc);
+  let tejas = "";
+  for (let i = 1; i < 12; i++) {
+    const xx = x + ((w + al) * i) / 12;
+    tejas += `M${pt(P(xx, ym, zc))}L${pt(P(xx, y + h + al, zp - 0.5))}`;
+  }
+  // Isotipo en una placa blanca sobre el agua sur (se lee sin texto en la vista completa).
+  const [bx, by] = P(x + w / 2, y + h * 0.74, zp + (zc - zp) * 0.48);
+  // Frontón, tres columnas y base.
+  const columnas = [-5, 0, 5].map((dx) => `M${f(bx + dx)} ${f(by - 1)}V${f(by + 4.6)}`).join("");
+  const isotipo =
+    `M${f(bx - 7.5)} ${f(by - 2)}L${f(bx)} ${f(by - 8)}L${f(bx + 7.5)} ${f(by - 2)}` +
+    columnas +
+    `M${f(bx - 8)} ${f(by + 6.6)}H${f(bx + 8)}`;
+  c.objetos.push({
+    z: y + h,
+    x,
+    k: el.id,
+    n: (
+      <>
+        <path
+          d={poly([P(x + w, y, 0), P(x + w, y + h, 0), P(x + w, y + h, zp), P(x + w, ym, zc), P(x + w, y, zp)])}
+          fill="oklch(0.84 0.034 263)"
+        />
+        <path d={fr(0, w, 0, zp)} fill="url(#mapa-admin-frente)" />
+        <path
+          d={fr(8, 26, 4, 12) + fr(66, 84, 4, 12)}
+          fill="url(#mapa-ventana)"
+          stroke="oklch(0.72 0.03 255)"
+          strokeWidth={0.7}
+        />
+        <path d={fr(38, 54, 0, 13)} fill="var(--primary)" />
+        {/* Techo: agua norte (al sol) y agua sur (hacia la cámara) */}
+        <path d={poly([NO, NE, CE, CO])} fill="oklch(0.91 0.022 262)" />
+        <path d={poly([CO, CE, SE, SO])} fill="oklch(0.79 0.04 264)" />
+        <path d={tejas} fill="none" stroke="oklch(0.66 0.045 265)" strokeOpacity={0.3} strokeWidth={0.8} />
+        <path d={`M${pt(CO)}L${pt(CE)}`} stroke="oklch(0.97 0.01 262)" strokeWidth={1.8} strokeLinecap="round" />
+        <path
+          d={`M${pt(SO)}L${pt(SE)}L${pt(CE)}`}
+          fill="none"
+          stroke="oklch(0.6 0.05 265)"
+          strokeWidth={1.2}
+          strokeLinejoin="round"
+        />
+        <circle cx={f(bx)} cy={f(by)} r={12} fill="#fff" stroke="var(--primary)" strokeOpacity={0.3} strokeWidth={1.2} />
+        <path
+          d={isotipo}
+          fill="none"
+          stroke="var(--primary)"
+          strokeWidth={1.7}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </>
+    ),
+  });
+  if (detalle) {
+    c.rotulos.push(
+      <Texto
+        key={el.id}
+        x={x + w / 2}
+        y={y + h + 13}
+        t={el.etiqueta ?? "Administración"}
+        clase="rot"
+        tam={12}
+        fill="var(--accent-foreground)"
+        halo="oklch(0.96 0.006 80)"
+        grosorHalo={3.5}
+      />
+    );
+  }
+}
+
+/** Invernadero: bóveda de vidrio con costillas, plantas adentro y frente esmerilado. */
+function invernadero(el: ElementoPlano, c: Capas) {
+  const { x, y, w, h } = el;
+  const H = ALT.invernadero;
+  const cx = x + w / 2;
+  const N = 18;
+  const arcoEn = (yy: number, inverso: boolean) => {
+    const pts: Pt[] = [];
+    for (let i = 0; i <= N; i++) {
+      const t = inverso ? 1 - i / N : i / N;
+      const px = x + t * w;
+      const u = (px - cx) / (w / 2);
+      pts.push(P(px, yy, H * Math.sqrt(Math.max(0, 1 - u * u))));
+    }
+    return pts;
+  };
+  const tira = (ps: Pt[], m = "M") => ps.map((p, i) => `${i === 0 ? m : "L"}${pt(p)}`).join("");
+  c.sombras.push(
+    <rect
+      key={el.id}
+      x={x + 2}
+      y={y + 6}
+      width={w + 12}
+      height={h + 10}
+      rx={14}
+      fill="oklch(0.3 0.04 200)"
+      fillOpacity={0.2}
+    />
+  );
+  let costillas = "";
+  for (let yy = y + 26; yy < y + h - 4; yy += 26) costillas += tira(arcoEn(yy, false));
+  const rx = cx - K * H;
+  c.objetos.push({
+    z: y + h,
+    x,
+    k: el.id,
+    n: (
+      <>
+        <rect x={x} y={y} width={w} height={h} rx={3} fill="oklch(0.86 0.035 80)" />
+        <rect x={x + 4} y={y + 4} width={w - 8} height={h - 8} fill="url(#mapa-plantas)" />
+        <path
+          d={`${tira(arcoEn(y, false)) + tira(arcoEn(y + h, true), "L")}Z`}
+          fill="url(#mapa-vidrio)"
+          stroke="oklch(0.76 0.05 190)"
+          strokeWidth={1}
+        />
+        {costillas ? <path d={costillas} fill="none" stroke="#fff" strokeOpacity={0.95} strokeWidth={1.3} /> : null}
+        <path
+          d={`M${f(rx - 5)} ${y - H + 3}V${y + h - H - 3}`}
+          stroke="#fff"
+          strokeWidth={2.4}
+          strokeOpacity={0.95}
+          strokeLinecap="round"
+        />
+        <path
+          d={`${tira(arcoEn(y + h, false))}Z`}
+          fill="#fff"
+          fillOpacity={0.5}
+          stroke="oklch(0.72 0.06 190)"
+          strokeWidth={1.1}
+        />
+        <path
+          d={poly([P(cx - 8, y + h, 0), P(cx + 8, y + h, 0), P(cx + 8, y + h, 17), P(cx - 8, y + h, 17)])}
+          fill="oklch(0.84 0.04 190)"
+          fillOpacity={0.7}
+          stroke="oklch(0.7 0.06 190)"
+          strokeWidth={0.8}
+        />
+      </>
+    ),
+  });
+  c.rotulos.push(
+    <Texto
+      key={el.id}
+      x={rx + 11}
+      y={y + h / 2 - H + 6}
+      t={el.etiqueta ?? "Invernadero"}
+      clase="rot"
+      tam={15}
+      fill="oklch(0.4 0.06 190)"
+      halo="oklch(0.965 0.02 185)"
+      grosorHalo={4}
+      vertical
+    />
+  );
+}
+
+/** Árboles: sombras y troncos, un path cada uno; la copa, una por árbol. */
+function arboledas(arboles: Arbol[], c: Capas) {
+  if (arboles.length === 0) return;
+  let sombras = "";
+  let troncos = "";
+  arboles.forEach((a, i) => {
+    const r = a.r;
+    const [cx, cy] = P(a.x, a.y, ALT.arbol);
+    sombras += elPath(a.x + 8, a.y + 4, r * 1.35, r * 0.72);
+    troncos += `M${f(a.x)} ${f(a.y)}L${f(cx)} ${f(cy + 0.3 * r)}`;
+    const copa =
+      circulo(cx - 0.5 * r, cy + 0.2 * r, 0.72 * r) +
+      circulo(cx + 0.48 * r, cy + 0.26 * r, 0.68 * r) +
+      circulo(cx, cy - 0.32 * r, 0.82 * r);
+    c.objetos.push({ z: a.y, x: a.x, k: `arbol:${i}`, n: <path d={copa} fill="url(#mapa-copa)" /> });
+  });
+  c.sombras.push(<path key="arboles" d={sombras} fill="oklch(0.3 0.04 130)" fillOpacity={0.22} />);
+  // Los troncos quedan debajo de todo lo que tiene volumen.
+  c.objetos.push({
+    z: -1e9,
+    x: 0,
+    k: "troncos",
+    n: <path d={troncos} stroke="oklch(0.55 0.04 62)" strokeWidth={2.4} strokeLinecap="round" />,
+  });
+}
+
+/** Siembra determinística de árboles en racimos, en el espacio libre del predio
+ * (se descarta todo árbol que toque un elemento, un espacio u otro árbol). */
+export function sembrarArboles(elementos: ElementoPlano[], espacios: Rect[], lim: Rect): Arbol[] {
+  type Caja = [number, number, number, number];
+  const env = (x: number, y: number, w: number, h: number, zMax: number, m: number): Caja => [
+    x - K * zMax - m,
+    y - zMax - m,
+    x + w + m,
+    y + h + m,
+  ];
+  const cajas: Caja[] = [];
+  for (const el of elementos) {
+    if (el.tipo === "nave") cajas.push(env(el.x, el.y, el.w, el.h, ALT.muroNorte + ALT.cabriada, 10));
+    else if (el.tipo === "recinto") cajas.push(env(el.x, el.y - 26, el.w, el.h + 26, ALT.cerco, 10));
+    else if (el.tipo === "invernadero") cajas.push(env(el.x, el.y, el.w, el.h, ALT.invernadero, 12));
+    else if (el.tipo === "rotulo") cajas.push(env(el.x - 20, el.y, el.w + 40, el.h, 0, 8));
+    else cajas.push(env(el.x, el.y, el.w, el.h, 8, 10));
+  }
+  for (const e of espacios) cajas.push(env(e.x, e.y, e.w, e.h, 26, 12));
+  const cruza = (a: Caja, b: Caja) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
+  const RACIMO: [number, number][] = [
+    [0, 0],
+    [21, 7],
+    [-17, 11],
+    [7, -15],
+  ];
+  const paso = 150;
+  const out: Arbol[] = [];
+  for (let gy = lim.y + 60; gy <= lim.y + lim.h; gy += paso / 1.6) {
+    for (let gx = lim.x + 40; gx <= lim.x + lim.w; gx += paso) {
+      const fila = Math.round((gy - lim.y) / (paso / 1.6));
+      const bx = gx + (fila % 2 ? paso / 2 : 0) + (hash(gx, gy) - 0.5) * 60;
+      const by = gy + (hash(gx + 7, gy) - 0.5) * 36;
+      if (hash(gx + 3, gy + 5) < 0.4) continue;
+      const n = 2 + Math.floor(hash(gx + 9, gy + 1) * 1.99);
+      for (let k = 0; k < n; k++) {
+        const tx = bx + RACIMO[k][0];
+        const ty = by + RACIMO[k][1];
+        const r = Math.round((8.5 + hash(tx, ty) * 4) * 4) / 4;
+        const caja: Caja = [tx - K * ALT.arbol - 1.5 * r, ty - ALT.arbol - 1.4 * r, tx + 1.5 * r + 12, ty + 10];
+        if (caja[0] < lim.x || caja[2] > lim.x + lim.w || caja[1] < lim.y || caja[3] > lim.y + lim.h) continue;
+        if (cajas.some((c) => cruza(caja, c))) continue;
+        if (out.some((o) => Math.hypot(o.x - tx, o.y - ty) < 16)) continue;
+        out.push({ x: tx, y: ty, r });
+      }
+    }
+  }
+  return out;
+}
+
+/** Placa del predio + suelos + nave + todo lo fijo, en orden de pintado. Memo:
+ * no se repinta al mover la cámara (solo al cruzar el umbral de `detalle`). */
+export const Fondo = memo(function Fondo({
+  elementos,
+  limites,
+  detalle,
+  arboles,
+  finFichas,
+}: {
+  elementos: ElementoPlano[];
+  limites: Rect;
+  /** Con zoom: brotes en los canteros y el rótulo de Administración. */
+  detalle: boolean;
+  /** Árboles sembrados en el espacio libre (vacío: sin árboles). */
+  arboles: Arbol[];
+  /** Hasta dónde llegan las fichas de cada cantero (id → y): debajo van los surcos. */
+  finFichas: Map<string, number>;
+}) {
+  const c: Capas = { suelos: [], sombras: [], objetos: [], rotulos: [] };
+  const naves = elementos.filter((el) => el.tipo === "nave");
+  const pasillos = elementos.filter((el) => el.tipo === "pasillo");
+  const nave0 = naves[0] ?? null;
+  // Dónde corta el pasillo a cada nave (si la cruza).
+  const cortes = new Map(naves.map((n) => [n.id, pasillos.map((p) => cortePasillo(n, p)).find(Boolean) ?? null]));
+
+  // Las cocheras al norte de la nave llevan las tachas del lado que la mira.
+  for (const el of elementos) if (el.tipo === "cocheras") cocheras(el, nave0 !== null && el.y < nave0.y, c);
+  for (const el of elementos) if (el.tipo === "recinto") recinto(el, c);
+  for (const n of naves) nave(n, cortes.get(n.id) ?? null, c);
+  for (const p of pasillos) pasillo(p, naves.find((n) => cortePasillo(n, p)) ?? null, c);
+  for (const n of naves) muros(n, cortes.get(n.id) ?? null, c);
+  elementos
+    .filter((el) => el.tipo === "quinteros")
+    .sort((a, b) => a.x - b.x)
+    .forEach((el) => cantero(el, finFichas.get(el.id), detalle, c));
+  for (const el of elementos) {
+    if (el.tipo === "administracion") administracion(el, detalle, c);
+    else if (el.tipo === "invernadero") invernadero(el, c);
+    else if (el.tipo === "rotulo" && el.etiqueta) {
+      c.rotulos.push(
+        <Texto
+          key={el.id}
+          x={el.x + el.w / 2}
+          y={el.y + el.h / 2 + 2}
+          t={el.etiqueta}
+          clase="rot7"
+          tam={16}
+          fill={TINTA_ROTULO}
+          halo="var(--background)"
+          grosorHalo={4}
+        />
+      );
+    }
+  }
+  arboledas(arboles, c);
+  c.objetos.sort((a, b) => a.z - b.z || a.x - b.x);
+
+  return (
+    <g aria-hidden>
+      <rect
+        x={limites.x - 600}
+        y={limites.y - 600}
+        width={limites.w + 1200}
+        height={limites.h + 1200}
+        fill="var(--background)"
+      />
+      {placa(limites)}
+      {c.suelos}
+      {/* Sombras de lo fijo: el único filtro del plano (se apaga mientras se arrastra) */}
+      <g className="mapa-sombras-fondo" filter="url(#mapa-desenfoque)">
+        {c.sombras}
+      </g>
+      {c.objetos.map((o) => (
+        <Fragment key={o.k}>{o.n}</Fragment>
+      ))}
+      {c.rotulos}
     </g>
+  );
+});
+
+// ---------- Bloques (puestos, bar, locales, contenedores) ----------
+
+export type EstiloBloque = {
+  estado: EstadoBloque;
+  /** No coincide con la selección o el filtro: pierde la pintura y baja. */
+  atenuado: boolean;
+  /** Seleccionado (flota), pincel de asignar o aviso (huella de su color). */
+  marca: Marca;
+  /** Segunda línea (apodo, nombre o nota) cuando el zoom lo permite. */
+  etiqueta: string | null;
+};
+
+/** Despegue de un bloque: traslación pura, animada con CSS (`.mapa-mov`). */
+function mover(z0: number): CSSProperties | undefined {
+  return z0 ? { transform: `translate(${f(-K * z0)}px, ${f(-z0)}px)` } : undefined;
+}
+
+/** El paso a atenuado (14 → 5) cambia sin animación, igual que la sombra: el
+ * bloque atenuado no lleva la transición (tampoco al bajar desde flotando). */
+function claseMov(estilo: EstiloBloque): string | undefined {
+  return estilo.atenuado ? undefined : "mapa-mov";
+}
+
+type Sombra = { k: string; d: string; opacidad: number };
+
+/** Sombras de los bloques, sin filtro: contacto + proyectada, juntas en un
+ * path por paso y opacidad (donde dos se pisan no se oscurece de más). */
+function sombrasBloques(orden: Bloque[], alturas: Map<string, Alturas>): Sombra[] {
+  const baldes = new Map<string, string>();
+  const aBalde = (paso: string, op: number, d: string) => {
+    const k = `${paso}|${f(op)}`;
+    baldes.set(k, (baldes.get(k) ?? "") + d);
+  };
+  for (const b of orden) {
+    const s = alturas.get(b.clave);
+    if (!s) continue;
+    const { x, y, w, h } = b.rect;
+    const H = s.zTop;
+    // Atenuado: más suave; flotando: sin contacto y la proyectada se despega.
+    const o = s.material === "neutro" ? 0.55 : s.z0 > 0 ? 0.7 : 1;
+    const d0 = s.z0 * 0.3;
+    const e0 = s.z0 * 0.45;
+    if (b.tipo === "contenedor") {
+      const cx = x + w / 2;
+      const cy = y + h / 2;
+      if (!s.z0) aBalde("contacto", 0.16 * o, elPath(cx + 0.06 * H, cy + 0.1 * H, w / 2 + 0.1 * H, h / 2 + 0.1 * H));
+      aBalde("proyectada", 0.09 * o, elPath(cx + 0.18 * H + d0, cy + 0.26 * H + e0, w / 2 + 0.22 * H, h / 2 + 0.22 * H));
+    } else {
+      const r = radioTapa(b);
+      if (!s.z0) aBalde("contacto", 0.16 * o, rrPath(x - 0.5, y + 0.5, w + 0.12 * H + 1, h + 0.2 * H, r + 1));
+      aBalde("proyectada", 0.09 * o, rrPath(x + 0.5 + d0, y + 1.5 + e0, w + 0.34 * H, h + 0.52 * H, r + 3));
+    }
+  }
+  return [...baldes]
+    .sort(([a], [b]) => (a < b ? 1 : -1))
+    .map(([k, d]) => ({ k, d, opacidad: Number(k.split("|")[1]) }));
+}
+
+/** Huella en el piso (seleccionado, pincel, aviso): la caja es la del piso, no la tapa. */
+function Huella({ bloque, marca }: { bloque: Bloque; marca: Exclude<Marca, null> }) {
+  const { x, y, w, h } = bloque.rect;
+  const color = marca === "aviso" ? "var(--parcial)" : "var(--primary)";
+  const m = 3;
+  const trazo = {
+    fill: color,
+    fillOpacity: marca === "seleccion" ? 0.1 : 0.08,
+    stroke: color,
+    strokeOpacity: 0.55,
+    strokeWidth: 1.3,
+    strokeDasharray: "3 2.6",
+  };
+  if (bloque.tipo === "contenedor") {
+    return (
+      <>
+        {marca === "seleccion" ? (
+          <ellipse cx={x + w / 2 + 2} cy={y + h / 2 + 3} rx={w / 2 + 9} ry={h / 2 + 9} fill={color} fillOpacity={0.07} />
+        ) : null}
+        <ellipse cx={x + w / 2} cy={y + h / 2} rx={w / 2 + m} ry={h / 2 + m} {...trazo} />
+      </>
+    );
+  }
+  const r = radioTapa(bloque);
+  return (
+    <>
+      {marca === "seleccion" ? (
+        <rect x={x - 7} y={y - 5} width={w + 16} height={h + 14} rx={f(r + 9)} fill={color} fillOpacity={0.07} />
+      ) : null}
+      <rect x={x - m} y={y - m} width={w + 2 * m} height={h + 2 * m} rx={f(r + m)} {...trazo} />
+    </>
+  );
+}
+
+/** Puesto o bar: mostrador de madera con faldón festoneado del color del estado
+ * (a rayas si debe), tapa lisa, ranuras entre puestos y canto iluminado. */
+function cuerpoPuesto(
+  b: Bloque,
+  mat: Material,
+  H: number,
+  pintado: boolean,
+  libre: boolean,
+  detalle: boolean,
+  conApodo: boolean
+) {
+  const { x, y, w, h } = b.rect;
+  const M = MAT[mat];
+  const r = radioTapa(b);
+  const tx = x - K * H;
+  const ty = y - H;
+  const divisiones = b.espacios.slice(1).map((e, i) => (b.espacios[i].x + b.espacios[i].w + e.x) / 2);
+  let caras: ReactNode;
+  if (pintado) {
+    const zf = detalle ? ALT.faldonDetalle : ALT.faldon;
+    const dF = caraSur(x, y, w, h, r, H, zf, { paso: detalle ? 7.5 : 8, caida: 1.7 });
+    // Mercadería (solo con zoom): óvalos centrados en las bandas de 7 u del degradé.
+    let merc = "";
+    if (detalle && b.tipo !== "bar") {
+      const zm = ALT.mostrador + 1.6;
+      const dz = K * zm;
+      for (let sx = Math.ceil((x + r + 1 - dz) / 7) * 7 + 3.5; sx + dz < x + w - r - 2; sx += 7) {
+        merc += `M${f(sx - 3.1)} ${f(y + h - zm)}a3.1 2.3 0 1 0 6.2 0a3.1 2.3 0 1 0 -6.2 0`;
+      }
+    }
+    const costuras = divisiones.map((lx) => `M${pt(P(lx, y + h, H))}L${pt(P(lx, y + h, zf))}`).join("");
+    caras = (
+      <>
+        <path d={caraEste(x, y, w, h, r, H, 0)} fill={M.lado} />
+        <path d={caraSur(x, y, w, h, r, H, 0)} fill="url(#mapa-mostrador)" />
+        {detalle ? (
+          <>
+            <path d={caraSur(x, y, w, h, r, zf, ALT.mostrador)} fill="url(#mapa-hueco)" />
+            {merc ? <path d={merc} fill="url(#mapa-mercaderia)" /> : null}
+            <path
+              d={`M${pt(P(x + r, y + h, ALT.mostrador))}L${pt(P(x + w - r, y + h, ALT.mostrador))}`}
+              stroke="oklch(0.86 0.05 72)"
+              strokeWidth={0.9}
+            />
+          </>
+        ) : null}
+        <path d={dF} fill={`url(#mapa-faldon-${mat})`} stroke={M.faldonBorde} strokeWidth={0.7} strokeLinejoin="round" />
+        {mat === "debe" ? <path d={dF} fill="url(#mapa-rayas-debe)" /> : null}
+        {costuras ? <path d={costuras} stroke={M.faldonBorde} strokeOpacity={0.8} strokeWidth={1} /> : null}
+      </>
+    );
+  } else {
+    caras = (
+      <>
+        <path d={caraEste(x, y, w, h, r, H, 0)} fill={M.lado} />
+        <path d={caraSur(x, y, w, h, r, H, 0)} fill={M.frente} />
+      </>
+    );
+  }
+  // Ranuras entre los puestos fusionados (más cortas si abajo va el apodo).
+  const fin = conApodo ? ty + h * 0.56 : ty + h - 6;
+  const ranuras = divisiones.map((lx) => `M${f(lx - K * H)} ${f(ty + 6)}V${f(fin)}`).join("");
+  const luces = divisiones.map((lx) => `M${f(lx - K * H + 1)} ${f(ty + 6)}V${f(fin)}`).join("");
+  // Lote punteado: "disponible" se lee por forma, no solo por color.
+  let lote = "";
+  if (libre) {
+    for (const e of b.espacios) {
+      const ex = e.x - K * H;
+      const x0 = ex + 4;
+      const x1 = ex + e.w - 4;
+      const y0 = ty + 4;
+      const y1 = ty + h - 4;
+      lote +=
+        `M${f(x0 + 2)} ${f(y0)}H${f(x1 - 2)}Q${f(x1)} ${f(y0)} ${f(x1)} ${f(y0 + 2)}` +
+        `V${f(y1 - 2)}Q${f(x1)} ${f(y1)} ${f(x1 - 2)} ${f(y1)}` +
+        `H${f(x0 + 2)}Q${f(x0)} ${f(y1)} ${f(x0)} ${f(y1 - 2)}` +
+        `V${f(y0 + 2)}Q${f(x0)} ${f(y0)} ${f(x0 + 2)} ${f(y0)}Z`;
+    }
+  }
+  return (
+    <>
+      {caras}
+      {tapa(tx, ty, w, h, r, mat)}
+      {ranuras ? (
+        <>
+          <path d={ranuras} stroke={M.ranura} strokeWidth={1.1} />
+          <path d={luces} stroke="#fff" strokeOpacity={mat === "vencido" ? 0.28 : 0.85} strokeWidth={1} />
+        </>
+      ) : null}
+      {lote ? <path d={lote} fill="none" stroke={M.lote} strokeWidth={1} strokeDasharray="2.5 2.5" /> : null}
+      {cantoTapa(tx, ty, w, h, r, mat)}
+    </>
+  );
+}
+
+/** Tapa lisa: detrás del número no va ninguna textura. */
+function tapa(tx: number, ty: number, w: number, h: number, r: number, mat: Material) {
+  return (
+    <rect
+      x={f(tx)}
+      y={f(ty)}
+      width={w}
+      height={h}
+      rx={f(r)}
+      fill={`url(#mapa-tapa-${mat})`}
+      stroke={MAT[mat].bisel}
+      strokeWidth={MAT[mat].grosor}
+    />
+  );
+}
+
+/** Canto iluminado de la tapa (luz del noroeste). */
+function cantoTapa(tx: number, ty: number, w: number, h: number, r: number, mat: Material) {
+  return (
+    <path
+      d={canto(tx, ty, w, h, r)}
+      fill="none"
+      stroke="#fff"
+      strokeOpacity={MAT[mat].canto}
+      strokeWidth={1.1}
+      strokeLinecap="round"
+    />
+  );
+}
+
+/** Local: fachada con vidriera, puerta y toldito del color del estado. */
+function cuerpoLocal(b: Bloque, mat: Material, H: number, pintado: boolean, libre: boolean) {
+  const { x, y, w, h } = b.rect;
+  const M = MAT[mat];
+  const r = 3;
+  const tx = x - K * H;
+  const ty = y - H;
+  const fr = (u0: number, u1: number, za: number, zb: number) =>
+    poly([P(x + u0, y + h, za), P(x + u1, y + h, za), P(x + u1, y + h, zb), P(x + u0, y + h, zb)]);
+  let caras: ReactNode;
+  if (pintado) {
+    const toldo = fr(1.5, w - 1.5, H - 1, H - 5);
+    caras = (
+      <>
+        <path d={caraEste(x, y, w, h, r, H, 0)} fill="oklch(0.86 0.016 80)" />
+        <path d={caraSur(x, y, w, h, r, H, 0)} fill="oklch(0.955 0.012 85)" />
+        <path d={fr(4, w - 17, 1.5, H - 5.5)} fill="url(#mapa-ventana)" />
+        <path d={fr(w - 14, w - 5, 0, H - 5)} fill="oklch(0.42 0.03 260)" />
+        <path d={toldo} fill={`url(#mapa-faldon-${mat})`} stroke={M.faldonBorde} strokeWidth={0.6} />
+        {mat === "debe" ? <path d={toldo} fill="url(#mapa-rayas-debe)" /> : null}
+      </>
+    );
+  } else {
+    caras = (
+      <>
+        <path d={caraEste(x, y, w, h, r, H, 0)} fill={M.lado} />
+        <path d={caraSur(x, y, w, h, r, H, 0)} fill={M.frente} />
+        {libre && mat !== "neutro" && H >= 6 ? (
+          // Persiana baja
+          <path
+            d={[2.2, 4.4].map((z) => `M${pt(P(x + 5, y + h, z))}L${pt(P(x + w - 5, y + h, z))}`).join("")}
+            stroke="oklch(0.78 0.012 258)"
+            strokeWidth={0.8}
+          />
+        ) : null}
+      </>
+    );
+  }
+  return (
+    <>
+      {caras}
+      {tapa(tx, ty, w, h, r, mat)}
+      {pintado ? (
+        // Pretil
+        <rect
+          x={f(tx + 3.5)}
+          y={f(ty + 3.5)}
+          width={w - 7}
+          height={h - 7}
+          rx={1.5}
+          fill="none"
+          stroke={M.bisel}
+          strokeOpacity={0.35}
+        />
+      ) : null}
+      {libre ? (
+        <rect
+          x={f(tx + 4)}
+          y={f(ty + 4)}
+          width={w - 8}
+          height={h - 8}
+          rx={2}
+          fill="none"
+          stroke={M.lote}
+          strokeDasharray="2.5 2.5"
+        />
+      ) : null}
+      {cantoTapa(tx, ty, w, h, r, mat)}
+    </>
+  );
+}
+
+/** Contenedor: tambor pulido, sin zunchos (con zuncho parecía una pila de monedas). */
+function cuerpoTambor(b: Bloque, mat: Material, H: number, pintado: boolean, libre: boolean) {
+  const { x, y, w, h } = b.rect;
+  const M = MAT[mat];
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  const rx = w / 2;
+  const ry = h / 2;
+  const [tcx, tcy] = P(cx, cy, H);
+  const cuerpo = barridoElipse(cx, cy, rx, ry, 0, H);
+  const vencido = mat === "vencido";
+  return (
+    <>
+      <path
+        d={cuerpo}
+        fill={`url(#mapa-tambor-${mat})`}
+        stroke={pintado ? M.faldonBorde : M.bisel}
+        strokeOpacity={0.45}
+        strokeWidth={0.8}
+      />
+      {mat === "debe" ? <path d={cuerpo} fill="url(#mapa-rayas-debe)" fillOpacity={0.92} /> : null}
+      <ellipse
+        cx={f(tcx)}
+        cy={f(tcy)}
+        rx={rx}
+        ry={ry}
+        fill={`url(#mapa-disco-${mat})`}
+        stroke={M.bisel}
+        strokeWidth={M.grosor}
+      />
+      {/* Aro interior (en un libre, el lote punteado) */}
+      {libre ? (
+        <ellipse cx={f(tcx)} cy={f(tcy)} rx={rx - 5} ry={ry - 5} fill="none" stroke={M.lote} strokeDasharray="2.5 2.5" />
+      ) : (
+        <ellipse
+          cx={f(tcx)}
+          cy={f(tcy)}
+          rx={rx - 5}
+          ry={ry - 5}
+          fill="none"
+          stroke={M.bisel}
+          strokeOpacity={vencido ? 0.5 : 0.28}
+        />
+      )}
+      {/* Brillo */}
+      <path
+        d={
+          `M${f(tcx - rx * 0.66)} ${f(tcy - ry * 0.2)}` +
+          `A${f(rx * 0.7)} ${f(ry * 0.7)} 0 0 1 ${f(tcx - rx * 0.12)} ${f(tcy - ry * 0.7)}`
+        }
+        fill="none"
+        stroke="#fff"
+        strokeOpacity={vencido ? 0.45 : 0.9}
+        strokeWidth={2}
+        strokeLinecap="round"
+      />
+    </>
+  );
+}
+
+/** El volumen de un bloque, dibujado en su lugar (z0 = 0): despegar es una
+ * traslación del grupo que lo contiene. `alto` es la altura de la tapa. */
+const Cuerpo = memo(function Cuerpo({
+  bloque,
+  material,
+  alto,
+  pintado,
+  libre,
+  detalle,
+  conApodo,
+}: {
+  bloque: Bloque;
+  material: Material;
+  alto: number;
+  pintado: boolean;
+  libre: boolean;
+  detalle: boolean;
+  conApodo: boolean;
+}) {
+  if (bloque.tipo === "contenedor") return cuerpoTambor(bloque, material, alto, pintado, libre);
+  if (bloque.tipo === "local") return cuerpoLocal(bloque, material, alto, pintado, libre);
+  return cuerpoPuesto(bloque, material, alto, pintado, libre, detalle, conApodo);
+});
+
+type TextoPlano = {
+  k: string;
+  x: number;
+  y: number;
+  t: string;
+  tam: number;
+  clase: ClaseTexto;
+  grosor: number;
+  opacidad?: number;
+  espaciado?: number;
+  /** Apodo (más angosto por carácter). */
+  apodo?: boolean;
+};
+
+const APODO = { k: "apodo", clase: "apodo", grosor: 2.5, opacidad: 0.9, apodo: true } as const;
+
+/** Números y apodos de un bloque, a la altura zt (proyectados, horizontales). */
+function textosBloque(
+  b: Bloque,
+  zt: number,
+  detalle: boolean,
+  etiqueta: string | null,
+  atenuado: boolean
+): TextoPlano[] {
+  const { x, y, w, h } = b.rect;
+  const out: TextoPlano[] = [];
+  if (b.tipo === "contenedor") {
+    const e = b.espacios[0];
+    const [cx, cy] = P(x + w / 2, y + h / 2, zt);
+    const apodo = detalle && etiqueta !== null && w >= 60 && !atenuado ? etiqueta : null;
+    out.push({ k: e.id, x: cx, y: cy + (apodo ? -6 : 0.5), t: e.numero ?? "?", tam: 17, clase: "num", grosor: 2.5 });
+    if (apodo) {
+      const a = apodoAjustado(apodo, w - 18);
+      out.push({ ...APODO, x: cx, y: cy + 10, t: a.t, tam: a.tam });
+    }
+    return out;
+  }
+  const apodo =
+    detalle && etiqueta !== null && h >= 36 && !atenuado && !b.espacios.every((e) => e.medio) ? etiqueta : null;
+  for (const e of b.espacios) {
+    const ecx = e.x + e.w / 2;
+    const [nx, ny] = P(ecx, apodo ? y + h * 0.4 : y + h / 2 + 0.5, zt);
+    if (e.tipo === "bar") {
+      out.push({ k: e.id, x: nx, y: ny, t: e.numero ?? "Bar", tam: 18, clase: "rot", grosor: 3 });
+    } else if (e.medio) {
+      const [mx, my] = P(ecx, y + h * 0.38, zt);
+      const [hx, hy] = P(ecx, y + h * 0.7, zt);
+      out.push({ k: e.id, x: mx, y: my, t: e.numero ?? "?", tam: 15, clase: "num", grosor: 2.5, espaciado: -0.3 });
+      out.push({ k: `${e.id}:½`, x: hx, y: hy, t: "½", tam: 12, clase: "apodo", grosor: 2.5, opacidad: 0.85 });
+    } else {
+      out.push({
+        k: e.id,
+        x: nx,
+        y: ny,
+        t: e.numero ?? "?",
+        tam: e.tipo === "local" || h < 45 ? 19 : 22,
+        clase: "num",
+        grosor: 3,
+        opacidad: e.numero === null ? 0.7 : undefined,
+      });
+    }
+  }
+  if (apodo) {
+    const a = apodoAjustado(apodo, w - 6);
+    const [ax, ay] = P(x + w / 2, y + h * 0.76, zt);
+    out.push({ ...APODO, x: ax, y: ay, t: a.t, tam: a.tam });
+  }
+  return out;
+}
+
+/** Números de un bloque: capa propia, encima de todos los cuerpos. */
+const Numeros = memo(function Numeros({
+  bloque,
+  material,
+  zt,
+  detalle,
+  etiqueta,
+  atenuado,
+}: {
+  bloque: Bloque;
+  material: Material;
+  /** Altura de los números con el bloque en su lugar (z0 = 0). */
+  zt: number;
+  detalle: boolean;
+  etiqueta: string | null;
+  atenuado: boolean;
+}) {
+  const M = MAT[material];
+  return (
+    <>
+      {textosBloque(bloque, zt, detalle, etiqueta, atenuado).map((t) => (
+        <Texto
+          key={t.k}
+          x={t.x}
+          y={t.y}
+          t={t.t}
+          clase={t.clase}
+          tam={t.tam}
+          fill={M.texto}
+          halo={M.halo}
+          grosorHalo={t.grosor}
+          opacidad={t.opacidad}
+          espaciado={t.espaciado}
+        />
+      ))}
+    </>
   );
 });
 
@@ -520,18 +1713,67 @@ export type AccionesEspacio = {
   alTocar: (espacio: Espacio, bloque: Bloque) => void;
   alEntrar: (espacio: Espacio, bloque: Bloque, ev: React.PointerEvent) => void;
   alSalir: () => void;
-  /** Foco con teclado: el plano se mueve para mostrar el espacio. */
-  alEnfocar: (espacio: Espacio, ev: React.FocusEvent<SVGGElement>) => void;
+  /** Foco con teclado: el bloque despega y el plano se mueve para mostrarlo. */
+  alEnfocar: (espacio: Espacio, bloque: Bloque, ev: React.FocusEvent<SVGGElement>) => void;
+  alDesenfocar: () => void;
   describir: (espacio: Espacio) => string;
 };
 
-/** Todos los bloques + una zona táctil por espacio (en un bloque de 4 puestos
- * se puede tocar cada uno por separado). */
+/** Zona táctil de un espacio: la envolvente proyectada (el dedo apunta al
+ * número, que está sobre la tapa elevada). Transparente. */
+const ZonaTactil = memo(function ZonaTactil({
+  espacio: e,
+  bloque: b,
+  zTop,
+  acciones,
+}: {
+  espacio: Espacio;
+  bloque: Bloque;
+  zTop: number;
+  acciones: AccionesEspacio;
+}) {
+  const env = envolvente(e, zTop);
+  return (
+    <g
+      role="button"
+      tabIndex={0}
+      aria-label={acciones.describir(e)}
+      className="mapa-foco cursor-pointer outline-none"
+      onClick={() => acciones.alTocar(e, b)}
+      onKeyDown={(ev) => {
+        if (ev.key === "Enter" || ev.key === " ") {
+          ev.preventDefault();
+          acciones.alTocar(e, b);
+        }
+      }}
+      onPointerEnter={(ev) => acciones.alEntrar(e, b, ev)}
+      onPointerMove={(ev) => acciones.alEntrar(e, b, ev)}
+      onPointerLeave={acciones.alSalir}
+      onFocus={(ev) => acciones.alEnfocar(e, b, ev)}
+      onBlur={acciones.alDesenfocar}
+      data-espacio={e.id}
+    >
+      <rect
+        x={f(env.x)}
+        y={f(env.y)}
+        width={f(env.w)}
+        height={f(env.h)}
+        rx={e.tipo === "contenedor" ? e.w / 2 : undefined}
+        fill="transparent"
+      />
+    </g>
+  );
+});
+
+/** Todos los bloques en orden del pintor: sombras y huellas → cuerpos →
+ * números → zonas táctiles (una por espacio: en un bloque de 4 puestos se
+ * puede tocar cada uno). */
 export const CapaBloques = memo(function CapaBloques({
   bloques,
   estilos,
   detalle,
   resaltado,
+  foco,
   acciones,
 }: {
   bloques: Bloque[];
@@ -539,104 +1781,379 @@ export const CapaBloques = memo(function CapaBloques({
   detalle: boolean;
   /** Clave del bloque bajo el puntero. */
   resaltado: string | null;
+  /** Espacio con foco de teclado. */
+  foco: string | null;
   acciones: AccionesEspacio;
 }) {
+  // Orden del pintor: base sur (y + h) ascendente y, a igual valor, de oeste a este.
+  const orden = useMemo(
+    () => [...bloques].sort((a, b) => a.rect.y + a.rect.h - (b.rect.y + b.rect.h) || a.rect.x - b.rect.x),
+    [bloques]
+  );
+  const alturas = useMemo(() => {
+    const m = new Map<string, Alturas>();
+    for (const b of orden) {
+      const estilo = estilos.get(b.clave);
+      if (!estilo) continue;
+      m.set(
+        b.clave,
+        alturaDe(b, estilo, {
+          hover: resaltado === b.clave,
+          foco: foco !== null && b.espacios.some((e) => e.id === foco),
+        })
+      );
+    }
+    return m;
+  }, [orden, estilos, resaltado, foco]);
+  const sombras = useMemo(() => sombrasBloques(orden, alturas), [orden, alturas]);
+
   return (
     <g>
-      {bloques.map((b) => {
-        const estilo = estilos.get(b.clave);
-        if (!estilo) return null;
-        return (
-          <g key={b.clave}>
-            <Cuerpo bloque={b} estilo={estilo} detalle={detalle} resaltado={resaltado === b.clave} />
-            {b.espacios.map((e) => (
-              <g
-                key={e.id}
-                role="button"
-                tabIndex={0}
-                aria-label={acciones.describir(e)}
-                className="mapa-foco cursor-pointer outline-none"
-                onClick={() => acciones.alTocar(e, b)}
-                onKeyDown={(ev) => {
-                  if (ev.key === "Enter" || ev.key === " ") {
-                    ev.preventDefault();
-                    acciones.alTocar(e, b);
-                  }
-                }}
-                onPointerEnter={(ev) => acciones.alEntrar(e, b, ev)}
-                onPointerMove={(ev) => acciones.alEntrar(e, b, ev)}
-                onPointerLeave={acciones.alSalir}
-                onFocus={(ev) => acciones.alEnfocar(e, ev)}
-                data-espacio={e.id}
-              >
-                {e.tipo === "contenedor" ? (
-                  <ellipse
-                    cx={e.x + e.w / 2}
-                    cy={e.y + e.h / 2}
-                    rx={e.w / 2 + 3}
-                    ry={e.h / 2 + 3}
-                    fill="transparent"
-                  />
-                ) : (
-                  <rect x={e.x - 2} y={e.y - 2} width={e.w + 4} height={e.h + 4} fill="transparent" />
-                )}
-              </g>
-            ))}
-          </g>
-        );
-      })}
+      <g aria-hidden>
+        {sombras.map((s) => (
+          <path key={s.k} d={s.d} fill={TINTA_SOMBRA} fillOpacity={s.opacidad} />
+        ))}
+        {orden.map((b) => {
+          const marca = estilos.get(b.clave)?.marca ?? null;
+          return marca ? <Huella key={b.clave} bloque={b} marca={marca} /> : null;
+        })}
+      </g>
+      <g aria-hidden>
+        {orden.map((b) => {
+          const al = alturas.get(b.clave);
+          const estilo = estilos.get(b.clave);
+          if (!al || !estilo) return null;
+          return (
+            <g key={b.clave} data-bloque={b.clave} className={claseMov(estilo)} style={mover(al.z0)}>
+              <Cuerpo
+                bloque={b}
+                material={al.material}
+                alto={al.zTop - al.z0}
+                pintado={al.pintado}
+                libre={al.libre}
+                detalle={detalle}
+                conApodo={detalle && estilo.etiqueta !== null && b.rect.h >= 36 && !estilo.atenuado}
+              />
+            </g>
+          );
+        })}
+      </g>
+      <g aria-hidden>
+        {orden.map((b) => {
+          const al = alturas.get(b.clave);
+          const estilo = estilos.get(b.clave);
+          if (!al || !estilo) return null;
+          return (
+            <g key={b.clave} className={claseMov(estilo)} style={mover(al.z0)}>
+              <Numeros
+                bloque={b}
+                material={al.material}
+                zt={al.zTexto - al.z0}
+                detalle={detalle}
+                etiqueta={estilo.etiqueta}
+                atenuado={estilo.atenuado}
+              />
+            </g>
+          );
+        })}
+      </g>
+      <g>
+        {orden.flatMap((b) => {
+          const al = alturas.get(b.clave);
+          if (!al) return [];
+          return b.espacios.map((e) => (
+            <ZonaTactil key={e.id} espacio={e} bloque={b} zTop={al.zTop} acciones={acciones} />
+          ));
+        })}
+      </g>
     </g>
   );
 });
 
-// ---------- Anillos de selección (siempre arriba de todo) ----------
+// ---------- Anillos (sobre la tapa elevada, arriba de todo) + pastilla ----------
 
-export type Anillo = { rect: Rect; forma: "rect" | "elipse"; tono: "seleccion" | "pincel" | "aviso" };
-
-const TONO_ANILLO: Record<Anillo["tono"], { color: string; dash?: string }> = {
-  seleccion: { color: "var(--primary)" },
-  pincel: { color: "var(--primary)" },
-  aviso: { color: "var(--parcial)", dash: "5 4" },
+export type Anillo = {
+  /** Bloque al que pertenece: el anillo despega con él. */
+  clave: string;
+  /** Huella que rodea (el bloque o uno de sus espacios). */
+  rect: Rect;
+  forma: "rect" | "elipse";
+  /** `focoSel`: foco de teclado sobre un espacio que ya tiene anillo de selección. */
+  tono: "seleccion" | "pincel" | "aviso" | "foco" | "focoSel" | "hover";
+  /** Traslación del bloque (el anillo se anima con él). */
+  z0: number;
+  /** Altura de la tapa que rodea. */
+  zTop: number;
+  /** Radio de las esquinas de la tapa. */
+  r: number;
 };
 
-export const Anillos = memo(function Anillos({ anillos }: { anillos: Anillo[] }) {
+export function anilloDe(b: Bloque, rect: Rect, tono: Anillo["tono"], al: Alturas): Anillo {
+  return {
+    clave: b.clave,
+    rect,
+    forma: b.tipo === "contenedor" ? "elipse" : "rect",
+    tono,
+    z0: al.z0,
+    zTop: al.zTop,
+    r: radioTapa(b),
+  };
+}
+
+type CapaAnillo = { color: string; ancho: number; opacidad?: number; trazos?: string };
+
+/** Margen y capas de cada tono (blanca abajo, color encima): medidos para que
+ * dos anillos vecinos no se pisen ni tapen el número del vecino. */
+const TONO_ANILLO: Record<Anillo["tono"], { m: number; capas: CapaAnillo[] }> = {
+  seleccion: {
+    m: 2.5,
+    capas: [
+      { color: "#fff", ancho: 5, opacidad: 0.95 },
+      { color: "var(--primary)", ancho: 2.2 },
+    ],
+  },
+  pincel: {
+    m: 1,
+    capas: [
+      { color: "#fff", ancho: 4.2, opacidad: 0.9 },
+      { color: "var(--primary)", ancho: 2.4 },
+    ],
+  },
+  aviso: {
+    m: 0.6,
+    capas: [
+      { color: "#fff", ancho: 4, opacidad: 0.85 },
+      { color: "var(--parcial)", ancho: 2.4, trazos: "5 3.5" },
+    ],
+  },
+  foco: {
+    m: 2,
+    capas: [
+      { color: "#fff", ancho: 6 },
+      { color: "var(--primary)", ancho: 2.4 },
+    ],
+  },
+  // El foco de "foco" taparía la selección y se vería igual: va por fuera de
+  // ella (su trazo blanco empieza donde termina el de la selección).
+  focoSel: {
+    m: 7,
+    capas: [
+      { color: "#fff", ancho: 5 },
+      { color: "var(--ring)", ancho: 2.4 },
+    ],
+  },
+  hover: { m: 0, capas: [{ color: "var(--primary)", ancho: 1.6, opacidad: 0.55 }] },
+};
+
+/** Un anillo dibujado con el bloque en su lugar: la traslación la pone el
+ * `<g>` de su bloque en `Anillos`. */
+function AnilloTapa({ anillo: a }: { anillo: Anillo }) {
+  const { m, capas } = TONO_ANILLO[a.tono];
+  const alto = a.zTop - a.z0;
+  const tx = a.rect.x - K * alto;
+  const ty = a.rect.y - alto;
   return (
-    <g pointerEvents="none">
-      {anillos.map((a, i) => {
-        const t = TONO_ANILLO[a.tono];
-        const m = 4;
-        return a.forma === "elipse" ? (
+    <>
+      {capas.map((c, i) =>
+        a.forma === "elipse" ? (
           <ellipse
             key={i}
-            cx={a.rect.x + a.rect.w / 2}
-            cy={a.rect.y + a.rect.h / 2}
-            rx={a.rect.w / 2 + m}
-            ry={a.rect.h / 2 + m}
+            cx={f(tx + a.rect.w / 2)}
+            cy={f(ty + a.rect.h / 2)}
+            rx={f(a.rect.w / 2 + m)}
+            ry={f(a.rect.h / 2 + m)}
             fill="none"
-            stroke={t.color}
-            strokeWidth={2.6}
-            strokeDasharray={t.dash}
+            stroke={c.color}
+            strokeWidth={c.ancho}
+            strokeOpacity={c.opacidad}
+            strokeDasharray={c.trazos}
           />
         ) : (
           <rect
             key={i}
-            x={a.rect.x - m}
-            y={a.rect.y - m}
-            width={a.rect.w + m * 2}
-            height={a.rect.h + m * 2}
-            rx={9}
+            x={f(tx - m)}
+            y={f(ty - m)}
+            width={f(a.rect.w + 2 * m)}
+            height={f(a.rect.h + 2 * m)}
+            rx={f(a.r + m)}
             fill="none"
-            stroke={t.color}
-            strokeWidth={2.6}
-            strokeDasharray={t.dash}
+            stroke={c.color}
+            strokeWidth={c.ancho}
+            strokeOpacity={c.opacidad}
+            strokeDasharray={c.trazos}
           />
-        );
-      })}
+        )
+      )}
+    </>
+  );
+}
+
+/** Lo que dice la pastilla de la selección: "Don Pedro · 4 puestos · al día". */
+export type DatosPastilla = { texto: string; estado: EstadoCobro };
+
+export type Pastilla = DatosPastilla & {
+  tam: number;
+  cx: number;
+  cy: number;
+  ancho: number;
+  alto: number;
+  lado: "arriba" | "abajo";
+  /** x del pico: el centro de la tapa del ancla. */
+  acx: number;
+  /** Huella del bloque al que apunta. */
+  ancla: Rect;
+};
+
+/** Ancho de un texto de la pastilla (Nunito 800) a un tamaño dado. */
+export type MedirTexto = (texto: string, tam: number) => number;
+
+/** Ubica la pastilla sobre (o bajo) el bloque seleccionado más al norte: entre
+ * 10 candidatas, la que menos tapa números ajenos y tapas seleccionadas sin
+ * salirse del predio. */
+export function ubicarPastilla(
+  datos: DatosPastilla | null,
+  bloques: Bloque[],
+  estilos: Map<string, EstiloBloque>,
+  detalle: boolean,
+  lim: Rect,
+  medir: MedirTexto | null
+): Pastilla | null {
+  if (!datos) return null;
+  type Caja = [number, number, number, number];
+  const sel: { b: Bloque; zTop: number }[] = [];
+  const numeros: Caja[] = [];
+  for (const b of bloques) {
+    const estilo = estilos.get(b.clave);
+    if (!estilo) continue;
+    // En reposo: la pastilla no se mueve con el hover.
+    const al = alturaDe(b, estilo, REPOSO);
+    if (estilo.marca === "seleccion") {
+      sel.push({ b, zTop: al.zTop });
+      continue;
+    }
+    for (const t of textosBloque(b, al.zTexto, detalle, estilo.etiqueta, estilo.atenuado)) {
+      const an = t.t.length * (t.apodo ? 0.56 : 0.6) * t.tam;
+      const at = 0.74 * t.tam;
+      numeros.push([t.x - an / 2, t.y - at / 2, t.x + an / 2, t.y + at / 2]);
+    }
+  }
+  if (sel.length === 0) return null;
+  // Dos tamaños, por el umbral de detalle (nunca por la escala continua).
+  const tam = detalle ? 12.5 : 17;
+  const ancho = (medir ? medir(datos.texto, tam) : datos.texto.length * 0.56 * tam) + tam * 2.6;
+  const alto = tam * 1.75;
+  const u = tam / 20;
+  const pico = 7 * u;
+  const sep = 2.5;
+  const ancla = sel.reduce((a, s) =>
+    s.b.rect.y < a.b.rect.y || (s.b.rect.y === a.b.rect.y && s.b.rect.x < a.b.rect.x) ? s : a
+  );
+  const { x, y, w, h } = ancla.b.rect;
+  const ty = y - ancla.zTop;
+  const acx = x - K * ancla.zTop + w / 2;
+  const tapas: Caja[] = sel.map(({ b, zTop }) => [
+    b.rect.x - K * zTop - 4,
+    b.rect.y - zTop - 4,
+    b.rect.x + b.rect.w + 4,
+    b.rect.y + b.rect.h + 4,
+  ]);
+  const pisa = (r: Caja, o: Caja) =>
+    Math.max(0, Math.min(r[2], o[2]) - Math.max(r[0], o[0])) * Math.max(0, Math.min(r[3], o[3]) - Math.max(r[1], o[1]));
+  let mejor: { cx: number; cy: number; lado: "arriba" | "abajo"; pen: number } | null = null;
+  let orden = 0;
+  for (const lado of ["arriba", "abajo"] as const) {
+    for (const corrimiento of [0, -1, 1, -2, 2]) {
+      const cx = acx + (corrimiento * (ancho / 2 - 14 * u)) / 2;
+      const cy = lado === "arriba" ? ty - sep - pico - alto / 2 : y + h + 4 + sep + pico + alto / 2;
+      const r: Caja = [cx - ancho / 2, cy - alto / 2, cx + ancho / 2, cy + alto / 2];
+      let pen =
+        numeros.reduce((s, o) => s + pisa(r, o), 0) * 10 + tapas.reduce((s, o) => s + pisa(r, o), 0) * 20;
+      if (r[0] < lim.x || r[2] > lim.x + lim.w || r[1] < lim.y || r[3] > lim.y + lim.h) pen += 1e6;
+      pen += orden++ * 0.01; // a igual puntaje, el orden de preferencia
+      if (!mejor || pen < mejor.pen) mejor = { cx, cy, lado, pen };
+    }
+  }
+  if (!mejor) return null;
+  return { ...datos, tam, cx: mejor.cx, cy: mejor.cy, ancho, alto, lado: mejor.lado, acx, ancla: ancla.b.rect };
+}
+
+function PastillaSeleccion({ p }: { p: Pastilla }) {
+  const u = p.tam / 20;
+  const x0 = p.cx - p.ancho / 2;
+  const y0 = p.cy - p.alto / 2;
+  // El pico siempre apunta al centro de la tapa del ancla.
+  const base = p.lado === "arriba" ? p.cy + p.alto / 2 - 1 : p.cy - p.alto / 2 + 1;
+  const punta = p.lado === "arriba" ? p.cy + p.alto / 2 + 7 * u : p.cy - p.alto / 2 - 7 * u;
+  return (
+    <g>
+      <rect
+        x={f(x0 + 1.5 * u)}
+        y={f(y0 + 3 * u)}
+        width={f(p.ancho)}
+        height={f(p.alto)}
+        rx={f(p.alto / 2)}
+        fill={TINTA_SOMBRA}
+        fillOpacity={0.18}
+      />
+      <rect x={f(x0)} y={f(y0)} width={f(p.ancho)} height={f(p.alto)} rx={f(p.alto / 2)} fill="var(--primary)" />
+      <path
+        d={`M${f(p.acx - 7 * u)} ${f(base)}L${f(p.acx)} ${f(punta)}L${f(p.acx + 7 * u)} ${f(base)}Z`}
+        fill="var(--primary)"
+      />
+      <circle
+        cx={f(x0 + p.tam * 0.95)}
+        cy={f(p.cy)}
+        r={f(p.tam * 0.3)}
+        fill={PUNTO_ESTADO[p.estado]}
+        stroke="#fff"
+        strokeWidth={f(1.2 * u)}
+      />
+      <Texto x={p.cx + p.tam * 0.45} y={p.cy + 0.5} t={p.texto} clase="rot" tam={p.tam} fill="#fff" />
+    </g>
+  );
+}
+
+export const Anillos = memo(function Anillos({
+  anillos,
+  pastilla,
+}: {
+  anillos: Anillo[];
+  pastilla: Pastilla | null;
+}) {
+  // Un `<g>` por bloque con la traslación del bloque: un anillo que aparece en
+  // un bloque que ya tenía otro (hover sobre el seleccionado) entra en su
+  // lugar, y ambos acompañan la transición del cuerpo. Un bloque sin anillos
+  // está en reposo (todo despegue lleva anillo), así que el `<g>` nuevo entra
+  // desde z0 = 0 con la animación de `.mapa-mov-entra`.
+  const grupos = new Map<string, Anillo[]>();
+  for (const a of anillos) {
+    const g = grupos.get(a.clave);
+    if (g) g.push(a);
+    else grupos.set(a.clave, [a]);
+  }
+  return (
+    <g aria-hidden>
+      <g pointerEvents="none">
+        {[...grupos].map(([clave, lista]) => (
+          <g key={clave} className="mapa-mov mapa-mov-entra" style={mover(lista[0].z0)}>
+            {lista.map((a) => (
+              <AnilloTapa key={`${a.tono}:${a.rect.x}:${a.rect.y}`} anillo={a} />
+            ))}
+          </g>
+        ))}
+      </g>
+      {/* La pastilla recibe el puntero: tocarla no selecciona lo que tiene debajo
+          ni limpia la selección (el lienzo la ignora). */}
+      {pastilla ? (
+        <g data-pastilla="" className="cursor-default">
+          <PastillaSeleccion p={pastilla} />
+        </g>
+      ) : null}
     </g>
   );
 });
 
-// ---------- Quinteros: fichas dentro de las zonas verdes ----------
+// ---------- Quinteros: fichas sobre los canteros ----------
 
 export type FichaQuintero = {
   clienteId: string;
@@ -644,8 +2161,38 @@ export type FichaQuintero = {
   estado: EstadoBloque;
   rect: Rect;
   atenuado: boolean;
+  /** Cliente seleccionado: la ficha despega. */
   seleccionado: boolean;
+  /** Pincel de asignar: borde de color, sin despegar (el pincel no levanta). */
+  pincel: boolean;
 };
+
+/** Pastilla baja sobre el cantero (base en zb, tapa 4 u más arriba). */
+function cuerpoFicha(rect: Rect, mat: Material, zb: number, destacada: boolean): ReactNode {
+  const { x, y, w, h } = rect;
+  const M = MAT[mat];
+  const r = h / 2;
+  const zt = zb + ALT.ficha;
+  const sur = caraSur(x, y, w, h, r, zt, zb);
+  const [fx, fy] = P(x, y, zt);
+  return (
+    <>
+      <path d={caraEste(x, y, w, h, r, zt, zb)} fill={M.lado} />
+      <path d={sur} fill={mat === "neutro" || mat === "libre" ? M.frente : `url(#mapa-faldon-${mat})`} />
+      {mat === "debe" ? <path d={sur} fill="url(#mapa-rayas-debe)" /> : null}
+      <rect
+        x={f(fx)}
+        y={f(fy)}
+        width={f(w)}
+        height={h}
+        rx={r}
+        fill={`url(#mapa-tapa-${mat})`}
+        stroke={destacada ? "var(--primary)" : M.bisel}
+        strokeWidth={destacada ? 2.2 : M.grosor}
+      />
+    </>
+  );
+}
 
 export const FichasQuinteros = memo(function FichasQuinteros({
   fichas,
@@ -658,73 +2205,71 @@ export const FichasQuinteros = memo(function FichasQuinteros({
   alTocar: (clienteId: string) => void;
   describir: (clienteId: string) => string;
 }) {
+  const zTapa = ALT.cantero + ALT.ficha;
   return (
     <g>
       {restos.map((r) => (
         <g key={`${r.rect.x}:${r.rect.y}`} aria-hidden>
-          <rect
-            x={r.rect.x}
-            y={r.rect.y}
-            width={r.rect.w}
-            height={r.rect.h}
-            rx={r.rect.h / 2}
-            fill="var(--card)"
-            stroke={ASPECTO.libre.stroke}
-            strokeDasharray="3 3"
+          {cuerpoFicha(r.rect, "libre", ALT.cantero, false)}
+          <Texto
+            x={r.rect.x - K * zTapa + r.rect.w / 2}
+            y={r.rect.y - zTapa + r.rect.h / 2}
+            t={`+${r.n}`}
+            tam={10.5}
+            fill={MAT.libre.texto}
           />
-          <text
-            x={r.rect.x + r.rect.w / 2}
-            y={r.rect.y + r.rect.h / 2}
-            textAnchor="middle"
-            dominantBaseline="central"
-            fill={ASPECTO.libre.texto}
-            style={{ ...SANS, fontWeight: 700, fontSize: 10.5 }}
-          >
-            +{r.n}
-          </text>
         </g>
       ))}
-      {fichas.map((f) => {
-        const a = ASPECTO[f.estado];
-        const { x, y, w, h } = f.rect;
+      {fichas.map((ficha) => {
+        // Atenuada: sin pintura (sin opacity de grupo). Seleccionada: despega.
+        const mat: Material = ficha.atenuado ? "neutro" : ficha.estado;
+        const zb = ALT.cantero + (ficha.seleccionado ? ALT.fichaSel : 0);
+        const [fx, fy] = P(ficha.rect.x, ficha.rect.y, zb + ALT.ficha);
         return (
           <g
-            key={f.clienteId}
+            key={ficha.clienteId}
             role="button"
             tabIndex={0}
-            data-ficha={f.clienteId}
-            aria-label={describir(f.clienteId)}
+            data-ficha={ficha.clienteId}
+            aria-label={describir(ficha.clienteId)}
             className="mapa-foco cursor-pointer outline-none"
-            style={{ opacity: f.atenuado ? 0.3 : 1, transition: "opacity 180ms ease" }}
-            onClick={() => alTocar(f.clienteId)}
+            onClick={() => alTocar(ficha.clienteId)}
             onKeyDown={(ev) => {
               if (ev.key === "Enter" || ev.key === " ") {
                 ev.preventDefault();
-                alTocar(f.clienteId);
+                alTocar(ficha.clienteId);
               }
             }}
           >
-            <rect
-              x={x}
-              y={y}
-              width={w}
-              height={h}
-              rx={h / 2}
-              fill={a.fill}
-              stroke={f.seleccionado ? "var(--primary)" : a.stroke}
-              strokeOpacity={f.seleccionado ? 1 : a.strokeOpacity}
-              strokeWidth={f.seleccionado ? 2.4 : a.grosor}
+            {cuerpoFicha(ficha.rect, mat, zb, ficha.seleccionado || ficha.pincel)}
+            {/* Foco de teclado (solo con :focus-visible): anillo doble por fuera
+                de la tapa, como el "foco" de los espacios. */}
+            <g className="mapa-ficha-foco">
+              {[
+                { color: "#fff", ancho: 6 },
+                { color: "var(--ring)", ancho: 2.4 },
+              ].map((c) => (
+                <rect
+                  key={c.ancho}
+                  x={f(fx - 2)}
+                  y={f(fy - 2)}
+                  width={f(ficha.rect.w + 4)}
+                  height={f(ficha.rect.h + 4)}
+                  rx={f(ficha.rect.h / 2 + 2)}
+                  fill="none"
+                  stroke={c.color}
+                  strokeWidth={c.ancho}
+                />
+              ))}
+            </g>
+            <Texto
+              x={fx + ficha.rect.w / 2}
+              y={fy + ficha.rect.h / 2}
+              t={ficha.texto}
+              clase="apodo"
+              tam={10.5}
+              fill={MAT[mat].texto}
             />
-            <text
-              x={x + w / 2}
-              y={y + h / 2}
-              textAnchor="middle"
-              dominantBaseline="central"
-              fill={a.texto}
-              style={{ ...SANS, fontWeight: 600, fontSize: 10.5 }}
-            >
-              {f.texto}
-            </text>
           </g>
         );
       })}
@@ -732,7 +2277,7 @@ export const FichasQuinteros = memo(function FichasQuinteros({
   );
 });
 
-/** Reparte fichas de quinteros en filas dentro de una zona. */
+/** Ficha "+N": los quinteros que no entraron en su zona. */
 export type Resto = { rect: Rect; n: number };
 
 /** Reparte fichas de quinteros en filas dentro de una zona. Si no entran

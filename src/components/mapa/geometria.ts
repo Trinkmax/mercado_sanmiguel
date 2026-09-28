@@ -1,5 +1,5 @@
 import { formatFraccion } from "@/lib/format";
-import type { ClienteMapa, ElementoPlano, Espacio, Rect, TipoEspacio } from "./tipos";
+import type { ClienteMapa, ElementoPlano, Espacio, EstadoCobro, Rect, TipoEspacio } from "./tipos";
 
 /** Dos puestos de la misma fila con menos de esto entre sí se tocan. */
 const TOLERANCIA_CONTIGUO = 8;
@@ -75,6 +75,93 @@ export function limitesPlano(elementos: ElementoPlano[], espacios: Espacio[]): R
   const r = unir(todo);
   const m = 28;
   return { x: r.x - m, y: r.y - m, w: r.w + 2 * m, h: r.h + 2 * m };
+}
+
+// ---------- Relieve: alturas de cada bloque ----------
+
+/** Estado visual de un bloque: el de cobro de su cliente, o libre. */
+export type EstadoBloque = EstadoCobro | "libre" | "ocupado";
+/** Pintura de un bloque: la de su estado, o "neutro" si quedó atenuado. */
+export type Material = EstadoBloque | "neutro";
+/** Por qué se destaca un bloque: seleccionado, pincel de asignar o aviso. */
+export type Marca = "seleccion" | "pincel" | "aviso" | null;
+
+/** Alturas del plano en relieve (unidades del plano). */
+export const ALT = {
+  puesto: 14, // puesto, bar y local ocupados
+  libre: 8, // cualquier espacio libre (lote bajo)
+  contenedor: 16, // tambor ocupado
+  atenuado: 5, // lo que no coincide con la selección o el filtro
+  realce: 4, // hover y foco de teclado: el bloque despega 4 u
+  despegue: 10, // seleccionado: la base se separa del piso
+  marca: 0, // pincel y aviso no levantan (la fila de números queda alineada)
+  faldon: 4.5, // hasta dónde baja el faldón (vista completa)
+  faldonDetalle: 8.5, // …y con zoom (deja ver la mercadería)
+  mostrador: 4.5,
+  cantero: 6,
+  ficha: 4,
+  fichaSel: 6,
+  zocalo: 8,
+  muroNorte: 30,
+  muroBajo: 6,
+  antepecho: 4,
+  cabriada: 12,
+  adminPared: 16,
+  adminCumbrera: 24,
+  invernadero: 30,
+  cerco: 10,
+  arbol: 18,
+  cordon: 3,
+} as const;
+
+/** Una fila se lee en una línea: ocupado (14) → número a 11; libre (8) → a 11. */
+export const COMP_TEXTO = 3;
+
+export type Alturas = {
+  /** Traslación del bloque (despega sin cambiar su forma). */
+  z0: number;
+  /** Altura de la tapa (con la traslación incluida). */
+  zTop: number;
+  /** Altura a la que van los números. */
+  zTexto: number;
+  material: Material;
+  pintado: boolean;
+  libre: boolean;
+};
+
+/** Sin hover ni foco de teclado. */
+export const REPOSO = { hover: false, foco: false } as const;
+
+/** La ÚNICA función de altura: la usan el cuerpo, las sombras, las huellas, los
+ * anillos, las zonas táctiles y la pastilla. */
+export function alturaDe(
+  b: Pick<Bloque, "tipo">,
+  e: { estado: EstadoBloque; atenuado: boolean; marca: Marca },
+  i: { hover: boolean; foco: boolean }
+): Alturas {
+  const libre = e.estado === "libre";
+  const hTipo = libre ? ALT.libre : b.tipo === "contenedor" ? ALT.contenedor : ALT.puesto;
+  let z0 = 0;
+  let zTop: number = hTipo;
+  if (e.atenuado) zTop = ALT.atenuado; // el atenuado manda
+  else if (e.marca === "seleccion") {
+    z0 = ALT.despegue; // flota
+    zTop = z0 + hTipo;
+  } else if (i.hover || i.foco) {
+    z0 = ALT.realce;
+    zTop = z0 + hTipo;
+  } // pincel y aviso: altura normal
+  const enFila = b.tipo === "puesto" || b.tipo === "bar";
+  const zTexto = enFila && !e.atenuado ? zTop + (libre ? COMP_TEXTO : -COMP_TEXTO) : zTop;
+  const material: Material = e.atenuado ? "neutro" : e.estado;
+  return { z0, zTop, zTexto, material, pintado: !libre && !e.atenuado, libre };
+}
+
+/** Radio de las esquinas de la tapa (el tambor es una elipse). */
+export function radioTapa(b: Pick<Bloque, "tipo" | "rect">): number {
+  if (b.tipo === "contenedor") return 0;
+  if (b.tipo === "local") return 3;
+  return Math.min(4, b.rect.w / 5);
 }
 
 /** Unidades de puesto: un medio puesto cuenta 0,5. */
