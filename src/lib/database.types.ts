@@ -965,6 +965,75 @@ export type Database = {
           },
         ]
       }
+      espacios: {
+        Row: {
+          actualizado_en: string
+          actualizado_por: string | null
+          asignado_en: string | null
+          cliente_id: string | null
+          grupo: string | null
+          h: number
+          id: string
+          medio: boolean
+          nota: string | null
+          numero: string | null
+          org_id: string
+          tipo: string
+          w: number
+          x: number
+          y: number
+        }
+        Insert: {
+          actualizado_en?: string
+          actualizado_por?: string | null
+          asignado_en?: string | null
+          cliente_id?: string | null
+          grupo?: string | null
+          h: number
+          id?: string
+          medio?: boolean
+          nota?: string | null
+          numero?: string | null
+          org_id: string
+          tipo: string
+          w: number
+          x: number
+          y: number
+        }
+        Update: {
+          actualizado_en?: string
+          actualizado_por?: string | null
+          asignado_en?: string | null
+          cliente_id?: string | null
+          grupo?: string | null
+          h?: number
+          id?: string
+          medio?: boolean
+          nota?: string | null
+          numero?: string | null
+          org_id?: string
+          tipo?: string
+          w?: number
+          x?: number
+          y?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "espacios_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "espacios_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizaciones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       gastos: {
         Row: {
           caja_id: string | null
@@ -1212,54 +1281,6 @@ export type Database = {
           },
           {
             foreignKeyName: "lecturas_org_id_fkey"
-            columns: ["org_id"]
-            isOneToOne: false
-            referencedRelation: "organizaciones"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      mapa_posiciones: {
-        Row: {
-          actualizado_en: string
-          actualizado_por: string | null
-          cliente_id: string
-          id: string
-          org_id: string
-          tipo: string
-          x: number
-          y: number
-        }
-        Insert: {
-          actualizado_en?: string
-          actualizado_por?: string | null
-          cliente_id: string
-          id?: string
-          org_id: string
-          tipo: string
-          x: number
-          y: number
-        }
-        Update: {
-          actualizado_en?: string
-          actualizado_por?: string | null
-          cliente_id?: string
-          id?: string
-          org_id?: string
-          tipo?: string
-          x?: number
-          y?: number
-        }
-        Relationships: [
-          {
-            foreignKeyName: "mapa_posiciones_cliente_id_fkey"
-            columns: ["cliente_id"]
-            isOneToOne: false
-            referencedRelation: "clientes"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "mapa_posiciones_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizaciones"
@@ -1545,6 +1566,53 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "periodos_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizaciones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      plano_elementos: {
+        Row: {
+          capacidad: number | null
+          etiqueta: string | null
+          h: number
+          id: string
+          orden: number
+          org_id: string
+          tipo: string
+          w: number
+          x: number
+          y: number
+        }
+        Insert: {
+          capacidad?: number | null
+          etiqueta?: string | null
+          h: number
+          id?: string
+          orden?: number
+          org_id: string
+          tipo: string
+          w: number
+          x: number
+          y: number
+        }
+        Update: {
+          capacidad?: number | null
+          etiqueta?: string | null
+          h?: number
+          id?: string
+          orden?: number
+          org_id?: string
+          tipo?: string
+          w?: number
+          x?: number
+          y?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "plano_elementos_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizaciones"
@@ -1935,6 +2003,10 @@ export type Database = {
         Returns: number
       }
       aprobar_cambio: { Args: { p_cambio: string }; Returns: Json }
+      asignar_espacios: {
+        Args: { p_actual?: string; p_cliente?: string; p_espacios: string[] }
+        Returns: number
+      }
       avanzar_solicitud: {
         Args: {
           p_accion: string
@@ -1945,6 +2017,15 @@ export type Database = {
         Returns: Database["public"]["Enums"]["estado_solicitud"]
       }
       cerrar_caja: { Args: { p_caja: string }; Returns: Json }
+      editar_espacio: {
+        Args: {
+          p_espacio: string
+          p_medio: boolean
+          p_nota: string
+          p_numero: string
+        }
+        Returns: undefined
+      }
       flujo_caja: { Args: never; Returns: Json }
       generar_periodo: { Args: { p_periodo: string }; Returns: Json }
       integrar_caja_porteria: {
@@ -2083,12 +2164,12 @@ export type Tables<
   DefaultSchemaTableNameOrOptions extends
     | keyof (DefaultSchema["Tables"] & DefaultSchema["Views"])
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof (DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"] &
         DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Views"])
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2112,11 +2193,11 @@ export type TablesInsert<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2137,11 +2218,11 @@ export type TablesUpdate<
   DefaultSchemaTableNameOrOptions extends
     | keyof DefaultSchema["Tables"]
     | { schema: keyof DatabaseWithoutInternals },
-  TableName extends DefaultSchemaTableNameOrOptions extends {
+  TableName extends (DefaultSchemaTableNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaTableNameOrOptions["schema"]]["Tables"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaTableNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2162,11 +2243,11 @@ export type Enums<
   DefaultSchemaEnumNameOrOptions extends
     | keyof DefaultSchema["Enums"]
     | { schema: keyof DatabaseWithoutInternals },
-  EnumName extends DefaultSchemaEnumNameOrOptions extends {
+  EnumName extends (DefaultSchemaEnumNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[DefaultSchemaEnumNameOrOptions["schema"]]["Enums"]
-    : never = never,
+    : never) = never,
 > = DefaultSchemaEnumNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }
@@ -2179,11 +2260,11 @@ export type CompositeTypes<
   PublicCompositeTypeNameOrOptions extends
     | keyof DefaultSchema["CompositeTypes"]
     | { schema: keyof DatabaseWithoutInternals },
-  CompositeTypeName extends PublicCompositeTypeNameOrOptions extends {
+  CompositeTypeName extends (PublicCompositeTypeNameOrOptions extends {
     schema: keyof DatabaseWithoutInternals
   }
     ? keyof DatabaseWithoutInternals[PublicCompositeTypeNameOrOptions["schema"]]["CompositeTypes"]
-    : never = never,
+    : never) = never,
 > = PublicCompositeTypeNameOrOptions extends {
   schema: keyof DatabaseWithoutInternals
 }

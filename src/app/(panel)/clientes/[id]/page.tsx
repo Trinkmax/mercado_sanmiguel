@@ -58,6 +58,8 @@ import {
   LABEL_TIPO_PERSONA,
   labelCategoria,
 } from "@/components/clientes/constantes";
+import { EnElPlano } from "@/components/mapa/en-el-plano";
+import type { TipoEspacio } from "@/components/mapa/tipos";
 
 export const metadata = { title: "Ficha del cliente" };
 
@@ -106,6 +108,7 @@ export default async function FichaClientePage({ params }: Props) {
     cambiosRes,
     circularesRes,
     recepcionesRes,
+    espaciosRes,
   ] = await Promise.all([
     supabase
       .from("cargos")
@@ -169,6 +172,10 @@ export default async function FichaClientePage({ params }: Props) {
     supabase
       .from("circular_recepciones")
       .select("circular_id, recibida_en")
+      .eq("cliente_id", id),
+    supabase
+      .from("espacios")
+      .select("tipo, numero, medio, x, y")
       .eq("cliente_id", id),
   ]);
 
@@ -297,6 +304,16 @@ export default async function FichaClientePage({ params }: Props) {
     .filter(Boolean)
     .join(" · ");
 
+  // Dónde está en el plano (espacios asignados) y si factura puestos.
+  const espaciosPlano = (espaciosRes.data ?? [])
+    .filter((e): e is typeof e & { tipo: TipoEspacio } =>
+      ["puesto", "bar", "local", "contenedor"].includes(e.tipo)
+    )
+    .map((e) => ({ ...e, x: Number(e.x), y: Number(e.y) }));
+  const facturaPuestos = items.some(
+    (i) => i.activo && ["EXPP", "EXPL", "EXPE"].includes(i.conceptos?.codigo ?? "")
+  );
+
   const puedeCobrar = ROLES_COBRAN.includes(perfil.rol);
   const puedeRegistrar =
     perfil.rol === "admin" || perfil.rol === "consejo" || perfil.rol === "lider";
@@ -358,6 +375,12 @@ export default async function FichaClientePage({ params }: Props) {
               rol={perfil.rol}
             />
           </PageHeader>
+          <EnElPlano
+            clienteId={cliente.id}
+            espacios={espaciosPlano}
+            facturaPuestos={facturaPuestos && cliente.activo}
+            puedeUbicar={perfil.rol === "admin" || perfil.rol === "lider"}
+          />
         </div>
 
         {/* Debe hoy + Saldo a favor, lado a lado */}

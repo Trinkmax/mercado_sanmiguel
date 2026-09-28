@@ -6,76 +6,73 @@ import { createClient } from "@/lib/supabase/server";
 import { requireRol } from "@/lib/auth";
 import { ok, fallo, type ActionResult } from "@/lib/actions/result";
 
-/** Límites del plano (viewBox del SVG del mapa). */
-const VB_W = 1000;
-const VB_H = 640;
+const idEspacio = z.uuid("No reconocemos el puesto. Recargá la página.");
 
-const tipoSchema = z.enum(["puesto", "quinta", "local", "deposito"], {
-  message: "El tipo de espacio no es válido.",
+const asignarSchema = z.object({
+  espacios: z
+    .array(idEspacio)
+    .min(1, "Elegí al menos un puesto.")
+    .max(200, "Son demasiados puestos de una vez."),
+  // null = liberar
+  cliente_id: z.uuid("No reconocemos al cliente. Recargá la página.").nullable(),
+  // A quién le figuran hoy esos espacios en la pantalla (null = libres): si
+  // otra persona los cambió mientras tanto, la RPC rechaza en vez de pisar.
+  actual: z.uuid("No reconocemos al cliente. Recargá la página.").nullable(),
 });
 
-const posicionSchema = z.object({
-  cliente_id: z.uuid("No reconocemos el espacio. Recargá la página."),
-  tipo: tipoSchema,
-  x: z.number().min(0).max(VB_W, "La posición se sale del plano."),
-  y: z.number().min(0).max(VB_H, "La posición se sale del plano."),
-});
-
-const claveSchema = z.object({
-  cliente_id: z.uuid("No reconocemos el espacio. Recargá la página."),
-  tipo: tipoSchema,
+const editarSchema = z.object({
+  id: idEspacio,
+  numero: z
+    .string()
+    .trim()
+    .max(12, "El número puede tener hasta 12 caracteres.")
+    .nullable(),
+  medio: z.boolean(),
+  nota: z.string().trim().max(60, "La nota puede tener hasta 60 caracteres.").nullable(),
 });
 
 /**
- * Guarda dónde quedó una celda del plano tras arrastrarla (drag & drop).
- * Upsert por (org, cliente, tipo): una sola posición por espacio.
- * Solo Administración y el Líder de Procesos mueven puestos (RLS lo exige igual).
+ * Asigna uno o varios espacios del plano a un cliente (o los libera con
+ * `cliente_id: null`). Solo Administración y el Líder de Procesos: la RPC
+ * `asignar_espacios` lo exige igual y valida organización y cliente activo.
  */
-export async function guardarPosicionMapa(
+export async function asignarEspacios(
   input: unknown
-): Promise<ActionResult<{ x: number; y: number }>> {
-  const perfil = await requireRol("admin", "lider");
-  const parsed = posicionSchema.safeParse(input);
+): Promise<ActionResult<{ cambiados: number }>> {
+  await requireRol("admin", "lider");
+  const parsed = asignarSchema.safeParse(input);
   if (!parsed.success) return fallo(parsed.error.issues[0].message);
 
-  // Dos decimales alcanzan (la columna es numeric(7,2)).
-  const x = Math.round(parsed.data.x * 100) / 100;
-  const y = Math.round(parsed.data.y * 100) / 100;
-
   const supabase = await createClient();
-  const { error } = await supabase.from("mapa_posiciones").upsert(
-    {
-      org_id: perfil.org_id,
-      cliente_id: parsed.data.cliente_id,
-      tipo: parsed.data.tipo,
-      x,
-      y,
-      actualizado_por: perfil.user_id,
-      actualizado_en: new Date().toISOString(),
-    },
-    { onConflict: "org_id,cliente_id,tipo" }
-  );
-  if (error) return fallo(error);
+  const { data, error } = await supabase.rpc("asignar_espacios", {
+    p_espacios: [...new Set(parsed.data.espacios)],
+    // Los tipos generados no admiten null (default en SQL): null = libre.
+    p_cliente: parsed.data.cliente_id as unknown as string,
+    p_actual: parsed.data.actual as unknown as string,
+  });
+  if (error) {
+    // Si otra persona cambió el plano, la pantalla se refresca con lo nuevo.
+    revalidatePath("/mapa");
+    return fallo(error);
+  }
 
   revalidatePath("/mapa");
-  return ok({ x, y });
+  return ok({ cambiados: Number(data ?? 0) });
 }
 
-/** Borra la posición guardada: la celda vuelve a su lugar automático. */
-export async function restablecerPosicionMapa(
-  input: unknown
-): Promise<ActionResult<void>> {
-  const perfil = await requireRol("admin", "lider");
-  const parsed = claveSchema.safeParse(input);
+/** Corrige número, medio puesto y nota de un espacio del plano. */
+export async function editarEspacio(input: unknown): Promise<ActionResult<void>> {
+  await requireRol("admin", "lider");
+  const parsed = editarSchema.safeParse(input);
   if (!parsed.success) return fallo(parsed.error.issues[0].message);
 
   const supabase = await createClient();
-  const { error } = await supabase
-    .from("mapa_posiciones")
-    .delete()
-    .eq("org_id", perfil.org_id)
-    .eq("cliente_id", parsed.data.cliente_id)
-    .eq("tipo", parsed.data.tipo);
+  const { error } = await supabase.rpc("editar_espacio", {
+    p_espacio: parsed.data.id,
+    p_numero: parsed.data.numero ?? "",
+    p_medio: parsed.data.medio,
+    p_nota: parsed.data.nota ?? "",
+  });
   if (error) return fallo(error);
 
   revalidatePath("/mapa");

@@ -19,7 +19,7 @@ export default async function CobranzaPage() {
   const supabase = await createClient();
   const esGuardia = perfil.rol === "guardia";
 
-  const [clientesRes, deudaRes, quinterosRes] = await Promise.all([
+  const [clientesRes, deudaRes, quinterosRes, espaciosRes] = await Promise.all([
     supabase
       .from("clientes")
       .select("id, codigo, nombre")
@@ -33,6 +33,10 @@ export default async function CobranzaPage() {
           .eq("activo", true)
           .eq("conceptos.codigo", "EXPQ")
       : Promise.resolve({ data: null }),
+    supabase
+      .from("espacios")
+      .select("cliente_id, tipo, numero, medio, x, y")
+      .not("cliente_id", "is", null),
   ]);
 
   const deudaPorCliente = new Map<string, number>();
@@ -48,11 +52,21 @@ export default async function CobranzaPage() {
     clientes = clientes.filter((c) => quinteros.has(c.id));
   }
 
+  // Puestos del plano de cada cliente: se busca también por N° de puesto.
+  const puestosPorCliente = new Map<string, { numero: string; etiqueta: string }[]>();
+  for (const e of (espaciosRes.data ?? []).sort((a, b) => Number(a.y) - Number(b.y) || Number(a.x) - Number(b.x))) {
+    if (!e.cliente_id || e.tipo !== "puesto" || !e.numero) continue;
+    const l = puestosPorCliente.get(e.cliente_id) ?? [];
+    l.push({ numero: e.numero, etiqueta: e.medio ? `${e.numero}½` : e.numero });
+    puestosPorCliente.set(e.cliente_id, l);
+  }
+
   const filas: FilaCliente[] = clientes.map((c) => ({
     id: c.id,
     codigo: c.codigo,
     nombre: c.nombre,
     deuda: deudaPorCliente.get(c.id) ?? 0,
+    puestos: puestosPorCliente.get(c.id) ?? [],
   }));
   // Primero los que deben (mayor deuda arriba); los al día, por número de carpeta.
   filas.sort((a, b) => b.deuda - a.deuda || a.codigo - b.codigo);

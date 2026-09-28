@@ -176,6 +176,12 @@
   }
 }
 
+/* Plano del mercado: foco de teclado visible sobre puestos y fichas (SVG). */
+.mapa-foco:focus-visible > :is(rect, ellipse):first-child {
+  stroke: var(--ring);
+  stroke-width: 3px;
+}
+
 /* Toasts: en tablet/celular (hay barra superior) bajan para no tapar el menú ni "Salir". */
 @media (max-width: 1023px) {
   [data-sonner-toaster][data-y-position="top"] {

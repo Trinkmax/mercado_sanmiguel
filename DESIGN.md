@@ -28,7 +28,10 @@ pendiente, ámbar = parcial (pedido textual del cliente y ley del sistema).
   Barra lateral azul profundo `oklch(0.29 0.08 268)` con texto claro.
 - **Fondo**: neutro frío muy claro `oklch(0.975 0.004 255)`; tarjetas blancas.
 - **Estados** (nunca otro color para estados): `--pagado` verde, `--pendiente`
-  rojo, `--parcial` ámbar, cada uno con su `-suave` de fondo.
+  rojo, `--parcial` ámbar, cada uno con su `-suave` de fondo. Fase 2 suma el
+  sello `info` (azul `--accent`) para lo *en curso administrativo* —en revisión,
+  en el Consejo, en caja mayor, listo para depositar— que no es un estado de
+  cobro y no debe competir con verde/rojo.
 - **Tema**: claro único (uso diurno en el mercado).
 - Radio 0.625rem. Foco visible 3px. Inputs ≥ 1rem.
 - Gradiente de marca (solo login): `linear-gradient(150deg, oklch(0.32 0.11 270),
@@ -48,8 +51,10 @@ pendiente, ámbar = parcial (pedido textual del cliente y ley del sistema).
 
 ## Componentes canónicos (`src/components/shared/`)
 
-- `Sello` — sello de goma de estado (verde/rojo/ámbar); `grande` rota −2,5°;
-  `.animar-estampado` al confirmar un cobro (único momento de motion autoral).
+- `Sello` — sello de goma de estado (verde/rojo/ámbar/azul info/gris); `grande` rota −2,5°;
+  `.animar-estampado` al confirmar un cobro o un ingreso de personal (único momento de motion autoral).
+- `BotonExportar` — link de descarga a Excel; `BotonImprimir` con `autoImprimir` (impresión directa).
+- Navegación en grupos plegables (Hoy siempre abierto; Gestión / Plata / Dirección se pliegan, recuerdan el estado en el dispositivo y se abren solos donde está el usuario) con badges ámbar de pendientes; roles con ≤ 7 entradas ven lista plana.
 - `Codigo` — chip azul (`--accent`) con el código en Nunito bold (EXPP, AGUA…).
 - `Money` — todo importe pasa por acá (`formatARS`).
 - `PageHeader` — título Nunito bold text-2xl + descripción text-sm.

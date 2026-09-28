@@ -14,6 +14,8 @@ export type FilaCliente = {
   codigo: number;
   nombre: string;
   deuda: number;
+  /** Puestos del plano ("52", "34½"): también se busca por ellos. */
+  puestos: { numero: string; etiqueta: string }[];
 };
 
 function normalizar(texto: string): string {
@@ -35,7 +37,10 @@ export function BuscadorClientes({ clientes }: { clientes: FilaCliente[] }) {
     q === ""
       ? clientes
       : clientes.filter(
-          (c) => normalizar(c.nombre).includes(q) || String(c.codigo).includes(q)
+          (c) =>
+            normalizar(c.nombre).includes(q) ||
+            String(c.codigo).includes(q) ||
+            c.puestos.some((p) => p.numero === q)
         );
 
   return (
@@ -73,8 +78,14 @@ export function BuscadorClientes({ clientes }: { clientes: FilaCliente[] }) {
                 <span className="w-9 shrink-0 text-right font-display text-base font-bold tabular">
                   {c.codigo}
                 </span>
-                <span className="min-w-0 flex-1 truncate text-[15px] font-medium">
-                  {c.nombre}
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[15px] font-medium">{c.nombre}</span>
+                  {c.puestos.length > 0 ? (
+                    <span className="block truncate text-xs text-muted-foreground tabular">
+                      {c.puestos.length > 1 ? "Puestos" : "Puesto"}{" "}
+                      {c.puestos.map((p) => p.etiqueta).join(" · ")}
+                    </span>
+                  ) : null}
                 </span>
                 <Money
                   monto={c.deuda}

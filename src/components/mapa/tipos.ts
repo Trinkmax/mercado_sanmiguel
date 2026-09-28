@@ -1,30 +1,66 @@
-/** Tipos compartidos del mapa del mercado (server → cliente). */
+/** Tipos compartidos del plano del mercado (server → cliente). */
 
-export type EstadoEspacio = "al_dia" | "debe" | "vencido";
+export type EstadoCobro = "al_dia" | "debe" | "vencido";
 
-/** Tipo de espacio en el plano (coincide con el check de `mapa_posiciones.tipo`). */
-export type TipoEspacio = "puesto" | "quinta" | "local" | "deposito";
+/** Espacio físico que se asigna a un cliente (tabla `espacios`). */
+export type TipoEspacio = "puesto" | "bar" | "local" | "contenedor";
 
-export type EspacioMapa = {
+/** Lo fijo del predio (tabla `plano_elementos`). */
+export type TipoElemento =
+  | "nave"
+  | "pasillo"
+  | "cocheras"
+  | "quinteros"
+  | "administracion"
+  | "invernadero"
+  | "recinto"
+  | "rotulo";
+
+/** Rectángulo en unidades del plano. */
+export type Rect = { x: number; y: number; w: number; h: number };
+
+export type Espacio = Rect & {
+  id: string;
+  tipo: TipoEspacio;
+  /** Número visible; null = sin número (el plano muestra "?"). */
+  numero: string | null;
+  /** Medio puesto: cuenta 0,5 para la expensa de puestos. */
+  medio: boolean;
+  /** Puestos que el plano original dibuja juntos (un mismo puestero). */
+  grupo: string | null;
+  nota: string | null;
+  clienteId: string | null;
+};
+
+export type ElementoPlano = Rect & {
+  id: string;
+  tipo: TipoElemento;
+  etiqueta: string | null;
+  capacidad: number | null;
+};
+
+/** Lo que el cliente tiene facturado (cantidades activas por concepto). */
+export type Facturado = {
+  puestos: number; // EXPP
+  locales: number; // EXPL
+  contenedores: number; // EXPE
+  quintas: number; // EXPQ
+  cocheras: number; // EXPC
+  galpones: number; // EXPG
+};
+
+export type ClienteMapa = {
   id: string;
   codigo: number;
   nombre: string;
-  /** Apodo del puesto ("Don Pedro"): va debajo del número en la celda. */
   apodo: string | null;
   deuda: number;
-  estado: EstadoEspacio;
+  estado: EstadoCobro;
+  facturado: Facturado;
 };
 
-export type DepositoMapa = EspacioMapa & {
-  galpones: number;
-  contenedores: number;
-};
-
-/** Posición persistida de una celda (coordenadas del viewBox 1000×640 del plano).
- * Sin fila → la celda se reparte sola en su zona. */
-export type PosicionMapa = {
-  cliente_id: string;
-  tipo: TipoEspacio;
-  x: number;
-  y: number;
+/** A qué ir al tocar a un cliente: su ficha y/o la pantalla de cobro. */
+export type Destinos = {
+  ficha: string | null;
+  cobro: string | null;
 };
