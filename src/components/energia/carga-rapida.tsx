@@ -1,22 +1,15 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Check, Loader2, MapPin, X } from "lucide-react";
 import { formatARS, formatNumero } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { Sello } from "@/components/shared/sello";
 import { registrarLectura } from "@/lib/actions/energia";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { llamarAccion } from "@/lib/llamar-accion";
 
 export type FilaMedidor = {
@@ -41,6 +34,10 @@ export type FilaMedidor = {
     monto: number;
   } | null;
 };
+
+/** Columnas de la vista ancha (lista de ≥ 64rem): las mismas en el encabezado y en cada fila.
+ * Medidor y lugar · Cliente (se estira) · Anterior · Actual · kWh · Importe · Acción. */
+const COLUMNAS_ANCHAS = "@5xl:grid-cols-[8.5rem_minmax(0,1fr)_7rem_7.5rem_4.5rem_7.5rem_9rem]";
 
 type EstadoFila = {
   modo: "pendiente" | "cargada" | "corrigiendo";
@@ -264,22 +261,26 @@ export function CargaRapida({
           </div>
         </div>
 
-        <Table>
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead className="w-24">N° medidor</TableHead>
-              <TableHead>Cliente</TableHead>
-              <TableHead className="max-md:hidden">Ubicación</TableHead>
-              <TableHead className="w-28 text-right">Anterior</TableHead>
-              <TableHead className="w-32 text-right">Actual</TableHead>
-              <TableHead className="w-20 text-right">kWh</TableHead>
-              <TableHead className="w-28 text-right">Importe</TableHead>
-              <TableHead className="w-28">
-                <span className="sr-only">Acción</span>
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
+        {/* Una sola lista para todos los anchos (los inputs tienen una ref por medidor):
+            en celular y tablet cada medidor es una tarjeta (dos por fila si entran); desde
+            64rem de ancho útil, filas alineadas como una tabla. Nada queda fuera de pantalla. */}
+        <div className="@container">
+          <div
+            aria-hidden
+            className={cn(
+              "hidden gap-x-3 border-b px-2 pb-2 text-sm font-medium text-muted-foreground @5xl:grid",
+              COLUMNAS_ANCHAS
+            )}
+          >
+            <span>Medidor y lugar</span>
+            <span>Cliente</span>
+            <span className="text-right">Anterior</span>
+            <span className="text-right">Actual</span>
+            <span className="text-right">kWh</span>
+            <span className="text-right">Importe</span>
+            <span />
+          </div>
+          <ul className="grid gap-3 @xl:grid-cols-2 @5xl:grid-cols-1 @5xl:gap-0">
             {filas.map((fila) => {
               const est = estado[fila.id];
               if (!est) return null;
@@ -302,56 +303,72 @@ export function CargaRapida({
                 anteriorNum !== null && actualNum !== null && actualNum >= anteriorNum
                   ? actualNum - anteriorNum
                   : null;
+              const kwh = editando ? kwhVivo : (est.valores?.kwh ?? 0);
+              const importe = editando
+                ? kwhVivo !== null
+                  ? kwhVivo * precioKwh
+                  : null
+                : (est.valores?.monto ?? 0);
 
               return (
-                <Fragment key={fila.id}>
-                <TableRow
-                  className={
-                    est.modo === "cargada"
-                      ? "bg-pagado-suave/40 hover:bg-pagado-suave/40"
-                      : undefined
-                  }
+                <li
+                  key={fila.id}
+                  className={cn(
+                    "grid grid-cols-2 gap-x-3 gap-y-3 rounded-lg border p-3",
+                    "[grid-template-areas:'num_ubi'_'cli_cli'_'ant_act'_'res_acc']",
+                    "@5xl:items-center @5xl:gap-y-1 @5xl:rounded-none @5xl:border-x-0 @5xl:border-t-0 @5xl:px-2 @5xl:py-2.5",
+                    "@5xl:[grid-template-areas:'num_cli_ant_act_kwh_imp_acc'_'ubi_cli_ant_act_kwh_imp_acc']",
+                    COLUMNAS_ANCHAS,
+                    est.modo === "cargada" && "border-pagado/30 bg-pagado-suave/40"
+                  )}
                 >
-                  <TableCell className="font-display text-lg tracking-wide">
+                  <p className="self-center font-display text-lg tracking-wide break-words [grid-area:num] @5xl:self-end">
                     {fila.numero}
-                  </TableCell>
-                  <TableCell className="max-w-48 font-medium">
+                  </p>
+
+                  {/* Lugar: chip al plano o el texto libre del medidor, siempre entero */}
+                  <div className="min-w-0 self-center justify-self-end text-right [grid-area:ubi] @5xl:self-start @5xl:justify-self-start @5xl:text-left">
+                    {fila.espacioId ? (
+                      <Link
+                        href={`/mapa?espacio=${fila.espacioId}`}
+                        className="inline-flex min-h-11 max-w-full items-center gap-1.5 rounded-md border bg-card px-2.5 py-1 text-left text-sm font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-accent"
+                        title="Ver en el plano"
+                      >
+                        <MapPin className="size-3.5 shrink-0 text-primary" strokeWidth={2} />
+                        <span className="min-w-0 break-words">{fila.ubicacion ?? "En el plano"}</span>
+                      </Link>
+                    ) : (
+                      <span className="block text-sm break-words text-muted-foreground">
+                        {fila.ubicacion ?? "Sin lugar en el plano"}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Cliente: el nombre completo, en los renglones que haga falta */}
+                  <div className="min-w-0 [grid-area:cli]">
                     {fila.clienteId ? (
                       <Link
                         href={`/clientes/${fila.clienteId}?tab=medidores`}
-                        className="flex min-h-11 max-w-full items-center underline-offset-4 hover:text-primary hover:underline"
+                        className="flex min-h-11 items-center text-base font-medium underline-offset-4 hover:text-primary hover:underline"
                         title="Ver sus medidores y el abono"
                       >
-                        <span className="truncate">{fila.cliente}</span>
+                        <span className="min-w-0 break-words">{fila.cliente}</span>
                       </Link>
                     ) : (
-                      <span className="block truncate">{fila.cliente}</span>
+                      <p className="text-base font-medium break-words">{fila.cliente}</p>
                     )}
                     {fila.abono === "exento" ? (
                       <Sello estado="exento" texto="Exento de abono" className="mt-0.5" />
                     ) : fila.abono ? (
-                      <span className="block text-xs font-normal text-muted-foreground">
+                      <p className="text-sm text-muted-foreground">
                         + abono {formatARS(fila.abono.monto)}
-                      </span>
+                      </p>
                     ) : null}
-                  </TableCell>
-                  <TableCell className="max-w-40 text-muted-foreground max-md:hidden">
-                    {fila.espacioId ? (
-                      <Link
-                        href={`/mapa?espacio=${fila.espacioId}`}
-                        className="inline-flex min-h-11 max-w-full items-center gap-1.5 rounded-md border bg-card px-2.5 text-sm font-medium text-foreground transition-colors hover:border-primary/40 hover:bg-accent"
-                        title="Ver en el plano"
-                      >
-                        <MapPin className="size-3.5 shrink-0 text-primary" strokeWidth={2} />
-                        <span className="truncate">{fila.ubicacion ?? "En el plano"}</span>
-                      </Link>
-                    ) : (
-                      <span className="block truncate">{fila.ubicacion ?? "Sin lugar en el plano"}</span>
-                    )}
-                  </TableCell>
+                  </div>
 
                   {/* Anterior */}
-                  <TableCell className="text-right">
+                  <div className="min-w-0 [grid-area:ant] @5xl:text-right">
+                    <p className="mb-1 text-sm text-muted-foreground @5xl:sr-only">Anterior</p>
                     {editando && anteriorEditable ? (
                       <Input
                         ref={(el) => {
@@ -362,7 +379,7 @@ export function CargaRapida({
                         autoComplete="off"
                         placeholder="Primera vez"
                         aria-label={`Lectura anterior del medidor ${fila.numero}`}
-                        className="h-11 w-24 text-right text-base tabular"
+                        className="h-11 w-full text-base tabular md:text-base @5xl:text-right"
                         value={est.anterior}
                         disabled={est.guardando}
                         onChange={(e) => setCampo(fila.id, "anterior", e.target.value)}
@@ -374,16 +391,17 @@ export function CargaRapida({
                         }}
                       />
                     ) : (
-                      <span className="tabular text-muted-foreground">
+                      <p className="flex min-h-11 items-center text-base tabular text-muted-foreground @5xl:justify-end">
                         {formatNumero(
                           editando ? anteriorNum : (est.valores?.anterior ?? 0)
                         )}
-                      </span>
+                      </p>
                     )}
-                  </TableCell>
+                  </div>
 
                   {/* Actual */}
-                  <TableCell className="text-right">
+                  <div className="min-w-0 [grid-area:act] @5xl:text-right">
+                    <p className="mb-1 text-sm text-muted-foreground @5xl:sr-only">Actual</p>
                     {editando ? (
                       <Input
                         ref={(el) => {
@@ -394,7 +412,7 @@ export function CargaRapida({
                         autoComplete="off"
                         aria-label={`Lectura actual del medidor ${fila.numero}`}
                         aria-invalid={est.error ? true : undefined}
-                        className="h-11 w-28 text-right text-base font-semibold tabular"
+                        className="h-11 w-full text-base font-semibold tabular md:text-base @5xl:text-right"
                         value={est.actual}
                         disabled={est.guardando}
                         onChange={(e) => setCampo(fila.id, "actual", e.target.value)}
@@ -406,42 +424,41 @@ export function CargaRapida({
                         }}
                       />
                     ) : (
-                      <span className="font-semibold tabular">
+                      <p className="flex min-h-11 items-center text-base font-semibold tabular @5xl:justify-end">
                         {formatNumero(est.valores?.actual ?? 0)}
-                      </span>
+                      </p>
                     )}
-                  </TableCell>
+                  </div>
 
-                  {/* kWh y $ */}
-                  <TableCell className="text-right">
-                    {editando ? (
-                      <span className="tabular text-muted-foreground">
-                        {kwhVivo !== null ? formatNumero(kwhVivo) : "—"}
-                      </span>
-                    ) : (
-                      <span className="tabular">
-                        {formatNumero(est.valores?.kwh ?? 0)}
-                      </span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    {editando ? (
-                      <span className="tabular text-muted-foreground">
-                        {kwhVivo !== null ? formatARS(kwhVivo * precioKwh) : "—"}
-                      </span>
-                    ) : (
-                      <span className="font-semibold tabular">
-                        {formatARS(est.valores?.monto ?? 0)}
-                      </span>
-                    )}
-                  </TableCell>
+                  {/* kWh e importe: en la tarjeta van juntos (el importe arriba, grande);
+                      en la vista ancha, cada uno en su columna. */}
+                  <div className="flex min-w-0 flex-col justify-center [grid-area:res] @5xl:contents">
+                    <p
+                      className={cn(
+                        "order-2 text-sm tabular text-muted-foreground @5xl:order-none @5xl:text-right @5xl:text-base @5xl:[grid-area:kwh]",
+                        !editando && "@5xl:text-foreground"
+                      )}
+                    >
+                      {kwh !== null ? formatNumero(kwh) : "—"}{" "}
+                      <span className="@5xl:sr-only">kWh</span>
+                    </p>
+                    <p
+                      className={cn(
+                        "order-1 text-lg tabular break-words @5xl:order-none @5xl:text-right @5xl:text-base @5xl:[grid-area:imp]",
+                        editando ? "text-muted-foreground" : "font-semibold"
+                      )}
+                    >
+                      <span className="sr-only">Importe </span>
+                      {importe !== null ? formatARS(importe) : "—"}
+                    </p>
+                  </div>
 
-                  {/* Acción */}
-                  <TableCell>
+                  {/* Acción: siempre a la vista, con su propio lugar */}
+                  <div className="flex items-center justify-end gap-1 self-center [grid-area:acc]">
                     {est.modo === "cargada" ? (
-                      <div className="flex items-center justify-end gap-1">
+                      <>
                         <Check
-                          className="size-5 text-pagado"
+                          className="size-5 shrink-0 text-pagado"
                           strokeWidth={2.2}
                           aria-label="Lectura cargada"
                         />
@@ -449,12 +466,13 @@ export function CargaRapida({
                           variant="ghost"
                           className="h-11 px-3 text-sm"
                           onClick={() => corregir(fila.id)}
+                          aria-label={`Corregir la lectura del medidor ${fila.numero}`}
                         >
                           Corregir
                         </Button>
-                      </div>
+                      </>
                     ) : (
-                      <div className="flex items-center justify-end gap-1">
+                      <>
                         <Button
                           className="min-h-11 px-4 text-sm font-semibold"
                           disabled={est.guardando}
@@ -479,25 +497,23 @@ export function CargaRapida({
                             <X className="size-5" strokeWidth={2.2} />
                           </Button>
                         ) : null}
-                      </div>
+                      </>
                     )}
-                  </TableCell>
-                </TableRow>
-                {est.error ? (
-                  <TableRow className="hover:bg-transparent">
-                    <TableCell
-                      colSpan={8}
-                      className="whitespace-normal bg-pendiente-suave/60 py-2.5 text-sm font-medium text-pendiente"
+                  </div>
+
+                  {est.error ? (
+                    <p
+                      role="alert"
+                      className="col-span-full rounded-md bg-pendiente-suave/60 px-3 py-2.5 text-sm font-medium text-pendiente"
                     >
                       {est.error}
-                    </TableCell>
-                  </TableRow>
-                ) : null}
-                </Fragment>
+                    </p>
+                  ) : null}
+                </li>
               );
             })}
-          </TableBody>
-        </Table>
+          </ul>
+        </div>
       </CardContent>
     </Card>
   );

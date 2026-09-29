@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ChevronRight, ClipboardList, Clock, TriangleAlert, UserPlus, Users } from "lucide-react";
 import { requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { formatDni } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -10,6 +11,7 @@ import { Sello } from "@/components/shared/sello";
 import { EmptyState } from "@/components/shared/empty-state";
 import { BotonExportar } from "@/components/shared/boton-exportar";
 import { BuscadorEmpleados } from "@/components/personal/buscador-empleados";
+import { FilaDeslizable } from "@/components/comunicaciones/fila-deslizable";
 import {
   LABEL_SECTOR,
   LABEL_TIPO_CONTRATO,
@@ -91,7 +93,8 @@ export default async function PersonalPage({ searchParams }: Props) {
 
       <div className="space-y-3">
         <BuscadorEmpleados inicial={texto} filtro={filtro} sector={sector} />
-        <div className="flex flex-wrap gap-2" role="group" aria-label="Filtrar empleados">
+        {/* En el celular, un solo renglón que se desliza (antes los filtros ocupaban 3). */}
+        <FilaDeslizable role="group" aria-label="Filtrar empleados">
           {FILTROS.map((f) => {
             const activo = f.valor === filtro;
             return (
@@ -100,7 +103,7 @@ export default async function PersonalPage({ searchParams }: Props) {
                 href={hrefPersonal(texto, f.valor, sector)}
                 aria-current={activo ? "true" : undefined}
                 className={cn(
-                  "inline-flex h-10 items-center rounded-full border px-4 text-sm font-medium transition-colors",
+                  "inline-flex min-h-11 shrink-0 items-center rounded-full border px-4 text-sm font-medium whitespace-nowrap transition-colors",
                   activo
                     ? "border-primary bg-primary text-primary-foreground"
                     : "border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground"
@@ -112,12 +115,12 @@ export default async function PersonalPage({ searchParams }: Props) {
           })}
           {todos.length > 0 ? (
             <>
-              <span className="mx-1 hidden h-10 w-px bg-border sm:block" aria-hidden />
+              <span className="mx-1 hidden h-11 w-px shrink-0 bg-border sm:block" aria-hidden />
               <Link
                 href={hrefPersonal(texto, filtro)}
                 aria-current={!sector ? "true" : undefined}
                 className={cn(
-                  "inline-flex h-10 items-center gap-2 rounded-full border px-4 text-sm font-medium transition-colors",
+                  "inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-medium whitespace-nowrap transition-colors",
                   !sector
                     ? "border-primary bg-primary text-primary-foreground"
                     : "border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground"
@@ -133,7 +136,7 @@ export default async function PersonalPage({ searchParams }: Props) {
                     href={hrefPersonal(texto, filtro, sec)}
                     aria-current={activo ? "true" : undefined}
                     className={cn(
-                      "inline-flex h-10 items-center gap-2 rounded-full border px-4 text-sm font-medium transition-colors",
+                      "inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-medium whitespace-nowrap transition-colors",
                       activo
                         ? "border-primary bg-primary text-primary-foreground"
                         : "border-border bg-card text-muted-foreground hover:bg-accent hover:text-foreground"
@@ -148,7 +151,7 @@ export default async function PersonalPage({ searchParams }: Props) {
               })}
             </>
           ) : null}
-        </div>
+        </FilaDeslizable>
       </div>
 
       {empleados.length === 0 ? (
@@ -188,20 +191,22 @@ export default async function PersonalPage({ searchParams }: Props) {
                 href={`/personal/${e.id}`}
                 className="flex min-h-16 items-center gap-4 px-4 py-3 transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
               >
+                {/* Todo completo, en los renglones que haga falta: cortados con "…" se perdía el
+                    nombre y el tipo de contrato ("Contr…"). El sello solo si está de baja: en
+                    "Activos" decía "Activo" en todas las filas y le robaba ancho al texto. */}
                 <div className="min-w-0 flex-1">
                   <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                     <p
                       className={cn(
-                        "truncate text-base font-semibold",
+                        "min-w-0 text-base leading-snug font-semibold break-words",
                         !e.activo && "text-muted-foreground"
                       )}
                     >
                       {nombreCompleto(e)}
                     </p>
-                    <span className="text-sm text-muted-foreground tabular">
-                      DNI {e.dni}
-                    </span>
+                    {!e.activo ? <Sello estado="inactivo" texto="De baja" /> : null}
                   </div>
+                  <p className="text-sm text-muted-foreground tabular">DNI {formatDni(e.dni)}</p>
                   <div className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                     <span className="inline-flex items-center rounded-full border bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground/80">
                       {LABEL_SECTOR[e.sector]}
@@ -218,21 +223,20 @@ export default async function PersonalPage({ searchParams }: Props) {
                         Sin horas de contrato
                       </span>
                     )}
-                    <span className="truncate text-sm text-muted-foreground">
+                    <span className="min-w-0 text-sm break-words text-muted-foreground">
                       {[e.cargo, LABEL_TIPO_CONTRATO[e.tipo_contrato]].filter(Boolean).join(" · ")}
                     </span>
                   </div>
                   <p
                     className={cn(
-                      "mt-0.5 flex items-center gap-1.5 text-sm",
+                      "mt-0.5 flex items-start gap-1.5 text-sm [&>svg]:mt-0.5",
                       sinHorarios ? "text-parcial" : "text-foreground/80"
                     )}
                   >
                     <Clock className="size-3.5 shrink-0" strokeWidth={2} />
-                    <span className="truncate tabular">{horarios}</span>
+                    <span className="min-w-0 break-words tabular">{horarios}</span>
                   </p>
                 </div>
-                <Sello estado={e.activo ? "activo" : "inactivo"} />
                 <ChevronRight
                   className="size-4 shrink-0 text-muted-foreground max-sm:hidden"
                   strokeWidth={2}

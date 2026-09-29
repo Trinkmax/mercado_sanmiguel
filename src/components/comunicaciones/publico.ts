@@ -3,7 +3,13 @@
  * El público se calcula SIEMPRE con clienteEnPublico() (espejo de private.cliente_en_publico)
  * sobre las filas de v_clientes_segmentos: "socios" es un filtro, no un segmento más.
  */
-import { clienteEnPublico, type CategoriaCliente } from "@/lib/segmentos";
+import {
+  CATEGORIAS,
+  clienteEnPublico,
+  LABEL_CATEGORIA,
+  LABEL_CATEGORIA_PLURAL,
+  type CategoriaCliente,
+} from "@/lib/segmentos";
 
 /** Fila de v_clientes_segmentos que usan Comunicaciones (formulario, detalle y ficha). */
 export type ClientePublico = {
@@ -65,6 +71,21 @@ export function resumenLectura(
   const vieron = lectores.filter((l) => l.vio_en).length;
   const sinPortal = lectores.filter((l) => !l.vio_en && !l.tiene_portal).length;
   return { lectores, total: lectores.length, vieron, sinPortal };
+}
+
+/**
+ * "4 puesteros y 2 quinteros": de qué categorías sale el total. Sirve para que "La vieron 1 de 6"
+ * cierre con lo que Administración ve en Clientes (solo sus puesteros). null si hay una sola.
+ */
+export function desgloseCategorias(lectores: { categoria: CategoriaCliente }[]): string | null {
+  const cuenta = new Map<CategoriaCliente, number>();
+  for (const l of lectores) cuenta.set(l.categoria, (cuenta.get(l.categoria) ?? 0) + 1);
+  if (cuenta.size < 2) return null;
+  const partes = CATEGORIAS.filter((c) => cuenta.has(c)).map((c) => {
+    const n = cuenta.get(c) ?? 0;
+    return `${n} ${(n === 1 ? LABEL_CATEGORIA[c] : LABEL_CATEGORIA_PLURAL[c]).toLowerCase()}`;
+  });
+  return partes.length === 2 ? partes.join(" y ") : `${partes.slice(0, -1).join(", ")} y ${partes.at(-1)}`;
 }
 
 /** Cuántos del público lo ven en el portal y cuántos no (formulario de circular). */

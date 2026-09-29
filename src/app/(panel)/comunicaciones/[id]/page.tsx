@@ -14,7 +14,7 @@ import { BarraRecepcion } from "@/components/comunicaciones/barra-recepcion";
 import { DesactivarCircular } from "@/components/comunicaciones/desactivar-circular";
 import { ListaLectores } from "@/components/comunicaciones/lista-lectores";
 import { cargarClientesPublico, cargarRecepciones } from "@/components/comunicaciones/datos";
-import { resumenLectura } from "@/components/comunicaciones/publico";
+import { desgloseCategorias, resumenLectura } from "@/components/comunicaciones/publico";
 
 export const metadata = { title: "Circular" };
 
@@ -51,26 +51,32 @@ export default async function CircularPage({
     ? (await supabase.storage.from("documentos").createSignedUrl(c.storage_path, 3600)).data?.signedUrl
     : undefined;
 
+  const desglose = desgloseCategorias(res.lectores);
+
   return (
     <div className="space-y-8">
-      <PageHeader titulo={`Circular N° ${c.numero}`} descripcion={c.titulo}>
-        {!c.activa ? <Sello estado="inactivo" texto="Desactivada" /> : null}
-        {pdfUrl ? (
-          <Button asChild variant="outline" className="min-h-11">
-            <a href={pdfUrl} target="_blank" rel="noopener noreferrer">
-              <FileText className="size-4" strokeWidth={2} />
-              Ver PDF
-            </a>
-          </Button>
-        ) : null}
-        {c.activa ? <DesactivarCircular id={c.id} numero={c.numero} titulo={c.titulo} /> : null}
-        <Button asChild variant="ghost" className="min-h-11">
+      {/* "Volver" arriba a la izquierda, como en los demás detalles, y lejos de "Desactivar"
+          (antes estaban pegados arriba a la derecha y se podía tocar uno por el otro). */}
+      <div className="space-y-3">
+        <Button asChild variant="ghost" className="-ml-2 min-h-11">
           <Link href="/comunicaciones">
             <ArrowLeft className="size-4" />
-            Volver
+            Volver a Circulares
           </Link>
         </Button>
-      </PageHeader>
+        <PageHeader titulo={`Circular N° ${c.numero}`} descripcion={c.titulo} className="pb-0">
+          {!c.activa ? <Sello estado="inactivo" texto="Desactivada" /> : null}
+          {pdfUrl ? (
+            <Button asChild variant="outline" className="min-h-11">
+              <a href={pdfUrl} target="_blank" rel="noopener noreferrer">
+                <FileText className="size-4" strokeWidth={2} />
+                Ver PDF
+              </a>
+            </Button>
+          ) : null}
+          {c.activa ? <DesactivarCircular id={c.id} numero={c.numero} titulo={c.titulo} /> : null}
+        </PageHeader>
+      </div>
 
       {/* El número que importa, grande */}
       <section
@@ -100,6 +106,11 @@ export default async function CircularPage({
           </div>
         </div>
         <BarraRecepcion recibidas={res.vieron} total={res.total} sinPortal={res.sinPortal} soloBarra />
+        {desglose ? (
+          <p className="text-sm">
+            Le llega a <span className="font-semibold tabular">{res.total}</span>: {desglose}.
+          </p>
+        ) : null}
         <p className="text-sm text-muted-foreground">
           {res.total === 0
             ? "Nadie entra en este público por ahora."
@@ -111,8 +122,7 @@ export default async function CircularPage({
         </p>
       </section>
 
-      <ListaLectores lectores={res.lectores} obligatoria={c.obligatoria} />
-
+      {/* Lo que dice va antes de las listas: la circular es corta y las listas crecen con cada socio. */}
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">Lo que dice</CardTitle>
@@ -146,6 +156,8 @@ export default async function CircularPage({
           </p>
         </CardContent>
       </Card>
+
+      <ListaLectores lectores={res.lectores} obligatoria={c.obligatoria} />
     </div>
   );
 }

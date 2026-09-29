@@ -43,18 +43,45 @@ function GrupoGastos({
   titulo,
   detalle,
   children,
+  plegable,
 }: {
   titulo: string;
   detalle: React.ReactNode;
   children: React.ReactNode;
+  /** Grupo que se puede cerrar (con el total a la vista) para que la página no sea eterna. */
+  plegable?: { abierto: boolean; textoVer: string };
 }) {
+  const lista = <ul className="divide-y overflow-hidden rounded-xl border bg-card">{children}</ul>;
+  if (!plegable) {
+    return (
+      <section className="space-y-3" aria-label={titulo}>
+        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+          <h2 className="font-display text-lg font-bold tracking-tight">{titulo}</h2>
+          <p className="text-sm text-muted-foreground">{detalle}</p>
+        </div>
+        {lista}
+      </section>
+    );
+  }
   return (
-    <section className="space-y-3" aria-label={titulo}>
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h2 className="font-display text-lg font-bold tracking-tight">{titulo}</h2>
-        <p className="text-sm text-muted-foreground">{detalle}</p>
-      </div>
-      <ul className="divide-y overflow-hidden rounded-xl border bg-card">{children}</ul>
+    <section aria-label={titulo}>
+      <Collapsible defaultOpen={plegable.abierto} className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-1">
+            <h2 className="font-display text-lg font-bold tracking-tight">{titulo}</h2>
+            <p className="text-sm text-muted-foreground">{detalle}</p>
+          </div>
+          <CollapsibleTrigger className="group inline-flex min-h-11 shrink-0 items-center gap-2 rounded-md border bg-card px-4 text-base font-medium outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/30">
+            <span className="group-data-[state=open]:hidden">{plegable.textoVer}</span>
+            <span className="hidden group-data-[state=open]:inline">Ocultar</span>
+            <ChevronDown
+              className="size-4 transition-transform group-data-[state=open]:rotate-180"
+              strokeWidth={2}
+            />
+          </CollapsibleTrigger>
+        </div>
+        <CollapsibleContent>{lista}</CollapsibleContent>
+      </Collapsible>
     </section>
   );
 }
@@ -77,6 +104,8 @@ export default async function GastosPage({
   // Tesorería paga casi siempre desde el banco; Administración y el Líder, de la caja.
   const preferirCaja = perfil.rol !== "tesoreria";
   const puedeOperar = true; // admin, tesorería y el Líder (§1.3) operan todo.
+  // Un pago con cheque se deshace en Cheques, que ven Tesorería y el Líder.
+  const verCheques = perfil.rol === "tesoreria" || perfil.rol === "lider";
 
   const supabase = await createClient();
   const [gastosRes, rubrosRes, anterioresRes, usoRes, cajas, impagosRes] = await Promise.all([
@@ -190,6 +219,7 @@ export default async function GastosPage({
       etiqueta: etiquetaGasto(g.descripcion, g.rubro?.nombre),
       descripcion: g.descripcion,
       rubroCodigo: g.rubro?.codigo ?? null,
+      rubroNombre: g.rubro?.nombre ?? null,
       monto: Number(g.monto),
       vencimientoSugerido: g.vencimiento ? sumarUnMes(g.vencimiento) : null,
     }));
@@ -213,11 +243,16 @@ export default async function GastosPage({
     .filter((g) => g.estado === "pagado")
     .sort((a, b) => (b.fechaPago ?? "").localeCompare(a.fechaPago ?? ""));
   const anulados = visibles.filter((g) => g.estado === "anulado");
+  const pagadosSinFactura = pagados.filter((g) => !g.facturaPath).length;
 
   const suma = (l: GastoFila[]) => l.reduce((acc, g) => acc + g.monto, 0);
   const pendientesMes = filas.filter((g) => g.estado === "pendiente");
   const vencidos = pendientesMes.filter((g) => g.vencimiento && g.vencimiento < hoy);
-  const semana = pendientesMes.filter(
+  // "Vencen esta semana" solo tiene sentido si los próximos 7 días caen en el mes que se
+  // mira: el actual (con sus impagos de antes) o el que viene si empieza en estos días.
+  // En un mes que ya pasó diría "Ninguno" aunque todo esté vencido.
+  const mostrarSemana = esMesActual || (periodo > periodoActual() && diasEntre(hoy, periodo) <= 7);
+  const semana = [...pendientesMes, ...anteriores].filter(
     (g) => g.vencimiento && g.vencimiento >= hoy && diasEntre(hoy, g.vencimiento) <= 7
   );
   const totalPorPagar = suma(pendientesMes);
@@ -232,6 +267,7 @@ export default async function GastosPage({
   const filaProps = {
     hoy,
     puedeOperar,
+    verCheques,
     cajas,
     preferirCaja,
     cajaPreseleccionadaId: cajaPreseleccionada?.id ?? null,
@@ -288,39 +324,46 @@ export default async function GastosPage({
 
       <div className="flex flex-wrap items-center justify-between gap-4">
         <SelectorMes periodo={periodo} caja={cajaPreseleccionada?.id ?? null} />
-        <dl className="flex flex-wrap divide-x rounded-xl border bg-card">
-          <div className="px-5 py-3">
-            <dt className="text-sm text-muted-foreground">Por pagar</dt>
-            <dd>
-              <Money
-                monto={totalPorPagar}
-                className={totalPorPagar > 0 ? "text-2xl font-bold text-pendiente" : "text-2xl font-bold"}
-              />
-            </dd>
-            {vencidos.length > 0 ? (
-              <dd className="text-sm font-medium text-pendiente">
-                {vencidos.length === 1 ? "1 vencido" : `${vencidos.length} vencidos`}
+        {/* Cada dato lleva su borde arriba y a la izquierda, y el recuadro recorta los que
+            caen sobre el borde: cuando en el celular pasan a otra línea, ocupan todo el
+            ancho y no queda un casillero vacío. */}
+        <div className="w-full overflow-hidden rounded-xl border bg-card sm:w-auto">
+          <dl className="-mt-px -ml-px flex flex-wrap">
+            <div className="grow border-t border-l px-4 py-3 sm:px-5">
+              <dt className="text-sm text-muted-foreground">Por pagar</dt>
+              <dd>
+                <Money
+                  monto={totalPorPagar}
+                  className={totalPorPagar > 0 ? "text-2xl font-bold text-pendiente" : "text-2xl font-bold"}
+                />
               </dd>
-            ) : null}
-            {anteriores.length > 0 ? (
-              <dd className="text-sm font-medium text-pendiente">
-                y {formatARS(totalAnteriores)} de meses anteriores
+              {vencidos.length > 0 ? (
+                <dd className="text-sm font-medium text-pendiente">
+                  {vencidos.length === 1 ? "1 vencido" : `${vencidos.length} vencidos`}
+                </dd>
+              ) : null}
+              {anteriores.length > 0 ? (
+                <dd className="text-sm font-medium text-pendiente">
+                  y {formatARS(totalAnteriores)} de meses anteriores
+                </dd>
+              ) : null}
+            </div>
+            <div className="grow border-t border-l px-4 py-3 sm:px-5">
+              <dt className="text-sm text-muted-foreground">Pagado</dt>
+              <dd>
+                <Money monto={totalPagado} className="text-xl font-bold text-pagado sm:text-2xl" />
               </dd>
+            </div>
+            {mostrarSemana ? (
+              <div className="grow border-t border-l px-4 py-3 sm:px-5">
+                <dt className="text-sm text-muted-foreground">Vencen esta semana</dt>
+                <dd className="text-lg font-semibold tabular">
+                  {semana.length === 0 ? "Ninguno" : `${semana.length} · ${formatARS(suma(semana))}`}
+                </dd>
+              </div>
             ) : null}
-          </div>
-          <div className="px-5 py-3">
-            <dt className="text-sm text-muted-foreground">Pagado</dt>
-            <dd>
-              <Money monto={totalPagado} className="text-2xl font-bold text-pagado" />
-            </dd>
-          </div>
-          <div className="px-5 py-3">
-            <dt className="text-sm text-muted-foreground">Vencen esta semana</dt>
-            <dd className="text-lg font-semibold tabular">
-              {semana.length === 0 ? "Ninguno" : `${semana.length} · ${formatARS(suma(semana))}`}
-            </dd>
-          </div>
-        </dl>
+          </dl>
+        </div>
       </div>
 
       {anteriores.length > 0 ? (
@@ -339,7 +382,7 @@ export default async function GastosPage({
       ) : null}
 
       {fijosParaTraer.length > 0 && filas.length > 0 ? (
-        <TraerFijos items={fijosParaTraer} mesOrigen={mesAnterior} mesDestino={periodo} />
+        <TraerFijos items={fijosParaTraer} mesOrigen={mesAnterior} mesDestino={periodo} hoy={hoy} />
       ) : null}
 
       {filas.length === 0 ? (
@@ -350,7 +393,13 @@ export default async function GastosPage({
               titulo={`Todavía no hay gastos en ${labelPeriodo(periodo)}`}
               descripcion="Empezá trayendo los fijos del mes anterior: revisás los montos y quedan cargados."
             />
-            <TraerFijos items={fijosParaTraer} mesOrigen={mesAnterior} mesDestino={periodo} abiertoInicial />
+            <TraerFijos
+              items={fijosParaTraer}
+              mesOrigen={mesAnterior}
+              mesDestino={periodo}
+              hoy={hoy}
+              abiertoInicial
+            />
           </div>
         ) : (
           <EmptyState
@@ -384,13 +433,23 @@ export default async function GastosPage({
           )}
 
           {pagados.length > 0 ? (
+            // Cerrado mientras haya algo por pagar: lo que se hace acá es pagar. El total y
+            // los que no tienen factura quedan a la vista en el título.
             <GrupoGastos
+              key={`pagados-${periodo}-${filtro}-${porPagar.length === 0}`}
               titulo="Pagados"
               detalle={
                 <>
                   {pagados.length} · <Money monto={suma(pagados)} className="font-semibold text-foreground" />
+                  {pagadosSinFactura > 0 ? (
+                    <span className="font-medium text-pendiente"> · {pagadosSinFactura} sin factura</span>
+                  ) : null}
                 </>
               }
+              plegable={{
+                abierto: porPagar.length === 0,
+                textoVer: pagados.length === 1 ? "Ver el pagado" : `Ver los ${pagados.length} pagados`,
+              }}
             >
               {pagados.map((g) => (
                 <FilaGasto key={g.id} g={g} {...filaProps} />

@@ -52,6 +52,7 @@ import {
   conceptoSigueConCategoria,
   labelCategoria,
 } from "@/components/clientes/constantes";
+import { DescripcionCargo } from "@/components/cobranza/descripcion-cargo";
 import { EnElPlano } from "@/components/mapa/en-el-plano";
 import { etiquetaEspacio, etiquetaEspacios } from "@/components/mapa/geometria";
 import type { TipoEspacio } from "@/components/mapa/tipos";
@@ -71,6 +72,24 @@ function estadoCargo(cargo: { estado: string; vencimiento: string }, hoy: string
     return "vencido";
   }
   return cargo.estado;
+}
+
+/**
+ * Beneficio por pago en término de un cargo, para que la fila cierre a la vista
+ * (importe − beneficio − pagado = saldo):
+ *  - pagado con beneficio: lo que no hizo falta pagar (monto − pagado);
+ *  - pendiente o parcial en término: lo que se ahorra si termina de pagar antes del vencimiento.
+ * Vencido: ya no hay beneficio (debe el importe completo, lo dice el aviso de arriba).
+ */
+function beneficioDelCargo(
+  c: { estado: string; monto: number; monto_pagado: number; descuento_pronto_pago: number },
+  saldo: number
+): number {
+  if (!(c.descuento_pronto_pago > 0)) return 0;
+  const sinPagar = Math.max(c.monto - c.monto_pagado, 0);
+  if (c.estado === "pagado") return Math.round(sinPagar * 100) / 100;
+  if (c.estado === "pendiente" || c.estado === "parcial") return Math.round(Math.max(sinPagar - saldo, 0) * 100) / 100;
+  return 0;
 }
 
 /** Pantalla simple (no 404) cuando el cliente es de otra categoría (§6 M4-2). */
@@ -690,15 +709,32 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
                     const saldo = saldoCargo(c);
                     const anulado = c.estado === "anulado";
                     const cargadoAMano = c.origen === "deuda" || c.origen === "manual";
+                    const beneficio = beneficioDelCargo(c, saldo);
                     return (
-                      <div key={c.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 py-3">
-                        <Codigo codigo={c.codigo} />
-                        <div className="min-w-0 flex-1 basis-48">
+                      // Celular: código + descripción arriba y el saldo con su sello abajo a la
+                      // derecha (en TODAS las filas, larga o corta). Desde tablet: saldo a la derecha.
+                      <div
+                        key={c.id}
+                        className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 py-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center sm:gap-x-4"
+                      >
+                        <Codigo codigo={c.codigo} className="mt-0.5 self-start sm:mt-0 sm:self-center" />
+                        <div className="min-w-0">
                           <p className={cn("font-medium break-words", anulado && "text-muted-foreground line-through")}>
-                            {c.descripcion}
+                            <DescripcionCargo texto={c.descripcion} />
                           </p>
+                          {/* La cuenta de la fila, en pedazos que no se parten: importe − beneficio − pagado = saldo. */}
                           <p className="text-sm text-muted-foreground tabular">
-                            {formatARS(c.monto)} · pagado {formatARS(c.monto_pagado)}
+                            <span className="whitespace-nowrap">{formatARS(c.monto)}</span>
+                            {beneficio > 0.009 ? (
+                              <>
+                                {" · "}
+                                <span className="whitespace-nowrap">
+                                  beneficio en término −{formatARS(beneficio)}
+                                </span>
+                              </>
+                            ) : null}
+                            {" · "}
+                            <span className="whitespace-nowrap">pagado {formatARS(c.monto_pagado)}</span>
                           </p>
                           {cargadoAMano && c.creado_por ? (
                             <p className="text-sm text-muted-foreground">
@@ -712,16 +748,18 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
                             </p>
                           ) : null}
                         </div>
-                        <div className="text-right">
-                          <p className="text-sm text-muted-foreground">Saldo</p>
-                          <Money
-                            monto={saldo}
-                            className={cn("font-semibold", saldo > 0 ? "text-pendiente" : "text-pagado")}
-                          />
+                        <div className="col-start-2 flex flex-wrap items-center justify-end gap-x-3 gap-y-1 sm:col-start-3 sm:flex-col sm:items-end sm:gap-1">
+                          <p className="text-right whitespace-nowrap">
+                            <span className="text-sm text-muted-foreground">Saldo </span>
+                            <Money
+                              monto={saldo}
+                              className={cn("font-semibold", saldo > 0 ? "text-pendiente" : "text-pagado")}
+                            />
+                          </p>
+                          <Sello estado={estadoCargo(c, hoy)} />
                         </div>
-                        <Sello estado={estadoCargo(c, hoy)} />
                         {puedeDeudaAnterior && cargadoAMano && !anulado ? (
-                          <div className="flex basis-full justify-end">
+                          <div className="col-span-full flex justify-end">
                             <AnularDeuda
                               cargoId={c.id}
                               clienteId={cliente.id}

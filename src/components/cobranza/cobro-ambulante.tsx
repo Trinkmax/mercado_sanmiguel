@@ -44,6 +44,7 @@ import {
   diaMes,
   diaSemanaCorto,
   diasEntre,
+  montoConMiles,
   parseMonto,
   redondear2,
   sanitizarMonto,
@@ -530,6 +531,8 @@ export function CobroAmbulante({
                 setErrorMonto(undefined);
                 setErrorRpc(null);
               }}
+              // Al salir del campo queda con sus puntos de miles ("12.000"), como en el cobro común.
+              onBlur={() => setMontoTransferencia((v) => (v ? montoConMiles(parseMonto(v)) : v))}
               aria-invalid={Boolean(mensajeMonto)}
               className="h-12 text-xl font-semibold tabular md:text-xl"
             />

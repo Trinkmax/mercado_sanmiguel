@@ -4,7 +4,15 @@ import { ArrowLeft, ClipboardList, DoorOpen, FileText, Pencil, Plus } from "luci
 import { requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { SIN_CONEXION } from "@/lib/sesion";
-import { formatFecha, formatFechaTS, hoyISO, labelPeriodo, periodoActual } from "@/lib/format";
+import {
+  formatCuit,
+  formatDni,
+  formatFecha,
+  formatFechaTS,
+  hoyISO,
+  labelPeriodo,
+  periodoActual,
+} from "@/lib/format";
 import { fechaHoraAR, horaAR } from "@/components/porteria/fechas";
 import { Button } from "@/components/ui/button";
 import {
@@ -106,7 +114,7 @@ export default async function FichaEmpleadoPage({ params }: Props) {
   const subtitulo = [
     empleado.cargo,
     LABEL_TIPO_CONTRATO[empleado.tipo_contrato],
-    `DNI ${empleado.dni}`,
+    `DNI ${formatDni(empleado.dni)}`,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -151,10 +159,11 @@ export default async function FichaEmpleadoPage({ params }: Props) {
           </CardHeader>
           <CardContent>
             <dl className="grid gap-4 sm:grid-cols-2">
-              <Dato label="DNI" valor={<span className="tabular">{empleado.dni}</span>} />
+              {/* Con puntos y guiones, como en el resto del sistema. */}
+              <Dato label="DNI" valor={<span className="tabular">{formatDni(empleado.dni)}</span>} />
               <Dato
                 label="CUIL"
-                valor={empleado.cuil ? <span className="tabular">{empleado.cuil}</span> : null}
+                valor={empleado.cuil ? <span className="tabular">{formatCuit(empleado.cuil)}</span> : null}
               />
               <Dato label="Sector" valor={LABEL_SECTOR[empleado.sector]} />
               <Dato label="Cargo" valor={empleado.cargo} />

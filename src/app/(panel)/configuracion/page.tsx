@@ -43,7 +43,7 @@ const DESCRIPCION: Partial<Record<Rol, string>> = {
   lider:
     "Precios, tarifas de transporte, cómo se cobra la quinta, usuarios y rubros. Los cambios rigen de acá en adelante.",
   admin:
-    "Precios de los puestos, vencimiento del mes, acceso de los socios al portal y rubros de gasto.",
+    "Precios de los puestos, vencimiento del mes, acceso de los clientes al portal y rubros de gasto.",
   guardia: "Cómo cobrás a quinteros y ambulantes, y los usuarios de Portería.",
 };
 
@@ -314,12 +314,18 @@ async function Usuarios(supabase: Supabase, perfil: Perfil, ver: "equipo" | "soc
 
   const selectorLider =
     perfil.rol === "lider" ? (
-      <div className="mb-5 flex gap-2" role="group" aria-label="Qué usuarios ver">
+      <div className="mb-5 flex flex-wrap gap-2" role="group" aria-label="Qué usuarios ver">
         {(
           [
             { valor: "equipo", label: "Equipo", n: todos.filter((p) => p.rol !== "socio").length },
-            // Socios que hoy pueden entrar (los que se quedaron sin acceso por una baja no están en la lista).
-            { valor: "socios", label: "Socios", n: todos.filter((p) => p.rol === "socio" && p.activo).length },
+            // Clientes que hoy pueden entrar al portal: el mismo número que "Con acceso" de la lista.
+            // No se llama "Socios": la lista es de todos los clientes (sean socios o no) y el 1 de
+            // la pestaña parecía contradecir los 11 de abajo.
+            {
+              valor: "socios",
+              label: "Portal de clientes",
+              n: todos.filter((p) => p.rol === "socio" && p.activo).length,
+            },
           ] as const
         ).map((o) => (
           <Link
@@ -332,7 +338,9 @@ async function Usuarios(supabase: Supabase, perfil: Perfil, ver: "equipo" | "soc
             )}
           >
             {o.label}
-            <span className="tabular opacity-80">{o.n}</span>
+            <span className="tabular opacity-80">
+              {o.valor === "socios" ? `${o.n} con acceso` : o.n}
+            </span>
           </Link>
         ))}
       </div>
@@ -342,7 +350,7 @@ async function Usuarios(supabase: Supabase, perfil: Perfil, ver: "equipo" | "soc
     const categorias = perfil.rol === "lider" ? ["puestero", "quintero"] : ["puestero"];
     const { data: clientesRes } = await supabase
       .from("clientes")
-      .select("id, codigo, nombre, apodo, cuit, tipo_persona, auth_user_id, activo")
+      .select("id, codigo, nombre, apodo, cuit, tipo_persona, es_socio, auth_user_id, activo")
       .eq("org_id", perfil.org_id)
       // Los dados de baja solo si todavía tienen usuario del portal: la base se lo
       // corta al aprobar la baja (0028), pero si quedó alguno activo, que se vea.
@@ -373,6 +381,7 @@ async function Usuarios(supabase: Supabase, perfil: Perfil, ver: "equipo" | "soc
         apodo: c.apodo,
         cuit: c.cuit,
         tipoPersona: c.tipo_persona,
+        esSocio: Boolean(c.es_socio),
         lugares: lugaresDe(espaciosPorCliente.get(c.id) ?? []),
         acceso: socio ? aFila(socio) : null,
         dadoDeBaja: !c.activo,

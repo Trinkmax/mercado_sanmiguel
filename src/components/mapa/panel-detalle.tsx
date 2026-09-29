@@ -13,6 +13,7 @@ import {
   UserPlus,
   X,
 } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { LABEL_CATEGORIA_PLURAL, textoAvance, type CategoriaCliente } from "@/lib/segmentos";
 import { Button } from "@/components/ui/button";
 import { Money } from "@/components/shared/money";
@@ -22,9 +23,11 @@ import {
   diferencias,
   espaciosPorTipo,
   etiquetaEspacio,
+  listaConY,
   NOMBRE_TIPO,
   nombreTipo,
   numeroVisible,
+  sinLugarEnPlano,
   textoDiferencia,
   unir,
 } from "./geometria";
@@ -155,66 +158,140 @@ export function PanelDetalle({
     const puedeCobrar = gestiona && destinos.cobro !== null && (!soloQuinteros || esQuintero);
     const quienGestiona =
       cliente.categoria === "puestero" ? "Administración" : cliente.categoria ? "el Jefe de Portería" : null;
+    // Cocheras y galpones se facturan pero no se marcan en el plano: se nombran igual,
+    // así la tarjeta dice lo mismo que su carpeta y que Clientes.
+    const sinLugar = vista === "porteria" ? [] : sinLugarEnPlano(cliente.facturado);
+    const f = cliente.facturado;
+    const facturaLugares = f.puestos + (f.propios ?? 0) + f.locales + f.contenedores > 0;
+
+    // Orden en el celular: la deuda y Cobrar en el primer renglón; lo demás, abajo.
+    // Desde @2xl (columna de la derecha) vuelven al orden del DOM.
+    const botonEditar =
+      editarPuesto && suyos.length > 0 ? (
+        <Button
+          type="button"
+          variant="outline"
+          className={cn(BOTON, "order-3 @2xl:order-none")}
+          aria-expanded={suyos.length > 1 ? eligiendo : undefined}
+          onClick={() => (suyos.length === 1 ? editarPuesto(suyos[0].id) : setEligiendo((v) => !v))}
+        >
+          <Pencil className="size-4" strokeWidth={2} />
+          {suyos.length === 1 ? `Editar ${nombreConArticulo(suyos[0])}` : "Editar un puesto"}
+        </Button>
+      ) : null;
+    const botonUbicar =
+      puedeEditar && suyos.length === 0 && !esQuintero ? (
+        <Button
+          type="button"
+          variant="outline"
+          className={cn(BOTON, "order-3 @2xl:order-none")}
+          onClick={() => onAsignarCliente(cliente.id)}
+        >
+          <UserPlus className="size-4" strokeWidth={2} />
+          Ubicar en el plano
+        </Button>
+      ) : null;
+    const botonFicha =
+      destinos.ficha && gestiona ? (
+        <Button asChild variant="outline" className={cn(BOTON, "order-3 @2xl:order-none")}>
+          <Link href={`${destinos.ficha}/${cliente.id}`}>
+            Ver ficha
+            <ArrowRight className="size-4" strokeWidth={2} />
+          </Link>
+        </Button>
+      ) : destinos.ficha && puedeEditar ? (
+        // Administración y un quintero: la carpeta es del Jefe, pero la energía es suya (§4.7).
+        <Button asChild variant="outline" className={cn(BOTON, "order-3 @2xl:order-none")}>
+          <Link href={`${destinos.ficha}/${cliente.id}?tab=medidores`}>
+            Ver sus medidores
+            <ArrowRight className="size-4" strokeWidth={2} />
+          </Link>
+        </Button>
+      ) : null;
+    const hayOtros = botonEditar !== null || botonUbicar !== null || botonFicha !== null;
+
     return (
       <div className="relative flex flex-col gap-4 p-4 @2xl:flex-row @2xl:items-start @2xl:gap-6 @2xl:p-5 @2xl:pr-16">
         <BotonCerrar onCerrar={onCerrar} />
-        <div className="min-w-0 space-y-1 @2xl:w-60 @2xl:shrink-0">
-          <div className="flex flex-wrap items-center gap-2 pr-10 @2xl:pr-0">
-            <Sello estado={sello.estado} texto={sello.texto} />
-            <span className="text-xs text-muted-foreground tabular">Carpeta N° {cliente.codigo}</span>
-          </div>
-          <p className="truncate font-display text-lg leading-snug font-bold">{cliente.nombre}</p>
-          {cliente.apodo ? (
-            <p className="truncate text-sm text-muted-foreground">Le dicen “{cliente.apodo}”</p>
-          ) : null}
-        </div>
-
-        <div className="min-w-0 flex-1 space-y-2.5">
-          {suyos.length > 0 ? (
-            <ChipsEspacios espacios={suyos} onEnfocar={onEnfocar} />
-          ) : esQuintero ? (
-            <AvanceQuintero cliente={cliente} />
-          ) : (
-            <p className="text-sm text-muted-foreground">Todavía no tiene puestos asignados en el plano.</p>
-          )}
-          {!gestiona && quienGestiona ? (
-            <p className="text-xs text-muted-foreground">
-              {cliente.categoria ? `${LABEL_CATEGORIA_PLURAL[cliente.categoria]}: ` : ""}lo gestiona {quienGestiona}.
-            </p>
-          ) : null}
-          {difs.map((d) => (
-            <p key={d.tipo} className="flex items-start gap-1.5 text-sm text-parcial">
-              <TriangleAlert className="mt-0.5 size-4 shrink-0" strokeWidth={2} />
-              {textoDiferencia(d)}
-            </p>
-          ))}
-          {eligiendo && editarPuesto && suyos.length > 1 ? (
-            <div className="space-y-1.5 rounded-lg border border-primary/25 bg-accent/60 p-2.5">
-              <p className="text-sm font-medium">¿Cuál querés editar?</p>
-              <div className="flex flex-wrap gap-1.5">
-                {suyos.map((e) => (
-                  <Button
-                    key={e.id}
-                    type="button"
-                    variant="outline"
-                    className="min-h-11 min-w-11 bg-card px-3 font-display text-[15px] font-bold tabular"
-                    onClick={() => editarPuesto(e.id)}
-                    aria-label={`Editar ${nombreConArticulo(e)}`}
-                  >
-                    {e.propio ? <Flag className="size-3.5 text-primary" strokeWidth={2.2} aria-hidden /> : null}
-                    {e.tipo === "puesto" ? numeroVisible(e) : etiquetaEspacio(e)}
-                  </Button>
-                ))}
-                <Button type="button" variant="ghost" className="min-h-11 px-3 text-sm" onClick={() => setEligiendo(false)}>
-                  Cancelar
-                </Button>
-              </div>
+        {/* Quién es y qué ocupa, en una sola columna: el nombre usa todo el ancho que
+            queda (en escritorio no se aprieta en 15 rem) y salta de renglón entero. */}
+        <div className="min-w-0 flex-1 space-y-3">
+          <div className="min-w-0 space-y-1">
+            <div className="flex flex-wrap items-center gap-2 pr-12 @2xl:pr-0">
+              <Sello estado={sello.estado} texto={sello.texto} />
+              <span className="text-xs text-muted-foreground tabular">Carpeta N° {cliente.codigo}</span>
             </div>
-          ) : null}
+            <p className="font-display text-lg leading-snug font-bold break-words">{cliente.nombre}</p>
+            {cliente.apodo ? (
+              <p className="text-sm break-words text-muted-foreground">Le dicen “{cliente.apodo}”</p>
+            ) : null}
+          </div>
+
+          <div className="min-w-0 space-y-2.5">
+            {suyos.length > 0 ? (
+              <ChipsEspacios espacios={suyos} onEnfocar={onEnfocar} />
+            ) : esQuintero ? (
+              <AvanceQuintero cliente={cliente} />
+            ) : facturaLugares || sinLugar.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Todavía no tiene puestos asignados en el plano.</p>
+            ) : null}
+            {sinLugar.length > 0 ? (
+              <p className="text-sm text-muted-foreground">
+                {suyos.length > 0 || esQuintero ? "También factura " : "Factura "}
+                <span className="font-medium text-foreground">{listaConY(sinLugar)}</span>
+                {sinLugar.length > 1 || f.cocheras > 1 || f.galpones > 1
+                  ? " (no se marcan en el plano)."
+                  : " (no se marca en el plano)."}
+              </p>
+            ) : null}
+            {!gestiona && quienGestiona ? (
+              <p className="text-xs text-muted-foreground">
+                {cliente.categoria ? `${LABEL_CATEGORIA_PLURAL[cliente.categoria]}: ` : ""}lo gestiona {quienGestiona}.
+              </p>
+            ) : null}
+            {difs.map((d) => (
+              <p key={d.tipo} className="flex items-start gap-1.5 text-sm text-parcial">
+                <TriangleAlert className="mt-0.5 size-4 shrink-0" strokeWidth={2} />
+                {textoDiferencia(d)}
+              </p>
+            ))}
+            {eligiendo && editarPuesto && suyos.length > 1 ? (
+              <div className="space-y-1.5 rounded-lg border border-primary/25 bg-accent/60 p-2.5">
+                <p className="text-sm font-medium">¿Cuál querés editar?</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {suyos.map((e) => (
+                    <Button
+                      key={e.id}
+                      type="button"
+                      variant="outline"
+                      className="min-h-11 min-w-11 bg-card px-3 font-display text-[15px] font-bold tabular"
+                      onClick={() => editarPuesto(e.id)}
+                      aria-label={`Editar ${nombreConArticulo(e)}`}
+                    >
+                      {e.propio ? <Flag className="size-3.5 text-primary" strokeWidth={2.2} aria-hidden /> : null}
+                      {e.tipo === "puesto" ? numeroVisible(e) : etiquetaEspacio(e)}
+                    </Button>
+                  ))}
+                  <Button type="button" variant="ghost" className="min-h-11 px-3 text-sm" onClick={() => setEligiendo(false)}>
+                    Cancelar
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 @2xl:flex-col @2xl:items-end">
-          <div className="@2xl:text-right">
+        {/* Deuda y acciones. En el celular y la tablet la tarjeta tiene alto máximo y se
+            desplaza por dentro: este pie queda FIJO abajo (Cobrar nunca queda cortado) y
+            lo que sigue arriba se ve pasar por debajo de su borde. Desde @2xl es la
+            columna de la derecha, como siempre. */}
+        <div
+          className={cn(
+            "sticky bottom-0 z-10 -mx-4 -mb-4 flex flex-wrap items-center gap-x-3 gap-y-2 border-t bg-card px-4 pt-3 pb-4",
+            "@2xl:static @2xl:z-auto @2xl:m-0 @2xl:shrink-0 @2xl:flex-col @2xl:items-end @2xl:gap-3 @2xl:border-t-0 @2xl:bg-transparent @2xl:p-0"
+          )}
+        >
+          <div className="order-1 mr-auto @2xl:order-none @2xl:mr-0 @2xl:text-right">
             <p className="text-xs text-muted-foreground">Deuda</p>
             {cliente.deuda > 0 ? (
               <Money monto={cliente.deuda} className="font-display text-xl font-bold text-pendiente" />
@@ -222,45 +299,15 @@ export function PanelDetalle({
               <p className="font-display text-xl font-bold text-pagado">Sin deuda</p>
             )}
           </div>
-          {/* Al costado (tablet/escritorio) los botones se apilan en una columna angosta: no
-              aprietan la lista de puestos del medio. */}
-          <div className="flex flex-wrap gap-2 @2xl:max-w-60 @2xl:justify-end">
-            {editarPuesto && suyos.length > 0 ? (
-              <Button
-                type="button"
-                variant="outline"
-                className={BOTON}
-                aria-expanded={suyos.length > 1 ? eligiendo : undefined}
-                onClick={() => (suyos.length === 1 ? editarPuesto(suyos[0].id) : setEligiendo((v) => !v))}
-              >
-                <Pencil className="size-4" strokeWidth={2} />
-                {suyos.length === 1 ? `Editar ${nombreConArticulo(suyos[0])}` : "Editar un puesto"}
-              </Button>
-            ) : null}
-            {puedeEditar && suyos.length === 0 && !esQuintero ? (
-              <Button type="button" variant="outline" className={BOTON} onClick={() => onAsignarCliente(cliente.id)}>
-                <UserPlus className="size-4" strokeWidth={2} />
-                Ubicar en el plano
-              </Button>
-            ) : null}
-            {destinos.ficha && gestiona ? (
-              <Button asChild variant="outline" className={BOTON}>
-                <Link href={`${destinos.ficha}/${cliente.id}`}>
-                  Ver ficha
-                  <ArrowRight className="size-4" strokeWidth={2} />
-                </Link>
-              </Button>
-            ) : destinos.ficha && puedeEditar ? (
-              // Administración y un quintero: la carpeta es del Jefe, pero la energía es suya (§4.7).
-              <Button asChild variant="outline" className={BOTON}>
-                <Link href={`${destinos.ficha}/${cliente.id}?tab=medidores`}>
-                  Ver sus medidores
-                  <ArrowRight className="size-4" strokeWidth={2} />
-                </Link>
-              </Button>
-            ) : null}
+          {/* En el celular los botones son hijos directos del pie (contents) para que
+              Cobrar vaya al lado de la deuda. Al costado (tablet ancha/escritorio) se apilan
+              en una columna angosta: no aprietan la lista de puestos. */}
+          <div className="contents @2xl:flex @2xl:max-w-60 @2xl:flex-wrap @2xl:justify-end @2xl:gap-2">
+            {botonEditar}
+            {botonUbicar}
+            {botonFicha}
             {puedeCobrar && destinos.cobro ? (
-              <Button asChild className={BOTON}>
+              <Button asChild className={cn(BOTON, "order-2 @2xl:order-none")}>
                 <Link href={`${destinos.cobro}/${cliente.id}`}>
                   <HandCoins className="size-4" strokeWidth={2} />
                   Cobrar
@@ -268,6 +315,8 @@ export function PanelDetalle({
               </Button>
             ) : null}
           </div>
+          {/* Corte de renglón (solo celular): lo secundario va debajo de la deuda y Cobrar. */}
+          {hayOtros ? <span aria-hidden className="order-2 h-0 basis-full @2xl:hidden" /> : null}
         </div>
       </div>
     );

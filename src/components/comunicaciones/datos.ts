@@ -91,6 +91,7 @@ export async function cargarRegistros(
     )
     .in("clientes.categoria", opciones.categorias)
     .order("creado_en", { ascending: false })
+    .order("numero", { ascending: false })
     .limit(500);
   if (opciones.tipo) q = q.eq("tipo", opciones.tipo);
   if (opciones.clienteId) q = q.eq("cliente_id", opciones.clienteId);

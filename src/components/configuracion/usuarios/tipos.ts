@@ -32,6 +32,8 @@ export type ClienteAcceso = {
   apodo: string | null;
   cuit: string | null;
   tipoPersona: "fisica" | "juridica";
+  /** Socio de la cooperativa (clientes.es_socio). El portal no es solo para socios. */
+  esSocio: boolean;
   /** "Puesto 58 · 60 · Local 3" (para buscar y reconocerlo). */
   lugares: string | null;
   acceso: UsuarioFila | null;

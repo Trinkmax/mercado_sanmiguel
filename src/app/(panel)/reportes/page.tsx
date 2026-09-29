@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { ArrowRight, Equal, FileText, Minus, Receipt, TrendingUp } from "lucide-react";
+import { ArrowRight, Equal, FileText, Minus, Receipt, TrendingUp, type LucideIcon } from "lucide-react";
 import { requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { labelPeriodo, periodoActual } from "@/lib/format";
+import { formatARS, labelPeriodo, periodoActual } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -22,7 +22,11 @@ import { Money } from "@/components/shared/money";
 import { BotonExportar } from "@/components/shared/boton-exportar";
 import { SelectorPeriodo } from "@/components/reportes/selector-periodo";
 import { MenuExportar } from "@/components/reportes/menu-exportar";
-import { FilaIngreso, type ResumenConcepto } from "@/components/reportes/fila-ingreso";
+import {
+  FilaIngreso,
+  beneficioEnTerminoDe,
+  type ResumenConcepto,
+} from "@/components/reportes/fila-ingreso";
 import { ChartCobranzaDiaria } from "@/components/charts/chart-cobranza-diaria";
 import { ChartGastosRubro, type GastoRubro } from "@/components/charts/chart-gastos-rubro";
 import { rangoDelPeriodo, serieDesdeTotales } from "@/components/charts/serie-cobranza";
@@ -30,6 +34,70 @@ import { rangoDelPeriodo, serieDesdeTotales } from "@/components/charts/serie-co
 export const metadata = { title: "Reportes" };
 
 const LABEL_TIPO_GASTO = { fijo: "Fijo", variable: "Variable" } as const;
+
+/** Pagado y pendiente de un rubro (o de un subtotal) en la lista del celular. */
+function MontosGasto({
+  pagado,
+  pendiente,
+  fuerte = false,
+}: {
+  pagado: number | string;
+  pendiente: number | string;
+  fuerte?: boolean;
+}) {
+  return (
+    <dl className="grid grid-cols-2 gap-3">
+      <div className="min-w-0">
+        <dt className="text-sm text-muted-foreground">Pagado</dt>
+        <dd>
+          <Money
+            monto={pagado}
+            className={cn("break-words", fuerte ? "text-lg font-bold" : "text-base font-medium")}
+          />
+        </dd>
+      </div>
+      <div className="min-w-0">
+        <dt className="text-sm text-muted-foreground">Pendiente</dt>
+        <dd>
+          <Money
+            monto={pendiente}
+            className={cn(
+              "break-words",
+              fuerte ? "text-lg font-bold" : "text-base font-medium",
+              Number(pendiente) > 0 && "text-pendiente"
+            )}
+          />
+        </dd>
+      </div>
+    </dl>
+  );
+}
+
+/** Un término del balance con su signo (−, =) pegado adelante: si no entra en el
+ * renglón, baja entero y el signo nunca queda colgando. */
+function TerminoBalance({
+  signo: Signo,
+  etiqueta,
+  children,
+}: {
+  signo?: LucideIcon;
+  etiqueta: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex min-w-0 items-end gap-3">
+      {Signo ? (
+        <Signo className="mb-2 size-5 shrink-0 text-muted-foreground" strokeWidth={2} aria-hidden />
+      ) : (
+        <span aria-hidden className="size-5 shrink-0 sm:hidden" />
+      )}
+      <div className="min-w-0">
+        <p className="text-sm text-muted-foreground">{etiqueta}</p>
+        {children}
+      </div>
+    </div>
+  );
+}
 
 export default async function ReportesPage({
   searchParams,
@@ -80,6 +148,15 @@ export default async function ReportesPage({
     }),
     { estimado: 0, cobrado: 0, descuentos: 0, pendiente: 0 }
   );
+  // Dos cifras con dos nombres, igual en todo el sistema: "Beneficios otorgados" (los
+  // descuentos ya hechos a quienes pagaron en término, como en la impresión y el Excel) y
+  // "Beneficio en término" (el de quienes todavía no pagaron y no vencieron). Con los dos,
+  // estimado = cobrado + otorgados + en término + falta cobrar.
+  const beneficioEnTermino = ingresos.reduce((acc, f) => acc + beneficioEnTerminoDe(f), 0);
+  const hayEnTermino = beneficioEnTermino > 0.5;
+  // El bono camioneros entra en el estimado de acá (se cobra en portería) pero no en el de
+  // Facturación, que no lo factura: se aclara para que los dos cuadren.
+  const bonoCamioneros = Number(ingresos.find((f) => f.codigo === "BC")?.estimado ?? 0);
 
   const subtotalGastos = (tipo: "fijo" | "variable") =>
     gastos
@@ -165,30 +242,55 @@ export default async function ReportesPage({
                   <FilaIngreso key={fila.codigo} fila={fila} />
                 ))}
               </div>
-              <div className="mt-4 grid gap-4 border-t pt-4 sm:grid-cols-4">
-                <div>
+              <div
+                className={cn(
+                  "mt-4 grid grid-cols-2 gap-4 border-t pt-4",
+                  hayEnTermino ? "sm:grid-cols-3 xl:grid-cols-5" : "sm:grid-cols-4"
+                )}
+              >
+                <div className="min-w-0">
                   <p className="text-sm text-muted-foreground">Estimado</p>
-                  <Money monto={totIngresos.estimado} className="text-lg font-semibold" />
+                  <Money monto={totIngresos.estimado} className="text-lg font-semibold break-words" />
+                  {bonoCamioneros > 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      incluye <span className="whitespace-nowrap">{formatARS(bonoCamioneros)}</span>{" "}
+                      de bono camioneros
+                    </p>
+                  ) : null}
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-sm text-muted-foreground">Cobrado</p>
                   <Money
                     monto={totIngresos.cobrado}
-                    className="text-lg font-bold text-pagado"
+                    className="text-lg font-bold break-words text-pagado"
                   />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <p className="text-sm text-muted-foreground">Beneficios otorgados</p>
-                  <Money monto={totIngresos.descuentos} className="text-lg font-semibold" />
+                  <Money monto={totIngresos.descuentos} className="text-lg font-semibold break-words" />
                 </div>
-                <div>
+                {hayEnTermino ? (
+                  <div className="min-w-0">
+                    <p className="text-sm text-muted-foreground">Beneficio en término</p>
+                    <Money monto={beneficioEnTermino} className="text-lg font-semibold break-words" />
+                    <p className="text-sm text-muted-foreground">se pierde si pagan tarde</p>
+                  </div>
+                ) : null}
+                <div className="min-w-0">
                   <p className="text-sm text-muted-foreground">Falta cobrar</p>
                   <Money
                     monto={totIngresos.pendiente}
-                    className="text-lg font-bold text-pendiente"
+                    className="text-lg font-bold break-words text-pendiente"
                   />
                 </div>
               </div>
+              {hayEnTermino ? (
+                <p className="mt-3 text-sm text-muted-foreground">
+                  Estimado = cobrado + beneficios otorgados + beneficio en término + falta cobrar.
+                  El beneficio en término es de quienes todavía no pagaron y no vencieron: si
+                  pagan después del vencimiento, pasa a “Falta cobrar”.
+                </p>
+              ) : null}
             </>
           )}
         </CardContent>
@@ -213,7 +315,43 @@ export default async function ReportesPage({
                   <ChartGastosRubro data={gastosGrafico} />
                 </div>
               ) : null}
-              <Table className="text-sm">
+              {/* Celular: cada rubro es una ficha con sus dos montos a la vista */}
+              <div className="md:hidden">
+                <ul className="divide-y">
+                  {gastos.map((g) => (
+                    <li
+                      key={`${g.codigo}-${g.tipo}`}
+                      className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 py-3 first:pt-0"
+                    >
+                      <Codigo codigo={g.codigo} className="mt-0.5" />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium break-words">{g.nombre}</p>
+                        <p className="text-sm text-muted-foreground">{LABEL_TIPO_GASTO[g.tipo]}</p>
+                      </div>
+                      <div className="col-start-2">
+                        <MontosGasto pagado={g.pagado} pendiente={g.pendiente} />
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-3 space-y-4 rounded-lg bg-muted/50 p-3">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">Subtotal fijos</p>
+                    <MontosGasto pagado={totFijos.pagado} pendiente={totFijos.pendiente} />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">Subtotal variables</p>
+                    <MontosGasto pagado={totVariables.pagado} pendiente={totVariables.pendiente} />
+                  </div>
+                  <div className="space-y-1 border-t pt-3">
+                    <p className="text-base font-bold">Total del mes</p>
+                    <MontosGasto pagado={totGastos.pagado} pendiente={totGastos.pendiente} fuerte />
+                  </div>
+                </div>
+              </div>
+
+              {/* Desde tablet: la tabla de cuatro columnas entra entera */}
+              <Table className="text-sm max-md:hidden">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Rubro</TableHead>
@@ -225,10 +363,10 @@ export default async function ReportesPage({
                 <TableBody>
                   {gastos.map((g) => (
                     <TableRow key={`${g.codigo}-${g.tipo}`}>
-                      <TableCell>
+                      <TableCell className="whitespace-normal">
                         <span className="flex items-center gap-3">
-                          <Codigo codigo={g.codigo} />
-                          <span className="font-medium">{g.nombre}</span>
+                          <Codigo codigo={g.codigo} className="shrink-0" />
+                          <span className="min-w-0 font-medium break-words">{g.nombre}</span>
                         </span>
                       </TableCell>
                       <TableCell className="text-muted-foreground">
@@ -287,22 +425,17 @@ export default async function ReportesPage({
           <CardTitle className="text-lg">Balance de {labelPeriodo(periodo)}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-4">
-            <div>
-              <p className="text-sm text-muted-foreground">Cobrado</p>
+          <div className="grid gap-3 sm:flex sm:flex-wrap sm:items-end sm:gap-x-6">
+            <TerminoBalance etiqueta="Cobrado">
               <Money
                 monto={totIngresos.cobrado}
                 className="text-2xl font-bold text-pagado"
               />
-            </div>
-            <Minus className="size-5 text-muted-foreground max-sm:hidden" strokeWidth={2} />
-            <div>
-              <p className="text-sm text-muted-foreground">Gastado (pagado)</p>
+            </TerminoBalance>
+            <TerminoBalance signo={Minus} etiqueta="Gastado (pagado)">
               <Money monto={totGastos.pagado} className="text-2xl font-bold" />
-            </div>
-            <Equal className="size-5 text-muted-foreground max-sm:hidden" strokeWidth={2} />
-            <div>
-              <p className="text-sm text-muted-foreground">Resultado del mes</p>
+            </TerminoBalance>
+            <TerminoBalance signo={Equal} etiqueta="Resultado del mes">
               <Money
                 monto={resultado}
                 className={cn(
@@ -310,7 +443,7 @@ export default async function ReportesPage({
                   resultado >= 0 ? "text-pagado" : "text-pendiente"
                 )}
               />
-            </div>
+            </TerminoBalance>
           </div>
         </CardContent>
       </Card>

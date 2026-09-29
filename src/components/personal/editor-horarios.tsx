@@ -61,7 +61,7 @@ function erroresSemana(semana: Semana): Record<number, string | null> {
   for (let d = 1; d <= 7; d++) {
     e[d] = null;
     for (const f of semana[d]) {
-      if (!f.desde || !f.hasta) e[d] ??= "Completá la hora de entrada y de salida";
+      if (!f.desde || !f.hasta) e[d] ??= "Completá la hora de entrada y de salida (por ejemplo 08:00)";
       else completas.push({ dia_semana: d, hora_desde: f.desde, hora_hasta: f.hasta });
     }
   }
@@ -159,9 +159,9 @@ export function EditorHorarios({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="max-w-2xl space-y-1 text-sm text-muted-foreground">
           <p>
-            Cargá la entrada y la salida de cada día. Portería compara el ingreso
-            con estas franjas. «Copiar lunes» completa de martes a sábado; el
-            domingo se carga aparte.
+            Cargá la entrada y la salida de cada día, en horario de 24 horas
+            (14:00, no 2 p.m.). Portería compara el ingreso con estas franjas.
+            «Copiar lunes» completa de martes a sábado; el domingo se carga aparte.
           </p>
           <p className="flex items-start gap-1.5">
             <Moon className="mt-0.5 size-4 shrink-0" strokeWidth={2} aria-hidden />
@@ -203,22 +203,16 @@ export function EditorHorarios({
               <div className="space-y-2">
                 {franjas.map((f) => (
                   <div key={f.clave} className="flex flex-wrap items-center gap-2">
-                    <Input
-                      type="time"
-                      step={300}
-                      value={f.desde}
-                      aria-label={`${dia.label}: hora de entrada`}
-                      onChange={(e) => cambiarHora(dia.valor, f.clave, "desde", e.target.value)}
-                      className="h-12 w-36 text-base tabular md:text-base"
+                    <CampoHora
+                      valor={f.desde}
+                      ariaLabel={`${dia.label}: hora de entrada`}
+                      onCambio={(v) => cambiarHora(dia.valor, f.clave, "desde", v)}
                     />
                     <span className="text-muted-foreground">a</span>
-                    <Input
-                      type="time"
-                      step={300}
-                      value={f.hasta}
-                      aria-label={`${dia.label}: hora de salida`}
-                      onChange={(e) => cambiarHora(dia.valor, f.clave, "hasta", e.target.value)}
-                      className="h-12 w-36 text-base tabular md:text-base"
+                    <CampoHora
+                      valor={f.hasta}
+                      ariaLabel={`${dia.label}: hora de salida`}
+                      onCambio={(v) => cambiarHora(dia.valor, f.clave, "hasta", v)}
                     />
                     <Button
                       type="button"
@@ -284,5 +278,82 @@ export function EditorHorarios({
         ) : null}
       </div>
     </div>
+  );
+}
+
+/**
+ * "08:00", "830", "8.30" o "14" → "08:00" / "08:30" / "14:00". null si no es una hora válida.
+ * Con dos puntos (o punto) separa horas y minutos; sin separador, los dos últimos números son
+ * los minutos cuando hay 3 o 4.
+ */
+function leerHora(texto: string): string | null {
+  const t = texto.trim().replace(/[.,h ]/gi, ":");
+  if (!t) return null;
+  let h: number;
+  let m: number;
+  if (t.includes(":")) {
+    const [a, b = ""] = t.split(":");
+    if (!/^\d{1,2}$/.test(a) || !/^\d{0,2}$/.test(b)) return null;
+    h = Number(a);
+    m = b === "" ? 0 : Number(b.padEnd(2, "0"));
+  } else {
+    if (!/^\d{1,4}$/.test(t)) return null;
+    if (t.length <= 2) {
+      h = Number(t);
+      m = 0;
+    } else {
+      h = Number(t.slice(0, -2));
+      m = Number(t.slice(-2));
+    }
+  }
+  if (h > 23 || m > 59) return null;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
+}
+
+/**
+ * Hora en 24 h, siempre ("14:00"). El <input type="time"> del navegador se muestra según el
+ * idioma de la computadora ("02:00 p.m."), distinto del resumen y del resto del sistema.
+ * Teclado numérico; al salir del campo se acomoda ("830" → "08:30").
+ */
+function CampoHora({
+  valor,
+  onCambio,
+  ariaLabel,
+}: {
+  valor: string;
+  onCambio: (hora: string) => void;
+  ariaLabel: string;
+}) {
+  const [texto, setTexto] = useState(valor);
+  const [anterior, setAnterior] = useState(valor);
+  // Si el valor cambia desde afuera, se muestra el nuevo. Lo que se está tipeando y todavía
+  // no es una hora ("14:") equivale a "" y no se pisa.
+  if (valor !== anterior) {
+    setAnterior(valor);
+    if (valor !== (leerHora(texto) ?? "")) setTexto(valor);
+  }
+  const invalida = texto.trim() !== "" && leerHora(texto) === null;
+
+  return (
+    <Input
+      type="text"
+      inputMode="numeric"
+      autoComplete="off"
+      placeholder="08:00"
+      maxLength={5}
+      value={texto}
+      aria-label={ariaLabel}
+      aria-invalid={invalida || undefined}
+      onChange={(e) => {
+        const nuevo = e.target.value.replace(/[^\d:.,]/g, "").slice(0, 5);
+        setTexto(nuevo);
+        onCambio(leerHora(nuevo) ?? "");
+      }}
+      onBlur={() => {
+        const hora = leerHora(texto);
+        if (hora) setTexto(hora);
+      }}
+      className="h-12 w-24 text-center text-lg tabular md:text-lg"
+    />
   );
 }

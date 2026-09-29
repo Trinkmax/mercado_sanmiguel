@@ -14,15 +14,15 @@ import { SesionViva } from "@/components/shared/sesion-viva";
 /** Salir: en la barra lateral (azul) o en la hoja del menú del celular (clara). */
 function BotonSalir({ claro = false }: { claro?: boolean }) {
   return (
-    <form action={cerrarSesion}>
+    <form action={cerrarSesion} className="shrink-0">
       <Button
         type="submit"
         variant={claro ? "outline" : "ghost"}
         className={cn(
-          "min-h-11 gap-2",
+          "gap-2 text-sm",
           claro
-            ? "px-4 text-sm font-semibold"
-            : "w-full justify-start gap-3 text-sidebar-foreground/85 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            ? "min-h-11 px-4 font-semibold"
+            : "min-h-9 px-2.5 text-sidebar-foreground/85 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground pointer-coarse:min-h-11"
         )}
       >
         <LogOut className="size-5" strokeWidth={1.8} />
@@ -31,6 +31,20 @@ function BotonSalir({ claro = false }: { claro?: boolean }) {
     </form>
   );
 }
+
+/**
+ * Sombra arriba o abajo de la lista de la barra lateral cuando quedan secciones
+ * fuera de la vista (ventana baja o grupos abiertos): avisa que se puede desplazar.
+ * Las capas "local" (color de la barra) tapan la sombra cuando ya se llegó al borde.
+ */
+const SOMBRAS_DESPLAZAR: React.CSSProperties = {
+  background: [
+    "linear-gradient(var(--sidebar) 30%, transparent) top / 100% 2.5rem no-repeat local",
+    "linear-gradient(transparent, var(--sidebar) 70%) bottom / 100% 2.5rem no-repeat local",
+    "linear-gradient(oklch(0.16 0.05 268 / 0.75), transparent) top / 100% 1rem no-repeat scroll",
+    "linear-gradient(transparent, oklch(0.16 0.05 268 / 0.75)) bottom / 100% 1rem no-repeat scroll",
+  ].join(", "),
+};
 
 export default async function PanelLayout({
   children,
@@ -49,13 +63,14 @@ export default async function PanelLayout({
         <div className="border-b border-sidebar-border p-4">
           <Marca className="text-sidebar-foreground" />
         </div>
-        <div className="flex-1 overflow-y-auto p-2.5">
+        <div className="flex-1 overflow-y-auto overscroll-contain p-2.5" style={SOMBRAS_DESPLAZAR}>
           <NavLinks rol={perfil.rol} badges={badges} />
         </div>
-        <div className="border-t border-sidebar-border p-4 space-y-3">
-          <div className="text-sm">
-            <p className="font-medium">{perfil.nombre}</p>
-            <p className="text-sidebar-foreground/70">{rolLabel}</p>
+        {/* Quién está y Salir en una sola fila: le deja más alto a la lista. */}
+        <div className="flex items-center gap-2 border-t border-sidebar-border py-3 pr-2.5 pl-4">
+          <div className="min-w-0 flex-1 text-sm leading-snug">
+            <p className="font-medium break-words">{perfil.nombre}</p>
+            <p className="break-words text-sidebar-foreground/70">{rolLabel}</p>
           </div>
           <BotonSalir />
         </div>

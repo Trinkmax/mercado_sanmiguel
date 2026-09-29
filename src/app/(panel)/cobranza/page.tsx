@@ -17,6 +17,11 @@ import {
   BuscadorClientes,
   type FilaCliente,
 } from "@/components/cobranza/buscador-clientes";
+import {
+  etiquetasCliente,
+  type ConceptoDeCliente,
+  type EspacioDeCliente,
+} from "@/components/clientes/segmentos-cliente";
 import { AvisoCajaCerrada, type CajaDeHoy } from "@/components/cobranza/aviso-caja";
 
 export const metadata = { title: "Cobrar" };
@@ -36,7 +41,7 @@ export default async function CobranzaPage({ searchParams }: { searchParams: Sp 
   const hoy = hoyISO();
   const periodo = periodoActual();
 
-  const [clientesRes, deudaRes, saldoRes, espaciosRes, avanceRes, diariosRes, cajaRes] =
+  const [clientesRes, deudaRes, saldoRes, espaciosRes, itemsRes, avanceRes, diariosRes, cajaRes] =
     await Promise.all([
       supabase
         .from("clientes")
@@ -46,12 +51,19 @@ export default async function CobranzaPage({ searchParams }: { searchParams: Sp 
         .order("codigo"),
       supabase.from("v_deuda_clientes").select("cliente_id, deuda, deuda_vencida"),
       supabase.from("v_saldo_favor").select("cliente_id, saldo_favor"),
-      // El Jefe no lee el plano con clientes (0022): los puestos solo sirven para puesteros.
+      // El Jefe no lee el plano con clientes (0022): los lugares solo sirven para puesteros.
       cobraPuesteros
         ? supabase
             .from("espacios")
-            .select("cliente_id, tipo, numero, medio, x, y")
+            .select("cliente_id, tipo, numero, medio, propio")
             .not("cliente_id", "is", null)
+        : Promise.resolve({ data: null }),
+      // Lo que factura (galpones, cocheras…): la fila dice lo mismo que en Clientes.
+      cobraPuesteros
+        ? supabase
+            .from("cliente_conceptos")
+            .select("cliente_id, cantidad, conceptos(codigo, activo)")
+            .eq("activo", true)
         : Promise.resolve({ data: null }),
       // "2 de 4 · Falta $X": la cuenta es SIEMPRE la de v_avance_mes.
       cobraQuinteros
@@ -107,14 +119,21 @@ export default async function CobranzaPage({ searchParams }: { searchParams: Sp 
     if (f.cliente_id) saldoPorCliente.set(f.cliente_id, Number(f.saldo_favor ?? 0));
   }
 
-  const puestosPorCliente = new Map<string, { numero: string; etiqueta: string }[]>();
-  for (const e of [...(espaciosRes.data ?? [])].sort(
-    (a, b) => Number(a.y) - Number(b.y) || Number(a.x) - Number(b.x)
-  )) {
-    if (!e.cliente_id || e.tipo !== "puesto" || !e.numero) continue;
-    const l = puestosPorCliente.get(e.cliente_id) ?? [];
-    l.push({ numero: e.numero, etiqueta: e.medio ? `${e.numero}½` : e.numero });
-    puestosPorCliente.set(e.cliente_id, l);
+  // Lugares de cada puestero con el MISMO texto y orden que el listado de Clientes
+  // ("Puestos 46 · 48 · 50 · 52 · Local 3 · 1 galpón"): de menor a mayor, no por el plano.
+  const espaciosPorCliente = new Map<string, EspacioDeCliente[]>();
+  for (const e of espaciosRes.data ?? []) {
+    if (!e.cliente_id) continue;
+    const l = espaciosPorCliente.get(e.cliente_id) ?? [];
+    l.push({ tipo: e.tipo, numero: e.numero, medio: e.medio, propio: Boolean(e.propio) });
+    espaciosPorCliente.set(e.cliente_id, l);
+  }
+  const conceptosPorCliente = new Map<string, ConceptoDeCliente[]>();
+  for (const i of itemsRes.data ?? []) {
+    if (!i.conceptos?.activo) continue;
+    const l = conceptosPorCliente.get(i.cliente_id) ?? [];
+    l.push({ codigo: i.conceptos.codigo, cantidad: Number(i.cantidad) });
+    conceptosPorCliente.set(i.cliente_id, l);
   }
 
   const avancePorCliente = new Map<string, AvanceMes>();
@@ -142,6 +161,7 @@ export default async function CobranzaPage({ searchParams }: { searchParams: Sp 
   const filas: FilaCliente[] = (clientesRes.data ?? []).map((c) => {
     const d = deudaPorCliente.get(c.id) ?? { deuda: 0, vencida: 0 };
     const saldo = saldoPorCliente.get(c.id) ?? 0;
+    const espacios = espaciosPorCliente.get(c.id) ?? [];
     return {
       id: c.id,
       codigo: c.codigo,
@@ -150,7 +170,8 @@ export default async function CobranzaPage({ searchParams }: { searchParams: Sp 
       categoria: c.categoria as CategoriaCliente,
       deuda: Math.max(Math.round((d.deuda - saldo) * 100) / 100, 0),
       nivel: nivelDeuda({ deuda: d.deuda, deudaVencida: d.vencida, saldoFavor: saldo }),
-      puestos: puestosPorCliente.get(c.id) ?? [],
+      numerosPlano: espacios.flatMap((e) => (e.numero ? [e.numero] : [])),
+      lugares: etiquetasCliente(espacios, conceptosPorCliente.get(c.id) ?? []),
       avance: avancePorCliente.get(c.id) ?? null,
       pagoHasta: pagoHastaPorCliente.get(c.id) ?? null,
     };
@@ -240,11 +261,14 @@ export default async function CobranzaPage({ searchParams }: { searchParams: Sp 
           categorias={categorias}
           categoriaInicial={categoriaInicial}
           hoy={hoy}
-          placeholder={
+          // Corto para que entre entero en un celular de 360 px; el aria-label dice todo.
+          placeholder={esJefe ? "Nombre, apodo o N° de carpeta" : "Nombre, apodo o N° de puesto"}
+          etiqueta={
             esJefe
-              ? "Buscá al quintero o ambulante por nombre o apodo…"
-              : "Buscá por nombre, apodo o número de puesto…"
+              ? "Buscá al quintero o ambulante por nombre, apodo o N° de carpeta"
+              : "Buscá por nombre, apodo, N° de puesto o N° de carpeta"
           }
+          buscaPuestos={cobraPuesteros}
         />
       )}
     </div>

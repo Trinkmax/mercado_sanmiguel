@@ -19,6 +19,7 @@ import { FormCobro, type PlanDelMes } from "@/components/cobranza/form-cobro";
 import { AvisoDeuda } from "@/components/cobranza/aviso-deuda";
 import { CobroAmbulante } from "@/components/cobranza/cobro-ambulante";
 import { OtrasDeudas } from "@/components/cobranza/otras-deudas";
+import { DescripcionCargo } from "@/components/cobranza/descripcion-cargo";
 import {
   AvisoCajaCerrada,
   cajaNoDejaCobrar,
@@ -292,17 +293,21 @@ export default async function CobrarClientePage({
       {items.length > 0 ? (
         <div className="divide-y px-5">
           {items.map((c) => (
-            <div key={c.id} className="flex items-center gap-3 py-3">
-              <Codigo codigo={c.codigo} />
+            <div key={c.id} className="flex items-start gap-3 py-3">
+              <Codigo codigo={c.codigo} className="mt-0.5" />
               <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">{c.descripcion}</p>
+                {/* Completa, en los renglones que haga falta: "× 4" o el medidor y su consumo
+                    explican el importe si el cliente pregunta. */}
+                <p className="font-medium break-words">
+                  <DescripcionCargo texto={c.descripcion} />
+                </p>
                 {/* El sello va debajo, junto al período: en un celular no le come el lugar al nombre. */}
                 <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
                   {labelPeriodo(c.periodo)}
                   {c.vencido ? <Sello estado="vencido" /> : null}
                 </p>
               </div>
-              <Money monto={c.saldo} className="shrink-0 font-semibold" />
+              <Money monto={c.saldo} className="shrink-0 pt-px font-semibold" />
             </div>
           ))}
         </div>

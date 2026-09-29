@@ -290,6 +290,26 @@ export function textoEspacios<T extends Pick<Espacio, "tipo" | "numero" | "medio
   return partes.join(" · ");
 }
 
+/**
+ * Lo que factura y el plano no marca por cliente: "2 cocheras", "½ galpón". Las
+ * cocheras son un cupo del predio y los galpones no están dibujados; sin esto, la
+ * tarjeta y el buscador del mapa mostraban menos de lo que dice su carpeta.
+ */
+export function sinLugarEnPlano(f: { cocheras?: number; galpones?: number }): string[] {
+  const partes: string[] = [];
+  const cocheras = f.cocheras ?? 0;
+  const galpones = f.galpones ?? 0;
+  if (cocheras > 0) partes.push(`${formatFraccion(cocheras)} ${cocheras > 1 ? "cocheras" : "cochera"}`);
+  if (galpones > 0) partes.push(`${formatFraccion(galpones)} ${galpones > 1 ? "galpones" : "galpón"}`);
+  return partes;
+}
+
+/** "2 cocheras", "2 cocheras y 1 galpón", "a, b y c". */
+export function listaConY(partes: string[]): string {
+  if (partes.length <= 1) return partes[0] ?? "";
+  return `${partes.slice(0, -1).join(", ")} y ${partes[partes.length - 1]}`;
+}
+
 /** "Puesto 52", "Puestos 52 · 50 · 48", "Local 3" — para una lista del mismo tipo. */
 export function etiquetaEspacios(espacios: Pick<Espacio, "tipo" | "numero" | "medio">[]): string {
   if (espacios.length === 0) return "";

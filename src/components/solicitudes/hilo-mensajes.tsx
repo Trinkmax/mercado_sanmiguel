@@ -1,4 +1,4 @@
-import { ArrowRightCircle, Lock, MessageSquareDashed, Paperclip } from "lucide-react";
+import { ArrowRightCircle, Lock, MessageSquareDashed, Paperclip, Store } from "lucide-react";
 import type { Rol } from "@/lib/auth";
 import { LABEL_ROL } from "@/lib/roles";
 import { formatFechaHora } from "@/lib/format";
@@ -19,6 +19,9 @@ export type MensajeHilo = {
 /**
  * Hilo de mensajes de una solicitud, en orden cronológico.
  * - Los míos van a la derecha (azul suave), los de los demás a la izquierda.
+ * - Los del socio (desde el portal) van en blanco con una franja azul y la etiqueta "Socio":
+ *   antes se veían igual que los de Administración y costaba saber quién hablaba.
+ * - Los de otra persona del equipo, en gris.
  * - Los internos (solo staff) llevan fondo ámbar y la leyenda "Interno".
  * - Los automáticos (cambios de estado que deja la RPC) van centrados, sutiles.
  */
@@ -52,6 +55,7 @@ export function HiloMensajes({
       {mensajes.map((m) => {
         const automatico = esMensajeAutomatico(m.mensaje) && !m.interno;
         const mio = m.autor_id === usuarioId;
+        const delSocio = m.autor_rol === "socio" && !mio;
 
         if (automatico) {
           return (
@@ -85,16 +89,23 @@ export function HiloMensajes({
                   ? "border-parcial/40 bg-parcial-suave"
                   : mio
                     ? "border-accent bg-accent/60"
-                    : "border-border bg-card"
+                    : delSocio
+                      ? "border-primary/25 border-l-4 border-l-primary bg-card"
+                      : "border-border bg-muted/60"
               )}
             >
-              <div className="mb-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              <div className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                 <span className="text-sm font-semibold">
                   {mio ? "Vos" : m.autor_nombre}
                 </span>
-                <span className="text-xs text-muted-foreground">
-                  {LABEL_ROL[m.autor_rol]}
-                </span>
+                {delSocio ? (
+                  <span className="inline-flex items-center gap-1 rounded-full bg-primary px-2 py-0.5 text-xs font-semibold text-primary-foreground">
+                    <Store className="size-3" strokeWidth={2.2} aria-hidden />
+                    {LABEL_ROL.socio}
+                  </span>
+                ) : (
+                  <span className="text-xs text-muted-foreground">{LABEL_ROL[m.autor_rol]}</span>
+                )}
                 <span className="tabular text-xs text-muted-foreground">
                   {formatFechaHora(m.creado_en)}
                 </span>

@@ -192,10 +192,14 @@ export function clienteEnPublico(
   return elegidos.some((v) => c.segmentos.includes(v));
 }
 
-/** "Todos" · "Todos los socios" · "Puesteros · Locales" · "Quinteros — solo socios" */
+/**
+ * "Todos los clientes" · "Solo socios" · "Puesteros · Locales" · "Quinteros — solo socios".
+ * "Todos" a secas se confundía con "Todos los socios" (6 contra 11 en la misma lista): el filtro
+ * de socios se nombra siempre igual ("solo socios") y "todos" dice de quiénes.
+ */
 export function textoPublico(publico: string[] | null): string {
   const e = leerPublico(publico);
-  if (e.todos) return e.soloSocios ? "Todos los socios" : "Todos";
+  if (e.todos) return e.soloSocios ? "Solo socios" : "Todos los clientes";
   const texto = e.segmentos
     .map((v) => OPCIONES_PUBLICO.find((o) => o.valor === v)?.label ?? v)
     .join(" · ");

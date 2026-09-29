@@ -3,15 +3,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 export default function LoadingComunicaciones() {
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-end justify-between gap-4 pb-5">
-        <div className="space-y-2">
-          <Skeleton className="h-8 w-56" />
-          <Skeleton className="h-5 w-[30rem] max-w-full" />
-        </div>
-        <div className="flex gap-2">
-          <Skeleton className="h-11 w-40 rounded-md" />
-          <Skeleton className="h-12 w-44 rounded-md" />
-        </div>
+      <div className="space-y-2">
+        <Skeleton className="h-8 w-56" />
+        <Skeleton className="h-5 w-[30rem] max-w-full" />
       </div>
 
       {/* Pestañas: Circulares · Notificaciones · Apercibimientos · Sanciones · Términos */}
@@ -21,6 +15,15 @@ export default function LoadingComunicaciones() {
         <Skeleton className="h-11 w-44 shrink-0 rounded-md" />
         <Skeleton className="h-11 w-32 shrink-0 rounded-md" />
         <Skeleton className="ml-auto h-11 w-28 shrink-0 rounded-md max-sm:hidden" />
+      </div>
+
+      {/* Qué es la pestaña + botones (debajo de la barra) */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <Skeleton className="h-4 w-80 max-w-full" />
+        <div className="flex gap-2">
+          <Skeleton className="h-11 w-40 rounded-md" />
+          <Skeleton className="h-12 w-44 rounded-md" />
+        </div>
       </div>
 
       {/* Filas: número, título, público, "La vieron X de Y" */}

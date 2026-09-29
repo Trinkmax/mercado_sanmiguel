@@ -7,7 +7,6 @@ import { Lock, Paperclip, Send, X } from "lucide-react";
 import { enviarMensaje } from "@/lib/actions/solicitudes";
 import { cn, uuidV4 } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
@@ -141,7 +140,8 @@ export function CajaMensaje({
               </Button>
             ) : null}
           </div>
-          <Input
+          {/* <input> nativo: el Input de shadcn trae w-full y, oculto con sr-only, mide todo el ancho de la ventana. */}
+          <input
             ref={adjuntoRef}
             id={`adjunto-${solicitudId}`}
             name="adjunto"

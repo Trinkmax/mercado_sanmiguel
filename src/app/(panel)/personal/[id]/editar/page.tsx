@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { formatDni } from "@/lib/format";
 import { PageHeader } from "@/components/shared/page-header";
 import { FormEmpleado } from "@/components/personal/form-empleado";
 import { horasSemanalesDeFranjas, nombreCompleto } from "@/components/personal/constantes";
@@ -40,7 +41,7 @@ export default async function EditarEmpleadoPage({ params }: Props) {
         </Link>
         <PageHeader
           titulo="Editar datos"
-          descripcion={`${nombreCompleto(empleado)} · DNI ${empleado.dni}`}
+          descripcion={`${nombreCompleto(empleado)} · DNI ${formatDni(empleado.dni)}`}
           className="pb-2"
         />
       </div>

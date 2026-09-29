@@ -37,7 +37,11 @@ function labelDe(p: PestanaConfiguracion, rol: Rol): string {
   return TODAS[p].label;
 }
 
-/** Pestañas grandes por link: cada una arma su contenido en el server (una a la vez). */
+/**
+ * Pestañas grandes por link: cada una arma su contenido en el server (una a la vez).
+ * En el celular van en dos columnas (el nombre largo pasa a dos líneas): todas a la
+ * vista y la activa siempre marcada, sin nada escondido de costado.
+ */
 export function PestanasConfiguracion({
   rol,
   activa,
@@ -50,11 +54,8 @@ export function PestanasConfiguracion({
 }) {
   const pestanas = pestanasDeRol(rol);
   return (
-    <nav
-      aria-label="Secciones de configuración"
-      className="-mx-4 overflow-x-auto px-4 pb-1 [scrollbar-width:none] md:mx-0 md:px-0"
-    >
-      <ul className="flex w-max gap-2 md:w-auto md:flex-wrap">
+    <nav aria-label="Secciones de configuración">
+      <ul className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
         {pestanas.map((p, i) => {
           const { icono: Icono } = TODAS[p];
           const esActiva = p === activa;
@@ -65,18 +66,18 @@ export function PestanasConfiguracion({
                 href={i === 0 ? "/configuracion" : `/configuracion?tab=${p}`}
                 aria-current={esActiva ? "page" : undefined}
                 className={cn(
-                  "inline-flex min-h-12 items-center gap-2 rounded-lg border px-4 text-sm font-semibold whitespace-nowrap transition-colors",
+                  "flex h-full min-h-12 items-center gap-2 rounded-lg border px-3 py-1.5 text-sm leading-tight font-semibold transition-colors sm:px-4 sm:whitespace-nowrap",
                   esActiva
                     ? "border-primary bg-primary text-primary-foreground"
                     : "border-border bg-card text-foreground hover:bg-accent"
                 )}
               >
-                <Icono className="size-5" strokeWidth={2} />
-                {labelDe(p, rol)}
+                <Icono className="size-5 shrink-0" strokeWidth={2} />
+                <span className="min-w-0 break-words">{labelDe(p, rol)}</span>
                 {n > 0 ? (
                   <span
                     className={cn(
-                      "ml-0.5 inline-flex min-w-5 items-center justify-center rounded-full px-1.5 text-[11px] leading-5 font-bold tabular",
+                      "ml-auto inline-flex min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-xs leading-5 font-bold tabular sm:ml-0.5",
                       esActiva ? "bg-primary-foreground/20" : "bg-parcial text-white"
                     )}
                   >

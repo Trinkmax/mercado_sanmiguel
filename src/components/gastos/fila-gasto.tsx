@@ -1,7 +1,8 @@
-import { FileText } from "lucide-react";
+import Link from "next/link";
+import { FileText, Undo2 } from "lucide-react";
 import { formatFecha, formatFechaHora } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Codigo } from "@/components/shared/codigo";
 import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
@@ -36,6 +37,15 @@ export type GastoFila = {
   mes?: string | null;
 };
 
+/**
+ * Columnas de la fila en pantallas anchas (la usa también el esqueleto de carga).
+ * Monto y acciones tienen ancho fijo: así los montos y los sellos quedan en
+ * columna en todas las filas, tengan o no botones. En tablet el vencimiento va
+ * debajo del nombre y el detalle aprovecha ese lugar; desde xl tiene su columna.
+ */
+export const COLUMNAS_FILA_GASTO =
+  "md:grid-cols-[minmax(0,1fr)_10.5rem_13rem] md:items-start md:gap-5 xl:grid-cols-[7rem_minmax(0,1fr)_10.5rem_13rem]";
+
 /** "Caja del 25/09 · Efectivo" / "Tesorería · Banco" / "Cheque N° 123 a Frutas del Sur". */
 export function textoPago(g: GastoFila): string {
   if (g.pagadoDesde === "cheque") {
@@ -58,6 +68,7 @@ export function FilaGasto({
   cajas,
   preferirCaja,
   cajaPreseleccionadaId,
+  verCheques,
 }: {
   g: GastoFila;
   hoy: string;
@@ -65,9 +76,14 @@ export function FilaGasto({
   cajas: CajaElegible[];
   preferirCaja: boolean;
   cajaPreseleccionadaId: string | null;
+  /** Tesorería y el Líder entran a Cheques (ahí se deshace un pago con cheque). */
+  verCheques: boolean;
 }) {
   const vencido = g.estado === "pendiente" && g.vencimiento !== null && g.vencimiento < hoy;
   const venceHoy = g.estado === "pendiente" && g.vencimiento === hoy;
+  const estadoSello = vencido ? "vencido" : g.estado;
+  // El pago con cheque no se deshace acá (el cheque se corrige en Cheques).
+  const pagadoConCheque = g.estado === "pagado" && g.pagadoDesde === "cheque";
 
   const vencimiento = g.vencimiento ? (
     <span
@@ -83,45 +99,56 @@ export function FilaGasto({
     <span className="text-muted-foreground">Sin vencimiento</span>
   );
 
+  // Rubro con su nombre: el código solo (SEGUV, HONO…) no se entiende.
+  const rubro = g.rubroNombre && !g.sinDescripcion ? g.rubroNombre : null;
+
   return (
     <li
       className={cn(
-        "grid gap-3 px-4 py-4 md:grid-cols-[7rem_minmax(0,1fr)_auto_minmax(12rem,auto)] md:items-center md:gap-5",
+        "grid gap-3 px-4 py-4",
+        COLUMNAS_FILA_GASTO,
         vencido && "bg-pendiente-suave/50"
       )}
     >
-      <div className="hidden text-sm md:block">{vencimiento}</div>
+      <div className="hidden pt-0.5 text-sm xl:block">{vencimiento}</div>
 
       <div className="min-w-0 space-y-1.5">
         <div className="flex items-start justify-between gap-3">
-          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-            {g.rubroCodigo ? <Codigo codigo={g.rubroCodigo} /> : null}
-            <p className={cn("min-w-0 text-base font-semibold break-words", g.estado === "anulado" && "text-muted-foreground line-through")}>
-              {g.etiqueta}
-            </p>
-            <Badge variant="outline" className="h-6 text-xs">
-              {g.tipo === "fijo" ? "Fijo" : "Variable"}
-            </Badge>
-          </div>
+          <p
+            className={cn(
+              "min-w-0 text-base font-semibold break-words",
+              g.estado === "anulado" && "text-muted-foreground line-through"
+            )}
+          >
+            {g.etiqueta}
+          </p>
           <Money
             monto={g.monto}
             className={cn("shrink-0 text-lg font-bold md:hidden", vencido && "text-pendiente")}
           />
         </div>
-        <p className="text-sm md:hidden">{vencimiento}</p>
+        <p className="text-sm text-muted-foreground">
+          {g.rubroCodigo ? <Codigo codigo={g.rubroCodigo} className="mr-1.5 align-middle" /> : null}
+          {rubro ? `${rubro} · ` : ""}
+          {g.tipo === "fijo" ? "Fijo" : "Variable"}
+          <span className="xl:hidden">
+            {" · "}
+            {vencimiento}
+          </span>
+        </p>
         {g.mes ? (
           <p className="text-sm font-medium text-pendiente">Gasto de {g.mes.toLowerCase()}</p>
         ) : null}
-        {g.notas ? <p className="line-clamp-2 text-sm text-muted-foreground">{g.notas}</p> : null}
+        {g.notas ? <p className="line-clamp-2 text-sm break-words text-muted-foreground">{g.notas}</p> : null}
         {g.estado === "pagado" ? (
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm break-words text-muted-foreground">
             <span className="font-medium text-foreground">{textoPago(g)}</span>
             {g.fechaPago ? ` · pagado el ${formatFecha(g.fechaPago).slice(0, 5)}` : ""}
             {g.pagadoPor ? ` por ${g.pagadoPor}` : ""}
           </p>
         ) : null}
         {g.estado === "pendiente" && g.revertido ? (
-          <p className="text-sm text-parcial">
+          <p className="text-sm break-words text-parcial">
             Pago deshecho por {g.revertido.por} el {formatFechaHora(g.revertido.en)}: {g.revertido.motivo}
           </p>
         ) : null}
@@ -149,14 +176,29 @@ export function FilaGasto({
         ) : null}
       </div>
 
-      <Money
-        monto={g.monto}
-        className={cn("hidden text-right text-lg font-bold md:block", vencido && "text-pendiente")}
-      />
+      {/* Monto y estado, en columna (pantallas anchas). */}
+      <div className="hidden space-y-2 text-right md:block">
+        <Money monto={g.monto} className={cn("block text-lg font-bold", vencido && "text-pendiente")} />
+        <Sello estado={estadoSello} />
+      </div>
 
-      <div className="flex flex-wrap items-center gap-2 md:justify-end">
-        <Sello estado={vencido ? "vencido" : g.estado} />
-        {puedeOperar ? (
+      <div className="flex flex-wrap items-center justify-between gap-2 md:justify-end">
+        <Sello estado={estadoSello} className="md:hidden" />
+        {!puedeOperar ? null : pagadoConCheque ? (
+          verCheques ? (
+            <Button asChild variant="ghost" className="h-11 px-3 text-base text-muted-foreground hover:text-foreground">
+              <Link
+                href={`/cheques?estado=entregado${g.cheque ? `&q=${encodeURIComponent(g.cheque.numero)}` : ""}`}
+                aria-label={`Deshacer en Cheques el pago de ${g.etiqueta}`}
+              >
+                <Undo2 className="size-4" strokeWidth={2} />
+                Deshacer en Cheques
+              </Link>
+            </Button>
+          ) : (
+            <p className="text-sm text-muted-foreground md:py-3 md:text-right">Lo deshace Tesorería</p>
+          )
+        ) : (
           <AccionesGasto
             gasto={{
               id: g.id,
@@ -170,7 +212,7 @@ export function FilaGasto({
             preferirCaja={preferirCaja}
             cajaPreseleccionadaId={cajaPreseleccionadaId}
           />
-        ) : null}
+        )}
       </div>
     </li>
   );

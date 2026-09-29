@@ -10,6 +10,7 @@ import { LABEL_EVENTO } from "@/components/caja/historial-caja";
 import type { Arqueo } from "@/components/caja/arqueo-tipos";
 import type { Caja, DatosCaja, EventoCaja } from "@/components/caja/datos";
 import type { PermisosCaja } from "@/components/caja/permisos";
+import { montosSinCortar } from "@/components/caja/texto";
 
 /** Eventos que cambian la plata de una caja ya cerrada. */
 const TIPOS_CAMBIO = new Set([
@@ -58,7 +59,7 @@ function CambiosDespuesDelCierre({ caja, eventos }: { caja: Caja; eventos: Event
         {hechos.map((e) => (
           <li key={e.id}>
             <span className="font-medium">{LABEL_EVENTO[e.tipo] ?? e.tipo}</span>
-            {e.detalle ? `: ${e.detalle}` : ""}{" "}
+            {e.detalle ? `: ${montosSinCortar(e.detalle)}` : ""}{" "}
             <span className="text-muted-foreground">
               ({[e.usuario, formatFechaHora(e.creado_en)].filter(Boolean).join(", ")})
             </span>

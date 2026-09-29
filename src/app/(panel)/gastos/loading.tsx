@@ -1,20 +1,24 @@
+import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
+import { COLUMNAS_FILA_GASTO } from "@/components/gastos/fila-gasto";
 
 function FilaSkeleton() {
   return (
-    <div className="grid gap-3 px-4 py-4 md:grid-cols-[7rem_minmax(0,1fr)_auto_minmax(12rem,auto)] md:items-center md:gap-5">
-      <Skeleton className="hidden h-4 w-20 md:block" />
+    <div className={cn("grid gap-3 px-4 py-4", COLUMNAS_FILA_GASTO)}>
+      <Skeleton className="hidden h-4 w-20 xl:block" />
       <div className="space-y-2">
+        <Skeleton className="h-5 w-56 max-w-full" />
         <div className="flex items-center gap-2">
           <Skeleton className="h-6 w-12 rounded-md" />
-          <Skeleton className="h-5 w-48" />
-          <Skeleton className="h-6 w-14 rounded-md" />
+          <Skeleton className="h-4 w-40" />
         </div>
-        <Skeleton className="h-4 w-40" />
       </div>
-      <Skeleton className="hidden h-6 w-24 md:block" />
-      <div className="flex items-center gap-2 md:justify-end">
-        <Skeleton className="h-7 w-20 rounded-md" />
+      <div className="hidden flex-col items-end gap-2 md:flex">
+        <Skeleton className="h-6 w-28" />
+        <Skeleton className="h-6 w-20 rounded-md" />
+      </div>
+      <div className="flex items-center justify-between gap-2 md:justify-end">
+        <Skeleton className="h-7 w-20 rounded-md md:hidden" />
         <Skeleton className="h-11 w-24 rounded-md" />
       </div>
     </div>
@@ -43,7 +47,7 @@ export default function LoadingGastos() {
           <Skeleton className="h-7 w-40" />
           <Skeleton className="size-11 rounded-md" />
         </div>
-        <Skeleton className="h-20 w-[28rem] max-w-full rounded-xl" />
+        <Skeleton className="h-20 w-full rounded-xl sm:w-[28rem] sm:max-w-full" />
       </div>
 
       {/* Aviso de fijos para traer */}

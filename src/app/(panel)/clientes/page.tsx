@@ -41,6 +41,13 @@ function hrefListado(p: { q?: string; seg?: string | null; estado?: string | nul
   return qs ? `/clientes?${qs}` : "/clientes";
 }
 
+/**
+ * Fila de chips: en celular es UNA fila que se desliza de costado (con 9 chips + 3, en varias
+ * filas tapaban la primera pantalla y la lista quedaba abajo); desde tablet se acomodan solos.
+ */
+const FILA_CHIPS =
+  "-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0 [&::-webkit-scrollbar]:hidden";
+
 /** Chip de filtro: link de 44 px con su conteo; en 0 se atenúa (sigue tocable para salir). */
 function ChipFiltro({
   href,
@@ -59,7 +66,7 @@ function ChipFiltro({
       scroll={false}
       aria-current={activo ? "true" : undefined}
       className={cn(
-        "inline-flex h-11 items-center gap-2 rounded-full border px-4 text-sm font-medium transition-colors",
+        "inline-flex h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-medium whitespace-nowrap transition-colors",
         activo
           ? "border-primary bg-primary text-primary-foreground"
           : cantidad === 0
@@ -271,21 +278,23 @@ export default async function ClientesPage({ searchParams }: Props) {
       ) : null}
 
       {hayClientes ? (
-        <div className="space-y-4">
+        <div className="space-y-3 sm:space-y-4">
           <BuscadorClientes
             inicial={texto}
             seg={seg}
             estado={estado}
-            placeholder={
+            // Corto para que entre entero en un celular de 360 px; el aria-label dice todo.
+            placeholder={esJefe ? "Nombre, apodo o N° de carpeta" : "Nombre, apodo o N° de puesto"}
+            etiqueta={
               esJefe
                 ? "Buscá al quintero o ambulante por nombre, apodo o N° de carpeta"
-                : "Buscá por nombre, apodo, N° de carpeta o de puesto"
+                : "Buscá por nombre, apodo, N° de puesto o N° de carpeta"
             }
           />
 
-          <div className="space-y-2">
+          <div className="space-y-1.5 sm:space-y-2">
             <p className="text-sm font-medium text-muted-foreground">¿Qué tiene?</p>
-            <div className="flex flex-wrap gap-2" role="group" aria-label="Filtrar por lo que tiene">
+            <div className={FILA_CHIPS} role="group" aria-label="Filtrar por lo que tiene">
               {chipsSegmento.map((s) => (
                 <ChipFiltro
                   key={s}
@@ -298,9 +307,9 @@ export default async function ClientesPage({ searchParams }: Props) {
             </div>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-1.5 sm:space-y-2">
             <p className="text-sm font-medium text-muted-foreground">¿Cómo está?</p>
-            <div className="flex flex-wrap gap-2" role="group" aria-label="Filtrar por cómo está">
+            <div className={FILA_CHIPS} role="group" aria-label="Filtrar por cómo está">
               {FILTROS_ESTADO.map((f) => (
                 <ChipFiltro
                   key={f.valor}
@@ -338,7 +347,9 @@ export default async function ClientesPage({ searchParams }: Props) {
           titulo="No encontramos a nadie con eso"
           descripcion={
             texto
-              ? "Probá con otra parte del nombre, el apodo, el N° de carpeta o el de puesto."
+              ? esJefe
+                ? "Probá con otra parte del nombre, el apodo o el N° de carpeta (el número azul de cada fila)."
+                : "Probá con otra parte del nombre, el apodo, el N° de puesto o el N° de carpeta (el número azul de cada fila)."
               : "Nadie cumple con los filtros elegidos. Tocá un chip marcado para sacarlo."
           }
         >
@@ -385,34 +396,37 @@ export default async function ClientesPage({ searchParams }: Props) {
                 <Link
                   key={c.id}
                   href={`/clientes/${c.id}`}
-                  className="flex min-h-16 items-center gap-3 px-4 py-2.5 transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+                  className="flex min-h-16 items-start gap-3 px-4 py-3 transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none sm:items-center sm:py-2.5"
                 >
-                  <Codigo codigo={String(c.codigo)} />
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                      <p
-                        className={cn(
-                          "truncate text-base font-medium",
-                          !c.activo && "text-muted-foreground"
-                        )}
-                      >
-                        {c.nombre}
-                      </p>
-                      {categorias.length > 1 ? <ChipCategoria categoria={c.categoria} /> : null}
-                      {c.esSocio ? <Sello estado="socio" className="px-1.5 py-1 text-[0.62rem]" /> : null}
-                      {!c.activo ? (
-                        <Sello estado="inactivo" texto="Dado de baja" className="px-1.5 py-1 text-[0.62rem]" />
-                      ) : null}
-                      {c.pendiente ? (
-                        <Sello estado="pendiente_aprobacion" className="px-1.5 py-1 text-[0.62rem]" />
+                  <Codigo codigo={String(c.codigo)} className="mt-0.5 sm:mt-0" />
+                  {/* Celular: nombre y lugares a todo el ancho, la deuda en su renglón de abajo.
+                      Desde tablet: la deuda a la derecha. Nada se corta con "…". */}
+                  <div className="min-w-0 flex-1 sm:flex sm:items-center sm:gap-4">
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                        <p
+                          title={c.nombre}
+                          className={cn(
+                            "line-clamp-2 min-w-0 text-base leading-snug font-medium break-words",
+                            !c.activo && "text-muted-foreground"
+                          )}
+                        >
+                          {c.nombre}
+                        </p>
+                        {categorias.length > 1 ? <ChipCategoria categoria={c.categoria} /> : null}
+                        {c.esSocio ? <Sello estado="socio" className="px-1.5 py-1 text-[0.62rem]" /> : null}
+                        {!c.activo ? (
+                          <Sello estado="inactivo" texto="Dado de baja" className="px-1.5 py-1 text-[0.62rem]" />
+                        ) : null}
+                        {c.pendiente ? (
+                          <Sello estado="pendiente_aprobacion" className="px-1.5 py-1 text-[0.62rem]" />
+                        ) : null}
+                      </div>
+                      {detalle ? (
+                        <p className="text-sm leading-snug break-words text-muted-foreground">{detalle}</p>
                       ) : null}
                     </div>
-                    {detalle ? (
-                      <p className="truncate text-sm text-muted-foreground">{detalle}</p>
-                    ) : null}
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <div className="flex flex-col items-end gap-1 text-right">
+                    <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 sm:mt-0 sm:shrink-0 sm:flex-col sm:items-end sm:gap-1 sm:text-right">
                       {c.deuda > 0.009 ? (
                         <Money
                           monto={c.deuda}
@@ -428,11 +442,11 @@ export default async function ClientesPage({ searchParams }: Props) {
                       ) : null}
                       <Sello estado={SELLO_NIVEL_DEUDA[c.nivel]} />
                     </div>
-                    <ChevronRight
-                      className="size-4 shrink-0 text-muted-foreground max-sm:hidden"
-                      strokeWidth={2}
-                    />
                   </div>
+                  <ChevronRight
+                    className="size-4 shrink-0 self-center text-muted-foreground max-sm:hidden"
+                    strokeWidth={2}
+                  />
                 </Link>
               );
             })}

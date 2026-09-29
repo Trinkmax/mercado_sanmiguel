@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, Equal, Gauge, Plus, Printer } from "lucide-react";
+import { ArrowRight, Equal, Gauge, Plus, Printer, type LucideIcon } from "lucide-react";
 import { aplicaDirecto, requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { labelPeriodo, periodoActual } from "@/lib/format";
@@ -16,6 +16,33 @@ import { AgregarMedidor, type ClienteParaMedidor } from "@/components/energia/ag
 import { etiquetaEspacio } from "@/components/mapa/geometria";
 
 export const metadata = { title: "Energía" };
+
+/** Un término de la cuenta de la energía, con su signo (+, =) pegado adelante. En el
+ * celular los términos van uno debajo del otro, alineados (el primero deja el lugar
+ * del signo vacío). */
+function Termino({
+  signo: Signo,
+  etiqueta,
+  children,
+}: {
+  signo?: LucideIcon;
+  etiqueta: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex min-w-0 items-end gap-3">
+      {Signo ? (
+        <Signo className="mb-1.5 size-5 shrink-0 text-muted-foreground" strokeWidth={2} aria-hidden />
+      ) : (
+        <span aria-hidden className="size-5 shrink-0 sm:hidden" />
+      )}
+      <div className="min-w-0">
+        <p className="text-sm text-muted-foreground">{etiqueta}</p>
+        {children}
+      </div>
+    </div>
+  );
+}
 
 type EspacioMedidor = {
   id: string;
@@ -258,40 +285,41 @@ export default async function EnergiaPage({
 
       <SelectorPeriodo periodo={periodo} />
 
-      {/* I1: la cuenta de la energía del mes, en una línea */}
+      {/* I1: la energía del mes. Arriba el abono (editable); abajo la cuenta, con cada
+          signo pegado a su término: si no entra en un renglón, "+ Consumo" y "= Total"
+          bajan enteros y nunca queda un signo colgando. */}
       <section
         aria-label={`Energía de ${mes}`}
-        className="flex flex-wrap items-center gap-x-5 gap-y-4 rounded-xl border bg-card p-4 sm:p-5"
+        className="space-y-4 rounded-xl border bg-card p-4 sm:p-5"
       >
-        <div className="w-full sm:w-auto">
-          <p className="font-display text-base font-bold">Energía de {mes}</p>
-          <p className="text-sm text-muted-foreground">
-            {mesGenerado ? "Abonos generados con el mes" : "El abono se suma al generar el mes"}
-          </p>
+        <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-3">
+          <div className="min-w-0">
+            <p className="font-display text-base font-bold">Energía de {mes}</p>
+            <p className="text-sm text-muted-foreground">
+              {mesGenerado ? "Abonos generados con el mes" : "El abono se suma al generar el mes"}
+            </p>
+          </div>
+          {aben ? (
+            <PrecioConcepto
+              codigo="ABEN"
+              precio={Number(aben.precio ?? 0)}
+              propuesto={propuestoDe(aben.id)}
+              aplicaDirecto={aplicaDirecto(perfil.rol)}
+            />
+          ) : null}
         </div>
-        {aben ? (
-          <PrecioConcepto
-            codigo="ABEN"
-            precio={Number(aben.precio ?? 0)}
-            propuesto={propuestoDe(aben.id)}
-            aplicaDirecto={aplicaDirecto(perfil.rol)}
-          />
-        ) : null}
-        <div>
-          <p className="text-sm text-muted-foreground">
-            Abono × {clientesConAbono} {clientesConAbono === 1 ? "cliente" : "clientes"} con medidor
-          </p>
-          <Money monto={totalAbonos} className="text-xl font-bold" />
-        </div>
-        <Plus className="size-5 text-muted-foreground max-sm:hidden" strokeWidth={2} aria-hidden />
-        <div>
-          <p className="text-sm text-muted-foreground">Consumo cargado</p>
-          <Money monto={consumoCargado} className="text-xl font-bold" />
-        </div>
-        <Equal className="size-5 text-muted-foreground max-sm:hidden" strokeWidth={2} aria-hidden />
-        <div>
-          <p className="text-sm text-muted-foreground">Total de energía</p>
-          <Money monto={totalEnergia} className="text-2xl font-bold text-primary" />
+        <div className="grid gap-3 border-t pt-4 sm:flex sm:flex-wrap sm:items-end sm:gap-x-6">
+          <Termino
+            etiqueta={`Abono × ${clientesConAbono} ${clientesConAbono === 1 ? "cliente" : "clientes"} con medidor`}
+          >
+            <Money monto={totalAbonos} className="text-xl font-bold" />
+          </Termino>
+          <Termino signo={Plus} etiqueta="Consumo cargado">
+            <Money monto={consumoCargado} className="text-xl font-bold" />
+          </Termino>
+          <Termino signo={Equal} etiqueta="Total de energía">
+            <Money monto={totalEnergia} className="text-2xl font-bold text-primary" />
+          </Termino>
         </div>
       </section>
 

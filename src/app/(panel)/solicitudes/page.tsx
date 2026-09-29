@@ -126,26 +126,39 @@ export default async function SolicitudesPage({
               const mensajes = s.solicitud_mensajes?.[0]?.count ?? 0;
               const esperaAlJefe = perfil.rol === "guardia" && s.estado === "con_jefe" && s.origen === "porteria";
               const respuestaNueva = conRespuesta.has(s.id);
+              // La lista va por el último movimiento: se dice cuál fecha es.
+              const fecha = fechaDeFila(s.creada_en, s.actualizada_en);
               return (
                 <Link
                   key={s.id}
                   href={`/solicitudes/${s.id}`}
                   className={cn(
-                    "flex min-h-14 items-center gap-3 px-4 py-2.5 transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none",
+                    "flex min-h-14 items-start gap-3 px-4 py-3 transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none",
                     esperaAlJefe && "bg-parcial-suave/50",
                     respuestaNueva && "bg-accent/60"
                   )}
                 >
-                  <span
-                    className="w-9 shrink-0 text-right font-display text-lg font-bold tabular"
-                    aria-label={`Solicitud N° ${s.numero}`}
-                  >
+                  {/* El "N°" va en el número de la solicitud (antes estaba en la carpeta del socio). */}
+                  <span className="flex w-12 shrink-0 items-baseline justify-end gap-0.5 font-display text-lg leading-snug font-bold tabular">
+                    <span className="font-sans text-xs font-medium text-muted-foreground">N°</span>
                     {s.numero}
                   </span>
 
-                  <div className="min-w-0 flex-1">
+                  {/* Asunto y datos completos, en los renglones que haga falta: cortados con "…" se
+                      perdían la hora, el origen o la fecha. */}
+                  <div className="min-w-0 flex-1 space-y-1">
+                    {/* Celular: el estado arriba del asunto, así el texto usa todo el ancho. */}
+                    <div className="flex items-center gap-2 sm:hidden">
+                      <Sello estado={selloSolicitud(s)} />
+                      <CantidadMensajes n={mensajes} />
+                    </div>
                     <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                      <p className={cn("line-clamp-2 text-sm leading-snug break-words", respuestaNueva ? "font-bold" : "font-medium")}>
+                      <p
+                        className={cn(
+                          "min-w-0 text-base leading-snug break-words",
+                          respuestaNueva ? "font-bold" : "font-medium"
+                        )}
+                      >
                         {s.asunto}
                       </p>
                       <ChipTipo tipo={s.tipo} />
@@ -155,40 +168,30 @@ export default async function SolicitudesPage({
                         </span>
                       ) : null}
                     </div>
-                    <p className="line-clamp-2 text-xs text-muted-foreground">
-                      {s.cliente ? (
-                        <span className="text-foreground/80">
-                          N° {s.cliente.codigo} · {s.cliente.nombre}
-                        </span>
-                      ) : s.referencia ? (
-                        <span className="inline-flex items-center gap-1 text-foreground/80">
-                          <MapPin className="size-3" strokeWidth={2} aria-hidden />
-                          {s.referencia}
-                        </span>
-                      ) : (
-                        <span>General</span>
-                      )}
-                      {" · "}
-                      {LABEL_ORIGEN[s.origen]}
-                      {" · "}
-                      <span className="tabular">{formatFechaHora(s.actualizada_en)}</span>
+                    {s.cliente ? (
+                      <p className="text-sm break-words text-foreground/80">
+                        <span className="tabular text-muted-foreground">Carpeta {s.cliente.codigo}</span> ·{" "}
+                        {s.cliente.nombre}
+                      </p>
+                    ) : s.referencia ? (
+                      <p className="flex items-start gap-1 text-sm break-words text-foreground/80">
+                        <MapPin className="mt-0.5 size-3.5 shrink-0" strokeWidth={2} aria-hidden />
+                        {s.referencia}
+                      </p>
+                    ) : null}
+                    <p className="flex flex-wrap gap-x-1.5 text-sm text-muted-foreground">
+                      <span>{s.cliente || s.referencia ? LABEL_ORIGEN[s.origen] : `General · ${LABEL_ORIGEN[s.origen]}`}</span>
+                      <span aria-hidden>·</span>
+                      <span className="whitespace-nowrap">
+                        {fecha.label} <span className="tabular">{fecha.valor}</span>
+                      </span>
                     </p>
                   </div>
 
-                  <div className="flex shrink-0 flex-col items-end gap-1.5 sm:flex-row sm:items-center sm:gap-3">
-                    <span
-                      className={cn(
-                        "inline-flex min-w-8 items-center justify-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold tabular",
-                        mensajes > 0 ? "bg-accent text-accent-foreground" : "text-muted-foreground"
-                      )}
-                      aria-label={`${mensajes} mensajes`}
-                      title={`${mensajes} mensajes`}
-                    >
-                      <MessageSquare className="size-3.5" strokeWidth={2} aria-hidden />
-                      {mensajes}
-                    </span>
+                  <div className="flex shrink-0 items-center gap-3 pt-0.5 max-sm:hidden">
+                    <CantidadMensajes n={mensajes} />
                     <Sello estado={selloSolicitud(s)} />
-                    <ChevronRight className="size-4 shrink-0 text-muted-foreground max-sm:hidden" strokeWidth={2} />
+                    <ChevronRight className="size-4 shrink-0 text-muted-foreground" strokeWidth={2} />
                   </div>
                 </Link>
               );
@@ -213,5 +216,32 @@ export default async function SolicitudesPage({
         ) : null}
       </div>
     </div>
+  );
+}
+
+/**
+ * Fecha de la fila con su nombre: la lista va por el último movimiento (cualquier mensaje la
+ * sube), así que se dice si es la de alta o la de la última actualización.
+ */
+function fechaDeFila(creada: string, actualizada: string): { label: string; valor: string } {
+  const alta = formatFechaHora(creada);
+  const ultima = formatFechaHora(actualizada);
+  return alta === ultima ? { label: "Creada", valor: alta } : { label: "Actualizada", valor: ultima };
+}
+
+function CantidadMensajes({ n }: { n: number }) {
+  const texto = n === 1 ? "1 mensaje" : `${n} mensajes`;
+  return (
+    <span
+      className={cn(
+        "inline-flex min-w-8 items-center justify-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold tabular",
+        n > 0 ? "bg-accent text-accent-foreground" : "text-muted-foreground"
+      )}
+      title={texto}
+    >
+      <MessageSquare className="size-3.5" strokeWidth={2} aria-hidden />
+      {n}
+      <span className="sr-only"> {n === 1 ? "mensaje" : "mensajes"}</span>
+    </span>
   );
 }

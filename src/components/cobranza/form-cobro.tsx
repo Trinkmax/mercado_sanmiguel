@@ -48,7 +48,7 @@ import {
   LABEL_MEDIO,
   MAX_COMPROBANTE,
   MEDIOS,
-  montoATexto,
+  montoConMiles,
   nuevaLinea,
   parseMonto,
   redondear2,
@@ -70,10 +70,12 @@ export type PlanDelMes = {
   atrasado: { meses: string[]; monto: number } | null;
 };
 
-/** "efectivo + transferencia" */
+/** "efectivo + transferencia": solo los medios que traen plata (una parte en $ 0 no cuenta). */
 function textoMedios(lineas: LineaForm[]): string {
   const vistos: MedioPago[] = [];
-  for (const l of lineas) if (!vistos.includes(l.medio)) vistos.push(l.medio);
+  for (const l of lineas) {
+    if (parseMonto(l.monto) > 0 && !vistos.includes(l.medio)) vistos.push(l.medio);
+  }
   return vistos.map((m) => LABEL_MEDIO[m].toLowerCase()).join(" + ");
 }
 
@@ -200,6 +202,12 @@ export function FormCobro({
     );
     setErrorRpc(null);
   }
+  /** Al salir del campo, el monto queda escrito con sus puntos de miles ("2.332.000"). */
+  function ordenarMonto(id: string) {
+    setLineas((prev) =>
+      prev.map((l) => (l.id === id && l.monto ? { ...l, monto: montoConMiles(parseMonto(l.monto)) } : l))
+    );
+  }
   function limpiarError(id: string, campo: keyof ErroresLinea) {
     setErrores((prev) => {
       if (!prev[id]?.[campo]) return prev;
@@ -224,14 +232,14 @@ export function FormCobro({
   /** "El resto": esta línea completa lo que falta para cubrir la deuda. */
   function elRestoEn(id: string) {
     const otros = lineas.filter((l) => l.id !== id).reduce((acc, l) => acc + parseMonto(l.monto), 0);
-    cambiarLinea(id, { monto: montoATexto(Math.max(redondear2(deudaTotal - otros), 0)) });
+    cambiarLinea(id, { monto: montoConMiles(Math.max(redondear2(deudaTotal - otros), 0)) });
     limpiarError(id, "monto");
   }
   /** Un monto elegido desde el plan de cuotas: la última línea completa ese total. */
   function cobrarMonto(monto: number) {
     const ultima = lineas[lineas.length - 1];
     const otros = lineas.slice(0, -1).reduce((acc, l) => acc + parseMonto(l.monto), 0);
-    cambiarLinea(ultima.id, { monto: montoATexto(Math.max(redondear2(monto - otros), 0)) });
+    cambiarLinea(ultima.id, { monto: montoConMiles(Math.max(redondear2(monto - otros), 0)) });
     limpiarError(ultima.id, "monto");
   }
 
@@ -448,10 +456,16 @@ export function FormCobro({
   }
 
   const unaLinea = lineas[0];
+  const mediosConPlata = textoMedios(lineas);
   const etiquetaBoton =
     total > 0
-      ? `Registrar cobro de ${formatARS(total)}${mixto ? ` (${textoMedios(lineas)})` : ""}`
+      ? `Registrar cobro de ${formatARS(total)}${mixto && mediosConPlata ? ` (${mediosConPlata})` : ""}`
       : "Registrar cobro";
+  // Cobro mixto con una parte sin plata: se avisa antes de tocar el botón (al tocarlo, el
+  // campo vacío se marca en rojo), y el botón no anuncia un medio que no trae nada.
+  const partesSinMonto = mixto
+    ? lineas.flatMap((l, i) => (parseMonto(l.monto) > 0 ? [] : [i + 1]))
+    : [];
 
   function detalleMedio(l: LineaForm) {
     const e = errores[l.id] ?? {};
@@ -548,7 +562,9 @@ export function FormCobro({
                   cambiarLinea(unaLinea.id, { monto: sanitizarMonto(e.target.value) });
                   limpiarError(unaLinea.id, "monto");
                 }}
+                onBlur={() => ordenarMonto(unaLinea.id)}
                 aria-invalid={Boolean(errores[unaLinea.id]?.monto)}
+                aria-describedby="monto-cobro-ayuda"
                 className="h-14 flex-1 text-2xl font-semibold tabular md:text-2xl"
               />
               {deudaTotal > 0 ? (
@@ -557,7 +573,7 @@ export function FormCobro({
                   variant="outline"
                   className="h-14 shrink-0 px-4 text-sm font-semibold"
                   onClick={() => {
-                    cambiarLinea(unaLinea.id, { monto: montoATexto(deudaTotal) });
+                    cambiarLinea(unaLinea.id, { monto: montoConMiles(deudaTotal) });
                     limpiarError(unaLinea.id, "monto");
                   }}
                 >
@@ -565,14 +581,28 @@ export function FormCobro({
                 </Button>
               ) : null}
             </div>
-            {errores[unaLinea.id]?.monto ? (
-              <p className="text-sm font-medium text-destructive">{errores[unaLinea.id]?.monto}</p>
-            ) : total > 0 ? (
-              <p className="text-sm text-muted-foreground tabular">
-                Vas a cobrar {formatARS(total)}
-                {resto > 0 ? ` · queda debiendo ${formatARS(resto)}` : ""}
-              </p>
-            ) : null}
+            {/* Renglón siempre presente: al escribir cambia el texto, no se corre la pantalla. */}
+            <div id="monto-cobro-ayuda" className="min-h-5 text-sm">
+              {errores[unaLinea.id]?.monto ? (
+                <p className="font-medium text-destructive">{errores[unaLinea.id]?.monto}</p>
+              ) : total > 0 ? (
+                <p className="text-muted-foreground tabular">
+                  Vas a cobrar <span className="font-semibold text-foreground">{formatARS(total)}</span>
+                  {resto > 0 ? (
+                    <>
+                      {" · "}
+                      <span className="whitespace-nowrap">queda debiendo {formatARS(resto)}</span>
+                    </>
+                  ) : null}
+                </p>
+              ) : (
+                <p className="text-muted-foreground">
+                  {deudaTotal > 0
+                    ? "Escribí cuánto te paga, o tocá Cobrar todo."
+                    : "Escribí cuánto te paga: queda a su favor."}
+                </p>
+              )}
+            </div>
             {sobrante > 0 ? (
               <div className="flex items-start gap-2.5 rounded-lg border border-parcial bg-parcial-suave px-4 py-3 text-sm">
                 <PiggyBank className="mt-0.5 size-5 shrink-0 text-parcial" strokeWidth={2} />
@@ -640,6 +670,7 @@ export function FormCobro({
                           cambiarLinea(l.id, { monto: sanitizarMonto(ev.target.value) });
                           limpiarError(l.id, "monto");
                         }}
+                        onBlur={() => ordenarMonto(l.id)}
                         aria-invalid={Boolean(e.monto)}
                         className="h-12 flex-1 text-xl font-semibold tabular md:text-xl"
                       />
@@ -652,13 +683,17 @@ export function FormCobro({
                         El resto
                       </Button>
                     </div>
-                    {e.monto ? (
-                      <p className="text-sm font-medium text-destructive">{e.monto}</p>
-                    ) : parseMonto(l.monto) > 0 ? (
-                      <p className="text-sm text-muted-foreground tabular">
-                        {formatARS(parseMonto(l.monto))} en {LABEL_MEDIO[l.medio].toLowerCase()}
-                      </p>
-                    ) : null}
+                    <div className="min-h-5 text-sm">
+                      {e.monto ? (
+                        <p className="font-medium text-destructive">{e.monto}</p>
+                      ) : parseMonto(l.monto) > 0 ? (
+                        <p className="text-muted-foreground tabular">
+                          {formatARS(parseMonto(l.monto))} en {LABEL_MEDIO[l.medio].toLowerCase()}
+                        </p>
+                      ) : (
+                        <p className="text-muted-foreground">Escribí el monto o tocá El resto.</p>
+                      )}
+                    </div>
                   </div>
                   {detalleMedio(l)}
                 </li>
@@ -728,6 +763,14 @@ export function FormCobro({
             </Button>
           ) : null}
         </AlertaError>
+      ) : null}
+
+      {partesSinMonto.length > 0 && total > 0 && !cajaCerrada ? (
+        <p className="text-sm font-medium text-parcial">
+          {partesSinMonto.length === 1
+            ? `La parte ${partesSinMonto[0]} está en $ 0: poné cuánto paga con ese medio o quitala.`
+            : `Las partes ${partesSinMonto.join(" y ")} están en $ 0: poné cuánto pagan o quitalas.`}
+        </p>
       ) : null}
 
       {cajaCerrada ? (

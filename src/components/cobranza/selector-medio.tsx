@@ -37,15 +37,18 @@ export function SelectorMedio({
             aria-checked={activo}
             onClick={() => onCambio(v)}
             className={cn(
-              "flex items-center justify-center rounded-lg border-2 font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
-              compacto ? "h-11 gap-1.5 text-sm" : "h-14 flex-col gap-1 text-sm",
+              "flex min-w-0 items-center justify-center rounded-lg border-2 px-1.5 py-1.5 text-center text-sm leading-tight font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
+              // Compacto (cobro mixto): ícono al lado del nombre solo desde tablet; en un celular
+              // tres botones de ~100 px no alcanzan para "Transferencia" con el ícono al costado.
+              // min-h (no h fija): en 360 px la palabra puede cortarse en sílabas y el botón crece.
+              compacto ? "min-h-14 flex-col gap-1 sm:min-h-11 sm:flex-row sm:gap-1.5" : "min-h-14 flex-col gap-1",
               activo
                 ? "border-primary bg-primary/5 text-primary"
                 : "border-border bg-card text-muted-foreground hover:bg-muted/50"
             )}
           >
-            <Icono className="size-5" strokeWidth={2} />
-            {label}
+            <Icono className="size-5 shrink-0" strokeWidth={2} />
+            <span className="max-w-full hyphens-auto">{label}</span>
           </button>
         );
       })}

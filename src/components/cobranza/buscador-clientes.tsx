@@ -29,8 +29,10 @@ export type FilaCliente = {
   /** Lo que debe hoy, neto del saldo a favor. */
   deuda: number;
   nivel: NivelDeuda;
-  /** Puestos del plano ("52", "34½"): también se busca por ellos. */
-  puestos: { numero: string; etiqueta: string }[];
+  /** Números de sus lugares en el plano ("52", "3"): también se busca por ellos. */
+  numerosPlano: string[];
+  /** "Puestos 46 · 48 · 50 · 52", "Local 3", "1 galpón": lo mismo que dice Clientes. */
+  lugares: string[];
   /** Quinteros: fila de v_avance_mes del mes (null = el mes no se generó). */
   avance: AvanceMes | null;
   /** Ambulantes: último día pago (null = nunca). */
@@ -50,7 +52,7 @@ function coincide(c: FilaCliente, q: string): boolean {
     normalizar(c.nombre).includes(q) ||
     (c.apodo ? normalizar(c.apodo).includes(q) : false) ||
     String(c.codigo) === q ||
-    c.puestos.some((p) => normalizar(p.numero) === q)
+    c.numerosPlano.some((n) => normalizar(n) === q)
   );
 }
 
@@ -64,12 +66,19 @@ export function BuscadorClientes({
   categorias,
   categoriaInicial,
   placeholder,
+  etiqueta,
+  buscaPuestos,
   hoy,
 }: {
   clientes: FilaCliente[];
   categorias: CategoriaCliente[];
   categoriaInicial: CategoriaCliente;
+  /** Corto: tiene que entrar entero en un celular de 360 px. */
   placeholder: string;
+  /** Lo que se lee en voz alta: puede ser más completo que el placeholder. */
+  etiqueta: string;
+  /** Quien cobra puesteros también busca por N° de puesto (el Jefe, no). */
+  buscaPuestos: boolean;
   hoy: string;
 }) {
   const [busqueda, setBusqueda] = useState("");
@@ -131,7 +140,7 @@ export function BuscadorClientes({
           value={busqueda}
           onChange={(e) => setBusqueda(e.target.value)}
           placeholder={placeholder}
-          aria-label={placeholder.replace(/…$/, "")}
+          aria-label={etiqueta}
           className="h-12 pl-12 text-base md:text-base"
         />
       </div>
@@ -147,7 +156,9 @@ export function BuscadorClientes({
           descripcion={
             q === ""
               ? undefined
-              : "Probá con otro nombre, el apodo o el número de carpeta."
+              : buscaPuestos
+                ? "Probá con otra parte del nombre, el apodo, el N° de puesto o el N° de carpeta (el número de la izquierda de cada fila)."
+                : "Probá con otra parte del nombre, el apodo o el N° de carpeta (el número de la izquierda de cada fila)."
           }
         >
           {enOtras.map((x) => (
@@ -164,47 +175,69 @@ export function BuscadorClientes({
         </EmptyState>
       ) : (
         <ul className="divide-y overflow-hidden rounded-lg border bg-card">
-          {filtrados.map((c) => (
-            <li key={c.id}>
-              <Link
-                href={`/cobranza/${c.id}`}
-                className="flex min-h-16 items-center gap-3 px-4 py-2 transition-colors hover:bg-muted/50 active:bg-muted"
-              >
-                <span className="w-10 shrink-0 text-right font-display text-base font-bold tabular">
-                  {c.codigo}
-                </span>
-                <span className="min-w-0 flex-1 space-y-1">
-                  <span className="block truncate text-base font-medium">
-                    {c.nombre}
-                    {c.apodo ? (
-                      <span className="font-normal text-muted-foreground"> · {c.apodo}</span>
+          {filtrados.map((c) => {
+            const muestraDeuda = c.categoria !== "ambulante" || c.deuda > 0;
+            return (
+              <li key={c.id}>
+                <Link
+                  href={`/cobranza/${c.id}`}
+                  className="flex min-h-16 items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/50 active:bg-muted sm:items-center sm:py-2.5"
+                >
+                  <span className="w-10 shrink-0 pt-px text-right font-display text-base font-bold tabular sm:pt-0">
+                    {c.codigo}
+                  </span>
+                  {/* Celular: nombre y apodo a todo el ancho, la deuda con su sello en el renglón
+                      de abajo. Desde tablet: la deuda a la derecha. Nada se corta con "…". */}
+                  <span className="min-w-0 flex-1 sm:flex sm:items-center sm:gap-4">
+                    <span className="block min-w-0 flex-1 space-y-1">
+                      <span
+                        title={c.nombre}
+                        className="line-clamp-2 text-base leading-snug font-medium break-words"
+                      >
+                        {c.nombre}
+                      </span>
+                      <DetalleFila c={c} hoy={hoy} />
+                    </span>
+                    {muestraDeuda ? (
+                      <span className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 sm:mt-0 sm:shrink-0 sm:flex-col sm:items-end sm:gap-1">
+                        <Money
+                          monto={c.deuda}
+                          className={cn(
+                            "text-base font-semibold",
+                            c.nivel === "al_dia" ? "text-pagado" : c.nivel === "vencido" ? "text-pendiente" : "text-parcial"
+                          )}
+                        />
+                        <Sello estado={SELLO_NIVEL_DEUDA[c.nivel]} />
+                      </span>
                     ) : null}
                   </span>
-                  <DetalleFila c={c} hoy={hoy} />
-                </span>
-                {c.categoria !== "ambulante" || c.deuda > 0 ? (
-                  <span className="flex shrink-0 flex-col items-end gap-1">
-                    <Money
-                      monto={c.deuda}
-                      className={cn(
-                        "text-base font-semibold",
-                        c.nivel === "al_dia" ? "text-pagado" : c.nivel === "vencido" ? "text-pendiente" : "text-parcial"
-                      )}
-                    />
-                    <Sello estado={SELLO_NIVEL_DEUDA[c.nivel]} className="max-[400px]:hidden" />
-                  </span>
-                ) : null}
-                <ChevronRight className="size-5 shrink-0 text-muted-foreground" strokeWidth={2} />
-              </Link>
-            </li>
-          ))}
+                  <ChevronRight className="size-5 shrink-0 self-center text-muted-foreground" strokeWidth={2} />
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
   );
 }
 
+/** El apodo con el que lo conocen, entre comillas, antes de lo demás. */
+function Apodo({ apodo }: { apodo: string | null }) {
+  if (!apodo) return null;
+  return <span className="block text-sm leading-snug break-words text-muted-foreground">“{apodo}”</span>;
+}
+
 function DetalleFila({ c, hoy }: { c: FilaCliente; hoy: string }) {
+  return (
+    <>
+      {c.categoria === "puestero" ? null : <Apodo apodo={c.apodo} />}
+      <DetalleCategoria c={c} hoy={hoy} />
+    </>
+  );
+}
+
+function DetalleCategoria({ c, hoy }: { c: FilaCliente; hoy: string }) {
   if (c.categoria === "quintero") {
     if (!c.avance) {
       return <span className="block text-sm text-muted-foreground">El mes todavía no se generó</span>;
@@ -238,10 +271,10 @@ function DetalleFila({ c, hoy }: { c: FilaCliente; hoy: string }) {
       </span>
     );
   }
-  if (c.puestos.length === 0) return null;
+  // Puestero: apodo y lugares en un mismo renglón, como en Clientes ("“Los Fernández” · Puestos 46 · 48").
+  const detalle = [c.apodo ? `“${c.apodo}”` : null, ...c.lugares].filter(Boolean).join(" · ");
+  if (!detalle) return null;
   return (
-    <span className="block truncate text-sm text-muted-foreground tabular">
-      {c.puestos.length > 1 ? "Puestos" : "Puesto"} {c.puestos.map((p) => p.etiqueta).join(" · ")}
-    </span>
+    <span className="block text-sm leading-snug break-words text-muted-foreground tabular">{detalle}</span>
   );
 }

@@ -67,7 +67,7 @@ export function BannerDeuda({
               Perdió el beneficio por mora: debe el importe completo.
             </p>
             <p className="text-pendiente/90">
-              {formatARS(r.deudaVencida)} vencidos
+              <span className="whitespace-nowrap">{formatARS(r.deudaVencida)}</span> vencidos
               {r.vencidoDesde ? ` desde el ${formatFecha(r.vencidoDesde)}` : ""}.
             </p>
           </div>
@@ -81,10 +81,11 @@ export function BannerDeuda({
           <CalendarClock className="mt-0.5 size-5 shrink-0" strokeWidth={2} />
           <p className="text-sm leading-snug">
             <span className="font-semibold">
-              Pagando hasta el {formatFecha(r.proximoVencimiento)} mantiene el
-              beneficio por pago en término ({formatARS(r.beneficio)}).
+              Pagando hasta el {formatFecha(r.proximoVencimiento)} mantiene el beneficio por pago en
+              término: <span className="whitespace-nowrap">{formatARS(r.beneficio)}</span> de descuento.
             </span>{" "}
-            Después vence y debe el importe completo.
+            Ya está descontado en el saldo de cada cargo. Después del vencimiento lo pierde y debe el
+            importe completo.
           </p>
         </div>
       ) : null}

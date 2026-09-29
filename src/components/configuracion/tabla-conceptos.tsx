@@ -226,7 +226,9 @@ export function TablaConceptos({
             <h2 className="font-display text-lg font-bold">{grupo.titulo}</h2>
             <p className="text-sm text-muted-foreground">{grupo.ayuda}</p>
           </div>
-          <ul className="divide-y overflow-hidden rounded-xl border bg-card">
+          {/* Las filas comparten columnas (subgrid): el interruptor "Activo" queda alineado aunque
+              una fila no tenga "Editar" (el bono camioneros lo tenía corrido ~100 px). */}
+          <ul className="grid grid-cols-1 divide-y overflow-hidden rounded-xl border bg-card sm:grid-cols-[auto_minmax(0,1fr)_auto_auto]">
             {grupo.items.map((concepto) => {
               const enEspera = pendientes[concepto.id] ?? [];
               const sinPrecio = SIN_PRECIO.includes(concepto.tipo);
@@ -235,7 +237,7 @@ export function TablaConceptos({
                 <li
                   key={concepto.id}
                   className={cn(
-                    "grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-3 px-4 py-4 sm:grid-cols-[auto_1fr_auto_auto] sm:px-5",
+                    "grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-3 px-4 py-4 sm:col-span-4 sm:grid-cols-subgrid sm:px-5",
                     !concepto.activo && "bg-muted/40"
                   )}
                 >

@@ -59,11 +59,16 @@ export async function PlataDeHoy({ org, supabase }: { org: string; supabase: Sup
             ) : null}
           </FilaCaja>
           <li className="flex items-center justify-between gap-3 px-3 py-3">
-            <span className="flex items-center gap-2 text-sm">
-              <Receipt className="size-4 text-muted-foreground" strokeWidth={2} />
+            <span className="flex min-w-0 items-center gap-2 text-sm">
+              <Receipt className="size-4 shrink-0 text-muted-foreground" strokeWidth={2} />
               Gastos pagados desde las cajas
             </span>
-            <Money monto={gastos} className={gastos > 0 ? "font-semibold text-pendiente" : "text-muted-foreground"} />
+            <Money
+              monto={gastos}
+              className={
+                gastos > 0 ? "shrink-0 text-base font-semibold text-pendiente" : "shrink-0 text-base text-muted-foreground"
+              }
+            />
           </li>
         </ul>
       </CardContent>
@@ -87,17 +92,28 @@ function FilaCaja({
 }) {
   return (
     <li className="px-3 py-3">
-      <Link href={href} className="-mx-1 flex items-center justify-between gap-3 rounded-md px-1 hover:bg-muted/60">
-        <span className="flex min-h-11 items-center gap-2 text-sm font-medium">
-          <CajaRegistradora className="size-4 text-muted-foreground" />
-          {titulo}
-          {caja ? <Sello estado={caja.estado} /> : <span className="text-xs font-normal text-muted-foreground">sin abrir</span>}
+      {/* El nombre de la caja en su renglón y el sello debajo: en la columna angosta del
+          escritorio no se aprietan con el monto. */}
+      <Link
+        href={href}
+        className="-mx-1 flex min-h-11 items-center justify-between gap-3 rounded-md px-1 py-1 hover:bg-muted/60"
+      >
+        <span className="flex min-w-0 items-start gap-2">
+          <CajaRegistradora className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 space-y-1">
+            <span className="block text-sm font-medium">{titulo}</span>
+            {caja ? (
+              <Sello estado={caja.estado} />
+            ) : (
+              <span className="block text-sm text-muted-foreground">Sin abrir</span>
+            )}
+          </span>
         </span>
-        <span className="flex items-center gap-1">
+        <span className="flex shrink-0 items-center gap-1">
           {monto === null ? (
             <span className="text-sm text-muted-foreground">sin datos</span>
           ) : (
-            <Money monto={monto} className="font-semibold" />
+            <Money monto={monto} className="text-base font-semibold" />
           )}
           <ChevronRight className="size-4 text-muted-foreground" aria-hidden />
         </span>

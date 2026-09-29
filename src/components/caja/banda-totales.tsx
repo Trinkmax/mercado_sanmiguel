@@ -20,34 +20,72 @@ function Bloque({
   return (
     <div className={cn("min-w-0 px-4 py-4 sm:px-6 sm:py-5", className)}>
       <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">{label}</p>
+      {/* Un monto nunca se corta con "…": si no entra, baja de renglón entero. */}
       <Money
         monto={monto}
         className={
           destacado
-            ? "mt-1 block truncate text-3xl font-bold"
-            : "mt-1 block truncate text-xl font-semibold sm:text-2xl"
+            ? "mt-1 block text-3xl font-bold [overflow-wrap:anywhere]"
+            : "mt-1 block text-lg font-semibold [overflow-wrap:anywhere] sm:text-2xl"
         }
       />
     </div>
   );
 }
 
-/** "🚜 Quintas $92.500" como pieza del desglose (ícono + etiqueta + monto). */
-function Pieza({ icono: Icono, etiqueta, monto }: { icono: LucideIcon; etiqueta: string; monto: number }) {
+/**
+ * "🚜 Quintas $92.500" como pieza del desglose (ícono + etiqueta + monto), sin partirse. Las
+ * piezas van separadas por espacio, no por "·": al bajar de renglón en un celular no queda un
+ * separador suelto al final de la línea.
+ */
+function Pieza({ icono: Icono, etiqueta, monto }: { icono?: LucideIcon; etiqueta: string; monto: number }) {
   return (
     <span className="inline-flex items-baseline gap-1.5 whitespace-nowrap">
-      <Icono className="size-4 shrink-0 translate-y-0.5 text-muted-foreground" strokeWidth={2} />
+      {Icono ? <Icono className="size-4 shrink-0 translate-y-0.5 text-muted-foreground" strokeWidth={2} /> : null}
       <span className="text-muted-foreground">{etiqueta}</span>
       <Money monto={monto} className="font-semibold text-foreground" />
     </span>
   );
 }
 
-function Separador() {
+/** Renglón de la cuenta: etiqueta a la izquierda, monto con su signo a la derecha. */
+function Renglon({
+  etiqueta,
+  monto,
+  signo,
+  total = false,
+}: {
+  etiqueta: string;
+  monto: number;
+  signo?: "−" | "±";
+  total?: boolean;
+}) {
+  const texto =
+    signo === "−"
+      ? `−${formatARS(Math.abs(monto))}`
+      : signo === "±"
+        ? `${monto < 0 ? "−" : "+"}${formatARS(Math.abs(monto))}`
+        : formatARS(monto);
   return (
-    <span aria-hidden className="text-muted-foreground/60">
-      ·
-    </span>
+    <p
+      className={cn(
+        "flex items-baseline justify-between gap-3",
+        total && "border-t border-foreground/20 pt-1.5 text-base"
+      )}
+    >
+      <span className={cn("min-w-0", total && "font-semibold")}>{etiqueta}</span>
+      <span className={cn("shrink-0 tabular", total ? "text-xl font-bold" : "font-semibold")}>{texto}</span>
+    </p>
+  );
+}
+
+/** Una cuenta por medio (efectivo, cheques, banco): lo juntado, lo que salió y lo que queda. */
+function Cuenta({ titulo, children }: { titulo: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1 px-4 py-3 sm:px-6">
+      <p className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">{titulo}</p>
+      {children}
+    </div>
   );
 }
 
@@ -71,8 +109,12 @@ export function BandaTotales({
   const juntadoEfectivo = a.cobros_efectivo + a.canon_efectivo + a.rendido_efectivo;
   const juntadoTransferencia = a.cobros_transferencia + a.canon_transferencia + a.rendido_transferencia;
   const hayRendido = Math.abs(a.rendido) > CENTAVO;
-  const hayDescuentos =
-    a.gastos_pagados > CENTAVO || Math.abs(a.ajustes) > CENTAVO || a.cheques_entregados > CENTAVO;
+  // Cada descuento sale de SU medio (misma fórmula que calcular_arqueo): gastos y ajustes en
+  // efectivo, del cajón; cheques entregados en el acto, de los cheques; ajustes del banco, del banco.
+  const cuentaEfectivo = a.gastos_pagados > CENTAVO || Math.abs(a.ajustes_efectivo) > CENTAVO;
+  const cuentaCheques = a.cheques_entregados > CENTAVO;
+  const cuentaBanco = Math.abs(a.ajustes_transferencia) > CENTAVO;
+  const hayDescuentos = cuentaEfectivo || cuentaCheques || cuentaBanco;
   const otros = porteria ? otrosCobrosPorteria(a) : 0;
   // Lo rendido ya viene neto de los ajustes de la caja de portería (faltantes al recibirla o de
   // Tesorería); las piezas son brutas. Sin esta pieza "Caja de portería $X" no daría la suma.
@@ -90,14 +132,16 @@ export function BandaTotales({
         </span>
       </p>
 
-      <div className={cn("grid border-foreground/30", porteria ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-3")}>
+      {/* En celular el efectivo (el número grande) va solo en su renglón: en media columna no
+          entraba y se cortaba. */}
+      <div className={cn("grid border-foreground/30", porteria ? "grid-cols-1 sm:grid-cols-2" : "grid-cols-2 sm:grid-cols-3")}>
         <Bloque
           label="Efectivo"
           monto={juntadoEfectivo}
           destacado
           className={
             porteria
-              ? undefined
+              ? "border-b border-dashed border-foreground/30 sm:border-b-0"
               : "col-span-2 border-b border-dashed border-foreground/30 sm:col-span-1 sm:border-b-0"
           }
         />
@@ -106,7 +150,7 @@ export function BandaTotales({
           monto={juntadoTransferencia}
           className={
             porteria
-              ? "border-l border-dashed border-foreground/30"
+              ? "border-dashed border-foreground/30 sm:border-l"
               : "border-r border-dashed border-foreground/30 sm:border-r-0 sm:border-l"
           }
         />
@@ -120,85 +164,66 @@ export function BandaTotales({
       </div>
 
       {porteria ? (
-        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1.5 border-t border-dashed border-foreground/30 px-4 py-3 text-sm sm:px-6">
+        <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1.5 border-t border-dashed border-foreground/30 px-4 py-3 text-sm sm:px-6">
           <Pieza icono={Tractor} etiqueta="Quintas (tus cobros)" monto={a.quintas} />
-          <Separador />
           <Pieza icono={Footprints} etiqueta="Ambulantes" monto={a.ambulantes} />
-          <Separador />
           <Pieza icono={Truck} etiqueta="Bono camioneros (Portería)" monto={a.canon} />
-          {Math.abs(otros) > CENTAVO ? (
-            <>
-              <Separador />
-              <span className="text-muted-foreground">
-                Otros cobros <Money monto={otros} className="font-semibold text-foreground" />
-              </span>
-            </>
-          ) : null}
+          {Math.abs(otros) > CENTAVO ? <Pieza etiqueta="Otros cobros" monto={otros} /> : null}
         </div>
       ) : hayRendido ? (
-        <div className="space-y-1 border-t border-dashed border-foreground/30 px-4 py-3 text-sm sm:px-6">
-          <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1.5">
-            <span className="font-medium">
-              Caja de portería <Money monto={a.rendido} className="font-bold" />
-            </span>
-            <span aria-hidden className="text-muted-foreground">
-              —
-            </span>
+        <div className="space-y-1.5 border-t border-dashed border-foreground/30 px-4 py-3 text-sm sm:px-6">
+          <p className="font-medium">
+            Caja de portería <Money monto={a.rendido} className="font-bold" />
+          </p>
+          <p className="flex flex-wrap items-baseline gap-x-5 gap-y-1.5">
             <Pieza icono={Tractor} etiqueta="Quintas" monto={a.rendido_quintas} />
-            <Separador />
             <Pieza icono={Footprints} etiqueta="Ambulantes" monto={a.rendido_ambulantes} />
-            <Separador />
             <Pieza icono={Truck} etiqueta="Bono camioneros" monto={a.rendido_canon} />
             {Math.abs(ajustesPorteria) > CENTAVO ? (
-              <>
-                <Separador />
-                <span className="inline-flex items-baseline gap-1.5 whitespace-nowrap">
-                  <span className="text-muted-foreground">Ajustes</span>
-                  <span className="tabular font-semibold text-foreground">
-                    {ajustesPorteria < 0 ? "−" : "+"}
-                    {formatARS(Math.abs(ajustesPorteria))}
-                  </span>
+              <span className="inline-flex items-baseline gap-1.5 whitespace-nowrap">
+                <span className="text-muted-foreground">Ajustes</span>
+                <span className="tabular font-semibold text-foreground">
+                  {ajustesPorteria < 0 ? "−" : "+"}
+                  {formatARS(Math.abs(ajustesPorteria))}
                 </span>
-              </>
+              </span>
             ) : null}
           </p>
-          <p className="text-muted-foreground">
-            En mano <Money monto={a.rendido_efectivo} className="font-medium text-foreground" /> · Por
-            transferencia <Money monto={a.rendido_transferencia} className="font-medium text-foreground" />
+          <p className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
+            <Pieza etiqueta="En mano" monto={a.rendido_efectivo} />
+            <Pieza etiqueta="Por transferencia" monto={a.rendido_transferencia} />
           </p>
         </div>
       ) : null}
 
       {hayDescuentos ? (
-        <div className="space-y-1 border-t border-dashed border-foreground/30 bg-muted/40 px-4 py-3 text-sm sm:px-6">
-          {a.gastos_pagados > CENTAVO ? (
-            <p className="flex items-baseline justify-between gap-3">
-              <span>− Gastos pagados desde esta caja</span>
-              <Money monto={a.gastos_pagados} className="font-semibold text-pendiente" />
-            </p>
+        <div className="divide-y divide-dashed divide-foreground/20 border-t border-dashed border-foreground/30 bg-muted/40 text-sm">
+          {cuentaEfectivo ? (
+            <Cuenta titulo="En efectivo">
+              <Renglon etiqueta="Juntado en efectivo" monto={juntadoEfectivo} />
+              {a.gastos_pagados > CENTAVO ? (
+                <Renglon etiqueta="Gastos pagados desde esta caja" monto={a.gastos_pagados} signo="−" />
+              ) : null}
+              {Math.abs(a.ajustes_efectivo) > CENTAVO ? (
+                <Renglon etiqueta="Ajustes de tesorería" monto={a.ajustes_efectivo} signo="±" />
+              ) : null}
+              <Renglon etiqueta="= Tenés que tener en el cajón" monto={a.efectivo} total />
+            </Cuenta>
           ) : null}
-          {a.cheques_entregados > CENTAVO ? (
-            <p className="flex items-baseline justify-between gap-3">
-              <span>− Cheques entregados a proveedores en el acto</span>
-              <Money monto={a.cheques_entregados} className="font-semibold" />
-            </p>
+          {cuentaCheques ? (
+            <Cuenta titulo="En cheques">
+              <Renglon etiqueta="Cheques recibidos" monto={a.cobros_cheques} />
+              <Renglon etiqueta="Entregados a proveedores en el acto" monto={a.cheques_entregados} signo="−" />
+              <Renglon etiqueta="= Quedan en la caja" monto={a.cheques} total />
+            </Cuenta>
           ) : null}
-          {Math.abs(a.ajustes) > CENTAVO ? (
-            <p className="flex items-baseline justify-between gap-3">
-              <span>± Ajustes de tesorería</span>
-              <span className="tabular font-semibold">
-                {a.ajustes < 0 ? "−" : "+"}
-                {formatARS(Math.abs(a.ajustes))}
-              </span>
-            </p>
+          {cuentaBanco ? (
+            <Cuenta titulo="En el banco">
+              <Renglon etiqueta="Juntado por transferencia" monto={juntadoTransferencia} />
+              <Renglon etiqueta="Ajustes de tesorería" monto={a.ajustes_transferencia} signo="±" />
+              <Renglon etiqueta="= Tiene que haber en el banco" monto={a.transferencia} total />
+            </Cuenta>
           ) : null}
-          <p className="flex flex-wrap items-baseline justify-between gap-x-3 border-t border-foreground/20 pt-1.5 text-base">
-            <span className="font-semibold">= Tenés que tener ahora</span>
-            <span>
-              <Money monto={a.efectivo} className="text-xl font-bold" />{" "}
-              <span className="text-muted-foreground">en efectivo</span>
-            </span>
-          </p>
         </div>
       ) : null}
     </section>

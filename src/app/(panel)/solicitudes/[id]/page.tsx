@@ -105,28 +105,31 @@ export default async function SolicitudPage({ params }: Props) {
     <div className="space-y-8">
       {/* Quien la cargó la está viendo: se apaga "Respuesta nueva". */}
       {s.creada_por === perfil.user_id ? <MarcarSolicitudVista solicitudId={s.id} /> : null}
-      <PageHeader titulo={`Solicitud N° ${s.numero}`} descripcion={s.asunto}>
-        <Sello estado={selloSolicitud(s)} className="text-sm" />
-        <Button asChild variant="outline" className="min-h-11">
-          <Link href={`/solicitudes/${s.id}/imprimir`}>
-            <Printer className="size-4" strokeWidth={2} />
-            Imprimir
-          </Link>
-        </Button>
-        <Button asChild variant="ghost" className="min-h-11">
+      {/* "Volver" arriba a la izquierda, como en los demás detalles. */}
+      <div className="space-y-3">
+        <Button asChild variant="ghost" className="-ml-2 min-h-11">
           <Link href="/solicitudes">
             <ArrowLeft className="size-4" />
-            Volver
+            Volver a Solicitudes
           </Link>
         </Button>
-      </PageHeader>
+        <PageHeader titulo={`Solicitud N° ${s.numero}`} descripcion={s.asunto} className="pb-0">
+          <Sello estado={selloSolicitud(s)} className="text-sm" />
+          <Button asChild variant="outline" className="min-h-11">
+            <Link href={`/solicitudes/${s.id}/imprimir`}>
+              <Printer className="size-4" strokeWidth={2} />
+              Imprimir
+            </Link>
+          </Button>
+        </PageHeader>
+      </div>
 
       {/* Recorrido */}
       <Card>
         <CardContent className="space-y-3">
           <LineaEstado solicitud={s} />
           {laTiene ? (
-            <p className="text-center text-sm">
+            <p className="border-t pt-3 text-sm md:border-t-0 md:pt-0 md:text-center">
               Ahora la tiene: <span className="font-semibold">{laTiene}{asignadaA}</span>
             </p>
           ) : null}
@@ -152,13 +155,17 @@ export default async function SolicitudPage({ params }: Props) {
                   {s.cliente ? (
                     puedeVerFicha ? (
                       <Link href={`/clientes/${s.cliente.id}`} className="inline-flex min-h-11 items-center gap-1.5 hover:underline">
-                        <Store className="size-4 text-muted-foreground" strokeWidth={2} />
-                        N° {s.cliente.codigo} · {s.cliente.nombre}
+                        <Store className="size-4 shrink-0 text-muted-foreground" strokeWidth={2} />
+                        <span className="break-words">
+                          Carpeta <span className="tabular">{s.cliente.codigo}</span> · {s.cliente.nombre}
+                        </span>
                       </Link>
                     ) : (
                       <span className="inline-flex items-center gap-1.5">
-                        <Store className="size-4 text-muted-foreground" strokeWidth={2} />
-                        N° {s.cliente.codigo} · {s.cliente.nombre}
+                        <Store className="size-4 shrink-0 text-muted-foreground" strokeWidth={2} />
+                        <span className="break-words">
+                          Carpeta <span className="tabular">{s.cliente.codigo}</span> · {s.cliente.nombre}
+                        </span>
                       </span>
                     )
                   ) : s.referencia ? (

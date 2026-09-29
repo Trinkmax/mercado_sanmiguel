@@ -84,11 +84,19 @@ export function LineaEstado({
   const total = pasos.length + (terminal ? 1 : 0);
   const terminalVerde = cerrada && delJefe;
 
+  const etiquetaTerminal = rechazada
+    ? delJefe
+      ? "Rechazada por el Jefe"
+      : "Rechazada"
+    : terminalVerde
+      ? "Resuelta por el Jefe"
+      : "Cerrada";
+
+  // Celular: la línea va vertical, un paso por renglón, así se ve el recorrido completo (antes
+  // era un scroll de costado sin aviso y "Resuelta", "Asignada" y "Ejecutada" quedaban afuera).
+  // Desde md, horizontal como siempre.
   return (
-    <ol
-      className={cn("flex w-full items-start overflow-x-auto pb-1", className)}
-      aria-label="Recorrido de la solicitud"
-    >
+    <ol className={cn("flex w-full flex-col md:flex-row md:items-start", className)} aria-label="Recorrido de la solicitud">
       {pasos.map((p, i) => {
         const hecho = Boolean(p.fecha);
         const actual = i === indiceActual;
@@ -96,48 +104,59 @@ export function LineaEstado({
         const lineaIzq = i > 0 && (hecho || salteado);
         const lineaDer = i < total - 1 && (i < ultimoHecho || terminal);
         return (
-          <li
+          <Paso
             key={p.clave}
-            className="flex min-w-[5.5rem] flex-1 flex-col items-center text-center"
-            aria-current={actual ? "step" : undefined}
-          >
-            <div className="flex w-full items-center">
-              <Linea pintada={lineaIzq} oculta={i === 0} />
+            actual={actual}
+            primero={i === 0}
+            ultimo={i === total - 1}
+            lineaIzq={lineaIzq}
+            lineaDer={lineaDer}
+            circulo={
               <span
                 className={cn(
                   "flex size-7 shrink-0 items-center justify-center rounded-full border-2 text-xs font-bold transition-shadow",
                   hecho && "border-primary bg-primary text-primary-foreground",
-                  !hecho && !salteado && "border-border bg-card text-muted-foreground",
+                  // El paso actual (todavía sin hacer) con el borde y el número en azul y un anillo
+                  // bien visible: antes era casi igual a los pendientes.
+                  !hecho && actual && "border-primary bg-card text-primary",
+                  !hecho && !actual && !salteado && "border-border bg-card text-muted-foreground",
                   salteado && "border-dashed border-muted-foreground/50 bg-card text-muted-foreground",
-                  actual && "ring-4 ring-primary/15"
+                  actual && "ring-4 ring-primary/25"
                 )}
               >
                 {hecho ? <Check className="size-4" strokeWidth={2.5} /> : salteado ? "–" : i + 1}
               </span>
-              <Linea pintada={lineaDer} oculta={i === total - 1} />
-            </div>
+            }
+          >
             <p
               className={cn(
-                "mt-1.5 px-1 text-xs leading-tight",
-                actual ? "font-semibold text-foreground" : hecho ? "text-foreground/80" : "text-muted-foreground"
+                "text-sm leading-tight",
+                actual ? "font-semibold text-primary" : hecho ? "text-foreground/80" : "text-muted-foreground"
               )}
             >
               {p.label}
+              {actual ? <span className="sr-only"> (paso actual)</span> : null}
             </p>
             {p.fecha ? (
-              <p className="tabular text-[0.68rem] text-muted-foreground">{formatFechaTS(p.fecha)}</p>
+              <p className="tabular text-xs text-muted-foreground">{formatFechaTS(p.fecha)}</p>
             ) : salteado ? (
-              <p className="text-[0.68rem] text-muted-foreground">salteado</p>
+              <p className="text-xs text-muted-foreground">salteado</p>
+            ) : actual ? (
+              <p className="text-xs font-medium text-primary">ahora</p>
             ) : null}
-            {p.sub ? <p className="text-[0.68rem] text-muted-foreground">{p.sub}</p> : null}
-          </li>
+            {p.sub ? <p className="text-xs text-muted-foreground">{p.sub}</p> : null}
+          </Paso>
         );
       })}
 
       {terminal ? (
-        <li className="flex min-w-[5.5rem] flex-1 flex-col items-center text-center" aria-current="step">
-          <div className="flex w-full items-center">
-            <Linea pintada />
+        <Paso
+          actual
+          primero={false}
+          ultimo
+          lineaIzq
+          lineaDer={false}
+          circulo={
             <span
               className={cn(
                 "flex size-7 shrink-0 items-center justify-center rounded-full border-2 ring-4",
@@ -150,24 +169,75 @@ export function LineaEstado({
             >
               {rechazada ? <X className="size-4" strokeWidth={2.5} /> : <Check className="size-4" strokeWidth={2.5} />}
             </span>
-            <Linea oculta />
-          </div>
-          <p className="mt-1.5 px-1 text-xs font-semibold leading-tight">
-            {rechazada ? (delJefe ? "Rechazada por el Jefe" : "Rechazada") : terminalVerde ? "Resuelta por el Jefe" : "Cerrada"}
-          </p>
+          }
+        >
+          <p className="text-sm leading-tight font-semibold">{etiquetaTerminal}</p>
           {s.cerrada_en ? (
-            <p className="tabular text-[0.68rem] text-muted-foreground">{formatFechaTS(s.cerrada_en)}</p>
+            <p className="tabular text-xs text-muted-foreground">{formatFechaTS(s.cerrada_en)}</p>
           ) : null}
-        </li>
+        </Paso>
       ) : null}
     </ol>
   );
 }
 
+/**
+ * Un paso: en celular, círculo a la izquierda con la línea que baja hasta el siguiente y el
+ * texto al lado; desde md, círculo arriba con las líneas a los costados y el texto abajo.
+ */
+function Paso({
+  actual,
+  primero,
+  ultimo,
+  lineaIzq,
+  lineaDer,
+  circulo,
+  children,
+}: {
+  actual: boolean;
+  primero: boolean;
+  ultimo: boolean;
+  /** Tramo que llega a este paso (arriba en celular, a la izquierda desde md). */
+  lineaIzq: boolean;
+  /** Tramo que sale hacia el siguiente. */
+  lineaDer: boolean;
+  circulo: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <li
+      className="relative flex min-w-0 items-start gap-3 pb-4 last:pb-0 md:flex-1 md:flex-col md:items-center md:gap-0 md:pb-0 md:text-center"
+      aria-current={actual ? "step" : undefined}
+    >
+      {/* Celular: línea vertical hacia el paso siguiente (centrada bajo el círculo de 28 px). */}
+      {!ultimo ? (
+        <span
+          aria-hidden
+          className={cn(
+            "absolute top-7 bottom-0 left-[13px] w-0.5 md:hidden",
+            lineaDer ? "bg-primary/60" : "bg-border"
+          )}
+        />
+      ) : null}
+      <div className="flex shrink-0 items-center md:w-full">
+        <Linea pintada={lineaIzq} oculta={primero} />
+        {circulo}
+        <Linea pintada={lineaDer} oculta={ultimo} />
+      </div>
+      <div className="min-w-0 pt-1 md:mt-1.5 md:px-1 md:pt-0">{children}</div>
+    </li>
+  );
+}
+
+/** Tramo horizontal (solo desde md: en celular la línea es vertical). */
 function Linea({ pintada = false, oculta = false }: { pintada?: boolean; oculta?: boolean }) {
   return (
     <span
-      className={cn("h-0.5 flex-1", oculta ? "bg-transparent" : pintada ? "bg-primary/60" : "bg-border")}
+      aria-hidden
+      className={cn(
+        "hidden h-0.5 flex-1 md:block",
+        oculta ? "bg-transparent" : pintada ? "bg-primary/60" : "bg-border"
+      )}
     />
   );
 }

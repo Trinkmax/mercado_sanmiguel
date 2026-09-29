@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarRange, Store, Zap } from "lucide-react";
+import { ArrowRight, CalendarRange, Store, Zap } from "lucide-react";
 import { requireRol } from "@/lib/auth";
 import { ROLES_REPORTES } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/server";
@@ -188,6 +188,22 @@ export default async function FacturacionPage() {
       : { data: [] };
   const nombrePorUsuario = new Map((perfiles ?? []).map((p) => [p.user_id, p.nombre]));
 
+  // Cada período generado, listo para la ficha del celular y la tabla de tablet/escritorio.
+  const periodos = historial.map((p) => {
+    const clave = p.periodo.slice(0, 10);
+    const resumen = resumenPorPeriodo.get(clave);
+    return {
+      id: p.id,
+      clave,
+      label: labelPeriodo(clave),
+      vence: formatFecha(p.vencimiento),
+      generado: formatFechaHora(p.generado_en),
+      generadoPor: p.generado_por ? (nombrePorUsuario.get(p.generado_por) ?? null) : null,
+      estimado: resumen?.estimado ?? 0,
+      cobrado: resumen?.cobrado ?? 0,
+    };
+  });
+
   return (
     <div className="space-y-8">
       <PageHeader
@@ -220,11 +236,16 @@ export default async function FacturacionPage() {
               <div className="divide-y">
                 {preview.map((fila) => (
                   <div key={fila.codigo} className="flex items-center gap-4 py-3">
-                    <Codigo codigo={fila.codigo} />
+                    <Codigo codigo={fila.codigo} className="shrink-0" />
                     <div className="min-w-0 flex-1">
-                      <p className="flex items-center gap-1.5 truncate font-medium">
+                      {/* El nombre entero, en los renglones que haga falta */}
+                      <p className="text-sm font-medium break-words">
                         {fila.automatica ? (
-                          <Zap className="size-4 shrink-0 text-primary" strokeWidth={2} aria-hidden />
+                          <Zap
+                            className="mr-1.5 inline size-4 align-[-0.15em] text-primary"
+                            strokeWidth={2}
+                            aria-hidden
+                          />
                         ) : null}
                         {fila.nombre}
                       </p>
@@ -234,7 +255,7 @@ export default async function FacturacionPage() {
                         {fila.automatica ? " con medidor · se suma solo" : ""}
                       </p>
                     </div>
-                    <Money monto={fila.subtotal} className="font-medium" />
+                    <Money monto={fila.subtotal} className="shrink-0 text-base font-medium" />
                   </div>
                 ))}
               </div>
@@ -271,62 +292,98 @@ export default async function FacturacionPage() {
               descripcion="Generá el primero con el botón de arriba: se crean los cargos del mes para todos los clientes."
             />
           ) : (
-            <Table className="text-sm">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Período</TableHead>
-                  <TableHead>Vencimiento</TableHead>
-                  <TableHead>Generado</TableHead>
-                  <TableHead className="text-right">Estimado</TableHead>
-                  <TableHead className="text-right">Cobrado</TableHead>
-                  {veReportes ? (
-                    <TableHead className="sr-only">Acciones</TableHead>
-                  ) : null}
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {historial.map((p) => {
-                  const clave = p.periodo.slice(0, 10);
-                  const resumen = resumenPorPeriodo.get(clave);
-                  const generadoPor = p.generado_por
-                    ? nombrePorUsuario.get(p.generado_por)
-                    : null;
-                  return (
+            <>
+              {/* Celular: cada período es una ficha apilada, con los montos a la vista */}
+              <ul className="divide-y md:hidden">
+                {periodos.map((p) => (
+                  <li key={p.id} className="space-y-3 py-4 first:pt-0 last:pb-0">
+                    <div>
+                      <p className="text-base font-semibold">{p.label}</p>
+                      <p className="text-sm text-muted-foreground">
+                        Vence el {p.vence} · generado el {p.generado}
+                        {p.generadoPor ? <span className="break-words"> por {p.generadoPor}</span> : null}
+                      </p>
+                    </div>
+                    <dl className="grid grid-cols-2 gap-3">
+                      <div className="min-w-0">
+                        <dt className="text-sm text-muted-foreground">Estimado</dt>
+                        <dd>
+                          <Money monto={p.estimado} className="text-base font-semibold break-words" />
+                        </dd>
+                      </div>
+                      <div className="min-w-0">
+                        <dt className="text-sm text-muted-foreground">Cobrado</dt>
+                        <dd>
+                          <Money monto={p.cobrado} className="text-base font-semibold break-words text-pagado" />
+                        </dd>
+                      </div>
+                    </dl>
+                    {veReportes ? (
+                      <Button asChild variant="outline" className="min-h-11 w-full text-sm">
+                        <Link href={`/reportes?periodo=${p.clave}`}>
+                          Ver reporte de {p.label}
+                          <ArrowRight className="size-4" />
+                        </Link>
+                      </Button>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+
+              {/* Desde tablet: tabla de cinco columnas que entra entera (el vencimiento va
+                  debajo del mes y quién lo generó puede bajar de renglón). */}
+              <Table className="text-sm max-md:hidden">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Período</TableHead>
+                    <TableHead>Generado</TableHead>
+                    <TableHead className="text-right">Estimado</TableHead>
+                    <TableHead className="text-right">Cobrado</TableHead>
+                    {veReportes ? (
+                      <TableHead>
+                        <span className="sr-only">Acciones</span>
+                      </TableHead>
+                    ) : null}
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {periodos.map((p) => (
                     <TableRow key={p.id}>
-                      <TableCell className="font-medium">
-                        {labelPeriodo(clave)}
-                      </TableCell>
-                      <TableCell>{formatFecha(p.vencimiento)}</TableCell>
                       <TableCell>
-                        {formatFechaHora(p.generado_en)}
-                        {generadoPor ? (
-                          <span className="text-muted-foreground">
-                            {" "}
-                            · {generadoPor}
-                          </span>
+                        <p className="font-medium">{p.label}</p>
+                        <p className="text-muted-foreground">Vence el {p.vence}</p>
+                      </TableCell>
+                      <TableCell className="whitespace-normal">
+                        <p>{p.generado}</p>
+                        {p.generadoPor ? (
+                          <p className="break-words text-muted-foreground">{p.generadoPor}</p>
                         ) : null}
                       </TableCell>
                       <TableCell className="text-right tabular">
-                        <Money monto={resumen?.estimado ?? 0} />
+                        <Money monto={p.estimado} />
                       </TableCell>
                       <TableCell className="text-right tabular">
-                        <Money
-                          monto={resumen?.cobrado ?? 0}
-                          className="font-semibold text-pagado"
-                        />
+                        <Money monto={p.cobrado} className="font-semibold text-pagado" />
                       </TableCell>
                       {veReportes ? (
                         <TableCell className="text-right">
                           <Button asChild variant="ghost" className="min-h-11 px-3">
-                            <Link href={`/reportes?periodo=${clave}`}>Ver reporte</Link>
+                            <Link href={`/reportes?periodo=${p.clave}`}>Ver reporte</Link>
                           </Button>
                         </TableCell>
                       ) : null}
                     </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+                  ))}
+                </TableBody>
+              </Table>
+
+              {/* Estimado ≠ cobrado + lo que falta: la diferencia son los beneficios. */}
+              <p className="mt-4 border-t pt-4 text-sm text-muted-foreground">
+                Estimado es todo lo facturado en el mes, sin descontar los beneficios por pagar en
+                término: por eso da más que lo cobrado más lo que falta cobrar.
+                {veReportes ? " El detalle, en cada reporte." : null}
+              </p>
+            </>
           )}
         </CardContent>
       </Card>

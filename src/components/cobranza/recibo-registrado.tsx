@@ -4,6 +4,7 @@ import type { ResultadoCobro } from "@/lib/actions/cobranza";
 import { Codigo } from "@/components/shared/codigo";
 import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
+import { DescripcionCargo } from "@/components/cobranza/descripcion-cargo";
 import { ICONO_MEDIO, LABEL_MEDIO } from "@/components/cobranza/tipos";
 
 /**
@@ -59,10 +60,12 @@ export function ReciboRegistrado({
           <p className="text-sm font-medium text-muted-foreground">Se aplicó a</p>
           <div className="divide-y rounded-md border">
             {resultado.imputaciones.map((imp) => (
-              <div key={imp.cargo_id} className="flex items-center gap-3 px-4 py-3">
-                <Codigo codigo={imp.codigo} />
+              <div key={imp.cargo_id} className="flex items-start gap-3 px-4 py-3">
+                <Codigo codigo={imp.codigo} className="mt-0.5" />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-medium">{imp.descripcion}</p>
+                  <p className="font-medium break-words">
+                    <DescripcionCargo texto={imp.descripcion} />
+                  </p>
                   {/* "Saldado" va debajo, junto al período: en un celular angosto no le come
                       el lugar a la descripción. */}
                   <p className="flex flex-wrap items-center gap-x-2 text-sm text-muted-foreground">
@@ -75,7 +78,7 @@ export function ReciboRegistrado({
                     ) : null}
                   </p>
                 </div>
-                <Money monto={imp.monto} className="shrink-0 font-semibold" />
+                <Money monto={imp.monto} className="shrink-0 pt-px font-semibold" />
               </div>
             ))}
           </div>

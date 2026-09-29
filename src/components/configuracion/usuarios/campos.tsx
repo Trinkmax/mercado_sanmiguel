@@ -12,7 +12,10 @@ import {
 } from "@/components/ui/collapsible";
 import { dniConPuntos, generarContrasena } from "./contrasena";
 
-/** DNI grande con los puntos que se ponen solos. `valor` son solo dígitos. */
+/**
+ * DNI con los puntos que se ponen solos. `valor` son solo dígitos. Mismo tamaño de letra que
+ * el nombre de al lado (antes 22,5 px contra 15 px en el mismo formulario).
+ */
 export function CampoDni({
   id,
   valor,
@@ -39,7 +42,7 @@ export function CampoDni({
         value={dniConPuntos(valor)}
         onChange={(e) => onCambiar(e.target.value.replace(/\D/g, "").slice(0, 8))}
         aria-invalid={error ? true : undefined}
-        className="h-14 max-w-xs bg-card text-2xl font-semibold tracking-wide tabular md:text-2xl"
+        className="h-14 max-w-xs bg-card text-lg font-semibold tracking-wide tabular md:text-lg"
       />
       {error ? (
         <p className="text-sm font-medium text-destructive">{error}</p>
@@ -84,7 +87,7 @@ export function CampoContrasena({
           onChange={(e) => onCambiar(e.target.value)}
           aria-invalid={corta ? true : undefined}
           placeholder="Mínimo 8 letras o números"
-          className="h-14 max-w-xs bg-card text-xl md:text-xl"
+          className="h-14 max-w-xs bg-card text-lg md:text-lg"
         />
       ) : (
         <p

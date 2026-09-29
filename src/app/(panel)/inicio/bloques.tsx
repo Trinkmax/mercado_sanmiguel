@@ -27,15 +27,12 @@ export function BarraConcepto({
   const pct = objetivo > 0 ? Math.min((cobrado / objetivo) * 100, 100) : 100;
   const completo = faltaTexto <= 0.009;
   return (
-    <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-1.5 py-3 sm:grid-cols-[5rem_1fr_11rem]">
+    // Celular: código + nombre entero arriba, la barra y abajo los montos (con el "faltan").
+    // Desde sm: los montos en su columna, alineados a la derecha.
+    <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-1.5 py-3 sm:grid-cols-[5rem_minmax(0,1fr)_12rem]">
       <Codigo codigo={fila.codigo} />
       <div className="min-w-0">
-        <div className="flex items-baseline justify-between gap-3">
-          <p className="truncate font-medium">{fila.nombre}</p>
-          <p className="text-sm text-muted-foreground tabular sm:hidden">
-            {formatARS(cobrado)} / {formatARS(objetivo)}
-          </p>
-        </div>
+        <p className="text-sm font-medium break-words">{fila.nombre}</p>
         <div
           className="mt-1.5 h-3 overflow-hidden rounded-full bg-pendiente-suave"
           role="progressbar"
@@ -47,11 +44,14 @@ export function BarraConcepto({
           <div className="h-full rounded-full bg-pagado transition-[width]" style={{ width: `${pct}%` }} />
         </div>
       </div>
-      <div className="col-start-2 text-sm text-muted-foreground tabular max-sm:hidden sm:col-start-3 sm:text-right">
-        <span className="font-semibold text-pagado">{formatARS(cobrado)}</span>
-        {" de "}
-        {formatARS(objetivo)}
-        {completo ? null : <span className="block text-pendiente">faltan {formatARS(faltaTexto)}</span>}
+      <div className="col-start-2 flex flex-wrap items-baseline justify-between gap-x-3 text-sm text-muted-foreground tabular sm:col-start-3 sm:block sm:text-right">
+        <p>
+          <span className="font-semibold whitespace-nowrap text-pagado">{formatARS(cobrado)}</span>{" "}
+          <span className="whitespace-nowrap">de {formatARS(objetivo)}</span>
+        </p>
+        {completo ? null : (
+          <p className="ml-auto whitespace-nowrap text-pendiente">faltan {formatARS(faltaTexto)}</p>
+        )}
       </div>
     </div>
   );

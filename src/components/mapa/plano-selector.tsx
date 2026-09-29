@@ -116,7 +116,8 @@ export default function PlanoSelector({
           clientes={[]}
           espacios={plano.filter((e) => permitido(e.tipo))}
           anonimo
-          placeholder="Escribí el número (58, local 3, c 7)"
+          // Corto: entra entero en la hoja de un celular de 360 px.
+          placeholder="Número (58, local 3, c 7)"
           vacio="No hay ningún lugar con"
           onElegir={(r) => {
             const e = r.tipo === "espacio" ? porId.get(r.id) : null;
@@ -141,9 +142,9 @@ export default function PlanoSelector({
           enfoqueInicial={enfoqueInicial}
         >
           {sugeridos.length > 0 && !actual ? (
-            <p className="pointer-events-none absolute top-3 right-3 left-3 mx-auto flex w-fit max-w-full items-center gap-2 truncate rounded-full bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground shadow-md">
+            <p className="pointer-events-none absolute top-3 right-3 left-3 mx-auto flex w-fit max-w-full items-center gap-2 rounded-2xl bg-primary px-3.5 py-2 text-sm leading-snug font-medium text-primary-foreground shadow-md">
               <MapPin className="size-4 shrink-0" strokeWidth={2} />
-              <span className="truncate">Los marcados en azul son de este cliente</span>
+              <span className="min-w-0">Los marcados en azul son de este cliente</span>
             </p>
           ) : null}
         </LienzoPlano>

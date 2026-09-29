@@ -8,13 +8,15 @@ import {
   formatARS,
   formatCuit,
   formatFecha,
-  formatFechaHora,
   formatFechaTS,
+  formatSoloHora,
   labelPeriodo,
 } from "@/lib/format";
 import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
 import { BotonImprimir } from "@/components/shared/boton-imprimir";
+import { DescripcionCargo, textoCargo } from "@/components/cobranza/descripcion-cargo";
+import { resumirLugares } from "@/components/cobranza/tipos";
 
 type Medio = "efectivo" | "transferencia" | "cheque";
 
@@ -102,25 +104,49 @@ export async function generateMetadata({
   return { title: { absolute: r ? `Recibo N° ${r.numero} — ${r.cliente.nombre}` : "Recibo" } };
 }
 
-function textoLinea(l: LineaRecibo, esSocio: boolean): { titulo: string; detalle: string | null } {
-  if (l.medio === "efectivo") return { titulo: "Efectivo", detalle: null };
+/** "29/09/2026, 03:49": el recibo es un papel que se guarda, la fecha va con año. */
+function fechaHora(iso: string): string {
+  return `${formatFechaTS(iso)}, ${formatSoloHora(iso)}`;
+}
+
+/**
+ * Título y detalle de un medio. El detalle son pedazos que no se parten por dentro ("CUIT
+ * 20-17894561-2", "se cobra desde 14/10/2026"); entre pedazo y pedazo sí baja de renglón.
+ */
+function textoLinea(l: LineaRecibo, esSocio: boolean): { titulo: string; detalle: string[] } {
+  if (l.medio === "efectivo") return { titulo: "Efectivo", detalle: [] };
   if (l.medio === "transferencia") {
     const partes = [
       l.titular_transferencia ? `de ${l.titular_transferencia}` : null,
       l.tiene_comprobante ? "comprobante adjunto" : null,
-    ].filter(Boolean);
-    return { titulo: "Transferencia", detalle: partes.length ? partes.join(" · ") : null };
+    ].filter((p): p is string => Boolean(p));
+    return { titulo: "Transferencia", detalle: partes };
   }
   const c = l.cheque;
-  if (!c) return { titulo: "Cheque", detalle: null };
+  if (!c) return { titulo: "Cheque", detalle: [] };
   const partes = [
     c.cuit ? `CUIT ${formatCuit(c.cuit)}` : null,
     c.recibido_de ? `entregó ${c.recibido_de}` : null,
     c.fecha_cobro ? `se cobra desde ${formatFecha(c.fecha_cobro)}` : null,
-    c.puesto,
+    // "Puesto 22 · Puesto 24 · Puesto 26" (así lo guarda la base) → "Puestos 22 · 24 · 26".
+    c.puesto ? resumirLugares(c.puesto.split(" · ")) : null,
     !esSocio && c.estado === "entregado" && c.proveedor ? `entregado a ${c.proveedor}` : null,
-  ].filter(Boolean);
-  return { titulo: `Cheque N° ${c.numero}`, detalle: partes.join(" · ") };
+  ].filter((p): p is string => Boolean(p));
+  return { titulo: `Cheque N° ${c.numero}`, detalle: partes };
+}
+
+/** Pedazos cortos (CUIT, fechas, puestos) enteros; los largos (nombres) bajan como texto. */
+function Detalle({ partes }: { partes: string[] }) {
+  return (
+    <>
+      {partes.map((p, i) => (
+        <span key={i}>
+          {i > 0 ? " · " : null}
+          <span className={p.length <= 32 ? "whitespace-nowrap" : undefined}>{p}</span>
+        </span>
+      ))}
+    </>
+  );
 }
 
 export default async function ReciboPage({
@@ -199,18 +225,20 @@ export default async function ReciboPage({
       <div className="etiqueta">
         <div className="etiqueta-interior space-y-6">
           {/* Cabecera */}
-          <header className="flex flex-wrap items-start justify-between gap-4 border-b pb-4">
-            <div>
+          {/* El N° y la fecha van juntos y del mismo lado: en celular abajo a la izquierda; desde
+              tablet (y en el papel) contra el borde derecho, aunque bajen de renglón. */}
+          <header className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3 border-b pb-4">
+            <div className="min-w-0">
               <p className="font-display text-xl font-semibold uppercase tracking-wide">
                 Cooperativa Mercado San Miguel
               </p>
               <p className="text-sm text-muted-foreground">Malagueño, Córdoba</p>
             </div>
-            <div className="text-right">
-              <p className="font-display text-2xl font-semibold uppercase tracking-wide">
+            <div className="sm:ml-auto sm:text-right print:ml-auto print:text-right">
+              <h1 className="font-display text-2xl font-semibold uppercase tracking-wide">
                 Recibo N° {recibo.numero}
-              </p>
-              <p className="text-sm text-muted-foreground">{formatFechaHora(recibo.fecha)}</p>
+              </h1>
+              <p className="text-sm text-muted-foreground tabular">{fechaHora(recibo.fecha)}</p>
             </div>
           </header>
 
@@ -227,25 +255,29 @@ export default async function ReciboPage({
                 const Icono = ICONO[l.medio] ?? Banknote;
                 const { titulo, detalle } = textoLinea(l, esSocio);
                 return (
+                  // El monto va en el renglón del título; el detalle (del cheque, largo) usa todo el
+                  // ancho debajo, no una columna angosta al lado del monto.
                   <div key={l.pago_id} className="flex items-start gap-3 px-4 py-3">
                     <Icono className="mt-0.5 size-5 shrink-0 text-muted-foreground" strokeWidth={2} />
-                    <div className={`min-w-0 flex-1 ${l.anulado ? "text-muted-foreground" : ""}`}>
-                      <p className={`font-medium ${l.anulado ? "line-through" : ""}`}>{titulo}</p>
-                      {detalle ? (
-                        <p className={`text-sm text-muted-foreground ${l.anulado ? "line-through" : ""}`}>
-                          {detalle}
+                    <div className={`min-w-0 flex-1 space-y-0.5 ${l.anulado ? "text-muted-foreground" : ""}`}>
+                      <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+                        <p className={`font-medium ${l.anulado ? "line-through" : ""}`}>{titulo}</p>
+                        <Money
+                          monto={l.monto}
+                          className={`ml-auto font-semibold ${l.anulado ? "text-muted-foreground line-through" : ""}`}
+                        />
+                      </div>
+                      {detalle.length > 0 ? (
+                        <p className={`text-sm break-words text-muted-foreground ${l.anulado ? "line-through" : ""}`}>
+                          <Detalle partes={detalle} />
                         </p>
                       ) : null}
                       {l.anulado ? (
-                        <p className="text-sm">
+                        <p className="text-sm break-words">
                           Anulada{l.motivo_anulacion ? `: ${l.motivo_anulacion}` : ""}
                         </p>
                       ) : null}
                     </div>
-                    <Money
-                      monto={l.monto}
-                      className={`shrink-0 font-semibold ${l.anulado ? "text-muted-foreground line-through" : ""}`}
-                    />
                   </div>
                 );
               })}
@@ -261,24 +293,24 @@ export default async function ReciboPage({
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-muted-foreground">
-                  <th className="py-2 font-medium">Detalle</th>
-                  <th className="py-2 font-medium">Período</th>
+                  <th className="py-2 pr-3 font-medium">Detalle</th>
+                  <th className="py-2 pr-3 font-medium">Período</th>
                   <th className="py-2 text-right font-medium">Monto</th>
                 </tr>
               </thead>
               <tbody>
                 {recibo.imputaciones.map((imp) => (
                   <tr key={imp.cargo_id} className="border-b border-dashed">
-                    <td className="py-2">
-                      {imp.descripcion}
+                    <td className="py-2 pr-3 break-words">
+                      <DescripcionCargo texto={imp.descripcion} />
                       {Number(imp.beneficio) > 0.009 ? (
                         <span className="block text-xs text-muted-foreground">
                           Con beneficio por pago en término de <Money monto={imp.beneficio} />
                         </span>
                       ) : null}
                     </td>
-                    <td className="py-2">{labelPeriodo(imp.periodo)}</td>
-                    <td className="py-2 text-right tabular">
+                    <td className="py-2 pr-3 whitespace-nowrap">{labelPeriodo(imp.periodo)}</td>
+                    <td className="py-2 text-right whitespace-nowrap tabular">
                       <Money monto={imp.monto} />
                     </td>
                   </tr>
@@ -294,7 +326,7 @@ export default async function ReciboPage({
                           {aplicadoDespues
                             .map(
                               (a) =>
-                                `${a.descripcion} · ${labelPeriodo(a.periodo)} ${formatARS(Number(a.monto))}${a.fecha ? ` (el ${formatFechaTS(a.fecha)})` : ""}`
+                                `${textoCargo(a.descripcion)} · ${labelPeriodo(a.periodo)} ${formatARS(Number(a.monto))}${a.fecha ? ` (el ${formatFechaTS(a.fecha)})` : ""}`
                             )
                             .join(" — ")}
                         </span>
@@ -323,7 +355,7 @@ export default async function ReciboPage({
             </div>
             {recibo.anulado ? (
               <p className="text-right text-sm font-medium">
-                Anulado{anuladoEn ? ` el ${formatFechaHora(anuladoEn)}` : ""}: no vale como pago.
+                Anulado{anuladoEn ? ` el ${fechaHora(anuladoEn)}` : ""}: no vale como pago.
               </p>
             ) : null}
             {beneficio > 0.009 ? (

@@ -161,6 +161,11 @@ export async function InicioGestion({ perfil, supabase }: { perfil: Perfil; supa
   const bono = resumen.find((f) => f.codigo === "BC");
   const totalCobrado = conceptos.reduce((a, f) => a + f.cobrado, 0);
   const totalPendiente = conceptos.reduce((a, f) => a + f.pendiente, 0);
+  // Estimado = cobrado + por cobrar + beneficios por pagar en término (los ya otorgados y los
+  // de quienes todavía están en término). Sin esta línea, el total no cuadraba con Facturación.
+  const totalEstimado = conceptos.reduce((a, f) => a + f.estimado, 0);
+  const totalBeneficios = Math.max(totalEstimado - totalCobrado - totalPendiente, 0);
+  const sinPorteria = rol === "admin" && resumen.some((f) => f.codigo !== "BC" && deOtraCaja.has(f.codigo));
 
   // ---------- Avisos (solo los que tienen algo) ----------
   const avisos: Aviso[] = [];
@@ -365,14 +370,30 @@ export async function InicioGestion({ perfil, supabase }: { perfil: Perfil; supa
                     />
                   ))}
                 </div>
-                <div className="mt-4 flex flex-wrap items-baseline justify-between gap-2 border-t pt-4">
-                  <p className="text-muted-foreground">Total del mes</p>
-                  <p className="text-lg tabular">
-                    <Money monto={totalCobrado} className="font-bold text-pagado" />{" "}
-                    <span className="text-muted-foreground">cobrado ·</span>{" "}
-                    <Money monto={totalPendiente} className="font-bold text-pendiente" />{" "}
-                    <span className="text-muted-foreground">por cobrar</span>
-                  </p>
+                <div className="mt-4 space-y-2 border-t pt-4">
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                    <p className="text-sm text-muted-foreground">Total del mes</p>
+                    <p className="text-lg tabular">
+                      <span className="whitespace-nowrap">
+                        <Money monto={totalCobrado} className="font-bold text-pagado" />{" "}
+                        <span className="text-muted-foreground">cobrado</span>
+                      </span>{" "}
+                      <span className="text-muted-foreground">·</span>{" "}
+                      <span className="whitespace-nowrap">
+                        <Money monto={totalPendiente} className="font-bold text-pendiente" />{" "}
+                        <span className="text-muted-foreground">por cobrar</span>
+                      </span>
+                    </p>
+                  </div>
+                  {totalBeneficios > 0.5 ? (
+                    <p className="text-sm text-muted-foreground">
+                      Estimado del mes
+                      {sinPorteria ? " (sin quintas ni ambulantes)" : ""}:{" "}
+                      <Money monto={totalEstimado} className="font-semibold text-foreground" />. La
+                      diferencia, <Money monto={totalBeneficios} className="font-semibold text-foreground" />,
+                      son beneficios por pagar en término.
+                    </p>
+                  ) : null}
                 </div>
               </>
             )}
@@ -425,6 +446,28 @@ function CajaAdministracionHoy({ caja }: { caja: CajaHoy | null }) {
               <div className="space-y-1">
                 <p className="text-sm text-muted-foreground">Juntaste hoy</p>
                 <Money monto={caja.arqueo.juntado} className="font-display text-3xl font-extrabold" />
+                {/* Lo juntado incluye la caja de portería recibida: por eso da más que el
+                    "Hoy cobraste" de Cobranza, que son solo tus recibos. */}
+                {caja.arqueo.rendido > 0 || caja.arqueo.canon > 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Cobraste <Money monto={caja.arqueo.cobros} className="font-semibold text-foreground" />
+                    {caja.arqueo.canon > 0 ? (
+                      <>
+                        {caja.arqueo.rendido > 0 ? ", " : " y "}
+                        <Money monto={caja.arqueo.canon} className="font-semibold text-foreground" /> de
+                        bono camioneros
+                      </>
+                    ) : null}
+                    {caja.arqueo.rendido > 0 ? (
+                      <>
+                        {" "}y recibiste{" "}
+                        <Money monto={caja.arqueo.rendido} className="font-semibold text-foreground" /> de
+                        la caja de portería
+                      </>
+                    ) : null}
+                    .
+                  </p>
+                ) : null}
                 <p className="text-sm text-muted-foreground">
                   Tenés que tener <Money monto={caja.arqueo.efectivo} className="font-semibold text-foreground" /> en
                   efectivo

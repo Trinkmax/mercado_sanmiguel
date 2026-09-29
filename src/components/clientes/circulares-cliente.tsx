@@ -52,7 +52,9 @@ export async function CircularesCliente({ clienteId }: { clienteId: string }) {
                       {c.numero}
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate font-medium">{c.titulo}</span>
+                      <span title={c.titulo} className="line-clamp-2 font-medium break-words">
+                        {c.titulo}
+                      </span>
                       <span className="text-xs tabular text-muted-foreground">
                         {formatFecha(c.fecha)} · {c.obligatoria ? "Obligatoria" : "Informativa"}
                         {!c.activa ? " · Desactivada" : ""}

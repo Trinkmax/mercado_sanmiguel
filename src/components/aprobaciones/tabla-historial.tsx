@@ -39,7 +39,7 @@ export function TablaHistorial({ cambios }: { cambios: CambioFila[] }) {
                 {c.cliente ? (
                   <Link
                     href={`/clientes/${c.cliente.id}`}
-                    className="mt-0.5 inline-flex min-h-8 items-center gap-0.5 text-sm text-primary underline-offset-4 hover:underline"
+                    className="mt-0.5 inline-flex min-h-11 items-center gap-0.5 text-sm text-primary underline-offset-4 hover:underline"
                   >
                     Ver ficha de {c.cliente.nombre}
                     <ArrowUpRight className="size-4" strokeWidth={2} />

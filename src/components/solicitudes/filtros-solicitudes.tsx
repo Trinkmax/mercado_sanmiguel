@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Rol } from "@/lib/auth";
 import { cn } from "@/lib/utils";
+import { FilaDeslizable } from "@/components/comunicaciones/fila-deslizable";
 import {
   ESTADOS_CON_LIDER,
   ESTADOS_EN_CURSO,
@@ -179,7 +180,10 @@ export function filtrosParaRol(rol: Rol): FiltroSolicitud[] {
   }
 }
 
-/** Pestañas grandes (targets ≥ 44 px) con el conteo de cada una. */
+/**
+ * Pestañas grandes (targets ≥ 44 px) con el conteo de cada una. En el celular van en un solo
+ * renglón que se desliza (antes los 8 filtros del Líder ocupaban 4 renglones antes de la lista).
+ */
 export function FiltrosSolicitudes({
   filtros,
   activo,
@@ -190,7 +194,7 @@ export function FiltrosSolicitudes({
   conteos: Record<string, number>;
 }) {
   return (
-    <div className="flex flex-wrap gap-2" role="tablist" aria-label="Filtrar por estado">
+    <FilaDeslizable role="tablist" aria-label="Filtrar por estado">
       {filtros.map((f, i) => {
         const esActivo = activo === f.valor;
         const cantidad = conteos[f.valor] ?? 0;
@@ -203,7 +207,7 @@ export function FiltrosSolicitudes({
             aria-selected={esActivo}
             href={i === 0 ? "/solicitudes" : `/solicitudes?estado=${f.valor}`}
             className={cn(
-              "inline-flex min-h-11 items-center gap-2 rounded-md border px-4 text-sm font-medium transition-colors",
+              "inline-flex min-h-11 shrink-0 items-center gap-2 rounded-md border px-4 text-sm font-medium whitespace-nowrap transition-colors",
               esActivo
                 ? "border-primary bg-primary text-primary-foreground"
                 : urgente
@@ -223,6 +227,6 @@ export function FiltrosSolicitudes({
           </Link>
         );
       })}
-    </div>
+    </FilaDeslizable>
   );
 }

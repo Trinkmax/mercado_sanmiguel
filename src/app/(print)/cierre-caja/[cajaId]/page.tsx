@@ -6,8 +6,8 @@ import {
   formatARS,
   formatCuit,
   formatFecha,
-  formatFechaHora,
   formatFechaLarga,
+  formatFechaTS,
   formatSoloHora,
 } from "@/lib/format";
 import { Marca } from "@/components/shared/marca";
@@ -18,6 +18,8 @@ import { CuentaCajon } from "@/components/caja/cuenta-cajon";
 import { LABEL_EVENTO } from "@/components/caja/historial-caja";
 import { labelMedio } from "@/components/caja/medios";
 import { cargarDatosCajaPorId } from "@/components/caja/datos";
+import { FechaImpresion } from "@/components/caja/fecha-impresion";
+import { montosSinCortar } from "@/components/caja/texto";
 
 type Props = {
   params: Promise<{ cajaId: string }>;
@@ -29,6 +31,28 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function capitalizar(texto: string): string {
   return texto.charAt(0).toUpperCase() + texto.slice(1);
+}
+
+/** "28/09/2026, 18:32": en un papel que se archiva, la fecha va con año. */
+function fechaHora(iso: string): string {
+  return `${formatFechaTS(iso)}, ${formatSoloHora(iso)}`;
+}
+
+/**
+ * Tablas del imprimible: aire entre columnas (sin él se leía "ReciboCliente") y montos sin
+ * partirse. En un celular algunas columnas se esconden y su dato baja a la celda principal
+ * (clase SOLO_ANCHO en la columna, SOLO_CELULAR en el dato que baja); en tablet, escritorio
+ * y en el papel se ven todas.
+ */
+const TABLA =
+  "w-full text-sm [&_td]:py-1 [&_td]:pr-3 [&_td]:align-top [&_td:last-child]:pr-0 [&_th]:py-1.5 [&_th]:pr-3 [&_th]:font-medium [&_th:last-child]:pr-0";
+const SOLO_ANCHO = "hidden sm:table-cell print:table-cell";
+const SOLO_CELULAR = "block text-xs text-muted-foreground sm:hidden print:hidden";
+
+/** "Efectivo contado $ 2.572.000 (coincide)": lo que dejó la validación de Tesorería. */
+function conteoValidado(detalle: string | null | undefined): { contado: string; resultado: string } | null {
+  const m = /Efectivo contado (\$\s?[\d.,]+) \(([^)]*)\)/.exec(detalle ?? "");
+  return m ? { contado: m[1], resultado: m[2] } : null;
 }
 
 /** El título es el nombre del PDF al "Guardar como PDF". */
@@ -84,7 +108,21 @@ export default async function CierreCajaPage({ params, searchParams }: Props) {
   const soloMirar = primero(ver) === "1";
   const autoImprimir =
     primero(auto) === "1" || (Boolean(configRes.data?.impresion_directa) && !soloMirar);
-  const impresoEn = formatFechaHora(new Date().toISOString());
+  const validada = caja.estado === "validada";
+  const conteo = validada
+    ? conteoValidado([...datos.eventos].reverse().find((e) => e.tipo === "validacion")?.detalle)
+    : null;
+  const quienCuenta = porteria ? "Administración" : "Tesorería";
+  const titulo = porteria ? "Rendición — Caja de portería" : "Cierre de caja — Administración";
+  const pasos = [
+    caja.cerrada_en
+      ? `${porteria ? "Rendida" : "Cerrada"} el ${fechaHora(caja.cerrada_en)}${datos.nombres.cerrada ? ` por ${datos.nombres.cerrada}` : ""}`
+      : null,
+    caja.integrada_en ? `Recibida en la caja mayor el ${fechaHora(caja.integrada_en)}` : null,
+    caja.validada_en
+      ? `Validada el ${fechaHora(caja.validada_en)}${datos.nombres.validada ? ` por ${datos.nombres.validada}` : ""}`
+      : null,
+  ].filter(Boolean);
 
   // Cobros: una fila por línea (medio); las líneas de un mismo recibo van juntas.
   const porMedio = { efectivo: 0, transferencia: 0, cheque: 0 } as Record<string, number>;
@@ -126,35 +164,33 @@ export default async function CierreCajaPage({ params, searchParams }: Props) {
 
       <div className="etiqueta">
         <div className="etiqueta-interior space-y-6">
-          {/* Cabecera */}
-          <header className="flex flex-wrap items-start justify-between gap-4 border-b-2 border-foreground pb-4">
-            <div className="space-y-1">
-              <Marca />
-              <p className="text-sm text-muted-foreground">
-                {orgRes.data?.nombre ?? "Cooperativa Mercado San Miguel"} · Malagueño, Córdoba
-              </p>
-            </div>
-            <div className="space-y-1 text-right">
-              <p className="font-display text-xl font-semibold tracking-wide uppercase">
-                {porteria ? "Rendición — Caja de portería" : "Cierre de caja — Administración"}
-              </p>
-              <p className="text-sm">{capitalizar(formatFechaLarga(caja.fecha))} de {caja.fecha.slice(0, 4)}</p>
-              <div className="flex justify-end gap-2 pt-1">
+          {/* Cabecera: la marca y el sello arriba; el título y el día juntos, a la izquierda
+              (alineados a la derecha quedaban flotando en el medio de la hoja al bajar de renglón). */}
+          <header className="space-y-3 border-b-2 border-foreground pb-4">
+            <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+              <div className="min-w-0 space-y-1">
+                <Marca />
+                <p className="text-sm text-muted-foreground">
+                  {orgRes.data?.nombre ?? "Cooperativa Mercado San Miguel"} · Malagueño, Córdoba
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
                 {caja.reapertura_solicitada_en ? <Sello estado="reapertura_pedida" /> : null}
                 <Sello grande estado={caja.estado} />
               </div>
             </div>
+            <div className="space-y-0.5">
+              <h1 className="font-display text-xl font-semibold tracking-wide break-words uppercase">{titulo}</h1>
+              <p className="text-sm">
+                {capitalizar(formatFechaLarga(caja.fecha))} de {caja.fecha.slice(0, 4)}
+              </p>
+            </div>
           </header>
 
-          <p className="text-xs text-muted-foreground">
-            Impreso el {impresoEn} por {perfil.nombre}
-            {caja.cerrada_en
-              ? ` · ${porteria ? "Rendida" : "Cerrada"} el ${formatFechaHora(caja.cerrada_en)}${datos.nombres.cerrada ? ` por ${datos.nombres.cerrada}` : ""}`
-              : ""}
-            {caja.integrada_en ? ` · Recibida en la caja mayor el ${formatFechaHora(caja.integrada_en)}` : ""}
-            {caja.validada_en
-              ? ` · Validada el ${formatFechaHora(caja.validada_en)}${datos.nombres.validada ? ` por ${datos.nombres.validada}` : ""}`
-              : ""}
+          <p className={`text-xs text-muted-foreground ${pasos.length === 0 ? "hidden print:block" : ""}`}>
+            {pasos.join(" · ")}
+            {pasos.length > 0 ? <span className="hidden print:inline"> · </span> : null}
+            <FechaImpresion por={perfil.nombre} />
           </p>
 
           {abierta ? (
@@ -181,16 +217,52 @@ export default async function CierreCajaPage({ params, searchParams }: Props) {
             />
           </section>
 
-          {/* Recuadro para contar a mano */}
-          <section className="break-inside-avoid grid gap-4 rounded-md border-2 border-foreground p-4 sm:grid-cols-2">
-            <p className="flex items-end gap-2">
-              <span className="shrink-0 font-semibold">Efectivo contado $</span>
-              <span className="mb-1 flex-1 border-b border-foreground" />
-            </p>
-            <p className="flex items-end gap-2">
-              <span className="shrink-0 font-semibold">Diferencia $</span>
-              <span className="mb-1 flex-1 border-b border-foreground" />
-            </p>
+          {/* Recuadro del conteo: cerrar la caja no es contarla. Lo completa quien recibe la
+              plata; con la caja validada, muestra lo que contó Tesorería. */}
+          <section className="break-inside-avoid space-y-3 rounded-md border-2 border-foreground p-4">
+            {validada ? (
+              conteo ? (
+                <>
+                  <p className="text-sm text-muted-foreground">Conteo de {quienCuenta} al validar la caja</p>
+                  <div className="grid gap-x-6 gap-y-2 sm:grid-cols-2 print:grid-cols-2">
+                    <p>
+                      <span className="font-semibold">Efectivo contado</span>{" "}
+                      <span className="whitespace-nowrap tabular">{montosSinCortar(conteo.contado)}</span>
+                    </p>
+                    <p>
+                      <span className="font-semibold">Diferencia</span>{" "}
+                      {conteo.resultado === "coincide"
+                        ? "no hubo: coincide"
+                        : montosSinCortar(conteo.resultado)}
+                    </p>
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm">
+                  {quienCuenta} validó la caja sin cargar el efectivo contado.
+                </p>
+              )
+            ) : (
+              <>
+                <p className="text-sm text-muted-foreground">
+                  Para completar a mano: lo cuenta {quienCuenta} al recibir la plata.{" "}
+                  <span className="whitespace-nowrap">
+                    Tiene que haber <Money monto={arqueo.efectivo} className="font-semibold text-foreground" />
+                  </span>{" "}
+                  en efectivo.
+                </p>
+                <div className="grid gap-4 sm:grid-cols-2 print:grid-cols-2">
+                  <p className="flex items-end gap-2">
+                    <span className="shrink-0 font-semibold">Efectivo contado $</span>
+                    <span className="mb-1 min-w-16 flex-1 border-b border-foreground" />
+                  </p>
+                  <p className="flex items-end gap-2">
+                    <span className="shrink-0 font-semibold">Diferencia $</span>
+                    <span className="mb-1 min-w-16 flex-1 border-b border-foreground" />
+                  </p>
+                </div>
+              </>
+            )}
           </section>
 
           {/* Cobros */}
@@ -202,42 +274,60 @@ export default async function CierreCajaPage({ params, searchParams }: Props) {
             {datos.recibos.length === 0 ? (
               <p className="text-sm text-muted-foreground">No hubo cobros en esta caja.</p>
             ) : (
-              <table className="w-full text-sm">
+              <table className={TABLA}>
                 <thead>
                   <tr className="border-b text-left text-muted-foreground">
-                    <th className="py-1.5 font-medium">Hora</th>
-                    <th className="py-1.5 font-medium">Recibo</th>
-                    <th className="py-1.5 font-medium">Cliente</th>
-                    <th className="py-1.5 font-medium">Medio</th>
-                    <th className="py-1.5 text-right font-medium">Monto</th>
+                    <th className={SOLO_ANCHO}>Hora</th>
+                    <th>Recibo</th>
+                    <th>Cliente</th>
+                    <th className={SOLO_ANCHO}>Medio</th>
+                    <th className="text-right">Monto</th>
                   </tr>
                 </thead>
                 <tbody>
                   {datos.recibos.flatMap((r) =>
-                    r.lineas.map((l, i) => (
-                      <tr
-                        key={l.pagoId}
-                        className={`break-inside-avoid ${i === r.lineas.length - 1 ? "border-b border-dashed" : ""} ${l.anulado ? "text-muted-foreground line-through" : ""}`}
-                      >
-                        <td className="py-1 tabular">{i === 0 ? formatSoloHora(r.fecha) : ""}</td>
-                        <td className="py-1 tabular">{i === 0 ? `N° ${r.numero}` : ""}</td>
-                        <td className="py-1">
-                          {i === 0 ? `${r.cliente?.nombre ?? "—"}${r.cliente ? ` (${r.cliente.codigo})` : ""}` : ""}
-                        </td>
-                        <td className="py-1">
-                          {labelMedio(l.medio)}
-                          {l.cheque ? ` N° ${l.cheque.numero}` : ""}
-                        </td>
-                        <td className="py-1 text-right tabular">{formatARS(l.monto)}</td>
-                      </tr>
-                    ))
+                    r.lineas.map((l, i) => {
+                      const medio = `${labelMedio(l.medio)}${l.cheque ? ` N° ${l.cheque.numero}` : ""}`;
+                      return (
+                        <tr
+                          key={l.pagoId}
+                          className={`break-inside-avoid ${i === r.lineas.length - 1 ? "border-b border-dashed" : ""} ${l.anulado ? "text-muted-foreground line-through" : ""}`}
+                        >
+                          <td className={`${SOLO_ANCHO} whitespace-nowrap tabular`}>
+                            {i === 0 ? formatSoloHora(r.fecha) : ""}
+                          </td>
+                          <td className="whitespace-nowrap tabular">
+                            {i === 0 ? (
+                              <>
+                                N° {r.numero}
+                                <span className={SOLO_CELULAR}>{formatSoloHora(r.fecha)}</span>
+                              </>
+                            ) : (
+                              ""
+                            )}
+                          </td>
+                          <td className="break-words">
+                            {i === 0 ? `${r.cliente?.nombre ?? "—"}${r.cliente ? ` (${r.cliente.codigo})` : ""}` : ""}
+                            <span className={SOLO_CELULAR}>{medio}</span>
+                          </td>
+                          <td className={SOLO_ANCHO}>{medio}</td>
+                          <td className="text-right whitespace-nowrap tabular">{formatARS(l.monto)}</td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
                 <tfoot>
                   <tr className="border-t-2 border-foreground">
-                    <td colSpan={5} className="pt-2 text-right">
-                      Efectivo {formatARS(porMedio.efectivo)} · Transferencia {formatARS(porMedio.transferencia)}
-                      {!porteria ? ` · Cheques ${formatARS(porMedio.cheque)}` : ""}
+                    <td colSpan={5} className="pt-2! text-right">
+                      <span className="whitespace-nowrap">Efectivo {formatARS(porMedio.efectivo)}</span> ·{" "}
+                      <span className="whitespace-nowrap">Transferencia {formatARS(porMedio.transferencia)}</span>
+                      {!porteria ? (
+                        <>
+                          {" · "}
+                          <span className="whitespace-nowrap">Cheques {formatARS(porMedio.cheque)}</span>
+                        </>
+                      ) : null}
                     </td>
                   </tr>
                 </tfoot>
@@ -260,24 +350,30 @@ export default async function CierreCajaPage({ params, searchParams }: Props) {
             <section className="break-inside-avoid space-y-2">
               <Titulo>Cheques recibidos</Titulo>
               {chequesEnCaja.length > 0 ? (
-                <table className="w-full text-sm">
+                <table className={TABLA}>
                   <thead>
                     <tr className="border-b text-left text-muted-foreground">
-                      <th className="py-1.5 font-medium">N°</th>
-                      <th className="py-1.5 font-medium">CUIT</th>
-                      <th className="py-1.5 font-medium">Recibido de</th>
-                      <th className="py-1.5 font-medium">Se cobra desde</th>
-                      <th className="py-1.5 text-right font-medium">Monto</th>
+                      <th>N°</th>
+                      <th className={SOLO_ANCHO}>CUIT</th>
+                      <th>Recibido de</th>
+                      <th className={SOLO_ANCHO}>Se cobra desde</th>
+                      <th className="text-right">Monto</th>
                     </tr>
                   </thead>
                   <tbody>
                     {chequesEnCaja.map((c, i) => (
                       <tr key={`${c.numero}-${i}`} className="border-b border-dashed">
-                        <td className="py-1 tabular">{c.numero}</td>
-                        <td className="py-1 tabular">{formatCuit(c.cuit)}</td>
-                        <td className="py-1">{c.recibidoDe ?? c.cliente}</td>
-                        <td className="py-1 tabular">{formatFecha(c.fechaCobro)}</td>
-                        <td className="py-1 text-right tabular">{formatARS(c.monto)}</td>
+                        <td className="tabular">
+                          {c.numero}
+                          <span className={`${SOLO_CELULAR} whitespace-nowrap`}>CUIT {formatCuit(c.cuit)}</span>
+                        </td>
+                        <td className={`${SOLO_ANCHO} whitespace-nowrap tabular`}>{formatCuit(c.cuit)}</td>
+                        <td className="break-words">
+                          {c.recibidoDe ?? c.cliente}
+                          <span className={SOLO_CELULAR}>Se cobra desde {formatFecha(c.fechaCobro)}</span>
+                        </td>
+                        <td className={`${SOLO_ANCHO} whitespace-nowrap tabular`}>{formatFecha(c.fechaCobro)}</td>
+                        <td className="text-right whitespace-nowrap tabular">{formatARS(c.monto)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -288,8 +384,10 @@ export default async function CierreCajaPage({ params, searchParams }: Props) {
                   <p className="font-semibold">Entregados a proveedores en el acto (no están en la caja):</p>
                   <ul>
                     {chequesEntregados.map((c, i) => (
-                      <li key={`${c.numero}-${i}`}>
-                        Cheque N° {c.numero} · CUIT {formatCuit(c.cuit)} · a {c.proveedor ?? "—"} · {formatARS(c.monto)}
+                      <li key={`${c.numero}-${i}`} className="break-words">
+                        <span className="whitespace-nowrap">Cheque N° {c.numero}</span> ·{" "}
+                        <span className="whitespace-nowrap">CUIT {formatCuit(c.cuit)}</span> · a {c.proveedor ?? "—"} ·{" "}
+                        <span className="whitespace-nowrap tabular">{formatARS(c.monto)}</span>
                       </li>
                     ))}
                   </ul>
@@ -305,35 +403,41 @@ export default async function CierreCajaPage({ params, searchParams }: Props) {
               {tarifas.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No entró ningún vehículo.</p>
               ) : (
-                <table className="w-full text-sm">
+                <table className={TABLA}>
                   <thead>
                     <tr className="border-b text-left text-muted-foreground">
-                      <th className="py-1.5 font-medium">Tarifa</th>
-                      <th className="py-1.5 text-right font-medium">Cobros</th>
-                      <th className="py-1.5 text-right font-medium">Cantidad</th>
-                      <th className="py-1.5 text-right font-medium">Efectivo</th>
-                      <th className="py-1.5 text-right font-medium">Transferencia</th>
+                      <th>Tarifa</th>
+                      <th className={`${SOLO_ANCHO} text-right`}>Cobros</th>
+                      <th className={`${SOLO_ANCHO} text-right`}>Cantidad</th>
+                      <th className="text-right">Efectivo</th>
+                      <th className="text-right">Transferencia</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {tarifas.map((t) => (
-                      <tr key={`${t.nombre}-${t.unidad}`} className="border-b border-dashed">
-                        <td className="py-1">{t.nombre}</td>
-                        <td className="py-1 text-right tabular">{t.entradas}</td>
-                        <td className="py-1 text-right tabular">
-                          {t.cantidad} {t.unidad === "dia" ? (t.cantidad === 1 ? "día" : "días") : t.cantidad === 1 ? "vehículo" : "vehículos"}
-                        </td>
-                        <td className="py-1 text-right tabular">{formatARS(t.efectivo)}</td>
-                        <td className="py-1 text-right tabular">{formatARS(t.transferencia)}</td>
-                      </tr>
-                    ))}
+                    {tarifas.map((t) => {
+                      const cantidad = `${t.cantidad} ${t.unidad === "dia" ? (t.cantidad === 1 ? "día" : "días") : t.cantidad === 1 ? "vehículo" : "vehículos"}`;
+                      return (
+                        <tr key={`${t.nombre}-${t.unidad}`} className="border-b border-dashed">
+                          <td className="break-words">
+                            {t.nombre}
+                            <span className={SOLO_CELULAR}>
+                              {t.entradas} {t.entradas === 1 ? "cobro" : "cobros"} · {cantidad}
+                            </span>
+                          </td>
+                          <td className={`${SOLO_ANCHO} text-right tabular`}>{t.entradas}</td>
+                          <td className={`${SOLO_ANCHO} text-right whitespace-nowrap tabular`}>{cantidad}</td>
+                          <td className="text-right whitespace-nowrap tabular">{formatARS(t.efectivo)}</td>
+                          <td className="text-right whitespace-nowrap tabular">{formatARS(t.transferencia)}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               )}
               {canonAnulados.length > 0 ? (
                 <ul className="space-y-0.5 text-xs text-muted-foreground">
                   {canonAnulados.map((e) => (
-                    <li key={e.id}>
+                    <li key={e.id} className="break-words">
                       N° {e.numero} anulado ({e.tarifa_nombre ?? "Canon"} · {formatARS(e.monto)})
                       {e.motivo_anulacion ? `: ${e.motivo_anulacion}` : ""}
                     </li>
@@ -347,26 +451,33 @@ export default async function CierreCajaPage({ params, searchParams }: Props) {
           {datos.rendidas.length > 0 ? (
             <section className="break-inside-avoid space-y-2">
               <Titulo>Cajas de portería recibidas</Titulo>
-              <table className="w-full text-sm">
+              <table className={TABLA}>
                 <thead>
                   <tr className="border-b text-left text-muted-foreground">
-                    <th className="py-1.5 font-medium">Día</th>
-                    <th className="py-1.5 text-right font-medium">Quintas</th>
-                    <th className="py-1.5 text-right font-medium">Ambulantes</th>
-                    <th className="py-1.5 text-right font-medium">Bono camioneros</th>
-                    <th className="py-1.5 text-right font-medium">En mano</th>
-                    <th className="py-1.5 text-right font-medium">Transferencia</th>
+                    <th>Día</th>
+                    <th className={`${SOLO_ANCHO} text-right`}>Quintas</th>
+                    <th className={`${SOLO_ANCHO} text-right`}>Ambulantes</th>
+                    <th className={`${SOLO_ANCHO} text-right`}>Bono camioneros</th>
+                    <th className="text-right">En mano</th>
+                    <th className="text-right">Transferencia</th>
                   </tr>
                 </thead>
                 <tbody>
                   {datos.rendidas.map((r) => (
                     <tr key={r.id} className="border-b border-dashed">
-                      <td className="py-1 tabular">{formatFecha(r.fecha)}</td>
-                      <td className="py-1 text-right tabular">{formatARS(r.total_quintas)}</td>
-                      <td className="py-1 text-right tabular">{formatARS(r.total_ambulantes)}</td>
-                      <td className="py-1 text-right tabular">{formatARS(r.total_canon)}</td>
-                      <td className="py-1 text-right tabular">{formatARS(r.total_efectivo)}</td>
-                      <td className="py-1 text-right tabular">{formatARS(r.total_transferencia)}</td>
+                      <td className="tabular">
+                        {formatFecha(r.fecha)}
+                        <span className={SOLO_CELULAR}>
+                          <span className="whitespace-nowrap">Quintas {formatARS(r.total_quintas)}</span> ·{" "}
+                          <span className="whitespace-nowrap">Ambulantes {formatARS(r.total_ambulantes)}</span> ·{" "}
+                          <span className="whitespace-nowrap">Bono camioneros {formatARS(r.total_canon)}</span>
+                        </span>
+                      </td>
+                      <td className={`${SOLO_ANCHO} text-right whitespace-nowrap tabular`}>{formatARS(r.total_quintas)}</td>
+                      <td className={`${SOLO_ANCHO} text-right whitespace-nowrap tabular`}>{formatARS(r.total_ambulantes)}</td>
+                      <td className={`${SOLO_ANCHO} text-right whitespace-nowrap tabular`}>{formatARS(r.total_canon)}</td>
+                      <td className="text-right whitespace-nowrap tabular">{formatARS(r.total_efectivo)}</td>
+                      <td className="text-right whitespace-nowrap tabular">{formatARS(r.total_transferencia)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -379,56 +490,59 @@ export default async function CierreCajaPage({ params, searchParams }: Props) {
             <section className="break-inside-avoid space-y-3">
               <Titulo>Gastos y ajustes</Titulo>
               {datos.gastos.length > 0 ? (
-                <table className="w-full text-sm">
+                <table className={TABLA}>
                   <thead>
                     <tr className="border-b text-left text-muted-foreground">
-                      <th className="py-1.5 font-medium">Gasto pagado desde la caja</th>
-                      <th className="py-1.5 font-medium">Pagó</th>
-                      <th className="py-1.5 text-right font-medium">Monto</th>
+                      <th>Gasto pagado desde la caja</th>
+                      <th className={SOLO_ANCHO}>Pagó</th>
+                      <th className="text-right">Monto</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {datos.gastos.map((g) => (
-                      <tr key={g.id} className="border-b border-dashed">
-                        <td className="py-1">
-                          {g.descripcion}
-                          {g.despuesDelCierre ? " (después del cierre)" : ""}
-                        </td>
-                        <td className="py-1">
-                          {g.pagadoPorNombre ?? "—"}
-                          {g.pagadoEn ? ` · ${formatFechaHora(g.pagadoEn)}` : ""}
-                        </td>
-                        <td className="py-1 text-right tabular">−{formatARS(g.monto)}</td>
-                      </tr>
-                    ))}
+                    {datos.gastos.map((g) => {
+                      const pago = `${g.pagadoPorNombre ?? "—"}${g.pagadoEn ? ` · ${fechaHora(g.pagadoEn)}` : ""}`;
+                      return (
+                        <tr key={g.id} className="border-b border-dashed">
+                          <td className="break-words">
+                            {g.descripcion}
+                            {g.despuesDelCierre ? " (después del cierre)" : ""}
+                            <span className={SOLO_CELULAR}>Pagó {pago}</span>
+                          </td>
+                          <td className={SOLO_ANCHO}>{pago}</td>
+                          <td className="text-right whitespace-nowrap tabular">−{formatARS(g.monto)}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               ) : null}
               {datos.ajustes.length > 0 ? (
-                <table className="w-full text-sm">
+                <table className={TABLA}>
                   <thead>
                     <tr className="border-b text-left text-muted-foreground">
-                      <th className="py-1.5 font-medium">Ajuste de tesorería</th>
-                      <th className="py-1.5 font-medium">Cargó</th>
-                      <th className="py-1.5 text-right font-medium">Monto</th>
+                      <th>Ajuste de tesorería</th>
+                      <th className={SOLO_ANCHO}>Cargó</th>
+                      <th className="text-right">Monto</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {datos.ajustes.map((a) => (
-                      <tr key={a.id} className="border-b border-dashed">
-                        <td className="py-1">
-                          {a.monto < 0 ? "Faltante" : "Sobrante"} {a.cuenta === "efectivo" ? "en efectivo" : "en el banco"}
-                          {a.descripcion ? ` — ${a.descripcion}` : ""}
-                        </td>
-                        <td className="py-1">
-                          {a.creadoPorNombre ?? "—"} · {formatFechaHora(a.creadoEn)}
-                        </td>
-                        <td className="py-1 text-right tabular">
-                          {a.monto < 0 ? "−" : "+"}
-                          {formatARS(Math.abs(a.monto))}
-                        </td>
-                      </tr>
-                    ))}
+                    {datos.ajustes.map((a) => {
+                      const cargo = `${a.creadoPorNombre ?? "—"} · ${fechaHora(a.creadoEn)}`;
+                      return (
+                        <tr key={a.id} className="border-b border-dashed">
+                          <td className="break-words">
+                            {a.monto < 0 ? "Faltante" : "Sobrante"} {a.cuenta === "efectivo" ? "en efectivo" : "en el banco"}
+                            {a.descripcion ? ` — ${montosSinCortar(a.descripcion)}` : ""}
+                            <span className={SOLO_CELULAR}>Cargó {cargo}</span>
+                          </td>
+                          <td className={SOLO_ANCHO}>{cargo}</td>
+                          <td className="text-right whitespace-nowrap tabular">
+                            {a.monto < 0 ? "−" : "+"}
+                            {formatARS(Math.abs(a.monto))}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               ) : null}
@@ -457,10 +571,10 @@ export default async function CierreCajaPage({ params, searchParams }: Props) {
               <Titulo>Historial de la caja</Titulo>
               <ol className="space-y-0.5 text-xs">
                 {datos.eventos.map((e) => (
-                  <li key={e.id} className="break-inside-avoid">
-                    <span className="tabular text-muted-foreground">{formatFechaHora(e.creado_en)}</span> ·{" "}
+                  <li key={e.id} className="break-inside-avoid break-words">
+                    <span className="tabular whitespace-nowrap text-muted-foreground">{fechaHora(e.creado_en)}</span> ·{" "}
                     <span className="font-semibold">{LABEL_EVENTO[e.tipo] ?? e.tipo}</span>
-                    {e.detalle ? ` — ${e.detalle}` : ""}
+                    {e.detalle ? ` — ${montosSinCortar(e.detalle)}` : ""}
                     {e.usuario ? ` (${e.usuario})` : ""}
                   </li>
                 ))}

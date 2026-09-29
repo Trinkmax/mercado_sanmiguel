@@ -106,6 +106,8 @@ function FilaEmpleado({
 }) {
   const [abierta, setAbierta] = useState(false);
   const nombre = nombrePila(f);
+  const n = f.novedades.length;
+  const textoDetalle = n === 0 ? "Ver detalle" : n === 1 ? "1 novedad en el mes" : `${n} novedades en el mes`;
 
   return (
     <Collapsible open={abierta} onOpenChange={setAbierta}>
@@ -113,7 +115,7 @@ function FilaEmpleado({
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1 space-y-2.5">
             <div className="flex flex-wrap items-center gap-2">
-              <p className={cn("text-base font-semibold", !f.activo && "text-muted-foreground")}>
+              <p className={cn("min-w-0 text-base font-semibold break-words", !f.activo && "text-muted-foreground")}>
                 {nombreCompleto(f)}
               </p>
               <span className="inline-flex items-center rounded-full border bg-muted px-2.5 py-0.5 text-xs font-semibold text-foreground/80">
@@ -143,9 +145,15 @@ function FilaEmpleado({
               </p>
             ) : null}
             <Contadores contadores={f} />
+            {/* Celular: el aviso de que se despliega va abajo, a lo ancho, con su texto (antes
+                quedaba solo la flecha). */}
+            <span className="flex items-center gap-1 text-sm font-medium text-primary sm:hidden">
+              {abierta ? "Ocultar" : textoDetalle}
+              <ChevronDown className={cn("size-5 transition-transform", abierta && "rotate-180")} strokeWidth={2} />
+            </span>
           </div>
-          <span className="mt-1 flex items-center gap-1 text-sm font-medium text-muted-foreground">
-            <span className="max-sm:hidden">{f.novedades.length > 0 ? `${f.novedades.length} en el mes` : "Detalle"}</span>
+          <span className="mt-1 flex shrink-0 items-center gap-1 text-sm font-medium text-muted-foreground max-sm:hidden">
+            {textoDetalle}
             <ChevronDown className={cn("size-5 transition-transform", abierta && "rotate-180")} strokeWidth={2} />
           </span>
         </div>
@@ -175,7 +183,7 @@ function FilaEmpleado({
               </Link>
             </Button>
             {esLider ? (
-              <Button asChild variant="ghost" className="h-12 px-4">
+              <Button asChild variant="ghost" className="h-12 px-4 text-sm">
                 <Link href={`/personal/${f.empleado_id}`}>
                   <IdCard className="size-4" strokeWidth={2} />
                   Ver ficha

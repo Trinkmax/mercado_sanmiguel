@@ -164,7 +164,7 @@ export function FilaUsuario({
 
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <p className="text-base font-semibold">
+            <p className="min-w-0 text-base font-semibold break-words">
               {usuario.nombre}
               {soyYo ? <span className="ml-1.5 font-normal text-muted-foreground">(vos)</span> : null}
             </p>
@@ -289,7 +289,7 @@ export function FilaUsuario({
               value={nombre}
               onChange={(e) => setNombre(e.target.value)}
               autoComplete="off"
-              className="h-12 max-w-md bg-card text-base md:text-base"
+              className="h-14 max-w-md bg-card text-lg md:text-lg"
             />
           </div>
           <CampoDni

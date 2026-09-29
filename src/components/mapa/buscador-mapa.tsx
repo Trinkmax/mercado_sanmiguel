@@ -11,6 +11,7 @@ import {
   etiquetaEspacio,
   normalizar,
   numeroVisible,
+  sinLugarEnPlano,
   textoEspacios,
   unidadesPuestos,
 } from "./geometria";
@@ -170,7 +171,14 @@ export function BuscadorMapa({
       } else if (anonimo) {
         detalle = c.mes ? `Quintero · ${textoAvance(c.mes)}` : "Quintero";
       } else {
-        detalle = suyos.length > 0 ? textoEspacios(suyos) : "Sin puestos en el plano";
+        // Todo lo que tiene, como en Clientes: lo ubicado y lo que no se marca en el plano.
+        const sinLugar = sinLugarEnPlano(c.facturado);
+        detalle =
+          suyos.length > 0
+            ? [textoEspacios(suyos), ...sinLugar].join(" · ")
+            : sinLugar.length > 0
+              ? `${sinLugar.join(" · ")} · sin lugar en el plano`
+              : "Sin puestos en el plano";
       }
       salida.push({
         clave: `c:${c.id}`,
@@ -194,65 +202,74 @@ export function BuscadorMapa({
 
   return (
     <div className={cn("relative", className)}>
-      <Search
-        className="pointer-events-none absolute top-1/2 left-3.5 size-[1.1rem] -translate-y-1/2 text-muted-foreground"
-        strokeWidth={2}
-      />
-      <Input
-        ref={inputRef}
-        type="text"
-        role="combobox"
-        aria-expanded={mostrar}
-        aria-controls={listaId}
-        aria-autocomplete="list"
-        aria-activedescendant={mostrar && filas[activo] ? `${listaId}-${activo}` : undefined}
-        autoFocus={autoFocus}
-        value={texto}
-        placeholder={placeholder}
-        aria-label={soloClientes ? placeholder : "Buscá un puestero o un número de puesto"}
-        className="h-11 rounded-lg pr-10 pl-10 text-[15px] md:text-[15px]"
-        onChange={(e) => {
-          setTexto(e.target.value);
-          setAbierto(true);
-          setActivo(0);
-        }}
-        onFocus={() => setAbierto(true)}
-        onBlur={() => window.setTimeout(() => setAbierto(false), 120)}
-        onKeyDown={(e) => {
-          if (e.key === "ArrowDown") {
-            e.preventDefault();
-            setAbierto(true);
-            setActivo((a) => Math.min(a + 1, Math.max(0, filas.length - 1)));
-          } else if (e.key === "ArrowUp") {
-            e.preventDefault();
-            setActivo((a) => Math.max(a - 1, 0));
-          } else if (e.key === "Enter") {
-            const f = filas[activo];
-            if (f) {
-              e.preventDefault();
-              elegir(f);
-            }
-          } else if (e.key === "Escape") {
-            if (texto) setTexto("");
-            else inputRef.current?.blur();
-            setAbierto(false);
+      {/* La lupa y la X se centran en el campo, no en el bloque: con la lista en línea
+          (dentro de un panel) el bloque crece hacia abajo y se le subirían encima. */}
+      <div className="relative">
+        <Search
+          className="pointer-events-none absolute top-1/2 left-3 size-[1.1rem] -translate-y-1/2 text-muted-foreground"
+          strokeWidth={2}
+        />
+        <Input
+          ref={inputRef}
+          type="text"
+          role="combobox"
+          aria-expanded={mostrar}
+          aria-controls={listaId}
+          aria-autocomplete="list"
+          aria-activedescendant={mostrar && filas[activo] ? `${listaId}-${activo}` : undefined}
+          autoFocus={autoFocus}
+          value={texto}
+          placeholder={placeholder}
+          aria-label={
+            soloClientes
+              ? "Buscá un puestero por nombre, apodo o número de carpeta"
+              : "Buscá un puestero o un número de puesto"
           }
-        }}
-      />
-      {texto ? (
-        <button
-          type="button"
-          aria-label="Borrar búsqueda"
-          className="absolute top-1/2 right-0.5 flex size-10 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
-          onMouseDown={(e) => e.preventDefault()}
-          onClick={() => {
-            setTexto("");
-            inputRef.current?.focus();
+          // Sin texto no hay X: el lugar a la derecha es del texto de ayuda.
+          className={cn("h-11 rounded-lg pl-9 text-[15px] md:text-[15px]", texto ? "pr-11" : "pr-3")}
+          onChange={(e) => {
+            setTexto(e.target.value);
+            setAbierto(true);
+            setActivo(0);
           }}
-        >
-          <X className="size-4" strokeWidth={2} />
-        </button>
-      ) : null}
+          onFocus={() => setAbierto(true)}
+          onBlur={() => window.setTimeout(() => setAbierto(false), 120)}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowDown") {
+              e.preventDefault();
+              setAbierto(true);
+              setActivo((a) => Math.min(a + 1, Math.max(0, filas.length - 1)));
+            } else if (e.key === "ArrowUp") {
+              e.preventDefault();
+              setActivo((a) => Math.max(a - 1, 0));
+            } else if (e.key === "Enter") {
+              const f = filas[activo];
+              if (f) {
+                e.preventDefault();
+                elegir(f);
+              }
+            } else if (e.key === "Escape") {
+              if (texto) setTexto("");
+              else inputRef.current?.blur();
+              setAbierto(false);
+            }
+          }}
+        />
+        {texto ? (
+          <button
+            type="button"
+            aria-label="Borrar búsqueda"
+            className="absolute top-1/2 right-0.5 flex size-10 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => {
+              setTexto("");
+              inputRef.current?.focus();
+            }}
+          >
+            <X className="size-4" strokeWidth={2} />
+          </button>
+        ) : null}
+      </div>
 
       {mostrar ? (
         <ul
@@ -294,9 +311,11 @@ export function BuscadorMapa({
                 >
                   {f.insignia}
                 </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium">{f.titulo}</span>
-                  <span className="block truncate text-xs text-muted-foreground">{f.detalle}</span>
+                {/* Nombres largos (razones sociales): hasta dos renglones y, si ni así
+                    entran, el nombre completo al pasar el mouse. */}
+                <span className="min-w-0 flex-1" title={`${f.titulo}\n${f.detalle}`}>
+                  <span className="line-clamp-2 text-sm leading-snug font-medium break-words">{f.titulo}</span>
+                  <span className="line-clamp-2 text-xs break-words text-muted-foreground">{f.detalle}</span>
                 </span>
               </li>
             ))

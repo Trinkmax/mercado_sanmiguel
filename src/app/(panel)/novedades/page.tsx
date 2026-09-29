@@ -9,8 +9,9 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { BotonExportar, type DatasetExportable } from "@/components/shared/boton-exportar";
-import { LABEL_SECTOR, esSector } from "@/components/personal/constantes";
+import { LABEL_SECTOR, esSector, nombreCompleto } from "@/components/personal/constantes";
 import { SelectorMes } from "@/components/novedades/selector-mes";
+import { FilaDeslizable } from "@/components/comunicaciones/fila-deslizable";
 import { BandejaAprobacion, type PendienteBandeja } from "@/components/novedades/bandeja-aprobacion";
 import { PlanillaMes, type FilaPlanilla } from "@/components/novedades/planilla-mes";
 import { AvisoRechazadas, type RechazadaAviso } from "@/components/novedades/aviso-rechazadas";
@@ -133,9 +134,11 @@ export default async function NovedadesPage({ searchParams }: Props) {
   }));
   const filas = sector ? todas.filter((f) => f.sector === sector) : todas;
 
+  // "Apellido, Nombre", igual que en la planilla de abajo (antes decía "Walter Hugo Sosa" arriba
+  // y "Sosa, Walter Hugo" abajo).
   const pendientes: PendienteBandeja[] = vistasPendientes.map((v, i) => ({
     ...v,
-    nombre: pendientesBD[i].empleado ? nombrePila(pendientesBD[i].empleado!) : "Empleado",
+    nombre: pendientesBD[i].empleado ? nombreCompleto(pendientesBD[i].empleado!) : "Empleado",
   }));
 
   // Chips de sector: solo si el rol ve más de uno. Conteo = empleados vigentes en el mes.
@@ -154,7 +157,8 @@ export default async function NovedadesPage({ searchParams }: Props) {
     <div className="space-y-8">
       <PageHeader titulo="Novedades del personal" descripcion={descripcion}>
         <BotonExportar dataset={DATASET_NOVEDADES} periodo={periodo} label="Exportar el mes" />
-        <Button asChild variant="outline" className="min-h-11">
+        {/* Mismo tamaño de letra que "Exportar el mes", al lado. */}
+        <Button asChild variant="outline" className="min-h-11 text-sm">
           <Link href={`/novedades/${periodo}`}>
             <Printer className="size-4" strokeWidth={2} />
             Imprimir planilla
@@ -176,7 +180,11 @@ export default async function NovedadesPage({ searchParams }: Props) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <SelectorMes periodo={periodo} hrefMes={hrefMes} />
           {alcance.length > 1 && todas.length > 0 ? (
-            <div className="flex flex-wrap gap-2" role="group" aria-label="Filtrar por sector">
+            <FilaDeslizable
+              role="group"
+              aria-label="Filtrar por sector"
+              classNameExterior="max-sm:w-[calc(100%+2rem)]"
+            >
               <ChipSector href={hrefNovedades({ periodo })} activo={!sector} label="Todos" cantidad={todas.length} />
               {alcance
                 .filter((s) => conteoSector.has(s))
@@ -189,7 +197,7 @@ export default async function NovedadesPage({ searchParams }: Props) {
                     cantidad={conteoSector.get(s) ?? 0}
                   />
                 ))}
-            </div>
+            </FilaDeslizable>
           ) : null}
         </div>
 
@@ -251,7 +259,7 @@ function ChipSector({
       href={href}
       aria-current={activo ? "true" : undefined}
       className={cn(
-        "inline-flex min-h-11 items-center gap-2 rounded-full border px-4 text-sm font-medium transition-colors",
+        "inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-medium whitespace-nowrap transition-colors",
         activo
           ? "border-primary bg-primary text-primary-foreground"
           : "border-border bg-card text-foreground hover:bg-accent"

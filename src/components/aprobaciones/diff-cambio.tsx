@@ -172,6 +172,29 @@ export function ValorCampo({
 
 /* ---------- Diff de una modificación: Campo | Antes | Después ---------- */
 
+/**
+ * Los campos que cambia una modificación, con su nombre ("Apodo", "Teléfono"…), en el orden de
+ * la tabla. Sirve para el encabezado del pedido: el resumen lo escribe quien lo pide y puede
+ * no nombrarlos todos.
+ */
+export function camposQueCambian(cambio: Pick<CambioFila, "accion" | "entidad" | "datos">): string[] {
+  if (cambio.accion !== "modificacion") return [];
+  return ordenarCampos(Object.keys(cambio.datos).filter((k) => !CLAVES_OCULTAS.has(k))).map((c) =>
+    labelCampo(c, cambio.entidad)
+  );
+}
+
+/** "apodo, teléfono y dirección" (respeta siglas como "CUIT / DNI"). */
+export function enumerarCampos(labels: string[]): string {
+  const bajas = labels.map((l) => (/^[A-ZÁÉÍÓÚÑ][a-záéíóúñ]/.test(l) ? l.charAt(0).toLowerCase() + l.slice(1) : l));
+  if (bajas.length <= 1) return bajas.join("");
+  return `${bajas.slice(0, -1).join(", ")} y ${bajas.at(-1)}`;
+}
+
+/** Columnas: en celular el nombre del campo va arriba y Antes → Después abajo, a lo ancho. */
+const COLUMNAS_DIFF =
+  "grid grid-cols-[minmax(0,1fr)_1.25rem_minmax(0,1fr)] gap-x-2 sm:grid-cols-[minmax(7rem,11rem)_minmax(0,1fr)_1.5rem_minmax(0,1fr)] sm:gap-x-3";
+
 function TablaDiff({
   entidad,
   datos,
@@ -191,47 +214,43 @@ function TablaDiff({
       </p>
     );
   }
+  // Grilla en vez de <table>: en el celular la tabla de 4 columnas partía los valores
+  // ("351 300-" / "4455"). Los roles mantienen la lectura de tabla.
   return (
-    <div className="overflow-x-auto rounded-lg border">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b bg-muted/40 text-left text-xs font-semibold text-muted-foreground">
-            <th scope="col" className="px-3 py-2">
-              Campo
-            </th>
-            <th scope="col" className="px-3 py-2">
-              Antes
-            </th>
-            <th scope="col" className="w-8 px-1 py-2">
-              <span className="sr-only">pasa a</span>
-            </th>
-            <th scope="col" className="px-3 py-2">
-              Después
-            </th>
-          </tr>
-        </thead>
-        <tbody className="divide-y">
-          {campos.map((campo) => (
-            <tr key={campo} className="align-top">
-              <th
-                scope="row"
-                className="px-3 py-2.5 text-left font-medium text-muted-foreground"
-              >
-                {labelCampo(campo, entidad)}
-              </th>
-              <td className="px-3 py-2.5 text-muted-foreground">
-                <ValorCampo campo={campo} valor={anteriores?.[campo]} />
-              </td>
-              <td className="px-1 py-2.5 text-center text-muted-foreground">
-                <ArrowRight className="inline size-4" strokeWidth={2} />
-              </td>
-              <td className="px-3 py-2.5 font-medium">
-                <ValorCampo campo={campo} valor={datos[campo]} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div role="table" aria-label="Qué cambia" className="overflow-hidden rounded-lg border text-sm">
+      <div role="rowgroup">
+        <div
+          role="row"
+          className={`${COLUMNAS_DIFF} border-b bg-muted/40 px-3 py-2 text-xs font-semibold text-muted-foreground`}
+        >
+          <span role="columnheader" className="max-sm:sr-only">
+            Campo
+          </span>
+          <span role="columnheader">Antes</span>
+          <span role="columnheader">
+            <span className="sr-only">pasa a</span>
+          </span>
+          <span role="columnheader">Después</span>
+        </div>
+      </div>
+      <div role="rowgroup" className="divide-y">
+        {campos.map((campo) => (
+          <div key={campo} role="row" className={`${COLUMNAS_DIFF} gap-y-1 px-3 py-2.5`}>
+            <span role="rowheader" className="col-span-3 font-medium text-muted-foreground sm:col-span-1">
+              {labelCampo(campo, entidad)}
+            </span>
+            <span role="cell" className="min-w-0 break-words text-muted-foreground">
+              <ValorCampo campo={campo} valor={anteriores?.[campo]} />
+            </span>
+            <span role="cell" aria-hidden className="pt-0.5 text-center text-muted-foreground">
+              <ArrowRight className="inline size-4" strokeWidth={2} />
+            </span>
+            <span role="cell" className="min-w-0 font-medium break-words">
+              <ValorCampo campo={campo} valor={datos[campo]} />
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -281,7 +300,7 @@ function ListaAlta({
               return (
                 <li key={`${c.concepto_id ?? i}`} className="flex items-center gap-3 px-3 py-2 text-sm">
                   <Codigo codigo={ref?.codigo ?? "?"} />
-                  <span className="min-w-0 flex-1 truncate">
+                  <span className="min-w-0 flex-1 break-words">
                     {ref?.nombre ?? "Concepto desconocido"}
                   </span>
                   <span className="tabular font-medium">

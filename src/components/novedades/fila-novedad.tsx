@@ -71,7 +71,7 @@ export function FilaNovedad({
         setErrorFila(res.error);
         return;
       }
-      toast.success(nombre ? `Aprobada la novedad de ${nombre}` : "Novedad aprobada");
+      toast.success(nombre ? `Novedad aprobada: ${nombre}` : "Novedad aprobada");
       router.refresh();
     });
   }
@@ -117,7 +117,7 @@ export function FilaNovedad({
           </span>
           <div className="min-w-0 flex-1 space-y-1">
             <div className="flex flex-wrap items-center gap-2">
-              {nombre ? <span className="font-semibold">{nombre}</span> : null}
+              {nombre ? <span className="font-semibold break-words">{nombre}</span> : null}
               <Sello estado={selloNovedad(estado)} />
             </div>
             <p className={cn("text-[15px] leading-snug", tachada && "text-muted-foreground line-through")}>
@@ -163,13 +163,13 @@ export function FilaNovedad({
         <div className="flex flex-wrap gap-2 sm:max-w-72 sm:justify-end">
           {esPendiente && puedeRevisar ? (
             <>
-              <Button size="lg" className="h-11 px-4 font-semibold" disabled={pendiente} onClick={aprobar}>
+              <Button size="lg" className="h-11 px-4 text-sm font-semibold" disabled={pendiente} onClick={aprobar}>
                 {pendiente ? <Spinner /> : <Check className="size-5" strokeWidth={2.2} />}
                 Aprobar
               </Button>
               <Button
                 variant="outline"
-                className="h-11 px-4 text-pendiente hover:text-pendiente"
+                className="h-11 px-4 text-sm text-pendiente hover:text-pendiente"
                 disabled={pendiente}
                 onClick={() => setDialogo("rechazar")}
               >
@@ -179,7 +179,7 @@ export function FilaNovedad({
             </>
           ) : null}
           {puedeEditar ? (
-            <Button asChild variant="outline" className="h-11 px-4">
+            <Button asChild variant="outline" className="h-11 px-4 text-sm">
               <Link href={`/novedades/editar/${n.id}`}>
                 <Pencil className="size-4" strokeWidth={2} />
                 Corregir
@@ -189,7 +189,7 @@ export function FilaNovedad({
           {puedeBorrar ? (
             <Button
               variant="ghost"
-              className="h-11 px-3 text-muted-foreground"
+              className="h-11 px-3 text-sm text-muted-foreground"
               disabled={pendiente}
               onClick={() => setDialogo("borrar")}
             >
@@ -200,7 +200,7 @@ export function FilaNovedad({
           {estado === "aprobada" && puedeRevisar ? (
             <Button
               variant="ghost"
-              className="h-11 px-3 text-muted-foreground"
+              className="h-11 px-3 text-sm text-muted-foreground"
               disabled={pendiente}
               onClick={() => setDialogo("anular")}
             >

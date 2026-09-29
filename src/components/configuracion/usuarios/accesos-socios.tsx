@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { EmptyState } from "@/components/shared/empty-state";
+import { Sello } from "@/components/shared/sello";
 import { CampoContrasena, CampoDni, CampoEmailOpcional } from "./campos";
 import { Credencial } from "./credencial";
 import { FilaUsuario } from "./fila-usuario";
@@ -76,10 +77,11 @@ export function AccesosSocios({
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="font-display text-lg font-bold">Socios en el portal</h2>
+        <h2 className="font-display text-lg font-bold">Clientes en el portal</h2>
         <p className="text-sm text-muted-foreground">
-          Desde el portal el socio ve su cuenta, descarga sus recibos y recibe las comunicaciones.
-          Entra con su DNI.
+          Desde el portal ve su cuenta, descarga sus recibos y recibe las comunicaciones. Entra con
+          su DNI. Puede tener acceso cualquier {miRol === "lider" ? "puestero o quintero" : "puestero"},
+          sea socio de la cooperativa o no.
         </p>
       </div>
 
@@ -218,11 +220,17 @@ export function AccesosSocios({
   );
 }
 
+/** Marca de socio de la cooperativa (el acceso al portal no depende de serlo). */
+function MarcaSocio({ cliente }: { cliente: ClienteAcceso }) {
+  return cliente.esSocio ? <Sello estado="socio" className="ml-1.5 align-middle" /> : null;
+}
+
 function Referencia({ cliente }: { cliente: ClienteAcceso }) {
   return (
-    <span>
-      <span className="font-medium text-foreground tabular">N° {cliente.codigo}</span> · {cliente.nombre}
+    <span className="break-words">
+      <span className="font-medium text-foreground tabular">Carpeta {cliente.codigo}</span> · {cliente.nombre}
       {cliente.apodo ? ` (${cliente.apodo})` : ""}
+      <MarcaSocio cliente={cliente} />
       {cliente.dadoDeBaja ? (
         <span className="font-medium text-parcial"> · Dado de baja</span>
       ) : cliente.lugares ? (
@@ -251,9 +259,10 @@ function FilaSinAcceso({
     <li className="px-4 py-4 sm:px-5">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-base font-semibold">
-            <span className="tabular text-muted-foreground">N° {cliente.codigo}</span> · {cliente.nombre}
+          <p className="text-base font-semibold break-words">
+            <span className="tabular text-muted-foreground">Carpeta {cliente.codigo}</span> · {cliente.nombre}
             {cliente.apodo ? <span className="font-normal text-muted-foreground"> ({cliente.apodo})</span> : null}
+            <MarcaSocio cliente={cliente} />
           </p>
           <p className="text-sm text-muted-foreground">{cliente.lugares ?? "Sin lugar en el plano"}</p>
         </div>

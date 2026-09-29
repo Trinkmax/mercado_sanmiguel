@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { cn } from "@/lib/utils";
 import { formatFraccion, formatNumero } from "@/lib/format";
 import { Money } from "@/components/shared/money";
@@ -71,6 +72,44 @@ function MuestraPropio() {
   );
 }
 
+/**
+ * Fila que en el celular se desliza de costado: sabe si quedó algo sin ver a la
+ * izquierda o a la derecha y esfuma ese borde, así se nota que la fila sigue (sin
+ * barra de desplazamiento no había ningún indicio). Desde tablet la fila no se
+ * desliza y no hay esfumado.
+ */
+function useFilaDeslizable<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+  const [lados, setLados] = useState({ izq: false, der: false });
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const medir = () => {
+      const izq = el.scrollLeft > 2;
+      const der = el.scrollLeft + el.clientWidth < el.scrollWidth - 2;
+      setLados((p) => (p.izq === izq && p.der === der ? p : { izq, der }));
+    };
+    medir();
+    el.addEventListener("scroll", medir, { passive: true });
+    // La fila y lo de adentro (un chip nuevo o un número más largo cambian el ancho).
+    const ro = new ResizeObserver(medir);
+    ro.observe(el);
+    for (const hijo of Array.from(el.children)) ro.observe(hijo);
+    return () => {
+      el.removeEventListener("scroll", medir);
+      ro.disconnect();
+    };
+  }, []);
+  let estilo: CSSProperties | undefined;
+  if (lados.izq || lados.der) {
+    const g = `linear-gradient(to right, ${lados.izq ? "transparent, #000 2rem" : "#000"}, ${
+      lados.der ? "#000 calc(100% - 3rem), transparent" : "#000"
+    })`;
+    estilo = { maskImage: g, WebkitMaskImage: g };
+  }
+  return { ref, estilo };
+}
+
 export type Resumen = {
   /** Unidades de puesto por estado (medio puesto = ½). */
   puestos: Record<FiltroEstado, number>;
@@ -101,12 +140,19 @@ export function ResumenMapa({
 }) {
   const ocupados = resumen.totalPuestos - resumen.puestos.libre;
   const total = resumen.totalPuestos || 1;
+  const { ref: filaRef, estilo: estiloFila } = useFilaDeslizable<HTMLDivElement>();
 
   return (
     <div className={cn("space-y-2.5", className)}>
-      {/* En el celular es una sola fila que se desliza de costado. */}
-      <div className="flex items-center gap-3 overflow-x-auto [scrollbar-width:none] max-md:-mx-3 max-md:px-3 md:gap-5 md:overflow-visible [&::-webkit-scrollbar]:hidden">
-        <div className="min-w-0 shrink-0 space-y-1.5 max-md:w-[8.5rem] md:w-56">
+      {/* En el celular es una sola fila que se desliza de costado (el borde se esfuma
+          mientras quede algo sin ver). El resumen toma el ancho que necesita: con uno
+          fijo, el primer chip le pisaba "ocupados". */}
+      <div
+        ref={filaRef}
+        style={estiloFila}
+        className="flex items-center gap-3 overflow-x-auto [scrollbar-width:none] max-md:-mx-3 max-md:px-3 md:gap-5 md:overflow-visible [&::-webkit-scrollbar]:hidden"
+      >
+        <div className="shrink-0 space-y-1.5 md:w-56">
           <p className="text-sm whitespace-nowrap">
             <span className="font-display text-lg font-bold tabular">{formatFraccion(ocupados)}</span>
             <span className="text-muted-foreground">
@@ -177,6 +223,19 @@ export function ResumenMapa({
             </button>
           ) : null}
         </div>
+
+        {/* Celular: locales, contéiners, cocheras… al final de la misma fila (desde
+            tablet van en su renglón, abajo). */}
+        {resumen.secundarios.length > 0 ? (
+          <div className="flex shrink-0 items-center gap-4 border-l pl-3 md:hidden">
+            {resumen.secundarios.map((s) => (
+              <p key={s.label} className="text-xs leading-tight whitespace-nowrap text-muted-foreground">
+                {s.label}
+                <span className="block text-sm font-semibold text-foreground tabular">{s.valor}</span>
+              </p>
+            ))}
+          </div>
+        ) : null}
       </div>
 
       {resumen.secundarios.length > 0 ? (
@@ -226,45 +285,55 @@ export function ResumenQuintas({
   onFiltro: (f: Filtro | null) => void;
   className?: string;
 }) {
+  const { ref: filaRef, estilo: estiloFila } = useFilaDeslizable<HTMLDivElement>();
+  // La fila va DENTRO del bloque (que trae el padding y el borde del mapa), como en
+  // ResumenMapa: con los márgenes negativos en el bloque mismo quedaba más ancho que la
+  // pantalla, y el esfumado se comía el borde de abajo.
   return (
-    <div className={cn("flex items-center gap-3 overflow-x-auto [scrollbar-width:none] max-md:-mx-3 max-md:px-3 md:gap-5 [&::-webkit-scrollbar]:hidden", className)}>
-      <div className="shrink-0">
-        <p className="text-sm whitespace-nowrap">
-          <span className="font-display text-lg font-bold tabular">{formatNumero(resumen.total)}</span>
-          <span className="text-muted-foreground"> {resumen.total === 1 ? "quintero" : "quinteros"}</span>
-        </p>
-        <p className="text-xs whitespace-nowrap text-muted-foreground">
-          {resumen.porCobrar > 0 ? (
-            <>
-              <Money monto={resumen.porCobrar} className="font-semibold text-pendiente" /> por cobrar este mes
-            </>
-          ) : (
-            "Nada por cobrar este mes"
-          )}
-        </p>
-      </div>
-      <div className="flex items-center gap-1.5 md:flex-1 md:flex-wrap" role="group" aria-label="Filtrar quinteros">
-        {LEYENDA_QUINTEROS.map((l) => {
-          const activo = filtro === l.filtro;
-          return (
-            <button
-              key={l.filtro}
-              type="button"
-              aria-pressed={activo}
-              onClick={() => onFiltro(activo ? null : l.filtro)}
-              className={cn(
-                "inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-3.5 text-[13px] font-medium whitespace-nowrap transition-colors",
-                activo
-                  ? "border-primary bg-accent text-accent-foreground"
-                  : "bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
-              )}
-            >
-              <MuestraEstado estado={l.filtro} />
-              {l.label}
-              <span className="tabular font-semibold text-foreground">{formatNumero(resumen[l.clave])}</span>
-            </button>
-          );
-        })}
+    <div className={className}>
+      <div
+        ref={filaRef}
+        style={estiloFila}
+        className="flex items-center gap-3 overflow-x-auto [scrollbar-width:none] max-md:-mx-3 max-md:px-3 md:gap-5 [&::-webkit-scrollbar]:hidden"
+      >
+        <div className="shrink-0">
+          <p className="text-sm whitespace-nowrap">
+            <span className="font-display text-lg font-bold tabular">{formatNumero(resumen.total)}</span>
+            <span className="text-muted-foreground"> {resumen.total === 1 ? "quintero" : "quinteros"}</span>
+          </p>
+          <p className="text-xs whitespace-nowrap text-muted-foreground">
+            {resumen.porCobrar > 0 ? (
+              <>
+                <Money monto={resumen.porCobrar} className="font-semibold text-pendiente" /> por cobrar este mes
+              </>
+            ) : (
+              "Nada por cobrar este mes"
+            )}
+          </p>
+        </div>
+        <div className="flex items-center gap-1.5 md:flex-1 md:flex-wrap" role="group" aria-label="Filtrar quinteros">
+          {LEYENDA_QUINTEROS.map((l) => {
+            const activo = filtro === l.filtro;
+            return (
+              <button
+                key={l.filtro}
+                type="button"
+                aria-pressed={activo}
+                onClick={() => onFiltro(activo ? null : l.filtro)}
+                className={cn(
+                  "inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-3.5 text-[13px] font-medium whitespace-nowrap transition-colors",
+                  activo
+                    ? "border-primary bg-accent text-accent-foreground"
+                    : "bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+              >
+                <MuestraEstado estado={l.filtro} />
+                {l.label}
+                <span className="tabular font-semibold text-foreground">{formatNumero(resumen[l.clave])}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

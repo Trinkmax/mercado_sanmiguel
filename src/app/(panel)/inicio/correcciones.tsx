@@ -353,15 +353,16 @@ function FilaCorreccion({ c }: { c: Correccion }) {
           <Icono className="size-[18px]" strokeWidth={2} />
         </span>
         <div className="min-w-0 flex-1">
+          {/* Si el monto no entra al lado del título, baja y queda a la derecha igual. */}
           <p className="flex flex-wrap items-baseline justify-between gap-x-3">
-            <span className="font-semibold">{c.titulo}</span>
+            <span className="min-w-0 font-semibold break-words">{c.titulo}</span>
             {c.monto === null ? null : c.moneda === "USD" ? (
-              <span className="tabular font-semibold">{formatMoneda(c.monto, "USD")}</span>
+              <span className="ml-auto tabular font-semibold whitespace-nowrap">{formatMoneda(c.monto, "USD")}</span>
             ) : (
-              <Money monto={c.monto} className="font-semibold" />
+              <Money monto={c.monto} className="ml-auto font-semibold whitespace-nowrap" />
             )}
           </p>
-          {c.donde ? <p className="text-sm">{c.donde}</p> : null}
+          {c.donde ? <p className="text-sm break-words">{c.donde}</p> : null}
           {c.detalle ? <p className="text-sm text-muted-foreground">{c.detalle}</p> : null}
           <p className="text-xs text-muted-foreground">
             {c.quien ? `${c.quien} · ` : ""}

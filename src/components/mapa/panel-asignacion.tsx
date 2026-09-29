@@ -185,11 +185,13 @@ export function PanelAsignacion({
               </div>
             </div>
             {clientes.length > 0 ? (
+              // Texto de ayuda corto: entra entero en el panel de 360 px del celular y en la
+              // columna de 27 rem del escritorio (el pedido ya lo hace el título de arriba).
               <BuscadorMapa
                 clientes={clientes}
                 espacios={espacios}
                 soloClientes
-                placeholder="Buscá el puestero por nombre, apodo o carpeta"
+                placeholder="Nombre, apodo o N° de carpeta"
                 onElegir={(r) => r.tipo === "cliente" && onPincel(r.id)}
               />
             ) : (
@@ -244,13 +246,15 @@ function PincelActivo({
 
   return (
     <div className="space-y-3">
-      <div className="flex items-start gap-3">
+      {/* El nombre salta de renglón entero; si el panel es angosto, "Elegir a otro" baja
+          a su propio renglón en vez de dejarle al nombre 150 px. */}
+      <div className="flex flex-wrap items-start gap-3">
         <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
           <Paintbrush className="size-5" strokeWidth={1.9} />
         </span>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 basis-52">
           <p className="text-xs text-muted-foreground">Asignando a · Carpeta N° {cliente.codigo}</p>
-          <p className="truncate font-display text-lg leading-snug font-bold">
+          <p className="font-display text-lg leading-snug font-bold break-words">
             {cliente.nombre}
             {cliente.apodo ? (
               <span className="font-sans text-sm font-normal text-muted-foreground"> · “{cliente.apodo}”</span>
@@ -260,7 +264,7 @@ function PincelActivo({
             Tocá un puesto libre para sumárselo; tocá uno suyo para sacárselo.
           </p>
         </div>
-        <Button type="button" variant="outline" className={BOTON} onClick={onSoltar}>
+        <Button type="button" variant="outline" className={cn(BOTON, "ml-[3.25rem] @md:ml-0")} onClick={onSoltar}>
           Elegir a otro
         </Button>
       </div>
@@ -347,9 +351,9 @@ function AvisoConfirmacion({
     <div
       role="alertdialog"
       aria-label="Confirmar cambio de puestero"
-      className="flex flex-col gap-3 rounded-lg border border-parcial/40 bg-parcial-suave px-4 py-3 sm:flex-row sm:items-center"
+      className="flex flex-col gap-3 rounded-lg border border-parcial/40 bg-parcial-suave px-4 py-3 @md:flex-row @md:items-center"
     >
-      <TriangleAlert className="hidden size-5 shrink-0 text-parcial sm:block" strokeWidth={2} />
+      <TriangleAlert className="hidden size-5 shrink-0 text-parcial @md:block" strokeWidth={2} />
       <p className="flex-1 text-sm">
         {nombreEspacio} es de <strong>{de ? nombreCorto(de) : "otro cliente"}</strong>. ¿Se lo pasás a{" "}
         <strong>{a ? nombreCorto(a) : "este cliente"}</strong>?
@@ -383,7 +387,7 @@ function AvisoSugerencia({
   const lista = otros.map(numeroVisible);
   const texto = lista.length === 1 ? `el ${lista[0]}` : `${lista.slice(0, -1).join(", ")} y ${lista[lista.length - 1]}`;
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-primary/25 bg-accent px-4 py-3 sm:flex-row sm:items-center">
+    <div className="flex flex-col gap-3 rounded-lg border border-primary/25 bg-accent px-4 py-3 @md:flex-row @md:items-center">
       <p className="flex-1 text-sm text-accent-foreground">
         En el plano original el {numeroVisible(base)} va junto con {texto}. ¿Se {otros.length === 1 ? "lo" : "los"}{" "}
         asignás también a <strong>{cliente ? nombreCorto(cliente) : "este puestero"}</strong>?
@@ -501,7 +505,7 @@ function EditorEspacio({
         <div
           role="alertdialog"
           aria-label="Cambios sin guardar"
-          className="flex flex-col gap-3 rounded-lg border border-parcial/40 bg-parcial-suave px-4 py-3 sm:flex-row sm:items-center"
+          className="flex flex-col gap-3 rounded-lg border border-parcial/40 bg-parcial-suave px-4 py-3 @md:flex-row @md:items-center"
         >
           <p className="flex-1 text-sm">Cambiaste el número o la nota y todavía no lo guardaste.</p>
           <div className="flex flex-wrap gap-2">
@@ -524,7 +528,7 @@ function EditorEspacio({
       ) : null}
 
       <form
-        className="grid gap-3 sm:grid-cols-[8rem_minmax(0,1fr)_auto] sm:items-end"
+        className="grid gap-3 @md:grid-cols-[8rem_minmax(0,1fr)_auto] @md:items-end"
         onSubmit={(ev) => {
           ev.preventDefault();
           guardarTexto();
@@ -550,7 +554,7 @@ function EditorEspacio({
             maxLength={60}
             placeholder="Por ejemplo: Quiniela"
             onChange={(e) => setNota(e.target.value)}
-            className="h-11"
+            className="h-11 text-[15px] md:text-[15px]"
           />
         </div>
         <Button type="submit" className={BOTON} disabled={!cambio || guardando}>
@@ -596,12 +600,14 @@ function EditorEspacio({
 
       <div className="space-y-2 border-t pt-4">
         <p className="text-sm font-medium">{duenio ? "Pasárselo a otro puestero" : "Asignárselo a un puestero"}</p>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        {/* Arriba y no al centro: la lista de resultados se abre debajo del campo y
+            Liberar tiene que quedar a la altura del campo, no a la mitad de la lista. */}
+        <div className="flex flex-col gap-2 @md:flex-row @md:items-start">
           <BuscadorMapa
             clientes={clientes}
             espacios={espacios}
             soloClientes
-            placeholder="Buscá por nombre, apodo o carpeta"
+            placeholder="Nombre, apodo o N° de carpeta"
             onElegir={(r) => r.tipo === "cliente" && onAsignar(r.id)}
             className="flex-1"
           />
@@ -767,7 +773,9 @@ function FilaRevision({
       >
         {icono ? <Hash className="size-4 shrink-0 text-muted-foreground" strokeWidth={2} /> : null}
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-medium">{titulo}</span>
+          <span className="line-clamp-2 text-sm leading-snug font-medium break-words" title={titulo}>
+            {titulo}
+          </span>
           <span className={cn("block text-xs", aviso ? "text-parcial" : "text-muted-foreground")}>{detalle}</span>
         </span>
       </button>

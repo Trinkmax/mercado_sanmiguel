@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Printer } from "lucide-react";
+import { ChevronDown, Printer, Wrench } from "lucide-react";
 import { toast } from "sonner";
 import { guardarConfiguracionGeneral } from "@/lib/actions/configuracion";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -139,7 +144,7 @@ function CardImpresionDirecta({ impresionDirecta }: { impresionDirecta: boolean 
           Impresión directa
         </CardTitle>
         <CardDescription className="text-sm">
-          Para que el recibo salga de la impresora del mostrador sin tocar nada más.
+          Para imprimir el recibo apenas se emite, sin buscar el botón.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -148,7 +153,7 @@ function CardImpresionDirecta({ impresionDirecta }: { impresionDirecta: boolean 
           className="flex min-h-14 cursor-pointer items-center justify-between gap-4 rounded-lg border px-4 py-3"
         >
           <span className="text-sm font-medium">
-            Al emitir un recibo u otro documento, abrir el diálogo de impresión automáticamente
+            Al emitir un recibo, abrir el cartel para imprimir automáticamente
           </span>
           <Switch
             id="impresion-directa"
@@ -159,43 +164,47 @@ function CardImpresionDirecta({ impresionDirecta }: { impresionDirecta: boolean 
           />
         </label>
 
-        <div className="space-y-2 text-sm text-muted-foreground">
-          <p className="font-medium text-foreground">
-            Para que salga directo, sin diálogo (recomendado en la tablet o PC de
-            administración):
-          </p>
-          <ol className="list-decimal space-y-1.5 pl-5">
-            <li>
-              Dejá como impresora predeterminada la del mostrador.
-            </li>
-            <li>
-              Creá un acceso directo de Chrome con la opción{" "}
-              <code className="rounded bg-muted px-1.5 py-0.5 text-foreground">
-                --kiosk-printing
-              </code>{" "}
-              y entrá al sistema desde ahí.
-              <ul className="mt-1.5 space-y-1 pl-4">
-                <li>
-                  Windows:{" "}
-                  <code className="rounded bg-muted px-1.5 py-0.5 text-foreground">
-                    chrome.exe --kiosk-printing
-                  </code>
-                </li>
-                <li>
-                  macOS:{" "}
-                  <code className="rounded bg-muted px-1.5 py-0.5 text-foreground">
-                    open -a &quot;Google Chrome&quot; --args --kiosk-printing
-                  </code>
-                </li>
-              </ul>
-            </li>
-          </ol>
-          <p>
-            Así el recibo va derecho a la impresora apenas se emite. Si abrís el
-            sistema desde un Chrome común, igual se abre el diálogo de impresión
-            solo y alcanza con tocar &quot;Imprimir&quot;.
-          </p>
-        </div>
+        {/* Lo técnico (atajos de Chrome) queda plegado, para quien instala las computadoras:
+            a la vista confundía a quien usa el sistema. */}
+        <p className="text-sm text-muted-foreground">
+          Con esto prendido, al emitir un recibo aparece el cartel de impresión y alcanza con tocar
+          &quot;Imprimir&quot;. Si querés que salga directo, sin ese cartel, pedíselo a quien les
+          instala las computadoras.
+        </p>
+        <Collapsible>
+          <CollapsibleTrigger className="group inline-flex min-h-11 items-center gap-2 rounded-md px-1 text-sm font-medium text-primary hover:underline">
+            <Wrench className="size-4" strokeWidth={2} />
+            Instrucciones para el técnico
+            <ChevronDown className="size-4 transition-transform group-data-[state=open]:rotate-180" strokeWidth={2} />
+          </CollapsibleTrigger>
+          <CollapsibleContent className="mt-2 space-y-2 rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground">
+            <p className="font-medium text-foreground">
+              Para que el recibo salga directo, sin cartel (en la tablet o PC de administración):
+            </p>
+            <ol className="list-decimal space-y-1.5 pl-5">
+              <li>Dejar como impresora predeterminada la del mostrador.</li>
+              <li>
+                Crear un acceso directo de Chrome con la opción{" "}
+                <code className="rounded bg-muted px-1.5 py-0.5 break-all text-foreground">--kiosk-printing</code> y
+                entrar al sistema desde ahí.
+                <ul className="mt-1.5 space-y-1 pl-4">
+                  <li>
+                    Windows:{" "}
+                    <code className="rounded bg-muted px-1.5 py-0.5 break-all text-foreground">
+                      chrome.exe --kiosk-printing
+                    </code>
+                  </li>
+                  <li>
+                    macOS:{" "}
+                    <code className="rounded bg-muted px-1.5 py-0.5 break-all text-foreground">
+                      open -a &quot;Google Chrome&quot; --args --kiosk-printing
+                    </code>
+                  </li>
+                </ul>
+              </li>
+            </ol>
+          </CollapsibleContent>
+        </Collapsible>
       </CardContent>
     </Card>
   );

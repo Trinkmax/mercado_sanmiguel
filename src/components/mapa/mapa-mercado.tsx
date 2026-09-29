@@ -136,6 +136,15 @@ function nombreEspacio(e: Espacio): string {
   return etiquetaEspacio(e);
 }
 
+/** Nombre para el globo corto: el apodo, o la razón social hasta ~24 letras cortada
+ * entre palabras ("Distribuidora Frutihortícola…"). */
+function nombreCorto(nombre: string): string {
+  const MAX = 24;
+  if (nombre.length <= MAX) return nombre;
+  const corte = nombre.lastIndexOf(" ", MAX);
+  return `${nombre.slice(0, corte > 8 ? corte : MAX).trimEnd()}…`;
+}
+
 /** "Puesto 52", "Puestos 50 · 48 · 46", "3 espacios". */
 function nombreVarios(espacios: Espacio[]): string {
   if (espacios.length === 1) return nombreEspacio(espacios[0]);
@@ -419,8 +428,12 @@ export function MapaMercado({
     )
       .filter(([, n]) => n > 0)
       .map(([tipo, n]) => cantidad(n, tipo));
+    const quien = cli.apodo ?? cli.nombre;
     return {
-      texto: `${cli.apodo ?? cli.nombre} · ${partes.join(" + ")} · ${ESTADO_PASTILLA[cli.estado]}`,
+      texto: `${quien} · ${partes.join(" + ")} · ${ESTADO_PASTILLA[cli.estado]}`,
+      // Si el globo entero tapa números de otros puestos (celular, plano girado), va
+      // solo el nombre: el punto de color ya dice el estado y la tarjeta, el resto.
+      corto: nombreCorto(quien),
       estado: cli.estado,
     };
   }, [modo, clienteSel, clientePorId, porCliente]);
@@ -895,10 +908,12 @@ export function MapaMercado({
   const enfoqueInicial = useMemo<Rect | null>(() => {
     if (clienteInicial) {
       const suyos = espacios.filter((e) => e.clienteId === clienteInicial);
-      return suyos.length > 0 ? unir(suyos) : null;
+      if (suyos.length > 0) return unir(suyos);
+      // Un quintero (link "Ver en el plano" de su ficha): su ficha en la zona de quinteros.
+      return fichasBase.find((f) => f.clienteId === clienteInicial)?.rect ?? null;
     }
     return espacioInicial;
-  }, [clienteInicial, espacioInicial, espacios]);
+  }, [clienteInicial, espacioInicial, espacios, fichasBase]);
 
   // ---------- Tooltip (mouse) ----------
   const tooltip = useCallback(
@@ -968,7 +983,8 @@ export function MapaMercado({
             espacios={plano}
             onElegir={elegirBusqueda}
             anonimo={esPorteria}
-            placeholder={esPorteria ? "Buscá un quintero o un número de puesto" : undefined}
+            // Corto: tiene que entrar entero al lado de los botones en un celular de 360 px.
+            placeholder={esPorteria ? "Buscá quintero o puesto" : undefined}
             className="min-w-0 flex-1 sm:max-w-md"
           />
           <div className="ml-auto flex shrink-0 items-center gap-2">
@@ -1067,9 +1083,10 @@ export function MapaMercado({
         >
           {modo === "asignar" ? (
             <div className="pointer-events-none absolute top-3 right-3 left-3 flex justify-center">
-              <p className="flex max-w-full items-center gap-2 truncate rounded-full bg-primary px-3.5 py-2 text-sm font-medium text-primary-foreground shadow-md">
+              {/* Sin apodo va la razón social entera: hasta dos renglones, no "Asignando a Distrib…". */}
+              <p className="flex max-w-full items-center gap-2 rounded-2xl bg-primary px-3.5 py-2 text-sm leading-snug font-medium text-primary-foreground shadow-md">
                 <Paintbrush className="size-4 shrink-0" strokeWidth={2} />
-                <span className="truncate">
+                <span className="line-clamp-2 min-w-0 break-words">
                   {cliPincel
                     ? `Asignando a ${cliPincel.apodo ?? cliPincel.nombre}: tocá sus puestos`
                     : "Elegí un puestero o tocá un puesto"}

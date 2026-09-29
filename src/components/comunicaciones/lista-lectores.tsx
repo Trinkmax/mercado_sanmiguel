@@ -8,6 +8,7 @@ import { LABEL_SEGMENTO, SEGMENTOS, type Segmento } from "@/lib/segmentos";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Sello } from "@/components/shared/sello";
+import { FilaDeslizable } from "./fila-deslizable";
 import type { Lector } from "./publico";
 
 /**
@@ -67,7 +68,7 @@ export function ListaLectores({
           />
         </div>
         {gruposPresentes.length > 1 ? (
-          <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0" role="group" aria-label="Filtrar por grupo">
+          <FilaDeslizable role="group" aria-label="Filtrar por grupo">
             <FiltroChip activo={grupo === null} onClick={() => setGrupo(null)}>
               Todos los grupos
             </FiltroChip>
@@ -76,12 +77,14 @@ export function ListaLectores({
                 {LABEL_SEGMENTO[g.valor]}
               </FiltroChip>
             ))}
-          </div>
+          </FilaDeslizable>
         ) : null}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
-        <section className="space-y-3" aria-label="La vieron">
+      {/* grid-cols-1 + min-w-0: sin eso la columna tomaba el ancho del nombre más largo y la
+          página se corría de costado en el celular. */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-start">
+        <section className="min-w-0 space-y-3" aria-label="La vieron">
           <h3 className="flex items-center gap-2 font-display text-lg font-bold tracking-tight">
             <Eye className="size-5 text-pagado" strokeWidth={2} />
             La vieron
@@ -101,7 +104,7 @@ export function ListaLectores({
           )}
         </section>
 
-        <section className="space-y-3" aria-label="Todavía no">
+        <section className="min-w-0 space-y-3" aria-label="Todavía no">
           <h3 className="flex items-center gap-2 font-display text-lg font-bold tracking-tight">
             <Users className="size-5 text-pendiente" strokeWidth={2} />
             Todavía no
@@ -142,10 +145,11 @@ function Lista({ items }: { items: Lector[] }) {
             <span className="w-10 shrink-0 text-right font-display text-base font-bold tabular">
               {l.codigo}
             </span>
+            {/* El nombre completo, en los renglones que haga falta (cortado no se sabía quién era). */}
             <span className="min-w-0 flex-1">
-              <span className="block truncate font-medium">{l.nombre}</span>
+              <span className="block leading-snug font-medium break-words">{l.nombre}</span>
               {l.apodo ? (
-                <span className="block truncate text-sm text-muted-foreground">{l.apodo}</span>
+                <span className="block text-sm break-words text-muted-foreground">{l.apodo}</span>
               ) : null}
             </span>
             {l.vio_en ? (

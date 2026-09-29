@@ -219,12 +219,16 @@ export default async function RegistroPage({
           </section>
         </div>
 
-        {/* Costado: a quién y la multa */}
-        <aside className="space-y-4 lg:sticky lg:top-4">
+        {/* Costado: a quién y la multa. En celular y tablet va primero: antes quedaba debajo del
+            hilo y había que bajar ~1100 px para ver a quién iba y cuánto era la multa. */}
+        <aside className="space-y-4 max-lg:order-first lg:sticky lg:top-4">
           <Card>
             <CardContent className="space-y-2">
               <p className="text-sm text-muted-foreground">Para</p>
-              <Link href={`/clientes/${cliente.id}`} className="block text-lg font-semibold leading-snug hover:underline">
+              <Link
+                href={`/clientes/${cliente.id}`}
+                className="block text-lg leading-snug font-semibold break-words hover:underline"
+              >
                 {cliente.nombre}
               </Link>
               <p className="text-sm text-muted-foreground">
@@ -237,10 +241,21 @@ export default async function RegistroPage({
                   {etiquetaLugar(espacio)}
                 </p>
               ) : null}
-              <p className="border-t pt-2 text-sm text-muted-foreground">
-                Del <span className="tabular">{formatFecha(r.fecha)}</span> · lo emitió{" "}
-                {r.creado_por ? (nombres.get(r.creado_por) ?? "—") : "—"}
-              </p>
+              {/* Dos fechas distintas, cada una con su nombre: la del hecho (la que se eligió al
+                  cargarlo) y cuándo se cargó, que es cuando se le notificó en el portal. */}
+              <dl className="space-y-1 border-t pt-2 text-sm">
+                <div className="flex flex-wrap gap-x-1.5">
+                  <dt className="text-muted-foreground">Fecha del registro:</dt>
+                  <dd className="font-medium tabular">{formatFecha(r.fecha)}</dd>
+                </div>
+                <div className="flex flex-wrap gap-x-1.5">
+                  <dt className="text-muted-foreground">Lo cargó:</dt>
+                  <dd>
+                    {r.creado_por ? (nombres.get(r.creado_por) ?? "—") : "—"}
+                    <span className="text-muted-foreground tabular"> · {formatFechaHora(r.creado_en)}</span>
+                  </dd>
+                </div>
+              </dl>
             </CardContent>
           </Card>
 

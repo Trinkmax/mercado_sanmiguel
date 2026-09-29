@@ -21,7 +21,7 @@ import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { Codigo } from "@/components/shared/codigo";
-import { DiffCambio } from "@/components/aprobaciones/diff-cambio";
+import { camposQueCambian, DiffCambio, enumerarCampos } from "@/components/aprobaciones/diff-cambio";
 import { ChipsCambio } from "@/components/aprobaciones/chips-cambio";
 import type {
   CambioFila,
@@ -47,6 +47,7 @@ export function CardCambio({
   const [aprobandoPendiente, startAprobar] = useTransition();
   const [rechazoPendiente, startRechazar] = useTransition();
   const ocupado = aprobandoPendiente || rechazoPendiente;
+  const cambiados = camposQueCambian(cambio);
 
   function aprobar() {
     startAprobar(async () => {
@@ -104,10 +105,18 @@ export function CardCambio({
         </div>
         <h2
           id={`cambio-${cambio.id}`}
-          className="font-display text-lg font-bold tracking-tight text-balance sm:text-xl"
+          className="font-display text-lg font-bold tracking-tight text-balance break-words sm:text-xl"
         >
           {cambio.resumen}
         </h2>
+        {/* Todos los campos que cambian, sacados de la tabla: el resumen lo escribe quien lo
+            pide y puede no nombrarlos todos (ej.: no decía que también cambiaba el apodo). */}
+        {cambiados.length > 0 ? (
+          <p className="text-base">
+            <span className="text-muted-foreground">Cambia: </span>
+            <span className="font-medium">{enumerarCampos(cambiados)}</span>
+          </p>
+        ) : null}
         <p className="text-sm text-muted-foreground">
           Lo pidió{" "}
           <span className="font-medium text-foreground">
@@ -120,7 +129,7 @@ export function CardCambio({
               {" · "}
               <Link
                 href={`/clientes/${cambio.cliente.id}`}
-                className="inline-flex items-center gap-0.5 font-medium text-primary underline-offset-4 hover:underline"
+                className="inline-flex min-h-11 items-center gap-0.5 font-medium text-primary underline-offset-4 hover:underline"
               >
                 Ver ficha de {cambio.cliente.nombre}
                 <ArrowUpRight className="size-4" strokeWidth={2} />

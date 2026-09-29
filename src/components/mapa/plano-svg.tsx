@@ -266,12 +266,93 @@ function recortar(texto: string, ancho: number, tamano: number): string {
   return limpio.length <= max ? limpio : `${limpio.slice(0, max - 1).trimEnd()}…`;
 }
 
-/** Apodo: se achica hasta 9 u (o `minimo`) antes de recortar (así entra "Bar de Mary"). */
-function apodoAjustado(texto: string, ancho: number, minimo = 9): { t: string; tam: number } {
-  let tam = 10.5;
-  while (tam > minimo && texto.length > Math.floor(ancho / (tam * 0.56))) tam -= 0.5;
-  return { t: recortar(texto, ancho, tam), tam };
+/** Ancho de cada letra del apodo (Inter 600), en em. Contar letras a 0,56 em recortaba
+ * de más lo que tiene letras angostas ("Quiniela" quedaba "Quinie…" con lugar de sobra). */
+const ANCHO_LETRA: Record<string, number> = {
+  " ": 0.28, ".": 0.28, ",": 0.28, "·": 0.28, "'": 0.24, "’": 0.24, '"': 0.4, "“": 0.4, "”": 0.4,
+  "-": 0.45, "(": 0.36, ")": 0.36, "/": 0.4, "&": 0.7,
+  i: 0.25, j: 0.25, l: 0.25, f: 0.37, t: 0.37, r: 0.39, s: 0.52, c: 0.55, z: 0.53, a: 0.56, e: 0.57,
+  k: 0.54, v: 0.55, x: 0.54, y: 0.55, m: 0.88, w: 0.8,
+  I: 0.28, J: 0.52, L: 0.56, F: 0.58, E: 0.6, S: 0.63, T: 0.63, Z: 0.63, C: 0.72, D: 0.72, U: 0.73,
+  G: 0.74, H: 0.74, N: 0.75, O: 0.77, Q: 0.77, M: 0.9, W: 0.98,
+};
+
+/** Ancho aproximado de un apodo a `tam` u (+5 %: el semibold y el halo). */
+function anchoApodo(texto: string, tam: number): number {
+  let em = 0;
+  for (const ch of texto) {
+    const base = ch.normalize("NFD")[0] ?? ch;
+    em += ANCHO_LETRA[base] ?? (/\d/.test(base) ? 0.62 : base !== base.toLowerCase() ? 0.68 : 0.58);
+  }
+  return em * tam * 1.05;
 }
+
+/** Recorta con "…" al ancho: entre palabras si así queda casi todo el lugar usado
+ * ("La Coope…"), si no, dentro de la palabra. */
+function recortarApodo(texto: string, ancho: number, tam: number): string {
+  if (anchoApodo(texto, tam) <= ancho) return texto;
+  let letras = texto;
+  while (letras.length > 1 && anchoApodo(`${letras}…`, tam) > ancho) letras = letras.slice(0, -1);
+  const porLetras = `${letras.trimEnd()}…`;
+  const palabras = texto.split(" ");
+  for (let n = palabras.length - 1; n >= 1; n--) {
+    const t = `${palabras.slice(0, n).join(" ")}…`;
+    if (anchoApodo(t, tam) <= ancho) return anchoApodo(t, tam) >= ancho * 0.6 ? t : porLetras;
+  }
+  return porLetras;
+}
+
+type LineasApodo = { lineas: string[]; tam: number };
+
+/**
+ * Apodo en la tapa: en un renglón, achicándolo hasta `minimo` (así entra "Bar de Mary");
+ * si no entra y hay alto (`dosLineas`), en dos renglones cortados entre palabras
+ * ("La Coope / Hortícola"); recién si tampoco, recortado con "…". El nombre completo
+ * está siempre en el cartel del mouse, en el globo y en la tarjeta.
+ */
+function apodoEnLineas(
+  texto: string,
+  ancho: number,
+  { minimo = 9, dosLineas = false }: { minimo?: number; dosLineas?: boolean } = {}
+): LineasApodo {
+  const limpio = texto.trim().replace(/\s+/g, " ");
+  for (let tam = 10.5; tam >= minimo; tam -= 0.5) {
+    if (anchoApodo(limpio, tam) <= ancho) return { lineas: [limpio], tam };
+  }
+  const palabras = limpio.split(" ");
+  if (!dosLineas || palabras.length < 2) return { lineas: [recortarApodo(limpio, ancho, minimo)], tam: minimo };
+  const minimo2 = Math.min(minimo, 8.5);
+  // El corte más parejo: el renglón más largo, lo más corto posible.
+  let corte = 1;
+  let largo = Number.POSITIVE_INFINITY;
+  for (let i = 1; i < palabras.length; i++) {
+    const m = Math.max(anchoApodo(palabras.slice(0, i).join(" "), 1), anchoApodo(palabras.slice(i).join(" "), 1));
+    if (m < largo) {
+      largo = m;
+      corte = i;
+    }
+  }
+  for (let tam = 9.5; tam >= minimo2; tam -= 0.5) {
+    if (largo * tam <= ancho) return { lineas: [palabras.slice(0, corte).join(" "), palabras.slice(corte).join(" ")], tam };
+  }
+  // Ni en dos renglones: arriba las palabras que entren enteras; abajo, el resto recortado.
+  let n = 0;
+  while (n < palabras.length - 1 && anchoApodo(palabras.slice(0, n + 1).join(" "), minimo2) <= ancho) n++;
+  if (n === 0) return { lineas: [recortarApodo(limpio, ancho, minimo2)], tam: minimo2 };
+  return {
+    lineas: [palabras.slice(0, n).join(" "), recortarApodo(palabras.slice(n).join(" "), ancho, minimo2)],
+    tam: minimo2,
+  };
+}
+
+/** Apodo en un solo renglón (tambores y fichas de quinteros). */
+function apodoAjustado(texto: string, ancho: number, minimo = 9): { t: string; tam: number } {
+  const a = apodoEnLineas(texto, ancho, { minimo });
+  return { t: a.lineas[0], tam: a.tam };
+}
+
+/** Interlineado del apodo en dos renglones (en unidades de su tamaño). */
+const INTERLINEA_APODO = 1.1;
 
 // ---------- Defs compartidas (una sola vez, prefijo mapa-) ----------
 
@@ -1987,9 +2068,16 @@ function textosColumna(
 ): TextoPlano[] {
   const out: TextoPlano[] = [];
   const anfitrion = detalle && etiqueta !== null && !atenuado ? anfitrionApodo(b) : null;
+  // La columna es angosta (un puesto de ancho): el apodo usa toda la tapa, baja a 8,5 u
+  // y, si no entra, va en dos renglones (el número sube para dejarles lugar).
+  const apodo =
+    anfitrion && etiqueta !== null
+      ? apodoEnLineas(etiqueta, anfitrion.w - 4, { minimo: 8.5, dosLineas: anfitrion.h >= 44 })
+      : null;
+  const dos = apodo !== null && apodo.lineas.length > 1;
   for (const e of b.espacios) {
     const ecx = e.x + e.w / 2;
-    const [nx, ny] = P(ecx, e === anfitrion ? e.y + e.h * 0.4 : e.y + e.h / 2 + 0.5, zt);
+    const [nx, ny] = P(ecx, e === anfitrion ? e.y + e.h * (dos ? 0.3 : 0.4) : e.y + e.h / 2 + 0.5, zt);
     if (e.tipo === "bar") {
       out.push({ k: e.id, x: nx, y: ny, t: e.numero ?? "Bar", tam: 18, clase: "rot", grosor: 3 });
     } else if (e.medio && e.w > e.h) {
@@ -2024,11 +2112,12 @@ function textosColumna(
       });
     }
   }
-  if (anfitrion && etiqueta !== null) {
-    // La columna es angosta (un puesto de ancho): el apodo usa toda la tapa y baja a 8,5 u.
-    const a = apodoAjustado(etiqueta, anfitrion.w - 4, 8.5);
-    const [ax, ay] = P(anfitrion.x + anfitrion.w / 2, anfitrion.y + anfitrion.h * 0.76, zt);
-    out.push({ ...APODO, x: ax, y: ay, t: a.t, tam: a.tam });
+  if (anfitrion && apodo) {
+    const y0 = anfitrion.y + anfitrion.h * (dos ? 0.6 : 0.76);
+    apodo.lineas.forEach((t, i) => {
+      const [ax, ay] = P(anfitrion.x + anfitrion.w / 2, y0 + i * apodo.tam * INTERLINEA_APODO, zt);
+      out.push({ ...APODO, k: i === 0 ? APODO.k : `${APODO.k}${i}`, x: ax, y: ay, t, tam: apodo.tam });
+    });
   }
   return out;
 }
@@ -2066,10 +2155,15 @@ function textosBloque(
   }
   if (b.eje === "y") return textosColumna(b, zt, detalle, etiqueta, atenuado);
   const apodo =
-    detalle && etiqueta !== null && h >= 36 && !atenuado && !b.espacios.every((e) => e.medio) ? etiqueta : null;
+    detalle && etiqueta !== null && h >= 36 && !atenuado && !b.espacios.every((e) => e.medio)
+      ? // Dos renglones solo en una tapa alta (puesto de 52 u) y sin medio puesto (su "½"
+        // va a la altura del segundo renglón). El número sube para dejarles lugar.
+        apodoEnLineas(etiqueta, w - 4, { dosLineas: h >= 48 && !b.espacios.some((e) => e.medio) })
+      : null;
+  const dos = apodo !== null && apodo.lineas.length > 1;
   for (const e of b.espacios) {
     const ecx = e.x + e.w / 2;
-    const [nx, ny] = P(ecx, apodo ? y + h * 0.4 : y + h / 2 + 0.5, zt);
+    const [nx, ny] = P(ecx, apodo ? y + h * (dos ? 0.33 : 0.4) : y + h / 2 + 0.5, zt);
     if (e.tipo === "bar") {
       out.push({ k: e.id, x: nx, y: ny, t: e.numero ?? "Bar", tam: 18, clase: "rot", grosor: 3 });
     } else if (e.medio) {
@@ -2091,9 +2185,11 @@ function textosBloque(
     }
   }
   if (apodo) {
-    const a = apodoAjustado(apodo, w - 6);
-    const [ax, ay] = P(x + w / 2, y + h * 0.76, zt);
-    out.push({ ...APODO, x: ax, y: ay, t: a.t, tam: a.tam });
+    const y0 = y + h * (dos ? 0.635 : 0.76);
+    apodo.lineas.forEach((t, i) => {
+      const [ax, ay] = P(x + w / 2, y0 + i * apodo.tam * INTERLINEA_APODO, zt);
+      out.push({ ...APODO, k: i === 0 ? APODO.k : `${APODO.k}${i}`, x: ax, y: ay, t, tam: apodo.tam });
+    });
   }
   return out;
 }
@@ -2476,8 +2572,9 @@ function AnilloTapa({ anillo: a }: { anillo: Anillo }) {
   );
 }
 
-/** Lo que dice la pastilla de la selección: "Don Pedro · 4 puestos · al día". */
-export type DatosPastilla = { texto: string; estado: EstadoCobro };
+/** Lo que dice la pastilla de la selección: "Don Pedro · 4 puestos · al día". `corto`
+ * ("Don Pedro") es lo que dice si el texto entero taparía números de otros puestos. */
+export type DatosPastilla = { texto: string; corto?: string; estado: EstadoCobro };
 
 export type Pastilla = DatosPastilla & {
   tam: number;
@@ -2520,7 +2617,7 @@ export function ubicarPastilla(
       continue;
     }
     for (const t of textosBloque(b, al.zTexto, detalle, estilo.etiqueta, estilo.atenuado)) {
-      const an = t.t.length * (t.apodo ? 0.56 : 0.6) * t.tam;
+      const an = t.apodo ? anchoApodo(t.t, t.tam) : t.t.length * 0.6 * t.tam;
       const at = 0.74 * t.tam;
       numeros.push([t.x - an / 2, t.y - at / 2, t.x + an / 2, t.y + at / 2]);
     }
@@ -2528,7 +2625,10 @@ export function ubicarPastilla(
   if (sel.length === 0) return null;
   // Dos tamaños, por el umbral de detalle (nunca por la escala continua).
   const tam = detalle ? 12.5 : 17;
-  const ancho = (medir ? medir(datos.texto, tam) : datos.texto.length * 0.56 * tam) + tam * 2.6;
+  const anchoDe = (texto: string) => (medir ? medir(texto, tam) : texto.length * 0.56 * tam) + tam * 2.6;
+  // Primero el texto entero; el corto compite solo si el entero tapa algo (en el celular,
+  // con el plano girado, "Los Fernández · 4 puestos · debe el mes" cruzaba tres columnas).
+  const textos = datos.corto && datos.corto !== datos.texto ? [datos.texto, datos.corto] : [datos.texto];
   const alto = tam * 1.75;
   const u = tam / 20;
   const pico = 7 * u;
@@ -2552,24 +2652,41 @@ export function ubicarPastilla(
   // cada lado); y va arriba, porque el detalle sube desde abajo y la taparía.
   const columna = ancla.b.eje === "y";
   const alcance = columna ? w / 2 + 140 : Number.POSITIVE_INFINITY;
-  let mejor: { cx: number; cy: number; lado: "arriba" | "abajo"; pen: number } | null = null;
+  let mejor: { cx: number; cy: number; lado: "arriba" | "abajo"; pen: number; texto: string; ancho: number } | null =
+    null;
   let orden = 0;
-  for (const lado of ["arriba", "abajo"] as const) {
-    for (const corrimiento of [0, -1, 1, -2, 2]) {
-      const cx = acx + (corrimiento * (ancho / 2 - 14 * u)) / 2;
-      const cy = lado === "arriba" ? ty - sep - pico - alto / 2 : y + h + 4 + sep + pico + alto / 2;
-      const r: Caja = [cx - ancho / 2, cy - alto / 2, cx + ancho / 2, cy + alto / 2];
-      let pen =
-        numeros.reduce((s, o) => s + pisa(r, o), 0) * 10 + tapas.reduce((s, o) => s + pisa(r, o), 0) * 20;
-      if (r[0] < lim.x || r[2] > lim.x + lim.w || r[1] < lim.y || r[3] > lim.y + lim.h) pen += 1e6;
-      if (acx - r[0] > alcance || r[2] - acx > alcance) pen += 1e5;
-      if (columna && lado === "abajo") pen += 5e4;
-      pen += orden++ * 0.01; // a igual puntaje, el orden de preferencia
-      if (!mejor || pen < mejor.pen) mejor = { cx, cy, lado, pen };
+  for (const [i, texto] of textos.entries()) {
+    const ancho = anchoDe(texto);
+    for (const lado of ["arriba", "abajo"] as const) {
+      for (const corrimiento of [0, -1, 1, -2, 2]) {
+        const cx = acx + (corrimiento * (ancho / 2 - 14 * u)) / 2;
+        const cy = lado === "arriba" ? ty - sep - pico - alto / 2 : y + h + 4 + sep + pico + alto / 2;
+        const r: Caja = [cx - ancho / 2, cy - alto / 2, cx + ancho / 2, cy + alto / 2];
+        let pen =
+          numeros.reduce((s, o) => s + pisa(r, o), 0) * 10 + tapas.reduce((s, o) => s + pisa(r, o), 0) * 20;
+        if (r[0] < lim.x || r[2] > lim.x + lim.w || r[1] < lim.y || r[3] > lim.y + lim.h) pen += 1e6;
+        if (acx - r[0] > alcance || r[2] - acx > alcance) pen += 1e5;
+        if (columna && lado === "abajo") pen += 5e4;
+        // El corto pierde información: gana solo si evita tapar más que un roce (~40 u²).
+        if (i > 0) pen += 400;
+        pen += orden++ * 0.01; // a igual puntaje, el orden de preferencia
+        if (!mejor || pen < mejor.pen) mejor = { cx, cy, lado, pen, texto, ancho };
+      }
     }
   }
   if (!mejor) return null;
-  return { ...datos, tam, cx: mejor.cx, cy: mejor.cy, ancho, alto, lado: mejor.lado, acx, ancla: ancla.b.rect };
+  return {
+    ...datos,
+    texto: mejor.texto,
+    tam,
+    cx: mejor.cx,
+    cy: mejor.cy,
+    ancho: mejor.ancho,
+    alto,
+    lado: mejor.lado,
+    acx,
+    ancla: ancla.b.rect,
+  };
 }
 
 function PastillaSeleccion({ p }: { p: Pastilla }) {

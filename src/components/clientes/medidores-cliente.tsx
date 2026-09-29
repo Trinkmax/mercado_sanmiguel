@@ -171,7 +171,7 @@ export function MedidoresCliente({
                     <Gauge className="size-5 shrink-0 text-muted-foreground" strokeWidth={1.8} />
                     <div className="min-w-0 flex-1 space-y-1">
                       <p className={cn("font-semibold", !m.activo && "text-muted-foreground")}>
-                        Medidor {m.numero}
+                        Medidor <span className="whitespace-nowrap">{m.numero}</span>
                       </p>
                       {m.espacioId ? (
                         <Link

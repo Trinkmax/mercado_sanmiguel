@@ -251,41 +251,44 @@ export function CuentaCajon({
         <Renglon signo="=" etiqueta={tituloResultado} variante={variante}>
           <Money monto={total} className="font-bold" />
         </Renglon>
+        {/* En un celular el cajón va solo en su renglón (es el número que se cuenta) y banco y
+            cheques abajo, de a dos: tres columnas de ~100 px pisaban un monto con el otro. En
+            tablet, escritorio y en la hoja impresa, las tres en fila. */}
         <dl
           className={cn(
-            "mt-2 grid gap-3",
-            dosColumnas ? "grid-cols-2" : variante === "papel" ? "grid-cols-3" : "grid-cols-2 sm:grid-cols-3"
+            "mt-2 grid gap-x-4 gap-y-3",
+            dosColumnas ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-3 print:grid-cols-3"
           )}
         >
-          <div className={cn(!dosColumnas && variante !== "papel" && "col-span-2 sm:col-span-1")}>
+          <div className="col-span-2 min-w-0 sm:col-span-1 print:col-span-1">
             <dt className="text-sm text-muted-foreground">En el cajón (efectivo)</dt>
             <dd>
               <Money
                 monto={a.efectivo}
                 className={cn(
-                  "block font-bold",
+                  "block font-bold [overflow-wrap:anywhere]",
                   variante === "pantalla" ? "text-3xl" : variante === "compacta" ? "text-2xl" : "text-xl",
                   a.efectivo < -CENTAVO && variante !== "papel" && "text-pendiente"
                 )}
               />
             </dd>
           </div>
-          <div>
+          <div className="min-w-0">
             <dt className="text-sm text-muted-foreground">En el banco (transferencias)</dt>
             <dd>
               <Money
                 monto={a.transferencia}
-                className={cn("block font-semibold", variante === "papel" ? "text-base" : "text-xl")}
+                className={cn("block font-semibold [overflow-wrap:anywhere]", variante === "papel" ? "text-base" : "text-xl")}
               />
             </dd>
           </div>
           {hayCheques || !porteria ? (
-            <div>
+            <div className="min-w-0">
               <dt className="text-sm text-muted-foreground">Cheques en cartera</dt>
               <dd>
                 <Money
                   monto={a.cheques}
-                  className={cn("block font-semibold", variante === "papel" ? "text-base" : "text-xl")}
+                  className={cn("block font-semibold [overflow-wrap:anywhere]", variante === "papel" ? "text-base" : "text-xl")}
                 />
               </dd>
             </div>

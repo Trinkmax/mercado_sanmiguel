@@ -110,7 +110,7 @@ export function CardRevision({
               {" · "}
               <Link
                 href={`/clientes/${cliente.id}`}
-                className="inline-flex items-center gap-0.5 font-medium text-primary underline-offset-4 hover:underline"
+                className="inline-flex min-h-11 items-center gap-0.5 font-medium text-primary underline-offset-4 hover:underline"
               >
                 Ver ficha de {cliente.nombre}
                 <ArrowUpRight className="size-4" strokeWidth={2} />

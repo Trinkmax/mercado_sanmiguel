@@ -15,12 +15,16 @@ export function BuscadorClientes({
   inicial,
   seg,
   estado,
-  placeholder = "Buscá por nombre, apodo, N° de carpeta o de puesto",
+  placeholder = "Nombre, apodo o N° de puesto",
+  etiqueta = "Buscá por nombre, apodo, N° de puesto o N° de carpeta",
 }: {
   inicial: string;
   seg?: string | null;
   estado?: string | null;
+  /** Corto: tiene que entrar entero en un celular de 360 px. */
   placeholder?: string;
+  /** Lo que se lee en voz alta: puede ser más completo que el placeholder. */
+  etiqueta?: string;
 }) {
   const router = useRouter();
   const [valor, setValor] = useState(inicial);
@@ -60,8 +64,8 @@ export function BuscadorClientes({
         value={valor}
         onChange={(e) => setValor(e.target.value)}
         placeholder={placeholder}
-        aria-label={placeholder}
-        className="h-12 pr-12 pl-11 text-base [&::-webkit-search-cancel-button]:hidden"
+        aria-label={etiqueta}
+        className="h-12 pr-12 pl-11 text-base md:text-base [&::-webkit-search-cancel-button]:hidden"
       />
       {buscando ? (
         <Spinner className="absolute top-1/2 right-4 size-4 -translate-y-1/2 text-muted-foreground" />

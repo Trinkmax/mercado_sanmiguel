@@ -39,6 +39,8 @@ export function TablaRubros({ rubros }: { rubros: RubroFila[] }) {
   const [creando, startCrear] = useTransition();
   const [pendiente, setPendiente] = useState<string | null>(null);
   const [, startToggle] = useTransition();
+  // Aviso en el acto si el código ya existe (antes el ejemplo "AGUA" era justo uno cargado).
+  const repetido = codigo ? rubros.find((r) => r.codigo.toUpperCase() === codigo.toUpperCase()) : undefined;
 
   function crear() {
     startCrear(async () => {
@@ -80,12 +82,15 @@ export function TablaRubros({ rubros }: { rubros: RubroFila[] }) {
               <Label htmlFor="codigo-rubro" className="text-sm">
                 Código
               </Label>
+              {/* Los ejemplos van con "Ej.:" y de un rubro que no existe: en gris parecían datos cargados. */}
               <Input
                 id="codigo-rubro"
                 autoComplete="off"
                 maxLength={8}
-                placeholder="AGUA"
-                className="h-12 w-32 text-base uppercase md:text-base"
+                placeholder="Ej.: PAPEL"
+                aria-invalid={repetido ? true : undefined}
+                aria-describedby="codigo-rubro-ayuda"
+                className="h-12 w-36 text-base uppercase placeholder:normal-case md:text-base"
                 value={codigo}
                 onChange={(e) =>
                   setCodigo(
@@ -101,7 +106,7 @@ export function TablaRubros({ rubros }: { rubros: RubroFila[] }) {
               <Input
                 id="nombre-rubro"
                 autoComplete="off"
-                placeholder="Agua corriente"
+                placeholder="Ej.: Papelería y librería"
                 className="h-12 text-base md:text-base"
                 value={nombre}
                 onChange={(e) => setNombre(e.target.value)}
@@ -110,13 +115,21 @@ export function TablaRubros({ rubros }: { rubros: RubroFila[] }) {
             <Button
               size="lg"
               className="h-12 px-6 text-base font-semibold"
-              disabled={creando || !codigo.trim() || !nombre.trim()}
+              disabled={creando || !codigo.trim() || !nombre.trim() || Boolean(repetido)}
               onClick={crear}
             >
               <Plus className="size-5" strokeWidth={2} />
               {creando ? "Agregando…" : "Agregar rubro"}
             </Button>
           </div>
+          <p
+            id="codigo-rubro-ayuda"
+            className={repetido ? "mt-2 text-sm font-medium text-destructive" : "mt-2 text-sm text-muted-foreground"}
+          >
+            {repetido
+              ? `El código ${repetido.codigo} ya es de "${repetido.nombre}". Elegí otro.`
+              : "Un código corto (hasta 8 letras o números) y el nombre como lo van a ver al cargar un gasto."}
+          </p>
         </CardContent>
       </Card>
 

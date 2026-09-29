@@ -23,7 +23,8 @@ const PESTANAS: {
 
 /**
  * Pestañas grandes de Comunicaciones (links: el contenido se arma en el server).
- * `badges` = descargos que esperan respuesta, en rojo. En el celular se desliza de costado.
+ * `badges` = descargos que esperan respuesta, en rojo. En el celular van en dos
+ * columnas: todas a la vista y la activa siempre marcada, nada escondido de costado.
  */
 export function PestanasComunicaciones({
   activa,
@@ -33,10 +34,7 @@ export function PestanasComunicaciones({
   badges?: Partial<Record<PestanaComunicaciones, number>>;
 }) {
   return (
-    <nav
-      aria-label="Secciones de Comunicaciones"
-      className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0"
-    >
+    <nav aria-label="Secciones de Comunicaciones" className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
       {PESTANAS.map((p) => {
         const Icono = p.icono;
         const esActiva = activa === p.valor;
@@ -47,19 +45,19 @@ export function PestanasComunicaciones({
             aria-current={esActiva ? "page" : undefined}
             href={p.valor === "circulares" ? "/comunicaciones" : `/comunicaciones?tab=${p.valor}`}
             className={cn(
-              "inline-flex min-h-11 shrink-0 items-center gap-2 rounded-md border px-4 text-sm font-medium whitespace-nowrap transition-colors",
+              "flex min-h-12 min-w-0 items-center gap-2 rounded-md border px-3 py-1.5 text-sm leading-tight font-medium transition-colors sm:shrink-0 sm:px-4 sm:whitespace-nowrap",
               p.valor === "terminos" && "sm:ml-auto",
               esActiva
                 ? "border-primary bg-primary text-primary-foreground"
                 : "border-border bg-card text-foreground hover:bg-accent"
             )}
           >
-            <Icono className="size-4" strokeWidth={2} />
-            {p.label}
+            <Icono className="size-4 shrink-0" strokeWidth={2} />
+            <span className="min-w-0 break-words">{p.label}</span>
             {badge > 0 ? (
               <span
                 className={cn(
-                  "inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-xs font-bold tabular",
+                  "ml-auto inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-xs font-bold tabular sm:ml-0",
                   esActiva ? "bg-card text-pendiente" : "bg-pendiente text-primary-foreground"
                 )}
                 aria-label={`${badge} ${badge === 1 ? "espera" : "esperan"} tu respuesta`}

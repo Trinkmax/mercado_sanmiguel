@@ -44,7 +44,8 @@ import {
   cargarRecepciones,
   cargarRegistros,
 } from "@/components/comunicaciones/datos";
-import { resumenLectura } from "@/components/comunicaciones/publico";
+import { desgloseCategorias, resumenLectura } from "@/components/comunicaciones/publico";
+import { FilaDeslizable } from "@/components/comunicaciones/fila-deslizable";
 import {
   infoTipoRegistro,
   saldoMulta,
@@ -64,7 +65,7 @@ const PESTANAS_VALIDAS: PestanaComunicaciones[] = [
 
 const FILTROS: { valor: FiltroRegistros; label: string }[] = [
   { valor: "todas", label: "Todas" },
-  { valor: "esperan", label: "Esperan respuesta" },
+  { valor: "esperan", label: "Esperan tu respuesta" },
   { valor: "sin_ver", label: "Sin ver" },
   { valor: "respondidas", label: "Respondidas" },
   { valor: "sin_efecto", label: "Sin efecto" },
@@ -98,16 +99,28 @@ export default async function ComunicacionesPage({
 
   const descripcion =
     pestana === "circulares"
-      ? "Avisos para los socios por grupo: vas a ver quién la vio y quién no."
+      ? "Avisos por grupo: ves quién la vio y quién no."
       : pestana === "terminos"
         ? "Los términos y condiciones que acepta cada socio al entrar al portal."
         : `${infoTipoRegistro(tipo ?? "notificacion").ayuda} El socio lo ve en su portal.`;
 
   return (
     <div className="space-y-6">
-      <PageHeader titulo="Comunicaciones" descripcion={descripcion}>
+      {/* El encabezado es el mismo en todas las pestañas: así la barra no se corre al tocarlas
+          (antes la ayuda de cada una ocupaba 1 o 2 renglones y la barra bajaba 20–30 px). */}
+      <PageHeader
+        titulo="Comunicaciones"
+        descripcion="Lo que la cooperativa les comunica a sus clientes y quién ya lo vio."
+        className="pb-0"
+      />
+
+      <PestanasComunicaciones activa={pestana} badges={badges} />
+
+      {/* Qué es esta pestaña y su botón para crear, debajo de la barra. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="min-w-0 flex-1 basis-64 text-sm text-muted-foreground">{descripcion}</p>
         {pestana === "circulares" ? (
-          <>
+          <div className="flex flex-wrap gap-2">
             <BotonExportar dataset="circulares" />
             <Button asChild size="lg" className="h-12 px-5 text-base font-semibold">
               <Link href="/comunicaciones/nueva">
@@ -115,9 +128,9 @@ export default async function ComunicacionesPage({
                 Nueva circular
               </Link>
             </Button>
-          </>
+          </div>
         ) : tipo ? (
-          <>
+          <div className="flex flex-wrap gap-2">
             <BotonExportar dataset="registros" />
             <Button asChild size="lg" className="h-12 px-5 text-base font-semibold">
               <Link href={`/comunicaciones/registros/nuevo?tipo=${tipo}`}>
@@ -125,11 +138,9 @@ export default async function ComunicacionesPage({
                 {infoTipoRegistro(tipo).nuevo}
               </Link>
             </Button>
-          </>
+          </div>
         ) : null}
-      </PageHeader>
-
-      <PestanasComunicaciones activa={pestana} badges={badges} />
+      </div>
 
       {pestana === "circulares" ? (
         <PestanaCirculares />
@@ -191,28 +202,35 @@ async function PestanaCirculares() {
     <Card className="gap-0 divide-y overflow-hidden py-0">
       {circulares.map((c) => {
         const res = resumenLectura(c.publico, clientes, recepciones.get(c.id) ?? new Map());
+        const desglose = desgloseCategorias(res.lectores);
         return (
           <Link
             key={c.id}
             href={`/comunicaciones/${c.id}`}
-            className="flex min-h-16 items-center gap-3 px-4 py-3 transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+            className="flex min-h-16 items-start gap-3 px-4 py-3.5 transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
           >
-            <span
-              className="w-10 shrink-0 text-right font-display text-lg font-bold tabular"
-              aria-label={`Circular N° ${c.numero}`}
-            >
+            <span className="w-10 shrink-0 text-right font-display text-lg leading-snug font-bold tabular">
+              <span className="sr-only">Circular N° </span>
               {c.numero}
             </span>
 
-            <div className="min-w-0 flex-1 space-y-1">
-              <p className={cn("line-clamp-2 font-medium leading-snug", !c.activa && "text-muted-foreground")}>
+            <div className="min-w-0 flex-1 space-y-1.5">
+              {/* El título es el dato principal: completo (salta de renglón) y más grande que lo de abajo. */}
+              <p
+                className={cn(
+                  "text-base leading-snug font-semibold break-words",
+                  !c.activa && "text-muted-foreground"
+                )}
+              >
                 {c.titulo}
               </p>
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
                 <span className="tabular">{formatFecha(c.fecha)}</span>
                 <span className="rounded-full border bg-muted/60 px-2 py-px font-medium text-foreground">
                   {textoPublico(c.publico)}
                 </span>
+                {/* De dónde sale el total: Administración ve en Clientes solo a sus puesteros. */}
+                {desglose ? <span>({desglose})</span> : null}
                 <span
                   className={cn(
                     "rounded-full border px-2 py-px font-medium",
@@ -221,9 +239,10 @@ async function PestanaCirculares() {
                 >
                   {c.obligatoria ? "Obligatoria" : "Informativa"}
                 </span>
+                {!c.activa ? <Sello estado="inactivo" texto="Desactivada" /> : null}
               </div>
               <div className="flex items-center gap-3 pt-0.5">
-                <p className="shrink-0 text-sm tabular">
+                <p className="shrink-0 text-sm whitespace-nowrap tabular">
                   La vieron{" "}
                   <span
                     className={cn(
@@ -245,15 +264,12 @@ async function PestanaCirculares() {
                   sinPortal={res.sinPortal}
                   compacta
                   soloBarra
-                  className="max-w-48 flex-1"
+                  className="max-w-48 min-w-16 flex-1"
                 />
               </div>
             </div>
 
-            <div className="flex shrink-0 items-center gap-2">
-              {!c.activa ? <Sello estado="inactivo" texto="Desactivada" /> : null}
-              <ChevronRight className="size-4 shrink-0 text-muted-foreground" strokeWidth={2} />
-            </div>
+            <ChevronRight className="mt-1 size-4 shrink-0 text-muted-foreground" strokeWidth={2} />
           </Link>
         );
       })}
@@ -314,72 +330,59 @@ async function PestanaRegistros({
 
   return (
     <div className="space-y-5">
-      {/* Lo que importa, grande: quién espera respuesta, quién no lo vio y cuánto falta cobrar */}
-      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border bg-border sm:grid-cols-3">
-        <Link
-          href={`${base}&filtro=esperan`}
-          className="flex min-h-20 flex-col justify-center bg-card px-4 py-3 transition-colors hover:bg-accent sm:px-5"
-        >
-          <span className="text-sm text-muted-foreground">Esperan tu respuesta</span>
-          <span
-            className={cn(
-              "font-display text-2xl font-bold tabular",
-              esperan > 0 ? "text-pendiente" : "text-foreground"
-            )}
-          >
-            {esperan}
-          </span>
-        </Link>
-        <Link
-          href={`${base}&filtro=sin_ver`}
-          className="flex min-h-20 flex-col justify-center bg-card px-4 py-3 transition-colors hover:bg-accent sm:px-5"
-        >
-          <span className="text-sm text-muted-foreground">Sin ver</span>
-          <span className={cn("font-display text-2xl font-bold tabular", sinVer > 0 && "text-parcial")}>
-            {sinVer}
-          </span>
-        </Link>
-        <div className="col-span-2 flex min-h-20 flex-col justify-center bg-card px-4 py-3 sm:col-span-1 sm:px-5">
-          <span className="text-sm text-muted-foreground">
-            {info.llevaMulta ? "Multas por cobrar" : "Respondidas"}
-          </span>
-          {info.llevaMulta ? (
-            <Money
-              monto={multasPendientes}
-              className={cn(
-                "font-display text-2xl font-bold",
-                multasPendientes > 0 ? "text-pendiente" : "text-foreground"
-              )}
-            />
-          ) : (
-            <span className="font-display text-2xl font-bold tabular">{conteo.respondidas}</span>
-          )}
-        </div>
-      </div>
-
-      {/* Filtros */}
-      <nav aria-label="Filtrar" className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
+      {/* Filtros con su cantidad (una sola fila: antes había además tarjetas con los mismos números).
+          Lo que espera respuesta se nota en rojo aunque no esté elegido. En el celular la fila se
+          desliza y avisa que sigue. */}
+      <FilaDeslizable role="group" aria-label="Filtrar">
         {FILTROS.filter((f) => info.llevaMulta || f.valor !== "sin_efecto").map((f) => {
           const activo = f.valor === filtro;
+          const urgente = f.valor === "esperan" && esperan > 0;
           return (
             <Link
               key={f.valor}
               href={f.valor === "todas" ? base : `${base}&filtro=${f.valor}`}
               aria-current={activo ? "true" : undefined}
               className={cn(
-                "inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border px-4 text-sm font-medium whitespace-nowrap transition-colors",
+                "inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-medium whitespace-nowrap transition-colors",
                 activo
                   ? "border-primary bg-accent text-foreground ring-2 ring-primary/25"
-                  : "bg-card hover:bg-accent/60",
+                  : urgente
+                    ? "border-pendiente/40 bg-pendiente-suave hover:bg-pendiente-suave/70"
+                    : "bg-card hover:bg-accent/60",
                 conteo[f.valor] === 0 && !activo && "text-muted-foreground"
               )}
             >
               {f.label}
-              <span className="tabular text-muted-foreground">{conteo[f.valor]}</span>
+              <span
+                className={cn(
+                  "tabular",
+                  urgente
+                    ? "inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-pendiente px-1.5 text-xs font-bold text-primary-foreground"
+                    : f.valor === "sin_ver" && sinVer > 0
+                      ? "font-semibold text-parcial"
+                      : "text-muted-foreground"
+                )}
+              >
+                {conteo[f.valor]}
+              </span>
             </Link>
           );
         })}
-      </nav>
+      </FilaDeslizable>
+
+      {/* La plata no está en los filtros: se muestra aparte. */}
+      {info.llevaMulta ? (
+        <p className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 rounded-xl border bg-card px-4 py-3 sm:px-5">
+          <span className="text-sm text-muted-foreground">Multas por cobrar</span>
+          <Money
+            monto={multasPendientes}
+            className={cn(
+              "font-display text-2xl font-bold",
+              multasPendientes > 0 ? "text-pendiente" : "text-foreground"
+            )}
+          />
+        </p>
+      ) : null}
 
       {lista.length === 0 ? (
         <EmptyState
@@ -442,7 +445,7 @@ async function PestanaTerminos({ esLider }: { esLider: boolean }) {
                 {aceptaron ?? 0}
                 <span className="text-base font-normal text-muted-foreground">
                   {" "}
-                  de {totalPortal} socios con acceso al portal
+                  de {totalPortal} {totalPortal === 1 ? "socio" : "socios"} con acceso al portal
                 </span>
               </p>
               <p className="mt-1 text-sm text-muted-foreground">

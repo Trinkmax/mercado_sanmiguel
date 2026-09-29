@@ -160,17 +160,21 @@ export function AvisoPuesto({
 
           {error ? <AlertaError error={error} titulo="No se pudo avisar" /> : null}
 
-          <Button
-            type="button"
-            size="lg"
-            className="h-12 w-full text-base font-semibold @md:w-auto"
-            disabled={!motivo || enviando}
-            onClick={avisar}
-          >
-            {enviando ? <Spinner className="size-5" /> : <Send className="size-5" strokeWidth={2} />}
-            Avisar al Líder sobre {sujeto}
-          </Button>
-          {!motivo ? <p className="text-xs text-muted-foreground">Elegí qué viste para poder avisar.</p> : null}
+          {/* En el celular la tarjeta tiene alto máximo y se desplaza por dentro: el botón
+              queda fijo abajo mientras se completa el aviso (nunca cortado por el borde). */}
+          <div className="sticky bottom-0 z-10 -mx-4 space-y-1.5 border-t bg-card px-4 pt-3 pb-4 @xl:-mx-5 @xl:px-5 @2xl:static @2xl:z-auto @2xl:m-0 @2xl:border-t-0 @2xl:bg-transparent @2xl:p-0">
+            <Button
+              type="button"
+              size="lg"
+              className="h-12 w-full text-base font-semibold @md:w-auto"
+              disabled={!motivo || enviando}
+              onClick={avisar}
+            >
+              {enviando ? <Spinner className="size-5" /> : <Send className="size-5" strokeWidth={2} />}
+              Avisar al Líder sobre {sujeto}
+            </Button>
+            {!motivo ? <p className="text-xs text-muted-foreground">Elegí qué viste para poder avisar.</p> : null}
+          </div>
         </div>
 
         <div className="space-y-2 @2xl:border-l @2xl:pl-4">
@@ -186,7 +190,7 @@ export function AvisoPuesto({
                     className="flex min-h-11 items-center gap-2 rounded-md border bg-card px-2.5 py-1.5 transition-colors hover:border-primary/35 hover:bg-accent/50"
                   >
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium">
+                      <span className="line-clamp-2 text-sm leading-snug font-medium break-words">
                         {a.asunto.replace(/^[^:]+:\s*/, "")}
                       </span>
                       <span className="block text-xs text-muted-foreground tabular">

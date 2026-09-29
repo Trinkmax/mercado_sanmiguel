@@ -51,7 +51,7 @@ export function AccionesSolicitud({
   const [texto, setTexto] = useState("");
   const [usuarioId, setUsuarioId] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
-  // Error de una acción sin diálogo ("Tomar para revisar"): se ve debajo de los botones.
+  // Error de una acción sin diálogo ("Tomarla para revisar"): se ve debajo de los botones.
   const [errorPanel, setErrorPanel] = useState<string | null>(null);
   const [pendiente, startTransition] = useTransition();
 

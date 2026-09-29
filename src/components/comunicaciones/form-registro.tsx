@@ -337,7 +337,7 @@ export function FormRegistro({
                           {c.codigo}
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate font-medium">
+                          <span className="block leading-snug font-medium break-words">
                             {c.nombre}
                             {c.apodo ? <span className="text-muted-foreground"> · {c.apodo}</span> : null}
                           </span>

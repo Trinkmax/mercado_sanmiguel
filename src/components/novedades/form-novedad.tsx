@@ -487,9 +487,9 @@ export function FormNovedad({
                               {activo ? <Check className="size-4" strokeWidth={3} /> : null}
                             </span>
                             <span className="min-w-0">
-                              <span className="block truncate font-semibold">{nombreCompleto(e)}</span>
+                              <span className="block leading-snug font-semibold break-words">{nombreCompleto(e)}</span>
                               {e.cargo ? (
-                                <span className="block truncate text-sm text-muted-foreground">{e.cargo}</span>
+                                <span className="block text-sm break-words text-muted-foreground">{e.cargo}</span>
                               ) : null}
                             </span>
                           </button>

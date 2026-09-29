@@ -50,18 +50,19 @@ export function GastosCaja({ gastos, pagarHref }: { gastos: GastoCaja[]; pagarHr
       <CardContent>
         <ul className="divide-y">
           {gastos.map((g) => (
-            <li key={g.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-3">
-              {g.rubro ? <Codigo codigo={g.rubro.codigo} /> : null}
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">{g.descripcion}</p>
+            <li key={g.id} className="flex items-start gap-x-3 py-3">
+              {g.rubro ? <Codigo codigo={g.rubro.codigo} className="mt-0.5" /> : null}
+              {/* La descripción completa (qué se compró), en los renglones que haga falta. */}
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <p className="font-medium break-words">{g.descripcion}</p>
                 <p className="text-xs text-muted-foreground">
                   {[g.pagadoPorNombre ? `Pagó ${g.pagadoPorNombre}` : null, g.pagadoEn ? formatFechaHora(g.pagadoEn) : null]
                     .filter(Boolean)
                     .join(" · ")}
                 </p>
+                {g.despuesDelCierre ? <Sello estado="despues_cierre" /> : null}
               </div>
-              {g.despuesDelCierre ? <Sello estado="despues_cierre" /> : null}
-              <Money monto={g.monto} className="font-semibold" />
+              <Money monto={g.monto} className="shrink-0 pt-px font-semibold" />
             </li>
           ))}
         </ul>

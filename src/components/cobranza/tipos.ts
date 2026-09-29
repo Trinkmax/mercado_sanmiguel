@@ -52,6 +52,19 @@ export const MENSAJE_COMPROBANTE_PESADO =
 // Montos tipeados: viven en @/lib/format (los usan también Gastos y Tesorería).
 export { parseMonto, sanitizarMonto, montoATexto, redondear2 };
 
+const MILES = new Intl.NumberFormat("es-AR", { maximumFractionDigits: 2 });
+
+/**
+ * Número → texto del campo CON puntos de miles: "2.332.000", "1.234,5". 0 → "".
+ * parseMonto lo lee igual (punto seguido de 3 cifras = miles; la coma, decimales). Se usa al
+ * completar el monto con un botón ("Cobrar todo", "El resto") y al salir del campo: así nadie
+ * tiene que contar los ceros de "2332000".
+ */
+export function montoConMiles(n: number): string {
+  if (!(n > 0)) return "";
+  return MILES.format(redondear2(n));
+}
+
 /** "YYYY-MM-DD" + n días (huso de negocio: las fechas son puras, sin hora). */
 export function sumarDias(iso: string, dias: number): string {
   const d = fechaLocal(iso);
@@ -88,6 +101,38 @@ export function diaRelativo(iso: string): string {
   if (d === -1) return "ayer";
   if (d === 1) return "mañana";
   return diaCorto(iso);
+}
+
+const PLURAL_LUGAR: Record<string, string> = {
+  Puesto: "Puestos",
+  Local: "Locales",
+  Contéiner: "Contéiners",
+  Bar: "Bares",
+};
+
+/**
+ * "Puesto 46", "Puesto 48", "Local 3" → "Puestos 46 · 48 · Local 3": el mismo nombre no se
+ * repite en cada número (así lo escribe también la lista de Clientes).
+ */
+export function resumirLugares(lugares: string[]): string {
+  const grupos: { nombre: string; numeros: string[] }[] = [];
+  for (const lugar of lugares) {
+    const m = /^(.+?) (\S+)$/.exec(lugar.trim());
+    if (!m) {
+      grupos.push({ nombre: lugar.trim(), numeros: [] });
+      continue;
+    }
+    const grupo = grupos.find((g) => g.nombre === m[1] && g.numeros.length > 0);
+    if (grupo) grupo.numeros.push(m[2]);
+    else grupos.push({ nombre: m[1], numeros: [m[2]] });
+  }
+  return grupos
+    .map((g) =>
+      g.numeros.length === 0
+        ? g.nombre
+        : `${g.numeros.length > 1 ? (PLURAL_LUGAR[g.nombre] ?? g.nombre) : g.nombre} ${g.numeros.join(" · ")}`
+    )
+    .join(" · ");
 }
 
 /** "20123456783" → "20-12345678-3" mientras se tipea. */
@@ -154,7 +199,7 @@ export function nuevaLinea(medio: MedioPago, monto = 0, id: string = nuevoId()):
   return {
     id,
     medio,
-    monto: montoATexto(monto),
+    monto: montoConMiles(monto),
     titular: "",
     comprobante: null,
     cheque: chequeVacio(),

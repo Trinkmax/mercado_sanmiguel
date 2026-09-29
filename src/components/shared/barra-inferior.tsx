@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutGrid, X, type LucideIcon } from "lucide-react";
@@ -93,6 +93,7 @@ export function BarraInferior({
 }) {
   const pathname = usePathname();
   const [abierto, setAbierto] = useState(false);
+  const refCerrar = useRef<HTMLButtonElement>(null);
   const items = navParaRol(rol);
   const tabs = (TABS_MOVIL[rol] ?? [])
     .map((href) => items.find((i) => i.href === href))
@@ -157,25 +158,33 @@ export function BarraInferior({
         <SheetContent
           side="bottom"
           showCloseButton={false}
+          onOpenAutoFocus={(e) => {
+            // Al abrir, el foco va a "Cerrar el menú" (nunca a Salir).
+            e.preventDefault();
+            refCerrar.current?.focus();
+          }}
           className="max-h-[88dvh] gap-0 rounded-t-[1.75rem] bg-background p-0 pr-[env(safe-area-inset-right)] pb-[max(1rem,env(safe-area-inset-bottom))] pl-[env(safe-area-inset-left)] data-[side=bottom]:border-t-0"
         >
           <div aria-hidden className="mx-auto mt-2.5 h-1.5 w-11 rounded-full bg-foreground/15" />
-          <div className="flex items-center gap-3 px-5 pt-4 pb-3">
-            <span className="flex size-11 shrink-0 items-center justify-center rounded-full bg-primary font-display text-lg font-bold text-primary-foreground">
+          {/* Cerrar arriba a la derecha y Salir abajo del nombre, lejos uno del otro:
+              al querer cerrar el menú no se cierra la sesión. */}
+          <div className="flex items-start gap-3 pt-3 pr-3 pb-3 pl-5">
+            <span className="mt-1 flex size-11 shrink-0 items-center justify-center rounded-full bg-primary font-display text-lg font-bold text-primary-foreground">
               {nombre.trim().charAt(0).toUpperCase() || "?"}
             </span>
-            <div className="min-w-0 flex-1">
-              <SheetTitle className="truncate font-display text-base font-bold">{nombre}</SheetTitle>
+            <div className="min-w-0 flex-1 pt-1">
+              <SheetTitle className="font-display text-base leading-snug font-bold break-words">{nombre}</SheetTitle>
               <SheetDescription className="text-sm">{rolLabel}</SheetDescription>
+              <div className="mt-2.5">{logout}</div>
             </div>
-            <div className="shrink-0">{logout}</div>
             <SheetClose asChild>
               <button
+                ref={refCerrar}
                 type="button"
                 aria-label="Cerrar el menú"
-                className="flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className="flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground pointer-coarse:size-[44px]"
               >
-                <X className="size-5" strokeWidth={2} />
+                <X className="size-6" strokeWidth={2} />
               </button>
             </SheetClose>
           </div>

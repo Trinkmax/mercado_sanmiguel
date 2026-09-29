@@ -71,7 +71,7 @@ export function LineaEstadoRegistro({
                   hecho
                     ? "border-primary bg-primary text-primary-foreground"
                     : "border-border bg-card text-muted-foreground",
-                  actual && "ring-4 ring-primary/15"
+                  actual && "ring-4 ring-primary/25"
                 )}
               >
                 {hecho ? <Check className="size-4" strokeWidth={2.5} /> : i + 1}

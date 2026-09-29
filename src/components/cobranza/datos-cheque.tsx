@@ -12,6 +12,7 @@ import {
   diaRelativo,
   diasEntre,
   mascaraCuit,
+  resumirLugares,
   sumarDias,
   type ChequeForm,
   type ErroresLinea,
@@ -46,6 +47,13 @@ export function Chip({
     </button>
   );
 }
+
+/**
+ * N° y CUIT del cheque: lo tipeado va grande y en negrita; el ejemplo ("Ej.: …") en letra
+ * normal y más clara, para que no parezca un dato ya cargado.
+ */
+const CAMPO_CHEQUE =
+  "h-12 text-lg font-semibold tabular md:text-lg placeholder:text-base placeholder:font-normal placeholder:text-muted-foreground/70";
 
 const PLAZOS = [
   { dias: 0, label: "Hoy" },
@@ -103,10 +111,11 @@ export function DatosCheque({
   const quienEntrega = valor.otraPersona
     ? valor.recibidoDe.trim() || "otra persona"
     : clienteNombre;
+  const textoPuestos = resumirLugares(puestos);
   const resumen = [
     `Lo entrega ${quienEntrega}`,
     `Recibido ${diaRelativo(valor.fechaRecepcion || hoy)}`,
-    puestos.length > 0 ? puestos.join(" · ") : "Sin puesto en el plano",
+    textoPuestos || "Sin puesto en el plano",
     valor.estado === "entregado"
       ? `Se lo di a ${valor.proveedor.trim() || "un proveedor"}`
       : "Queda en la cooperativa",
@@ -124,11 +133,11 @@ export function DatosCheque({
             inputMode="numeric"
             autoComplete="off"
             maxLength={20}
-            placeholder="00012345"
+            placeholder="Ej.: 00012345"
             value={valor.numero}
             onChange={(e) => onCambio({ numero: e.target.value.replace(/\D/g, "").slice(0, 20) })}
             aria-invalid={Boolean(errores.chequeNumero)}
-            className="h-12 text-lg font-semibold tabular md:text-lg"
+            className={CAMPO_CHEQUE}
           />
           {errores.chequeNumero ? (
             <p className="text-sm font-medium text-destructive">{errores.chequeNumero}</p>
@@ -143,13 +152,13 @@ export function DatosCheque({
             id={`${id}-cuit`}
             inputMode="numeric"
             autoComplete="off"
-            placeholder="20-12345678-3"
+            placeholder="Ej.: 20-12345678-3"
             value={valor.cuit}
             onChange={(e) =>
               onCambio({ cuit: mascaraCuit(e.target.value), cuitConfirmado: false })
             }
             aria-invalid={Boolean(errores.chequeCuit)}
-            className="h-12 text-lg font-semibold tabular md:text-lg"
+            className={CAMPO_CHEQUE}
           />
           {errores.chequeCuit ? (
             <p className="text-sm font-medium text-destructive">{errores.chequeCuit}</p>
@@ -300,23 +309,15 @@ export function DatosCheque({
             ) : null}
           </div>
 
-          <div className="space-y-2">
-            <p className="text-base font-medium">Puesto</p>
-            {puestos.length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {puestos.map((p) => (
-                  <span
-                    key={p}
-                    className="inline-flex min-h-9 items-center rounded-md border bg-card px-3 text-sm font-medium tabular"
-                  >
-                    {p}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">Sin puesto en el plano</p>
-            )}
-            <p className="text-xs text-muted-foreground">Sale solo de los espacios del cliente en el plano.</p>
+          {/* Dato, no opción: texto plano (sin borde de botón) para que no parezca que hay que elegir. */}
+          <div className="space-y-1">
+            <p className="text-base font-medium">Puesto del cheque</p>
+            <p className={cn("text-base break-words tabular", !textoPuestos && "text-muted-foreground")}>
+              {textoPuestos || "Sin puesto en el plano"}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              Sale solo del plano: {puestos.length > 1 ? "van todos, no hay que elegir." : "no hay que elegirlo."}
+            </p>
           </div>
 
           <div className="space-y-2">

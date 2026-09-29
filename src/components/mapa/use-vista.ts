@@ -23,6 +23,12 @@ const ZOOM_ENFOQUE = 2.6;
  * ~1,5 (lienzo de 390×620) y con pantalla completa en ~1,3: con 1,6, como en
  * el caso angosto, el celular arrancaría con el predio entero a 0,3 px/u. */
 const PROPORCION_ALTA = 1.2;
+/** En pantallas táctiles el plano arranca, como mínimo, a esta escala (px por unidad):
+ * un puesto (44 × 52 u) queda de 35 × 42 px, un blanco cómodo para el dedo, y sus
+ * números (22 u) se leen a 17 px. Con el predio entero en una tablet apaisada o en un
+ * celular los puestos quedaban de 18 px con números de 7: había que agrandar con + antes
+ * de poder tocar nada. "Ver todo el predio" sigue mostrando el plano entero. */
+const K_TACTIL = 0.8;
 
 const acotar = (v: number, min: number, max: number) => Math.min(Math.max(v, min), max);
 
@@ -34,13 +40,23 @@ function encuadre(lim: Rect, tam: Tam): Camara {
   };
 }
 
-/** Encuadre al abrir: todo el predio; en pantallas angostas (el plano mucho
- * más ancho que la pantalla) el plano entero quedaría como una tira, así que se
- * arranca más cerca, centrado en la nave, llenando el alto disponible. Al revés,
- * con el plano girado en una pantalla parada (el plano bastante más alto que la
- * pantalla, en proporción), se arranca llenando el ANCHO desde la parte de
- * arriba: en un celular el predio entero se vería con números de 6 px. */
-export function encuadreInicial(lim: Rect, tam: Tam): Camara {
+/** Encuadre al abrir: el de la forma de la pantalla (abajo) pero, con el dedo, nunca
+ * más lejos que `kMinimo` (K_TACTIL). Si hay que acercar, se conserva el centro y, con
+ * el plano girado en una pantalla parada, el arranque desde arriba. */
+export function encuadreInicial(lim: Rect, tam: Tam, kMinimo = 0): Camara {
+  const c = encuadreSegunForma(lim, tam);
+  if (c.k >= kMinimo) return c;
+  const alta = tam.w / tam.h > (lim.w / lim.h) * PROPORCION_ALTA;
+  return { cx: c.cx, cy: alta ? lim.y + tam.h / (2 * kMinimo) : c.cy, k: kMinimo };
+}
+
+/** Todo el predio; en pantallas angostas (el plano mucho más ancho que la
+ * pantalla) el plano entero quedaría como una tira, así que se arranca más cerca,
+ * centrado en la nave, llenando el alto disponible. Al revés, con el plano girado en
+ * una pantalla parada (el plano bastante más alto que la pantalla, en proporción),
+ * se arranca llenando el ANCHO desde la parte de arriba: en un celular el predio
+ * entero se vería con números de 6 px. */
+function encuadreSegunForma(lim: Rect, tam: Tam): Camara {
   const todo = encuadre(lim, tam);
   const angosta = tam.w / tam.h < lim.w / lim.h / 1.6;
   if (!angosta) {
@@ -79,6 +95,8 @@ export function useVista(limites: Rect, insetInferior = 0) {
   }, [insetInferior]);
   // Mientras el usuario no toque el zoom, el plano sigue encuadrado al redimensionar.
   const ajustadoRef = useRef(true);
+  /** Escala mínima al abrir y al enfocar: K_TACTIL con el dedo, 0 con mouse. */
+  const kTactilRef = useRef(0);
   const animRef = useRef<number | null>(null);
   const punteros = useRef(new Map<number, { x: number; y: number }>());
   const gesto = useRef<Gesto>({ tipo: "nada" });
@@ -201,6 +219,7 @@ export function useVista(limites: Rect, insetInferior = 0) {
   useEffect(() => {
     const el = contRef.current;
     if (!el) return;
+    kTactilRef.current = window.matchMedia("(pointer: coarse)").matches ? K_TACTIL : 0;
     const medir = () => {
       const r = el.getBoundingClientRect();
       if (r.width < 10 || r.height < 10) return;
@@ -208,7 +227,7 @@ export function useVista(limites: Rect, insetInferior = 0) {
       tamRef.current = t;
       setTam(t);
       if (ajustadoRef.current || !camRef.current) {
-        aplicar(encuadreInicial(limRef.current, t));
+        aplicar(encuadreInicial(limRef.current, t, kTactilRef.current));
       } else {
         aplicar(camRef.current);
       }
@@ -230,7 +249,7 @@ export function useVista(limites: Rect, insetInferior = 0) {
       anterior.x === x && anterior.y === y && anterior.w === w && anterior.h === h;
     if (igual && camRef.current) return;
     ajustadoRef.current = true;
-    aplicar(encuadreInicial(limRef.current, t));
+    aplicar(encuadreInicial(limRef.current, t, kTactilRef.current));
   }, [claveLimites, aplicar]);
 
   /** Acerca/aleja con un factor, fijando el punto de pantalla (sx, sy). */
@@ -283,10 +302,11 @@ export function useVista(limites: Rect, insetInferior = 0) {
       const margen = 140;
       // Se encuadra en la parte visible (arriba del panel flotante, si hay).
       const alto = Math.max(t.h - insetRef.current, t.h * 0.35);
+      // Con el dedo, enfocar nunca aleja más allá de la escala con la que abre el plano.
       const k = acotar(
         Math.min(t.w / (r.w + margen * 2), alto / (r.h + margen * 2)),
         kFit,
-        kFit * ZOOM_ENFOQUE
+        Math.max(kFit * ZOOM_ENFOQUE, kTactilRef.current)
       );
       animarA({ cx: r.x + r.w / 2, cy: r.y + r.h / 2 + (t.h - alto) / (2 * k), k });
     },

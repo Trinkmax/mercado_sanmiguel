@@ -327,9 +327,9 @@ function Formulario({
               <div className="flex min-w-0 items-center gap-3">
                 <span className="font-display text-lg font-bold tabular">{clienteElegido.codigo}</span>
                 <div className="min-w-0">
-                  <p className="truncate font-medium">{clienteElegido.nombre}</p>
+                  <p className="leading-snug font-medium break-words">{clienteElegido.nombre}</p>
                   {clienteElegido.apodo ? (
-                    <p className="truncate text-sm text-muted-foreground">{clienteElegido.apodo}</p>
+                    <p className="text-sm break-words text-muted-foreground">{clienteElegido.apodo}</p>
                   ) : null}
                 </div>
               </div>
@@ -377,10 +377,10 @@ function Formulario({
                             setBusqueda("");
                             setError(null);
                           }}
-                          className="flex min-h-12 w-full items-center gap-3 px-4 text-left transition-colors hover:bg-muted/60"
+                          className="flex min-h-12 w-full items-center gap-3 px-4 py-2 text-left transition-colors hover:bg-muted/60"
                         >
                           <span className="w-9 shrink-0 text-right font-display text-base font-bold tabular">{c.codigo}</span>
-                          <span className="min-w-0 flex-1 truncate font-medium">
+                          <span className="min-w-0 flex-1 leading-snug font-medium break-words">
                             {c.nombre}
                             {c.apodo ? <span className="ml-2 text-sm font-normal text-muted-foreground">{c.apodo}</span> : null}
                           </span>
@@ -432,7 +432,8 @@ function Formulario({
         <p className="text-sm text-muted-foreground">
           {nombreAdjunto ? "Se adjunta al enviar." : `Foto o PDF. ${AYUDA_PESO_ADJUNTO}`}
         </p>
-        <Input
+        {/* <input> nativo: el Input de shadcn trae w-full y, oculto con sr-only, mide todo el ancho de la ventana. */}
+        <input
           ref={adjuntoRef}
           id="sol-adjunto"
           name="adjunto"

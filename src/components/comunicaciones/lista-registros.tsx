@@ -48,14 +48,19 @@ export function filtrarRegistros(lista: RegistroStaff[], filtro: FiltroRegistros
   }
 }
 
-/** Lo que espera respuesta va primero (el que espera hace más, arriba); después lo más nuevo. */
+/**
+ * Lo que espera respuesta va primero (el que espera hace más, arriba); después lo más nuevo
+ * por la fecha que se ve en la fila (la del registro), y a igual fecha el número más alto.
+ * Antes el resto iba por creado_en: con varios cargados juntos el orden quedaba al azar
+ * (Notificaciones salía 1 y después 4, al revés que las demás pestañas).
+ */
 export function ordenarRegistros(lista: RegistroStaff[]): RegistroStaff[] {
   return [...lista].sort((a, b) => {
     const ea = a.estado === "descargo" ? 0 : 1;
     const eb = b.estado === "descargo" ? 0 : 1;
     if (ea !== eb) return ea - eb;
     if (ea === 0) return (a.ultimo_mensaje_en ?? "").localeCompare(b.ultimo_mensaje_en ?? "");
-    return b.creado_en.localeCompare(a.creado_en);
+    return b.fecha.localeCompare(a.fecha) || b.creado_en.localeCompare(a.creado_en) || b.numero - a.numero;
   });
 }
 
@@ -81,25 +86,28 @@ export function ListaRegistros({
                 espera && "bg-pendiente-suave/40"
               )}
             >
-              <span
-                className="w-10 shrink-0 pt-0.5 text-right font-display text-lg font-bold tabular"
-                aria-label={`N° ${r.numero}`}
-              >
+              <span className="w-10 shrink-0 pt-0.5 text-right font-display text-lg font-bold tabular">
+                <span className="sr-only">N° </span>
                 {r.numero}
               </span>
 
+              {/* En el celular el sello va adentro (arriba del texto) y el texto usa todo el ancho:
+                  a la derecha dejaba ~190 px y el nombre ocupaba 3 renglones. */}
               <span className="min-w-0 flex-1 space-y-1">
+                <Sello estado={selloEstadoRegistro(r)} className="sm:hidden" />
                 {mostrarCliente ? (
-                  <span className="block text-sm">
+                  <span className="block text-sm break-words">
                     <span className="font-semibold">{r.cliente.nombre}</span>
                     {r.cliente.apodo ? (
                       <span className="text-muted-foreground"> · {r.cliente.apodo}</span>
                     ) : null}
-                    {r.lugar ? <span className="text-muted-foreground"> · {r.lugar}</span> : null}
+                    {r.lugar ? (
+                      <span className="whitespace-nowrap text-muted-foreground"> · {r.lugar}</span>
+                    ) : null}
                   </span>
                 ) : null}
-                <span className="line-clamp-2 block font-medium leading-snug">{r.titulo}</span>
-                <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                <span className="block text-base leading-snug font-medium break-words">{r.titulo}</span>
+                <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
                   <span className="tabular">{formatFecha(r.fecha)}</span>
                   {!r.tienePortal ? (
                     <span className="inline-flex items-center gap-1">
@@ -134,7 +142,7 @@ export function ListaRegistros({
                 ) : null}
               </span>
 
-              <Sello estado={selloEstadoRegistro(r)} className="shrink-0" />
+              <Sello estado={selloEstadoRegistro(r)} className="shrink-0 max-sm:hidden" />
               <ChevronRight
                 className="mt-1 size-4 shrink-0 text-muted-foreground max-sm:hidden"
                 strokeWidth={2}

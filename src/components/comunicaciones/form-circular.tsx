@@ -229,7 +229,8 @@ export function FormCircular({
                 </Button>
               ) : null}
             </div>
-            <Input
+            {/* <input> nativo: el Input de shadcn trae w-full y, oculto con sr-only, mide todo el ancho de la ventana. */}
+            <input
               ref={archivoRef}
               id="circ-archivo"
               name="archivo"

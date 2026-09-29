@@ -3,25 +3,27 @@ import { Skeleton } from "@/components/ui/skeleton";
 export default function LoadingSolicitud() {
   return (
     <div className="space-y-8">
-      {/* PageHeader: N° + asunto + sello + botones */}
-      <div className="flex flex-wrap items-end justify-between gap-4 pb-5">
-        <div className="space-y-2">
-          <Skeleton className="h-9 w-56" />
-          <Skeleton className="h-5 w-96 max-w-full" />
-        </div>
-        <div className="flex gap-2">
-          <Skeleton className="h-7 w-24 rounded" />
-          <Skeleton className="h-11 w-28 rounded-md" />
-          <Skeleton className="h-11 w-24 rounded-md" />
+      {/* Volver + PageHeader: N° + asunto + sello + Imprimir */}
+      <div className="space-y-3">
+        <Skeleton className="h-11 w-48 rounded-md" />
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="space-y-2">
+            <Skeleton className="h-9 w-56" />
+            <Skeleton className="h-5 w-96 max-w-full" />
+          </div>
+          <div className="flex gap-2">
+            <Skeleton className="h-7 w-24 rounded" />
+            <Skeleton className="h-11 w-28 rounded-md" />
+          </div>
         </div>
       </div>
 
-      {/* Recorrido (stepper) */}
+      {/* Recorrido (stepper): vertical en celular, horizontal desde md */}
       <div className="rounded-xl border bg-card p-4">
-        <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between md:gap-2">
           {Array.from({ length: 6 }).map((_, i) => (
-            <div key={i} className="flex flex-1 flex-col items-center gap-2">
-              <Skeleton className="size-7 rounded-full" />
+            <div key={i} className="flex items-center gap-3 md:flex-1 md:flex-col md:gap-2">
+              <Skeleton className="size-7 shrink-0 rounded-full" />
               <Skeleton className="h-3 w-16" />
             </div>
           ))}

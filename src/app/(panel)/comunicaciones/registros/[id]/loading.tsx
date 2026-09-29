@@ -40,7 +40,8 @@ export default function LoadingRegistro() {
           <Skeleton className="ml-auto h-16 w-2/3 rounded-xl" />
           <Skeleton className="h-40 w-full rounded-xl" />
         </div>
-        <div className="space-y-4">
+        {/* Para + multa: en celular y tablet, arriba (igual que la página) */}
+        <div className="space-y-4 max-lg:order-first">
           <Skeleton className="h-40 w-full rounded-xl" />
           <Skeleton className="h-36 w-full rounded-xl" />
         </div>

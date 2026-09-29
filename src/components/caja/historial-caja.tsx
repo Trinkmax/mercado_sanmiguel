@@ -1,6 +1,7 @@
 import { ChevronDown, History } from "lucide-react";
 import { formatFechaHora } from "@/lib/format";
 import type { EventoCaja } from "@/components/caja/datos";
+import { montosSinCortar } from "@/components/caja/texto";
 
 export const LABEL_EVENTO: Record<string, string> = {
   apertura: "Apertura",
@@ -66,7 +67,9 @@ export function HistorialCaja({ eventos }: { eventos: EventoCaja[] }) {
               </span>
               {e.usuario ? <span className="ml-auto shrink-0 text-muted-foreground">{e.usuario}</span> : null}
             </div>
-            {e.detalle ? <p className="mt-0.5 text-muted-foreground sm:pl-32">{e.detalle}</p> : null}
+            {e.detalle ? (
+              <p className="mt-0.5 break-words text-muted-foreground sm:pl-32">{montosSinCortar(e.detalle)}</p>
+            ) : null}
           </li>
         ))}
       </ol>

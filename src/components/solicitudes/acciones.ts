@@ -48,10 +48,12 @@ export type DefAccion = {
 };
 
 const DEFS: Record<Accion, Omit<DefAccion, "accion" | "primaria">> = {
+  // Mismo nombre esté con el Jefe o recién llegada: es la misma acción (antes era "Tomarla yo"
+  // en una y "Tomar para revisar" en otra).
   tomar: {
-    label: "Tomar para revisar",
+    label: "Tomarla para revisar",
     icono: Hand,
-    exito: "Solicitud tomada: ahora está en revisión",
+    exito: "La tomaste: ahora está en revisión",
   },
   derivar_consejo: {
     label: "Derivar al Consejo",
@@ -183,7 +185,7 @@ export function accionesPara(rol: Rol, s: EstadoSolicitud | SolicitudAcciones): 
     switch (estado) {
       case "con_jefe":
         return [
-          d("tomar", true, { label: "Tomarla yo", exito: "La tomaste: ahora está en revisión" }),
+          d("tomar", true),
           d("resolver"),
           d("rechazar"),
         ];
