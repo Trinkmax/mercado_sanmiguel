@@ -23,6 +23,8 @@ export type GastoFila = {
   estado: "pendiente" | "pagado" | "anulado";
   vencimiento: string | null;
   fechaPago: string | null;
+  /** Momento en que se registró el pago (para dejar a la vista lo pagado hoy). */
+  pagadoEn: string | null;
   medioPago: string | null;
   pagadoDesde: string | null;
   cajaFecha: string | null;
@@ -40,11 +42,12 @@ export type GastoFila = {
 /**
  * Columnas de la fila en pantallas anchas (la usa también el esqueleto de carga).
  * Monto y acciones tienen ancho fijo: así los montos y los sellos quedan en
- * columna en todas las filas, tengan o no botones. En tablet el vencimiento va
- * debajo del nombre y el detalle aprovecha ese lugar; desde xl tiene su columna.
+ * columna en todas las filas, tengan o no botones. La del monto entra
+ * "$ 123.456.789,50" en una línea. En tablet el vencimiento va debajo del nombre y
+ * el detalle aprovecha ese lugar; desde xl tiene su columna.
  */
 export const COLUMNAS_FILA_GASTO =
-  "md:grid-cols-[minmax(0,1fr)_10.5rem_13rem] md:items-start md:gap-5 xl:grid-cols-[7rem_minmax(0,1fr)_10.5rem_13rem]";
+  "md:grid-cols-[minmax(0,1fr)_11rem_13rem] md:items-start md:gap-5 xl:grid-cols-[7rem_minmax(0,1fr)_11rem_13rem]";
 
 /** "Caja del 25/09 · Efectivo" / "Tesorería · Banco" / "Cheque N° 123 a Frutas del Sur". */
 export function textoPago(g: GastoFila): string {
@@ -92,7 +95,8 @@ export function FilaGasto({
         vencido ? "font-semibold text-pendiente" : venceHoy ? "font-semibold text-parcial" : "text-muted-foreground"
       )}
     >
-      {vencido ? "Venció " : venceHoy ? "Vence hoy " : "Vence "}
+      {/* Pagado o anulado: ya no "vence", solo se recuerda cuándo vencía. */}
+      {g.estado !== "pendiente" ? "Vencía " : vencido ? "Venció " : venceHoy ? "Vence hoy " : "Vence "}
       {formatFecha(g.vencimiento).slice(0, 5)}
     </span>
   ) : (
@@ -113,20 +117,19 @@ export function FilaGasto({
       <div className="hidden pt-0.5 text-sm xl:block">{vencimiento}</div>
 
       <div className="min-w-0 space-y-1.5">
-        <div className="flex items-start justify-between gap-3">
-          <p
-            className={cn(
-              "min-w-0 text-base font-semibold break-words",
-              g.estado === "anulado" && "text-muted-foreground line-through"
-            )}
-          >
-            {g.etiqueta}
-          </p>
-          <Money
-            monto={g.monto}
-            className={cn("shrink-0 text-lg font-bold md:hidden", vencido && "text-pendiente")}
-          />
-        </div>
+        <p
+          className={cn(
+            "text-base font-semibold break-words",
+            g.estado === "anulado" && "text-muted-foreground line-through"
+          )}
+        >
+          {g.etiqueta}
+        </p>
+        {/* Celular: el monto debajo del nombre, así el nombre usa todo el ancho. */}
+        <Money
+          monto={g.monto}
+          className={cn("block text-lg font-bold md:hidden", vencido && "text-pendiente")}
+        />
         <p className="text-sm text-muted-foreground">
           {g.rubroCodigo ? <Codigo codigo={g.rubroCodigo} className="mr-1.5 align-middle" /> : null}
           {rubro ? `${rubro} · ` : ""}
@@ -178,7 +181,10 @@ export function FilaGasto({
 
       {/* Monto y estado, en columna (pantallas anchas). */}
       <div className="hidden space-y-2 text-right md:block">
-        <Money monto={g.monto} className={cn("block text-lg font-bold", vencido && "text-pendiente")} />
+        <Money
+          monto={g.monto}
+          className={cn("block text-lg font-bold whitespace-nowrap", vencido && "text-pendiente")}
+        />
         <Sello estado={estadoSello} />
       </div>
 
@@ -196,7 +202,10 @@ export function FilaGasto({
               </Link>
             </Button>
           ) : (
-            <p className="text-sm text-muted-foreground md:py-3 md:text-right">Lo deshace Tesorería</p>
+            // Explica por qué no hay "Deshacer pago" (Administración no entra a Cheques).
+            <p className="min-w-0 flex-1 text-right text-sm text-muted-foreground md:py-3">
+              Para deshacerlo, avisá a Tesorería
+            </p>
           )
         ) : (
           <AccionesGasto
