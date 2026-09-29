@@ -15,6 +15,7 @@ import {
   type MensajeHilo,
 } from "@/components/solicitudes/hilo-mensajes";
 import { CajaMensaje } from "@/components/solicitudes/caja-mensaje";
+import { MarcarSolicitudVista } from "@/components/solicitudes/marcar-vista";
 import {
   ESTADOS_TERMINADOS,
   LABEL_ESTADO,
@@ -48,7 +49,7 @@ export default async function SolicitudSocioPage({
   const { data: s } = await supabase
     .from("solicitudes")
     .select(
-      "id, numero, tipo, asunto, detalle, estado, adjunto_path, resolucion, nota_ejecucion, creada_en, revisada_en, derivada_consejo_en, resuelta_en, asignada_en, ejecutada_en, cerrada_en, actualizada_en, cliente_id"
+      "id, numero, tipo, asunto, detalle, estado, adjunto_path, resolucion, nota_ejecucion, creada_en, revisada_en, derivada_consejo_en, resuelta_en, asignada_en, ejecutada_en, cerrada_en, actualizada_en, cliente_id, creada_por"
     )
     .eq("id", id)
     .maybeSingle();
@@ -84,6 +85,8 @@ export default async function SolicitudSocioPage({
 
   return (
     <div className="space-y-8">
+      {/* El socio la está viendo: se apaga "Respuesta nueva" (y el número de "Mi cuenta"). */}
+      {s.creada_por === perfil.user_id ? <MarcarSolicitudVista solicitudId={s.id} /> : null}
       <Button asChild variant="ghost" className="-ml-2 min-h-11">
         <Link href="/mi-cuenta">
           <ArrowLeft className="size-4" />

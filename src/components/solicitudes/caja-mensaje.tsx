@@ -16,8 +16,8 @@ import { ACCEPT_ADJUNTO, firmaFormulario } from "./constantes";
 import { llamarAccion } from "@/lib/llamar-accion";
 import { AlertaError } from "@/components/cobranza/alerta-error";
 import {
-  adjuntoMuyPesado,
-  ERROR_PESO_ADJUNTO,
+  AYUDA_PESO_ADJUNTO,
+  errorPesoAdjunto,
   explicarFalloEnvio,
   prepararAdjuntos,
 } from "@/components/comunicaciones/adjuntos";
@@ -116,6 +116,7 @@ export function CajaMensaje({
           }}
           className="min-h-24 bg-card text-base md:text-base"
         />
+        <p className="text-sm text-muted-foreground">Podés adjuntar una foto o un PDF. {AYUDA_PESO_ADJUNTO}</p>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -149,10 +150,11 @@ export function CajaMensaje({
             className="sr-only"
             onChange={(e) => {
               const archivo = e.target.files?.[0] ?? null;
-              if (adjuntoMuyPesado(archivo)) {
+              const pesado = errorPesoAdjunto(archivo);
+              if (pesado) {
                 e.target.value = "";
                 setNombreAdjunto(null);
-                setError(ERROR_PESO_ADJUNTO);
+                setError(pesado);
                 return;
               }
               setError(null);

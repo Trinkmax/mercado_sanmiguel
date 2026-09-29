@@ -25,7 +25,7 @@ import {
   type TipoRegistro,
 } from "./constantes";
 import { llamarAccion } from "@/lib/llamar-accion";
-import { adjuntoMuyPesado, ERROR_PESO_ADJUNTO, explicarFalloEnvio, prepararAdjuntos } from "./adjuntos";
+import { AYUDA_PESO_ADJUNTO, errorPesoAdjunto, explicarFalloEnvio, prepararAdjuntos } from "./adjuntos";
 import { AvisoError, irAlCampo } from "./aviso-error";
 
 export type ClienteOpcion = {
@@ -527,15 +527,17 @@ export function FormRegistro({
               className="sr-only"
               onChange={(e) => {
                 const f = e.target.files?.[0];
-                if (adjuntoMuyPesado(f)) {
+                const pesado = errorPesoAdjunto(f);
+                if (pesado) {
                   quitarArchivo();
-                  mostrarError(ERROR_PESO_ADJUNTO, "reg-archivo");
+                  mostrarError(pesado, "reg-archivo");
                   return;
                 }
                 corrigio("reg-archivo");
                 setNombreArchivo(f?.name ?? null);
               }}
             />
+            <p className="text-sm text-muted-foreground">{AYUDA_PESO_ADJUNTO}</p>
             {avisoDe("reg-archivo")}
           </div>
         </div>

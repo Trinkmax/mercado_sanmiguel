@@ -52,8 +52,8 @@ import { llamarAccion } from "@/lib/llamar-accion";
 import { AlertaError } from "@/components/cobranza/alerta-error";
 import { ACCEPT_ADJUNTO } from "@/components/solicitudes/constantes";
 import {
-  adjuntoMuyPesado,
-  ERROR_PESO_ADJUNTO,
+  AYUDA_PESO_ADJUNTO,
+  errorPesoAdjunto,
   explicarFalloEnvio,
   prepararAdjuntos,
 } from "@/components/comunicaciones/adjuntos";
@@ -741,10 +741,11 @@ export function FormNovedad({
               className="sr-only"
               onChange={(e) => {
                 const elegido = e.target.files?.[0] ?? null;
-                if (adjuntoMuyPesado(elegido)) {
+                const pesado = errorPesoAdjunto(elegido);
+                if (pesado) {
                   e.target.value = "";
                   setArchivo(null);
-                  setError(ERROR_PESO_ADJUNTO);
+                  setError(pesado);
                   return;
                 }
                 setError(null);
@@ -789,7 +790,7 @@ export function FormNovedad({
                   </Button>
                 </span>
               ) : (
-                <span className="text-sm text-muted-foreground">Foto o PDF. Las fotos se achican solas.</span>
+                <span className="text-sm text-muted-foreground">Foto o PDF. {AYUDA_PESO_ADJUNTO}</span>
               )}
             </div>
           </div>

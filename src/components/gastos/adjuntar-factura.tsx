@@ -6,7 +6,7 @@ import { Paperclip } from "lucide-react";
 import { adjuntarFacturaGasto } from "@/lib/actions/gastos";
 import { formatARS } from "@/lib/format";
 import { comprimirImagen } from "@/lib/imagen";
-import { MIME_PERMITIDOS, TAMANO_MAX_BYTES } from "@/lib/storage";
+import { MIME_PERMITIDOS, TAMANO_MAX_SUBIDA } from "@/lib/storage";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -21,11 +21,17 @@ import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { AlertaError } from "@/components/cobranza/alerta-error";
 import { llamarAccion } from "@/lib/llamar-accion";
+import {
+  AYUDA_PESO_ADJUNTO,
+  errorPesoAdjunto,
+  mensajePesoAdjunto,
+} from "@/components/comunicaciones/adjuntos";
 
 /**
  * Botón "Adjuntar factura" + subformulario corto para un gasto cargado sin
  * comprobante. Después tesorería la valida desde Tesorería. La foto se achica
- * antes de subirla (una foto de tablet pesa varios MB).
+ * antes de subirla (una foto de tablet pesa varios MB) y lo que se manda no puede pasar de
+ * 4 MB (TAMANO_MAX_SUBIDA): un PDF más pesado se avisa al elegirlo.
  */
 export function AdjuntarFactura({
   gasto,
@@ -44,6 +50,12 @@ export function AdjuntarFactura({
       setError("La factura tiene que ser un PDF o una foto (JPG, PNG o WEBP). Elegí otro archivo.");
       return;
     }
+    const pesado = errorPesoAdjunto(f);
+    if (pesado) {
+      setArchivo(null);
+      setError(pesado);
+      return;
+    }
     setArchivo(f);
   }
 
@@ -56,8 +68,8 @@ export function AdjuntarFactura({
     setError(null);
     startTransition(async () => {
       const chico = await comprimirImagen(archivo);
-      if (chico.size > TAMANO_MAX_BYTES) {
-        setError("La factura pesa más de 20 MB. Sacale una foto o elegí un archivo más liviano.");
+      if (chico.size > TAMANO_MAX_SUBIDA) {
+        setError(mensajePesoAdjunto(chico.size));
         return;
       }
       const fd = new FormData();
@@ -117,7 +129,7 @@ export function AdjuntarFactura({
               onChange={(e) => elegir(e.target.files?.[0] ?? null)}
             />
             <p className="text-sm text-muted-foreground">
-              Hasta 20 MB. Después tesorería la revisa y la valida.
+              {AYUDA_PESO_ADJUNTO} Después tesorería la revisa y la valida.
             </p>
           </div>
           {error ? <AlertaError error={error} titulo="No se pudo guardar la factura" /> : null}

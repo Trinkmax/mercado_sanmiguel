@@ -28,8 +28,8 @@ import {
   CATEGORIAS_DOCUMENTO,
 } from "@/components/portal/constantes";
 import {
-  adjuntoMuyPesado,
-  ERROR_PESO_ADJUNTO,
+  AYUDA_PESO_ADJUNTO,
+  errorPesoAdjunto,
   explicarFalloEnvio,
   prepararAdjuntos,
 } from "@/components/comunicaciones/adjuntos";
@@ -117,7 +117,7 @@ export function SubirDocumento() {
         <DialogHeader>
           <DialogTitle className="pr-8">Subir documento</DialogTitle>
           <DialogDescription>
-            Puede ser un PDF o una foto (JPG, PNG o WEBP), de hasta 20 MB.
+            Puede ser un PDF o una foto (JPG, PNG o WEBP).
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} noValidate className="space-y-5">
@@ -169,14 +169,12 @@ export function SubirDocumento() {
               accept={ACCEPT_ARCHIVOS}
               className="h-12 pt-3"
               onChange={(e) => {
-                if (adjuntoMuyPesado(e.target.files?.[0])) {
-                  e.target.value = "";
-                  setError(ERROR_PESO_ADJUNTO);
-                } else {
-                  setError(null);
-                }
+                const pesado = errorPesoAdjunto(e.target.files?.[0]);
+                if (pesado) e.target.value = "";
+                setError(pesado);
               }}
             />
+            <p className="text-sm text-muted-foreground">{AYUDA_PESO_ADJUNTO}</p>
           </div>
 
           {error ? <AvisoError mensaje={error} /> : null}

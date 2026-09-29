@@ -14,7 +14,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Sello } from "@/components/shared/sello";
 import { cn } from "@/lib/utils";
 import { ACCEPT_ARCHIVOS, TIPOS_REGISTRO, type TipoRegistro } from "./constantes";
-import { explicarFalloEnvio, prepararAdjuntos } from "@/components/comunicaciones/adjuntos";
+import {
+  AYUDA_PESO_ADJUNTO,
+  errorPesoAdjunto,
+  explicarFalloEnvio,
+  prepararAdjuntos,
+} from "@/components/comunicaciones/adjuntos";
 import { AlertaError } from "@/components/cobranza/alerta-error";
 import { llamarAccion } from "@/lib/llamar-accion";
 
@@ -46,7 +51,7 @@ export function NuevaSancion({
     fd.set("tipo", tipo);
     setError(null);
     startTransition(async () => {
-      // Las fotos se achican antes de subir; el total no puede pasar de 20 MB.
+      // Las fotos se achican antes de subir; el total no puede pasar de 4 MB.
       const errorPeso = await prepararAdjuntos(fd, ["archivo"]);
       if (errorPeso) {
         setError(errorPeso);
@@ -164,9 +169,14 @@ export function NuevaSancion({
               type="file"
               accept={ACCEPT_ARCHIVOS}
               className="h-12 pt-3 text-base"
+              onChange={(e) => {
+                const pesado = errorPesoAdjunto(e.target.files?.[0]);
+                if (pesado) e.target.value = "";
+                setError(pesado);
+              }}
             />
             <p className="text-sm text-muted-foreground">
-              PDF o foto (JPG, PNG, WEBP), hasta 20 MB.
+              PDF o foto (JPG, PNG o WEBP). {AYUDA_PESO_ADJUNTO}
             </p>
           </div>
 

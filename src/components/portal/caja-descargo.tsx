@@ -11,8 +11,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { ACCEPT_ADJUNTO_REGISTRO } from "@/components/comunicaciones/constantes";
 import {
-  adjuntoMuyPesado,
-  ERROR_PESO_ADJUNTO,
+  AYUDA_PESO_ADJUNTO,
+  errorPesoAdjunto,
   explicarFalloEnvio,
   firmaMensaje,
   prepararAdjuntos,
@@ -175,15 +175,17 @@ export function CajaDescargo({
           className="sr-only"
           onChange={(e) => {
             const f = e.target.files?.[0];
-            if (adjuntoMuyPesado(f)) {
+            const pesado = errorPesoAdjunto(f);
+            if (pesado) {
               quitarArchivo();
-              setError(ERROR_PESO_ADJUNTO);
+              setError(pesado);
               return;
             }
             setNombreArchivo(f?.name ?? null);
           }}
         />
       </div>
+      <p className="-mt-2 text-sm text-muted-foreground">{AYUDA_PESO_ADJUNTO}</p>
 
       {error ? <AvisoError mensaje={error} /> : null}
       {aviso ? <AvisoError mensaje={aviso} tono="atencion" /> : null}

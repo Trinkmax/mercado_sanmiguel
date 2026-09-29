@@ -98,13 +98,36 @@ export async function subirDocumentoSocio(
 
 const TIPOS_SOLICITUD = ["solicitud", "informe", "reclamo", "consulta"] as const;
 
+const RE_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+type Supabase = Awaited<ReturnType<typeof createClient>>;
+type SolicitudSocioCreada = { id: string; numero: number; repetido: boolean };
+
+/** Reintento después de un corte: la solicitud que ya se guardó con esta clave (o null). */
+async function solicitudSocioConRef(
+  supabase: Supabase,
+  orgId: string,
+  ref: string | null
+): Promise<SolicitudSocioCreada | null> {
+  if (!ref) return null;
+  const { data } = await supabase
+    .from("solicitudes")
+    .select("id, numero")
+    .eq("org_id", orgId)
+    .eq("ref", ref)
+    .maybeSingle();
+  return data ? { id: data.id, numero: data.numero, repetido: true } : null;
+}
+
 /**
  * El socio crea una solicitud desde el portal: siempre sobre su propio puesto
  * (`cliente_id` propio) y con origen `portal` (la RLS lo exige).
+ * Con `ref` (clave del formulario, uuid por intento) un reintento tras un corte devuelve la
+ * que ya se guardó (`repetido: true`) en vez de crear otra igual (índice único org_id + ref).
  */
 export async function crearSolicitudSocio(
   formData: FormData
-): Promise<ActionResult<{ id: string; numero: number }>> {
+): Promise<ActionResult<SolicitudSocioCreada>> {
   const perfil = await requireRol("socio");
 
   const parsed = z
@@ -121,15 +144,25 @@ export async function crearSolicitudSocio(
         .max(6000, "El detalle es demasiado largo")
         .optional()
         .transform((v) => (v ? v : null)),
+      ref: z
+        .string()
+        .trim()
+        .optional()
+        .transform((v) => (v ? v : null))
+        .refine((v) => v === null || RE_UUID.test(v), "Recargá la página y probá de nuevo"),
     })
     .safeParse({
       tipo: formData.get("tipo"),
       asunto: formData.get("asunto"),
       detalle: formData.get("detalle") ?? undefined,
+      ref: formData.get("ref") ?? undefined,
     });
   if (!parsed.success) return fallo(parsed.error.issues[0].message);
 
   const supabase = await createClient();
+
+  const previa = await solicitudSocioConRef(supabase, perfil.org_id, parsed.data.ref);
+  if (previa) return ok(previa);
 
   const { data: cliente, error: errorCliente } = await supabase
     .from("clientes")
@@ -169,6 +202,7 @@ export async function crearSolicitudSocio(
       origen: "portal",
       adjunto_path: adjuntoPath,
       creada_por: perfil.user_id,
+      ref: parsed.data.ref,
     })
     .select("id, numero")
     .single();
@@ -176,10 +210,15 @@ export async function crearSolicitudSocio(
   if (error) {
     if (adjuntoPath)
       await supabase.storage.from("documentos").remove([adjuntoPath]);
+    // Dos toques a la vez con la misma clave: ganó el otro, se devuelve esa.
+    if (error.code === "23505") {
+      const otra = await solicitudSocioConRef(supabase, perfil.org_id, parsed.data.ref);
+      if (otra) return ok(otra);
+    }
     return fallo(error);
   }
 
   revalidatePath("/mi-cuenta");
   revalidatePath("/solicitudes");
-  return ok({ id: data.id, numero: data.numero });
+  return ok({ id: data.id, numero: data.numero, repetido: false });
 }

@@ -26,8 +26,8 @@ import { llamarAccion } from "@/lib/llamar-accion";
 import { AlertaError } from "@/components/cobranza/alerta-error";
 import { ACCEPT_ADJUNTO } from "@/components/solicitudes/constantes";
 import {
-  adjuntoMuyPesado,
-  ERROR_PESO_ADJUNTO,
+  AYUDA_PESO_ADJUNTO,
+  errorPesoAdjunto,
   explicarFalloEnvio,
   prepararAdjuntos,
 } from "@/components/comunicaciones/adjuntos";
@@ -427,10 +427,11 @@ export function FormEmpleado({
             className="sr-only"
             onChange={(e) => {
               const archivo = e.target.files?.[0] ?? null;
-              if (adjuntoMuyPesado(archivo)) {
+              const pesado = errorPesoAdjunto(archivo);
+              if (pesado) {
                 e.target.value = "";
                 setNombreArchivo(null);
-                setError(ERROR_PESO_ADJUNTO);
+                setError(pesado);
                 return;
               }
               setError(null);
@@ -461,7 +462,7 @@ export function FormEmpleado({
               ) : empleado?.contrato_path ? (
                 <p>Ya hay un contrato cargado. Si elegís otro, lo reemplaza.</p>
               ) : (
-                <p>PDF o foto. Las fotos se achican solas. Se puede cargar después.</p>
+                <p>PDF o foto. {AYUDA_PESO_ADJUNTO} Se puede cargar después.</p>
               )}
             </div>
           </div>

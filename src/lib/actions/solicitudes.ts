@@ -386,7 +386,7 @@ export async function enviarMensaje(
  * cuenta como "la vio"). Solo revalida si había algo nuevo.
  */
 export async function marcarSolicitudVista(input: unknown): Promise<ActionResult<{ habiaNovedad: boolean }>> {
-  await requireRol("admin", "guardia", "porteria", "tesoreria", "lider", "socio");
+  const perfil = await requireRol("admin", "guardia", "porteria", "tesoreria", "lider", "socio");
   const parsed = z.object({ solicitudId: z.string().regex(RE_UUID) }).safeParse(input);
   if (!parsed.success) return fallo("No encontramos esa solicitud.");
 
@@ -397,9 +397,14 @@ export async function marcarSolicitudVista(input: unknown): Promise<ActionResult
   if (error) return fallo(error);
 
   if (data) {
-    revalidatePath("/solicitudes");
-    revalidatePath(`/solicitudes/${parsed.data.solicitudId}`);
-    revalidatePath("/porteria");
+    if (perfil.rol === "socio") {
+      // El layout del portal cuenta las respuestas nuevas en "Mi cuenta".
+      revalidatePath("/mi-cuenta", "layout");
+    } else {
+      revalidatePath("/solicitudes");
+      revalidatePath(`/solicitudes/${parsed.data.solicitudId}`);
+      revalidatePath("/porteria");
+    }
   }
   return ok({ habiaNovedad: Boolean(data) });
 }

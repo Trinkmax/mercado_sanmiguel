@@ -19,7 +19,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { contarPublico, type ClientePublico } from "./publico";
 import { llamarAccion } from "@/lib/llamar-accion";
-import { adjuntoMuyPesado, ERROR_PESO_ADJUNTO, explicarFalloEnvio, prepararAdjuntos } from "./adjuntos";
+import { AYUDA_PESO_PDF, errorPesoAdjunto, explicarFalloEnvio, prepararAdjuntos } from "./adjuntos";
 import { AvisoError, irAlCampo } from "./aviso-error";
 
 /**
@@ -131,7 +131,7 @@ export function FormCircular({
     fd.set("soloSocios", soloSocios ? "true" : "false");
     fd.set("ref", ref);
     startTransition(async () => {
-      const errorPeso = await prepararAdjuntos(fd, ["archivo"]);
+      const errorPeso = await prepararAdjuntos(fd, ["archivo"], { soloPdf: true });
       if (errorPeso) {
         mostrarError(errorPeso);
         return;
@@ -238,9 +238,10 @@ export function FormCircular({
               className="sr-only"
               onChange={(e) => {
                 const f = e.target.files?.[0];
-                if (adjuntoMuyPesado(f)) {
+                const pesado = errorPesoAdjunto(f, { soloPdf: true });
+                if (pesado) {
                   quitarPdf();
-                  mostrarError(ERROR_PESO_ADJUNTO, "circ-archivo");
+                  mostrarError(pesado, "circ-archivo");
                   return;
                 }
                 setNombrePdf(f?.name ?? null);
@@ -248,6 +249,7 @@ export function FormCircular({
                 if (f) corrigio("circ-archivo", "circ-detalle");
               }}
             />
+            <p className="text-sm text-muted-foreground">{AYUDA_PESO_PDF}</p>
             {avisoDe("circ-archivo")}
           </div>
         </div>

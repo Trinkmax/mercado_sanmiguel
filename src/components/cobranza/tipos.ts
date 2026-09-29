@@ -15,6 +15,7 @@ import {
   sanitizarMonto,
 } from "@/lib/format";
 import type { MedioPago } from "@/lib/actions/cobranza";
+import { TAMANO_MAX_SUBIDA } from "@/lib/storage";
 
 export type { MedioPago };
 
@@ -42,8 +43,9 @@ export const ACCEPT_COMPROBANTE = "image/*,application/pdf";
  * puede pasar de 4,5 MB: si pasa, el servidor lo corta y la pantalla diría "Se cortó la
  * conexión", y el operador reintentaría creyendo que es el wifi. Las fotos ya se achican a
  * ~400 KB (comprimirImagen); lo que puede pasarse es un PDF o una foto que no se pudo achicar.
+ * Es el mismo tope de todo el sistema (TAMANO_MAX_SUBIDA, en @/lib/storage).
  */
-export const MAX_COMPROBANTE = 4 * 1024 * 1024;
+export const MAX_COMPROBANTE = TAMANO_MAX_SUBIDA;
 export const MENSAJE_COMPROBANTE_PESADO =
   "El archivo pesa más de 4 MB y no se puede subir. Si es un PDF, mandá una captura de pantalla (foto) del comprobante. También podés cobrar sin la foto.";
 

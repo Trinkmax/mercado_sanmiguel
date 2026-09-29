@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Check, Paperclip, Send, X } from "lucide-react";
 import { crearSolicitudSocio } from "@/lib/actions/portal";
-import { cn } from "@/lib/utils";
+import { cn, uuidV4 } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,19 +13,25 @@ import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import {
   ACCEPT_ADJUNTO,
+  firmaFormulario,
   TIPOS_SOLICITUD,
   type TipoSolicitud,
 } from "@/components/solicitudes/constantes";
 import {
-  adjuntoMuyPesado,
-  ERROR_PESO_ADJUNTO,
+  AYUDA_PESO_ADJUNTO,
+  errorPesoAdjunto,
   explicarFalloEnvio,
   prepararAdjuntos,
 } from "@/components/comunicaciones/adjuntos";
 import { AvisoError, irAlCampo } from "@/components/comunicaciones/aviso-error";
 import { llamarAccion } from "@/lib/llamar-accion";
 
-/** Alta de solicitud del socio: tipo → asunto → detalle → foto opcional → enviar. */
+/**
+ * Alta de solicitud del socio: tipo → asunto → detalle → foto opcional → enviar.
+ * Clave de idempotencia (`ref`, como en el panel): la misma mientras no cambie lo escrito y
+ * hasta que se guarde. Si se corta el wifi y el socio toca "Enviar" de nuevo, no sale otra
+ * solicitud igual: vuelve la que ya había llegado. Si corrige algo, es otro envío.
+ */
 export function FormSolicitudSocio() {
   const router = useRouter();
   const [pendiente, startTransition] = useTransition();
@@ -35,6 +41,7 @@ export function FormSolicitudSocio() {
   const [error, setError] = useState<string | null>(null);
   /** El aviso de "falta el asunto" va debajo del asunto; los demás, junto al botón. */
   const [faltaAsunto, setFaltaAsunto] = useState(false);
+  const claveRef = useRef<{ firma: string; ref: string } | null>(null);
 
   function quitarAdjunto() {
     if (archivoRef.current) archivoRef.current.value = "";
@@ -53,6 +60,9 @@ export function FormSolicitudSocio() {
       return;
     }
     fd.set("tipo", tipo);
+    const firma = firmaFormulario(fd);
+    if (claveRef.current?.firma !== firma) claveRef.current = { firma, ref: uuidV4() };
+    fd.set("ref", claveRef.current.ref);
     startTransition(async () => {
       const errorPeso = await prepararAdjuntos(fd, ["adjunto"]);
       if (errorPeso) {
@@ -61,19 +71,17 @@ export function FormSolicitudSocio() {
       }
       const res = await llamarAccion(() => crearSolicitudSocio(fd));
       if (!res.ok) {
-        // Lo escrito queda en el formulario. La solicitud no tiene clave de idempotencia:
-        // si se cortó la conexión, antes de mandarla de nuevo que se fije si llegó.
-        setError(
-          explicarFalloEnvio(
-            res.error,
-            fd,
-            ["adjunto"],
-            "Se cortó la conexión y no sabemos si llegó. Revisá internet y fijate en “Tus solicitudes” (en Mi cuenta) antes de mandarla de nuevo."
-          )
-        );
+        // Lo escrito queda en el formulario y la clave se conserva: tocar "Enviar" de nuevo
+        // no la manda dos veces.
+        setError(explicarFalloEnvio(res.error, fd, ["adjunto"]));
         return;
       }
-      toast.success(`Solicitud N° ${res.data.numero} enviada`);
+      claveRef.current = null;
+      if (res.data.repetido) {
+        toast.info(`Ya la habíamos recibido: es la solicitud N° ${res.data.numero}. No se mandó dos veces.`);
+      } else {
+        toast.success(`Solicitud N° ${res.data.numero} enviada`);
+      }
       router.push(`/mi-cuenta/solicitudes/${res.data.id}`);
     });
   }
@@ -172,15 +180,17 @@ export function FormSolicitudSocio() {
           className="sr-only"
           onChange={(e) => {
             const f = e.target.files?.[0];
-            if (adjuntoMuyPesado(f)) {
+            const pesado = errorPesoAdjunto(f);
+            if (pesado) {
               quitarAdjunto();
-              setError(ERROR_PESO_ADJUNTO);
+              setError(pesado);
               return;
             }
+            setError(null);
             setNombreAdjunto(f?.name ?? null);
           }}
         />
-        <p className="text-sm text-muted-foreground">Hasta 20 MB.</p>
+        <p className="text-sm text-muted-foreground">{AYUDA_PESO_ADJUNTO}</p>
       </div>
 
       {error ? <AvisoError mensaje={error} /> : null}

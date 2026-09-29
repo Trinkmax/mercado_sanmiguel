@@ -7,18 +7,25 @@ import { SesionViva } from "@/components/shared/sesion-viva";
 import { GateTerminos } from "@/components/portal/gate-terminos";
 import { GateCirculares } from "@/components/portal/gate-circulares";
 import { NavPortal } from "@/components/portal/nav-portal";
-import { getResumenComunicaciones } from "@/components/portal/datos-portal";
+import {
+  getResumenComunicaciones,
+  getSolicitudesConRespuesta,
+} from "@/components/portal/datos-portal";
 
 /** Portal del socio: una sola columna, simple, pensado para el celular.
  * Antes de mostrar cualquier cosa, exige aceptar los términos vigentes y confirmar las
- * circulares obligatorias de su público. Navegación: "Mi cuenta" · "Comunicaciones". */
+ * circulares obligatorias de su público. Navegación: "Mi cuenta" (con las respuestas nuevas
+ * a sus solicitudes) · "Comunicaciones" (con lo nuevo). */
 export default async function PortalLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const perfil = await requireRol("socio");
-  const resumen = await getResumenComunicaciones(perfil.user_id);
+  const [resumen, conRespuesta] = await Promise.all([
+    getResumenComunicaciones(perfil.user_id),
+    getSolicitudesConRespuesta(),
+  ]);
 
   return (
     <div className="flex min-h-svh flex-col">
@@ -43,7 +50,7 @@ export default async function PortalLayout({
         <p className="sr-only">Sesión de {perfil.nombre}</p>
         <GateTerminos perfil={perfil}>
           <GateCirculares perfil={perfil}>
-            <NavPortal nuevas={resumen.total} />
+            <NavPortal nuevas={resumen.total} respuestas={conRespuesta.length} />
             {children}
           </GateCirculares>
         </GateTerminos>

@@ -32,9 +32,14 @@ import { Sello } from "@/components/shared/sello";
 import { SubirDocumento } from "@/components/portal/subir-documento";
 import { SemaforoDeuda } from "@/components/portal/semaforo-deuda";
 import { labelCategoria, LABEL_MEDIO } from "@/components/portal/constantes";
-import { getClienteSocio, getResumenComunicaciones } from "@/components/portal/datos-portal";
+import {
+  getClienteSocio,
+  getResumenComunicaciones,
+  getSolicitudesConRespuesta,
+} from "@/components/portal/datos-portal";
 import { ChipTipo } from "@/components/solicitudes/chip-tipo";
 import { selloEstado } from "@/components/solicitudes/constantes";
+import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Mi cuenta" };
 
@@ -117,48 +122,57 @@ export default async function MiCuentaPage() {
     );
   }
 
-  const [cargosRes, pagosRes, docsRes, deudaRes, saldoFavorRes, solicitudesRes, resumen] =
-    await Promise.all([
-      supabase
-        .from("cargos")
-        .select(
-          "id, codigo, descripcion, periodo, vencimiento, monto, monto_pagado, descuento_pronto_pago, estado"
-        )
-        .eq("cliente_id", cliente.id)
-        .neq("estado", "anulado")
-        .order("periodo", { ascending: false })
-        .order("descripcion"),
-      supabase
-        .from("pagos")
-        .select("id, fecha, numero, monto, medio, titular_transferencia, lote_id, linea")
-        .eq("cliente_id", cliente.id)
-        .eq("anulado", false)
-        .order("fecha", { ascending: false })
-        .order("numero", { ascending: false })
-        .order("linea", { ascending: true })
-        .limit(40),
-      supabase
-        .from("documentos_cliente")
-        .select("id, titulo, categoria, creado_en, storage_path")
-        .eq("cliente_id", cliente.id)
-        .order("creado_en", { ascending: false }),
-      supabase
-        .from("v_deuda_clientes")
-        .select("deuda, deuda_vencida, vencido_desde, proximo_vencimiento")
-        .eq("cliente_id", cliente.id)
-        .maybeSingle(),
-      supabase
-        .from("v_saldo_favor")
-        .select("saldo_favor")
-        .eq("cliente_id", cliente.id)
-        .maybeSingle(),
-      supabase
-        .from("solicitudes")
-        .select("id, numero, tipo, asunto, estado, actualizada_en")
-        .eq("cliente_id", cliente.id)
-        .order("actualizada_en", { ascending: false }),
-      getResumenComunicaciones(perfil.user_id),
-    ]);
+  const [
+    cargosRes,
+    pagosRes,
+    docsRes,
+    deudaRes,
+    saldoFavorRes,
+    solicitudesRes,
+    resumen,
+    idsConRespuesta,
+  ] = await Promise.all([
+    supabase
+      .from("cargos")
+      .select(
+        "id, codigo, descripcion, periodo, vencimiento, monto, monto_pagado, descuento_pronto_pago, estado"
+      )
+      .eq("cliente_id", cliente.id)
+      .neq("estado", "anulado")
+      .order("periodo", { ascending: false })
+      .order("descripcion"),
+    supabase
+      .from("pagos")
+      .select("id, fecha, numero, monto, medio, titular_transferencia, lote_id, linea")
+      .eq("cliente_id", cliente.id)
+      .eq("anulado", false)
+      .order("fecha", { ascending: false })
+      .order("numero", { ascending: false })
+      .order("linea", { ascending: true })
+      .limit(40),
+    supabase
+      .from("documentos_cliente")
+      .select("id, titulo, categoria, creado_en, storage_path")
+      .eq("cliente_id", cliente.id)
+      .order("creado_en", { ascending: false }),
+    supabase
+      .from("v_deuda_clientes")
+      .select("deuda, deuda_vencida, vencido_desde, proximo_vencimiento")
+      .eq("cliente_id", cliente.id)
+      .maybeSingle(),
+    supabase
+      .from("v_saldo_favor")
+      .select("saldo_favor")
+      .eq("cliente_id", cliente.id)
+      .maybeSingle(),
+    supabase
+      .from("solicitudes")
+      .select("id, numero, tipo, asunto, estado, actualizada_en")
+      .eq("cliente_id", cliente.id)
+      .order("actualizada_en", { ascending: false }),
+    getResumenComunicaciones(perfil.user_id),
+    getSolicitudesConRespuesta(),
+  ]);
 
   const cargos: Cargo[] = (cargosRes.data ?? []).map((c) => ({
     ...c,
@@ -169,6 +183,9 @@ export default async function MiCuentaPage() {
   }));
   const documentos = docsRes.data ?? [];
   const solicitudes = solicitudesRes.data ?? [];
+  // Las que le respondieron y todavía no abrió ("Respuesta nueva"; se apaga al abrirla).
+  const conRespuesta = new Set(idsConRespuesta);
+  const respondidas = solicitudes.filter((s) => conRespuesta.has(s.id));
 
   // ---- Semáforo (B3): la cuenta sale de v_deuda_clientes + v_saldo_favor ----
   const deuda = Number(deudaRes.data?.deuda ?? 0);
@@ -253,6 +270,16 @@ export default async function MiCuentaPage() {
           ? "Tenés 1 comunicación nueva"
           : `Tenés ${resumen.total} comunicaciones nuevas`,
       icono: Bell,
+    });
+  }
+  if (respondidas.length > 0) {
+    const una = respondidas.length === 1 ? respondidas[0] : null;
+    acciones.push({
+      href: una ? `/mi-cuenta/solicitudes/${una.id}` : "/mi-cuenta#solicitudes",
+      texto: una
+        ? `Te respondieron en la solicitud N° ${una.numero}`
+        : `Te respondieron en ${respondidas.length} solicitudes`,
+      icono: MessagesSquare,
     });
   }
 
@@ -420,7 +447,7 @@ export default async function MiCuentaPage() {
       ) : null}
 
       {/* 6. Solicitudes */}
-      <Card>
+      <Card id="solicitudes" className="scroll-mt-4">
         <CardHeader>
           <CardTitle className="text-lg">Tus solicitudes</CardTitle>
         </CardHeader>
@@ -438,27 +465,46 @@ export default async function MiCuentaPage() {
             />
           ) : (
             <ul className="divide-y overflow-hidden rounded-lg border">
-              {solicitudes.map((s) => (
-                <li key={s.id}>
-                  <Link
-                    href={`/mi-cuenta/solicitudes/${s.id}`}
-                    className="flex min-h-16 items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50 active:bg-muted"
-                  >
-                    <span className="w-8 shrink-0 text-right font-display text-base font-bold tabular">
-                      {s.numero}
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="line-clamp-2 font-medium leading-snug">{s.asunto}</span>
-                      <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-                        <ChipTipo tipo={s.tipo} />
-                        <span className="tabular">Actualizada {formatFechaHora(s.actualizada_en)}</span>
+              {solicitudes.map((s) => {
+                // Con respuesta nueva, el sello de la derecha es "Respuesta nueva" (como en
+                // Comunicaciones) y el estado pasa a la línea de abajo.
+                const respuestaNueva = conRespuesta.has(s.id);
+                return (
+                  <li key={s.id}>
+                    <Link
+                      href={`/mi-cuenta/solicitudes/${s.id}`}
+                      className={cn(
+                        "flex min-h-16 items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50 active:bg-muted",
+                        respuestaNueva && "bg-accent/60"
+                      )}
+                    >
+                      <span className="w-8 shrink-0 text-right font-display text-base font-bold tabular">
+                        {s.numero}
                       </span>
-                    </span>
-                    <Sello estado={selloEstado(s.estado)} className="shrink-0" />
-                    <ChevronRight className="size-5 shrink-0 text-muted-foreground" strokeWidth={2} />
-                  </Link>
-                </li>
-              ))}
+                      <span className="min-w-0 flex-1">
+                        <span
+                          className={cn(
+                            "line-clamp-2 leading-snug",
+                            respuestaNueva ? "font-bold" : "font-medium"
+                          )}
+                        >
+                          {s.asunto}
+                        </span>
+                        <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+                          <ChipTipo tipo={s.tipo} />
+                          {respuestaNueva ? <Sello estado={selloEstado(s.estado)} /> : null}
+                          <span className="tabular">Actualizada {formatFechaHora(s.actualizada_en)}</span>
+                        </span>
+                      </span>
+                      <Sello
+                        estado={respuestaNueva ? "respuesta_nueva" : selloEstado(s.estado)}
+                        className="shrink-0"
+                      />
+                      <ChevronRight className="size-5 shrink-0 text-muted-foreground" strokeWidth={2} />
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           )}
           <Button asChild size="lg" className="h-12 w-full text-base font-semibold">

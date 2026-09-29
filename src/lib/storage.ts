@@ -76,4 +76,15 @@ export const MIME_PERMITIDOS = [
 /** Solo imágenes (fotos de comprobantes, firmas). */
 export const MIME_IMAGEN = ["image/jpeg", "image/png", "image/webp"];
 
+/** Tope de cada archivo que controla el SERVIDOR (red de seguridad de las acciones). */
 export const TAMANO_MAX_BYTES = 20 * 1024 * 1024; // 20 MB
+
+/**
+ * Tope real de lo que se sube en UN pedido, controlado en el NAVEGADOR antes de mandar (ya
+ * con las fotos achicadas por comprimirImagen, ~400 KB) y sobre el total si van varios
+ * archivos. En producción (Vercel) un pedido a una server action no puede pasar de 4,5 MB:
+ * si pasa, el servidor lo corta sin respuesta, la pantalla dice "Se cortó la conexión" y la
+ * persona reintenta sin entender qué pasa. 4 MB deja margen para el resto del formulario.
+ * Este módulo no tiene dependencias de servidor: se importa también desde componentes cliente.
+ */
+export const TAMANO_MAX_SUBIDA = 4 * 1024 * 1024; // 4 MB

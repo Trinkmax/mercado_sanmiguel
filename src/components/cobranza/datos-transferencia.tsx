@@ -226,7 +226,7 @@ export function DatosTransferencia({
           <p className="text-sm font-medium text-destructive">{errorComprobante}</p>
         ) : !comprobante && !preparando ? (
           <p className="text-sm text-muted-foreground">
-            Si el cliente te mandó la captura por WhatsApp, elegila de la galería (también sirve un PDF).
+            Si el cliente te mandó la captura por WhatsApp, elegila de la galería (también sirve un PDF de hasta 4 MB).
           </p>
         ) : null}
       </div>

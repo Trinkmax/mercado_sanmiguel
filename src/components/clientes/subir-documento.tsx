@@ -18,7 +18,8 @@ import {
   normalizarCategoriaDocumento,
 } from "./constantes";
 import {
-  adjuntoMuyPesado,
+  AYUDA_PESO_ADJUNTO,
+  errorPesoAdjunto,
   explicarFalloEnvio,
   prepararAdjuntos,
 } from "@/components/comunicaciones/adjuntos";
@@ -75,7 +76,7 @@ export function SubirDocumento({
     fd.set("categoria", categoriaFinal);
     setError(null);
     startTransition(async () => {
-      // Las fotos se achican (~400 KB) antes de subir; el total no puede pasar de 20 MB.
+      // Las fotos se achican (~400 KB) antes de subir; el total no puede pasar de 4 MB.
       const errorPeso = await prepararAdjuntos(fd, ["archivo"]);
       if (errorPeso) {
         setError(errorPeso);
@@ -210,16 +211,13 @@ export function SubirDocumento({
                 className="h-12 pt-2.5 text-base"
                 required
                 onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  setError(
-                    adjuntoMuyPesado(f)
-                      ? "Ese archivo pesa más de 20 MB. Elegí uno más liviano o sacale una foto."
-                      : null
-                  );
+                  const pesado = errorPesoAdjunto(e.target.files?.[0]);
+                  if (pesado) e.target.value = "";
+                  setError(pesado);
                 }}
               />
               <p className="text-sm text-muted-foreground">
-                PDF o foto (JPG, PNG, WEBP), hasta 20 MB. En la tablet podés sacarle una foto.
+                PDF o foto (JPG, PNG o WEBP). {AYUDA_PESO_ADJUNTO}
               </p>
             </div>
           </div>

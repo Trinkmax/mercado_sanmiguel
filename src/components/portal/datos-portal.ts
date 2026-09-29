@@ -139,6 +139,18 @@ export function registroEsNuevo(r: RegistroPortal): boolean {
   return registroSinVer(r) || respuestaNueva(r);
 }
 
+/**
+ * Solicitudes que cargó el socio con una respuesta (o un cambio de estado) de otra persona
+ * que todavía no abrió: sello "Respuesta nueva" en la lista y número en "Mi cuenta". Se apaga
+ * al abrir el detalle (marcar_solicitud_vista). Si la base no responde, no marca nada.
+ */
+export const getSolicitudesConRespuesta = cache(async (): Promise<string[]> => {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("solicitudes_con_respuesta");
+  if (error) return [];
+  return data ?? [];
+});
+
 export type ResumenComunicaciones = {
   /** Contador de "nuevas" por pestaña del portal. */
   nuevas: { circulares: number; notificaciones: number; apercibimientos: number; sanciones: number };

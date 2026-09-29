@@ -7,7 +7,12 @@ import { ChevronDown, Plus } from "lucide-react";
 import { formatARS, labelPeriodo, parseMonto, sanitizarMonto } from "@/lib/format";
 import { crearGasto } from "@/lib/actions/gastos";
 import { comprimirImagen } from "@/lib/imagen";
-import { MIME_PERMITIDOS, TAMANO_MAX_BYTES } from "@/lib/storage";
+import { MIME_PERMITIDOS, TAMANO_MAX_SUBIDA } from "@/lib/storage";
+import {
+  AYUDA_PESO_ADJUNTO,
+  errorPesoAdjunto,
+  mensajePesoAdjunto,
+} from "@/components/comunicaciones/adjuntos";
 import { cn, uuidV4 } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -128,11 +133,12 @@ export function DialogNuevoGasto({
     }
     setError(null);
     startTransition(async () => {
-      // La foto de la factura se achica antes de mandarla (una foto de tablet pesa 3–8 MB).
+      // La foto de la factura se achica antes de mandarla (una foto de tablet pesa 3–8 MB); lo
+      // que se manda no puede pasar de 4 MB (tope por pedido en Vercel).
       if (factura instanceof File && factura.size > 0) {
         const chica = await comprimirImagen(factura);
-        if (chica.size > TAMANO_MAX_BYTES) {
-          setError("La factura pesa más de 20 MB. Sacale una foto o elegí un archivo más liviano.");
+        if (chica.size > TAMANO_MAX_SUBIDA) {
+          setError(mensajePesoAdjunto(chica.size));
           return;
         }
         fd.set("factura", chica, chica.name);
@@ -288,9 +294,13 @@ export function DialogNuevoGasto({
                 type="file"
                 accept="application/pdf,image/jpeg,image/png,image/webp"
                 className="h-12 pt-3 text-sm"
-                onChange={() => setError(null)}
+                onChange={(e) => {
+                  const pesado = errorPesoAdjunto(e.target.files?.[0]);
+                  if (pesado) e.target.value = "";
+                  setError(pesado);
+                }}
               />
-              <p className="text-sm text-muted-foreground">PDF o foto, hasta 20 MB.</p>
+              <p className="text-sm text-muted-foreground">PDF o foto. {AYUDA_PESO_ADJUNTO}</p>
             </div>
           </div>
 

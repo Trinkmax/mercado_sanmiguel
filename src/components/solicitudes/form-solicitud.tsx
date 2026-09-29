@@ -28,8 +28,8 @@ import { SelectorPuesto } from "./selector-puesto";
 import { llamarAccion } from "@/lib/llamar-accion";
 import { AlertaError } from "@/components/cobranza/alerta-error";
 import {
-  adjuntoMuyPesado,
-  ERROR_PESO_ADJUNTO,
+  AYUDA_PESO_ADJUNTO,
+  errorPesoAdjunto,
   explicarFalloEnvio,
   prepararAdjuntos,
 } from "@/components/comunicaciones/adjuntos";
@@ -430,7 +430,7 @@ function Formulario({
           ) : null}
         </div>
         <p className="text-sm text-muted-foreground">
-          {nombreAdjunto ? "Se adjunta al enviar." : "Foto o PDF. Las fotos se achican solas."}
+          {nombreAdjunto ? "Se adjunta al enviar." : `Foto o PDF. ${AYUDA_PESO_ADJUNTO}`}
         </p>
         <Input
           ref={adjuntoRef}
@@ -441,10 +441,11 @@ function Formulario({
           className="sr-only"
           onChange={(e) => {
             const archivo = e.target.files?.[0] ?? null;
-            if (adjuntoMuyPesado(archivo)) {
+            const pesado = errorPesoAdjunto(archivo);
+            if (pesado) {
               e.target.value = "";
               setNombreAdjunto(null);
-              setError(ERROR_PESO_ADJUNTO);
+              setError(pesado);
               return;
             }
             setError(null);

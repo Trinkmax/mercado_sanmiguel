@@ -13,8 +13,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { ACCEPT_ADJUNTO_REGISTRO } from "./constantes";
 import { llamarAccion } from "@/lib/llamar-accion";
 import {
-  adjuntoMuyPesado,
-  ERROR_PESO_ADJUNTO,
+  AYUDA_PESO_ADJUNTO,
+  errorPesoAdjunto,
   explicarFalloEnvio,
   firmaMensaje,
   prepararAdjuntos,
@@ -141,6 +141,7 @@ export function ResponderRegistro({
       />
       {error ? <AvisoError mensaje={error} /> : null}
       {aviso ? <AvisoError mensaje={aviso} tono="atencion" /> : null}
+      <p className="text-sm text-muted-foreground">Podés adjuntar una foto o un PDF. {AYUDA_PESO_ADJUNTO}</p>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 max-w-full items-center gap-1">
           <Label
@@ -164,9 +165,10 @@ export function ResponderRegistro({
             className="sr-only"
             onChange={(e) => {
               const f = e.target.files?.[0];
-              if (adjuntoMuyPesado(f)) {
+              const pesado = errorPesoAdjunto(f);
+              if (pesado) {
                 quitarArchivo();
-                setError(ERROR_PESO_ADJUNTO);
+                setError(pesado);
                 return;
               }
               setNombreArchivo(f?.name ?? null);
