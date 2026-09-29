@@ -42,3 +42,6 @@ next-env.d.ts
 
 # backups locales de datos (no versionar)
 /.backups/
+
+# CLI de Supabase (archivos locales)
+supabase/.temp/
