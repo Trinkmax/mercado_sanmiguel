@@ -1,5 +1,7 @@
 /** Constantes del módulo Clientes (compartidas entre server y client components). */
 
+import { centavosConBeneficio } from "@/lib/format";
+
 /**
  * Categorías de documento que se sugieren siempre (C7). La categoría es texto
  * libre: además de estas aparecen como chip las que ya usó la cooperativa.
@@ -180,7 +182,7 @@ export function totalMensual(
     // Mismo cálculo que la generación: cantidad × precio × porcentaje, a centavos.
     const cents = Math.round(Number(i.cantidad) * Number(i.precio) * Number(i.porcentaje ?? 100));
     total += cents;
-    conBeneficio += Math.round((cents * (100 - Number(i.descuentoPp || 0))) / 100);
+    conBeneficio += centavosConBeneficio(cents, Number(i.descuentoPp || 0));
   }
   return { total: total / 100, conBeneficio: conBeneficio / 100 };
 }

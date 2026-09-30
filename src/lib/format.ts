@@ -232,6 +232,18 @@ export function diasHasta(iso: string): number {
 }
 
 /**
+ * Centavos a pagar en término: el precio de lista incluye el recargo, así que el
+ * beneficio DIVIDE por (1 + %) — con 15 %, 1.080.000 / 1,15 = 939.130,43 — en vez de
+ * restar el %. Misma cuenta que private.monto_con_beneficio (redondeo half-up exacto,
+ * como `round(numeric, 2)`), en enteros para no depender de la coma flotante.
+ */
+export function centavosConBeneficio(montoCents: number, porcentaje: number): number {
+  const divisor = BigInt(10000 + Math.round((porcentaje || 0) * 100)); // (1 + %) en centésimas de %
+  const monto = BigInt(Math.round(montoCents)) * BigInt(10000);
+  return Number((monto * BigInt(2) + divisor) / (divisor * BigInt(2)));
+}
+
+/**
  * Saldo exigible hoy de un cargo (aplica el beneficio por pago en término vigente;
  * en la DB la columna sigue llamándose descuento_pronto_pago).
  * Calcula en centavos enteros con redondeo half-up para dar EXACTAMENTE lo
@@ -247,9 +259,8 @@ export function saldoCargo(cargo: {
   if (cargo.estado === "pagado" || cargo.estado === "anulado") return 0;
   const enTermino = hoyISO() <= cargo.vencimiento;
   const montoCents = Math.round(cargo.monto * 100);
-  const descCentesimas = Math.round(cargo.descuento_pronto_pago * 100); // % con 2 decimales
   const objetivoCents = enTermino
-    ? Math.floor((montoCents * (10000 - descCentesimas) + 5000) / 10000)
+    ? centavosConBeneficio(montoCents, Number(cargo.descuento_pronto_pago))
     : montoCents;
   const pagadoCents = Math.round(cargo.monto_pagado * 100);
   return Math.max((objetivoCents - pagadoCents) / 100, 0);

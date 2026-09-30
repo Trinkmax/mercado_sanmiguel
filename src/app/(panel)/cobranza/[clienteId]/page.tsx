@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, UserX } from "lucide-react";
 import { requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { formatARS, hoyISO, labelPeriodo, periodoActual, saldoCargo } from "@/lib/format";
+import { centavosConBeneficio, formatARS, hoyISO, labelPeriodo, periodoActual, saldoCargo } from "@/lib/format";
 import {
   LABEL_CATEGORIA,
   categoriasDeRol,
@@ -39,8 +39,7 @@ function redondear2(n: number): number {
  */
 function beneficioCargo(monto: number, descuentoPct: number): number {
   const montoCents = Math.round(monto * 100);
-  const descCentesimas = Math.round(descuentoPct * 100);
-  const objetivoCents = Math.floor((montoCents * (10000 - descCentesimas) + 5000) / 10000);
+  const objetivoCents = centavosConBeneficio(montoCents, descuentoPct);
   return Math.max((montoCents - objetivoCents) / 100, 0);
 }
 
