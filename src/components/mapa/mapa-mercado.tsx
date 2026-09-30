@@ -18,6 +18,7 @@ import {
   armarBloques,
   cantidad,
   CODIGO_DIFERENCIA,
+  compararNumero,
   diferencias,
   etiquetaEspacio,
   etiquetaEspacios,
@@ -27,6 +28,7 @@ import {
   REPOSO,
   unidadesPuestos,
   unir,
+  vecinosEnFila,
   type Bloque,
   type Diferencia,
   type EstadoBloque,
@@ -40,7 +42,7 @@ import {
   type Revision,
   type Sugerencia,
 } from "./panel-asignacion";
-import { PanelDetalle } from "./panel-detalle";
+import { PanelDetalle, type VecinoDuenio } from "./panel-detalle";
 import {
   anilloDe,
   repartirFichas,
@@ -987,6 +989,47 @@ export function MapaMercado({
   const cliPincel = pincel ? clientePorId.get(pincel) ?? null : null;
   const espacioSel = seleccion?.tipo === "espacio" ? espacioPorId.get(seleccion.id) ?? null : null;
   const clienteDetalle = clienteSel ? clientePorId.get(clienteSel) ?? null : null;
+
+  // Unir puestos de un mismo dueño sin pasar por "Asignar puestos" (se dibujan en un
+  // solo bloque apenas son del mismo cliente). Solo quien edita el plano y solo para los
+  // clientes que gestiona.
+  const faltanPuestos = (c: ClienteMapa) =>
+    diferencias(c, porCliente.get(c.id) ?? []).some(
+      (d) => (d.tipo === "puesto" || d.tipo === "propio") && d.enPlano < d.facturado
+    );
+  const puedeUnir = puedeEditar && !esPorteria;
+  // Del cliente elegido: los libres pegados a sus puestos, si el dibujo original los junta
+  // (4 · 6) o si factura más puestos de los que tiene.
+  let sumables: Espacio[] = [];
+  if (puedeUnir && clienteDetalle && gestiona(clienteDetalle)) {
+    const falta = faltanPuestos(clienteDetalle);
+    const m = new Map<string, Espacio>();
+    for (const e of porCliente.get(clienteDetalle.id) ?? []) {
+      for (const v of vecinosEnFila(e, plano)) {
+        if (v.clienteId || m.has(v.id)) continue;
+        if (falta || (e.grupo !== null && v.grupo === e.grupo)) m.set(v.id, v);
+      }
+    }
+    sumables = [...m.values()].sort((a, b) => compararNumero(a.numero, b.numero));
+  }
+  // Del puesto libre elegido: quiénes tienen los de al lado (primero a quien le faltan).
+  let vecinos: VecinoDuenio[] = [];
+  if (puedeUnir && espacioSel && !espacioSel.clienteId) {
+    const m = new Map<string, VecinoDuenio>();
+    for (const v of vecinosEnFila(espacioSel, plano)) {
+      const c = v.clienteId ? clientePorId.get(v.clienteId) : undefined;
+      if (!c || !gestiona(c)) continue;
+      const actual = m.get(c.id);
+      if (actual) actual.lugares.push(v);
+      else m.set(c.id, { cliente: c, lugares: [v], faltanPuestos: faltanPuestos(c) });
+    }
+    vecinos = [...m.values()].sort((a, b) => Number(b.faltanPuestos) - Number(a.faltanPuestos));
+  }
+  const sumar = (ids: string[], clienteId: string) => {
+    asignar(ids, clienteId);
+    setFiltro(null);
+    setSeleccion({ tipo: "cliente", id: clienteId });
+  };
   const hayPanel = modo === "asignar" || clienteDetalle !== null || espacioSel !== null;
 
   return (
@@ -1229,6 +1272,9 @@ export function MapaMercado({
               vista={vista}
               avisos={espacioSel ? avisos?.[espacioSel.id] ?? [] : []}
               categoriasGestion={categoriasGestion}
+              sumables={sumables}
+              vecinos={vecinos}
+              onSumar={sumar}
             />
           )}
         </div>

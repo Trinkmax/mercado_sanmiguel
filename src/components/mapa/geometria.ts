@@ -61,6 +61,16 @@ function ejeDeFilas(espacios: Espacio[]): Eje {
   return pegados("y") > pegados("x") ? "y" : "x";
 }
 
+/** Los puestos pegados a `e` en su fila, a un costado o al otro (con el plano tal cual o
+ * girado): los que, con el mismo dueño, se dibujan unidos en un solo bloque. */
+export function vecinosEnFila(e: Espacio, plano: Espacio[]): Espacio[] {
+  if (e.tipo !== "puesto") return [];
+  const eje = ejeDeFilas(plano);
+  return plano.filter(
+    (o) => o.id !== e.id && o.tipo === "puesto" && (contiguos(e, o, eje) || contiguos(o, e, eje))
+  );
+}
+
 export function unir(rects: Rect[]): Rect {
   const x = Math.min(...rects.map((r) => r.x));
   const y = Math.min(...rects.map((r) => r.y));

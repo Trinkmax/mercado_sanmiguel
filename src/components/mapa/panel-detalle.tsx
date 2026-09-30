@@ -6,6 +6,7 @@ import {
   ArrowRight,
   Flag,
   HandCoins,
+  Link2,
   MousePointerClick,
   Pencil,
   TriangleAlert,
@@ -108,6 +109,12 @@ function nombreConArticulo(e: Espacio): string {
   return conArticulo(e);
 }
 
+/** Quien tiene puestos pegados a uno libre: se le puede sumar de un toque (queda unido). */
+export type VecinoDuenio = { cliente: ClienteMapa; lugares: Espacio[]; faltanPuestos: boolean };
+
+/** "PRODUCTOS DANIEL" o, sin apodo, el nombre (cortado por CSS si es largo). */
+const nombreDe = (c: ClienteMapa) => c.apodo ?? c.nombre;
+
 /** Panel de consulta bajo el plano: quién ocupa lo que se tocó. */
 export function PanelDetalle({
   cliente,
@@ -125,6 +132,9 @@ export function PanelDetalle({
   vista = "completa",
   avisos = [],
   categoriasGestion,
+  sumables = [],
+  vecinos = [],
+  onSumar,
 }: {
   cliente: ClienteMapa | null;
   suyos: Espacio[];
@@ -146,6 +156,12 @@ export function PanelDetalle({
   avisos?: AvisoPuestoPrevio[];
   /** Categorías que el rol gestiona (Cobrar / Ver ficha solo para esas). */
   categoriasGestion?: CategoriaCliente[];
+  /** Puestos libres pegados a los del cliente que se le pueden sumar (quedan unidos). */
+  sumables?: Espacio[];
+  /** Quienes tienen los puestos pegados al libre que se tocó. */
+  vecinos?: VecinoDuenio[];
+  /** Asigna esos espacios al cliente (se guarda solo, con "Deshacer"). */
+  onSumar?: (espacioIds: string[], clienteId: string) => void;
 }) {
   // Con varios puestos, "Editar un puesto" pregunta cuál (el panel se remonta por selección).
   const [eligiendo, setEligiendo] = useState(false);
@@ -261,6 +277,31 @@ export function PanelDetalle({
                 {textoDiferencia(d)}
               </p>
             ))}
+            {puedeEditar && onSumar && sumables.length > 0 ? (
+              // Unir puestos del mismo dueño sin pasar por "Asignar puestos": el libre de al
+              // lado se le suma de un toque y el plano los dibuja en un solo bloque.
+              <div className="space-y-2 rounded-lg border border-dashed border-primary/35 bg-accent/40 p-2.5">
+                <p className="text-sm">
+                  Al lado {sumables.length > 1 ? "quedan libres" : "queda libre"}{" "}
+                  <span className="font-medium">{listaConY(sumables.map((e) => conArticulo(e)))}</span>.{" "}
+                  {sumables.length > 1 ? "Si también son suyos, sumáselos:" : "Si también es suyo, sumáselo:"}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {sumables.map((e) => (
+                    <Button
+                      key={e.id}
+                      type="button"
+                      variant="outline"
+                      className={cn(BOTON, "bg-card")}
+                      onClick={() => onSumar([e.id], cliente.id)}
+                    >
+                      <Link2 className="size-4" strokeWidth={2} />
+                      Sumarle {conArticulo(e)}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             {eligiendo && editarPuesto && suyos.length > 1 ? (
               <div className="space-y-1.5 rounded-lg border border-primary/25 bg-accent/60 p-2.5">
                 <p className="text-sm font-medium">¿Cuál querés editar?</p>
@@ -338,9 +379,11 @@ export function PanelDetalle({
     // Ocupado por alguien que no está en el mapa (dado de baja o ambulante): no hay ficha
     // que mostrar; se ofrece dejarlo libre.
     const huerfano = espacio.clienteId !== null;
+    const sumarA = puedeEditar && onSumar && !huerfano ? vecinos : [];
     return (
-      <div className="relative flex flex-col gap-3 p-4 @xl:flex-row @xl:items-center @xl:gap-6 @xl:p-5 @xl:pr-16">
+      <div className="relative space-y-3 p-4 @xl:p-5 @xl:pr-16">
         <BotonCerrar onCerrar={onCerrar} />
+        <div className="flex flex-col gap-3 @xl:flex-row @xl:items-center @xl:gap-6">
         <div className="min-w-0 flex-1 space-y-1 pr-12 @xl:pr-0">
           <div className="flex flex-wrap items-center gap-2">
             {huerfano ? <Sello estado="inactivo" texto="Ocupado" /> : <Sello estado="libre" texto="Libre" />}
@@ -375,6 +418,35 @@ export function PanelDetalle({
                 Editar
               </Button>
             ) : null}
+          </div>
+        ) : null}
+        </div>
+        {sumarA.length > 0 && onSumar ? (
+          // Lo más común al cargar el plano: el libre es de quien tiene el de al lado.
+          <div className="space-y-2 rounded-lg border border-dashed border-primary/35 bg-accent/40 p-2.5">
+            <p className="text-sm text-muted-foreground">
+              ¿Es de quien tiene el de al lado? Se lo sumás y queda unido a su puesto.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {sumarA.map((v) => (
+                <Button
+                  key={v.cliente.id}
+                  type="button"
+                  variant="outline"
+                  className={cn(BOTON, "h-auto max-w-full bg-card py-2 text-left whitespace-normal")}
+                  onClick={() => onSumar([espacio.id], v.cliente.id)}
+                >
+                  <Link2 className="size-4 shrink-0" strokeWidth={2} />
+                  <span className="min-w-0">
+                    <span className="block break-words">Sumárselo a {nombreDe(v.cliente)}</span>
+                    <span className="block text-xs font-normal text-muted-foreground">
+                      Tiene {listaConY(v.lugares.map((e) => conArticulo(e)))}
+                      {v.faltanPuestos ? " · factura más puestos de los que tiene" : ""}
+                    </span>
+                  </span>
+                </Button>
+              ))}
+            </div>
           </div>
         ) : null}
       </div>
