@@ -257,7 +257,7 @@ export function FormCircular({
       </section>
 
       {/* ¿A quién le llega? */}
-      <section className="space-y-4" aria-labelledby="circ-publico">
+      <section className="space-y-4" aria-labelledby="circ-publico" data-tour="comunicaciones-publico">
         <div>
           <h2 id="circ-publico" className="font-display text-lg font-bold tracking-tight">
             ¿A quién le llega?
@@ -339,6 +339,7 @@ export function FormCircular({
 
       {/* ¿Tienen que confirmar? */}
       <label
+        data-tour="comunicaciones-obligatoria"
         className={cn(
           "flex min-h-16 cursor-pointer items-start gap-4 rounded-lg border p-4 transition-colors select-none",
           obligatoria ? "border-parcial/50 bg-parcial-suave/60" : "bg-card"
@@ -361,6 +362,7 @@ export function FormCircular({
         type="submit"
         size="lg"
         disabled={pendiente || cuenta.total === 0}
+        data-tour="comunicaciones-publicar"
         className="h-14 w-full text-base font-semibold sm:w-auto sm:px-8"
       >
         {pendiente ? <Spinner className="size-5" /> : <Megaphone className="size-5" strokeWidth={2} />}

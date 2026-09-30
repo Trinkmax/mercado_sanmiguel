@@ -39,7 +39,7 @@ export function EditarClienteDialog({
   return (
     <Dialog open={abierto} onOpenChange={setAbierto}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="lg" className="h-12 px-5 text-base">
+        <Button variant="outline" size="lg" className="h-12 px-5 text-base" data-tour="clientes-editar">
           <Pencil className="size-5" strokeWidth={2} />
           Editar
         </Button>

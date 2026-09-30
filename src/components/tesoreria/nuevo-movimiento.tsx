@@ -228,7 +228,12 @@ export function AccionesRapidas({
     <>
       {variante === "tiles" ? (
         // Grilla pareja (2 o 3 por renglón): ningún botón queda solo en el último renglón.
-        <div className="grid grid-cols-2 gap-2 lg:grid-cols-3" role="group" aria-label="Registrar un movimiento">
+        <div
+          className="grid grid-cols-2 gap-2 lg:grid-cols-3"
+          role="group"
+          aria-label="Registrar un movimiento"
+          data-tour="tesoreria-movimiento-botones"
+        >
           {ACCIONES.map((a) => {
             const Icono = a.icono;
             return (

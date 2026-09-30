@@ -202,11 +202,12 @@ export function CanonTransporte({
   }
 
   return (
-    <section className="rounded-lg border bg-card p-5 sm:p-6" aria-label="Cobrar canon de transporte">
+    <section className="rounded-lg border bg-card p-5 sm:p-6" aria-label="Cobrar canon de transporte" data-tour="porteria-canon">
       <form onSubmit={cobrar} className="space-y-6" autoComplete="off">
         {bloqueo ? (
           <div
             role="alert"
+            data-tour="porteria-caja-rendida"
             className="flex items-start gap-3 rounded-lg border border-parcial bg-parcial-suave px-4 py-3"
           >
             <TriangleAlert className="mt-0.5 size-5 shrink-0 text-parcial" strokeWidth={2} />
@@ -219,7 +220,7 @@ export function CanonTransporte({
 
         <fieldset disabled={Boolean(bloqueo) || pendiente} className="space-y-6 disabled:opacity-60">
           {/* ---------------------------------------------------- ¿Qué entró? */}
-          <div className="space-y-2">
+          <div className="space-y-2" data-tour="porteria-que-entro">
             <p id="que-entro" className="font-display text-xl font-bold tracking-tight">
               ¿Qué entró?
             </p>
@@ -286,7 +287,7 @@ export function CanonTransporte({
           </div>
 
           {/* ---------------------------------------------------- Cantidad y medio */}
-          <div className="grid gap-6 sm:grid-cols-2">
+          <div className="grid gap-6 sm:grid-cols-2" data-tour="porteria-cantidad-medio">
             <div className="space-y-2">
               <Label htmlFor="canon-cantidad" className="text-base">
                 {tarifa ? preguntaCantidad(tarifa.unidad) : "¿Cuántos?"}
@@ -366,7 +367,7 @@ export function CanonTransporte({
           </div>
 
           {/* ---------------------------------------------------- Opcionales */}
-          <div className="grid gap-6 border-t pt-5 sm:grid-cols-2">
+          <div className="grid gap-6 border-t pt-5 sm:grid-cols-2" data-tour="porteria-opcionales">
             <div className="space-y-2">
               <Label htmlFor="canon-patente" className="text-base">
                 Patente <span className="font-normal text-muted-foreground">(si querés)</span>
@@ -463,7 +464,10 @@ export function CanonTransporte({
         </fieldset>
 
         {/* ---------------------------------------------------- Total y cobrar (siempre a la vista) */}
-        <div className="sticky bottom-[calc(var(--nav-inferior)+0.75rem)] z-10 -mx-2 space-y-3 rounded-xl border bg-card/95 p-3 shadow-[0_8px_24px_-12px_rgb(0_0_0/0.25)] backdrop-blur supports-[backdrop-filter]:bg-card/85 sm:mx-0 xl:static xl:border-0 xl:bg-transparent xl:p-0 xl:shadow-none xl:backdrop-blur-none">
+        <div
+          data-tour="porteria-cobrar"
+          className="sticky bottom-[calc(var(--nav-inferior)+0.75rem)] z-10 -mx-2 space-y-3 rounded-xl border bg-card/95 p-3 shadow-[0_8px_24px_-12px_rgb(0_0_0/0.25)] backdrop-blur supports-[backdrop-filter]:bg-card/85 sm:mx-0 xl:static xl:border-0 xl:bg-transparent xl:p-0 xl:shadow-none xl:backdrop-blur-none"
+        >
           <div className="flex min-h-16 flex-wrap items-center justify-between gap-x-4 gap-y-1" aria-live="polite">
             {exito ? (
               <div className="flex flex-wrap items-center gap-3">

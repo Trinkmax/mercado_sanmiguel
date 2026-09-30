@@ -136,7 +136,7 @@ export default async function FichaEmpleadoPage({ params }: Props) {
           ) : null}
         </div>
         <PageHeader titulo={nombre} descripcion={subtitulo} className="pb-2">
-          <Button asChild variant="outline" size="lg" className="h-12 px-5 text-base">
+          <Button asChild variant="outline" size="lg" className="h-12 px-5 text-base" data-tour="personal-editar">
             <Link href={`/personal/${empleado.id}/editar`}>
               <Pencil className="size-5" strokeWidth={2} />
               Editar datos
@@ -173,7 +173,7 @@ export default async function FichaEmpleadoPage({ params }: Props) {
           </CardContent>
         </Card>
 
-        <Card className="text-base">
+        <Card className="text-base" data-tour="personal-contrato">
           <CardHeader>
             <CardTitle className="font-display text-lg font-bold">Contrato laboral</CardTitle>
             <CardDescription className="text-sm">
@@ -251,7 +251,7 @@ export default async function FichaEmpleadoPage({ params }: Props) {
         </Card>
       </div>
 
-      <section className="space-y-4">
+      <section className="space-y-4" data-tour="personal-horarios">
         <div className="space-y-0.5">
           <h2 className="font-display text-xl font-bold tracking-tight">Horarios de trabajo</h2>
           <p className="text-sm text-muted-foreground tabular">{resumirHorarios(horarios)}</p>
@@ -259,7 +259,7 @@ export default async function FichaEmpleadoPage({ params }: Props) {
         <EditorHorarios empleadoId={empleado.id} inicial={horarios} />
       </section>
 
-      <Card className="text-base">
+      <Card className="text-base" data-tour="personal-novedades">
         <CardHeader>
           <CardTitle className="font-display text-lg font-bold">Novedades de {mes}</CardTitle>
           <CardDescription className="text-sm">
@@ -320,7 +320,7 @@ export default async function FichaEmpleadoPage({ params }: Props) {
         </CardContent>
       </Card>
 
-      <Card className="text-base">
+      <Card className="text-base" data-tour="personal-ingresos">
         <CardHeader>
           <CardTitle className="font-display text-lg font-bold">Últimos ingresos por portería</CardTitle>
           <CardDescription className="text-sm">

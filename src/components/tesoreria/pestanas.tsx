@@ -26,7 +26,7 @@ export function PestanasTesoreria({
   pendientes: Partial<Record<PestanaTesoreria, number>>;
 }) {
   return (
-    <nav aria-label="Secciones de Tesorería">
+    <nav aria-label="Secciones de Tesorería" data-tour="tesoreria-pestanas">
       <ul className="grid grid-cols-2 gap-1 rounded-xl border bg-muted/60 p-1 sm:flex sm:w-fit sm:max-w-full sm:flex-wrap">
         {PESTANAS_TESORERIA.map((p) => {
           const esActiva = p === activa;
@@ -37,6 +37,7 @@ export function PestanasTesoreria({
                 href={p === "hoy" ? "/tesoreria" : `/tesoreria?tab=${p}`}
                 aria-current={esActiva ? "page" : undefined}
                 scroll={false}
+                data-tour={`tesoreria-pestana-${p}`}
                 className={cn(
                   "flex h-full min-h-11 items-center justify-center gap-2 rounded-lg px-3 text-center text-base leading-tight font-medium transition-colors pointer-coarse:min-h-[44px] sm:px-4",
                   esActiva ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"

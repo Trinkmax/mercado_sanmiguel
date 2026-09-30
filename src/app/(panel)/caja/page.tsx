@@ -99,12 +99,12 @@ export default async function CajaPage({
           }
         />
         <Tabs key={`${fecha}-${tipoPedido}`} defaultValue={tipoPedido} className="gap-6">
-          <TabsList className="h-auto! w-full p-1 sm:w-fit">
+          <TabsList className="h-auto! w-full p-1 sm:w-fit" data-tour="caja-pestanias">
             <TabsTrigger value="administracion" className={PESTANIA}>
               Administración
               <EstadoPestania datos={administracion} />
             </TabsTrigger>
-            <TabsTrigger value="guardia" className={PESTANIA}>
+            <TabsTrigger value="guardia" className={PESTANIA} data-tour="caja-pestania-porteria">
               Caja de portería
               <EstadoPestania datos={guardia} />
             </TabsTrigger>

@@ -218,7 +218,7 @@ export default async function FacturacionPage() {
       />
 
       {/* Tarjeta protagonista: el período que toca generar */}
-      <Card>
+      <Card data-tour="facturacion-mes">
         <CardHeader>
           <CardTitle className="font-display text-2xl font-bold tracking-tight">
             {labelPeriodo(proximo)}
@@ -239,7 +239,7 @@ export default async function FacturacionPage() {
             />
           ) : (
             <>
-              <div className="divide-y">
+              <div className="divide-y" data-tour="facturacion-conceptos">
                 {preview.map((fila) => (
                   <div key={fila.codigo} className="flex items-center gap-4 py-3">
                     <Codigo codigo={fila.codigo} className="shrink-0" />
@@ -286,7 +286,7 @@ export default async function FacturacionPage() {
       </Card>
 
       {/* Historial de períodos generados */}
-      <Card>
+      <Card data-tour="facturacion-historial">
         <CardHeader>
           <CardTitle className="text-lg">Períodos generados</CardTitle>
         </CardHeader>
@@ -302,7 +302,7 @@ export default async function FacturacionPage() {
               {/* Celular: cada período es una ficha apilada, con los montos a la vista */}
               <ul className="divide-y md:hidden">
                 {periodos.map((p) => (
-                  <li key={p.id} className="space-y-3 py-4 first:pt-0 last:pb-0">
+                  <li key={p.id} data-tour="facturacion-periodo" className="space-y-3 py-4 first:pt-0 last:pb-0">
                     <div>
                       <p className="text-base font-semibold">{p.label}</p>
                       <p className="text-sm text-muted-foreground">
@@ -325,7 +325,7 @@ export default async function FacturacionPage() {
                       </div>
                     </dl>
                     {veReportes ? (
-                      <Button asChild variant="outline" className="min-h-11 w-full text-sm">
+                      <Button asChild variant="outline" className="min-h-11 w-full text-sm" data-tour="facturacion-ver-reporte">
                         <Link href={`/reportes?periodo=${p.clave}`}>
                           Ver reporte de {p.label}
                           <ArrowRight className="size-4" />
@@ -354,7 +354,7 @@ export default async function FacturacionPage() {
                 </TableHeader>
                 <TableBody>
                   {periodos.map((p) => (
-                    <TableRow key={p.id}>
+                    <TableRow key={p.id} data-tour="facturacion-periodo">
                       <TableCell>
                         <p className="font-medium">{p.label}</p>
                         <p className="text-muted-foreground">Vence el {p.vence}</p>
@@ -373,7 +373,7 @@ export default async function FacturacionPage() {
                       </TableCell>
                       {veReportes ? (
                         <TableCell className="text-right">
-                          <Button asChild variant="ghost" className="min-h-11 px-3">
+                          <Button asChild variant="ghost" className="min-h-11 px-3" data-tour="facturacion-ver-reporte">
                             <Link href={`/reportes?periodo=${p.clave}`}>Ver reporte</Link>
                           </Button>
                         </TableCell>

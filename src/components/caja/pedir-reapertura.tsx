@@ -89,7 +89,7 @@ export function BotonPedirReapertura({
       }}
     >
       <DialogTrigger asChild>
-        <Button variant="outline" size="lg" className="h-12 px-5 text-base">
+        <Button variant="outline" size="lg" className="h-12 px-5 text-base" data-tour="caja-pedir-reapertura">
           <LockOpen className="size-5" strokeWidth={2} />
           Pedir reapertura
         </Button>

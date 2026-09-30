@@ -47,6 +47,7 @@ export function AvisoRechazadas({ rechazadas }: { rechazadas: RechazadaAviso[] }
     <section
       className="space-y-3 rounded-xl border border-pendiente/30 bg-pendiente-suave/70 p-4 sm:p-5"
       aria-label="Novedades rechazadas"
+      data-tour="novedades-rechazadas"
     >
       <div className="space-y-0.5">
         <h2 className="font-display text-lg font-bold tracking-tight">

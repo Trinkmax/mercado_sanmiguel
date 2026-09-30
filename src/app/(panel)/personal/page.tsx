@@ -83,7 +83,7 @@ export default async function PersonalPage({ searchParams }: Props) {
             Novedades del mes
           </Link>
         </Button>
-        <Button asChild size="lg" className="h-13 px-6 text-base font-semibold">
+        <Button asChild size="lg" className="h-13 px-6 text-base font-semibold" data-tour="personal-nuevo">
           <Link href="/personal/nuevo">
             <UserPlus className="size-5" />
             Nuevo empleado
@@ -91,7 +91,7 @@ export default async function PersonalPage({ searchParams }: Props) {
         </Button>
       </PageHeader>
 
-      <div className="space-y-3">
+      <div className="space-y-3" data-tour="personal-buscar">
         <BuscadorEmpleados inicial={texto} filtro={filtro} sector={sector} />
         {/* En el celular, un solo renglón que se desliza (antes los filtros ocupaban 3). */}
         <FilaDeslizable role="group" aria-label="Filtrar empleados">
@@ -171,7 +171,7 @@ export default async function PersonalPage({ searchParams }: Props) {
             titulo="Todavía no hay empleados cargados"
             descripcion="Cargá el primero con sus datos, su contrato y sus horarios de trabajo."
           >
-            <Button asChild size="lg" className="h-12 px-5 font-semibold">
+            <Button asChild size="lg" className="h-12 px-5 font-semibold" data-tour="personal-nuevo">
               <Link href="/personal/nuevo">
                 <UserPlus className="size-5" />
                 Nuevo empleado
@@ -189,6 +189,7 @@ export default async function PersonalPage({ searchParams }: Props) {
               <Link
                 key={e.id}
                 href={`/personal/${e.id}`}
+                data-tour="personal-fila"
                 className="flex min-h-16 items-center gap-4 px-4 py-3 transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
               >
                 {/* Todo completo, en los renglones que haga falta: cortados con "…" se perdía el

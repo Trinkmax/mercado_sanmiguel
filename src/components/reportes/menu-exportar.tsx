@@ -57,7 +57,7 @@ export function MenuExportar({ rol, periodo }: { rol: Rol; periodo: string }) {
   return (
     <Popover open={abierto} onOpenChange={setAbierto}>
       <PopoverTrigger asChild>
-        <Button variant="outline" className="min-h-11 px-4 text-sm">
+        <Button variant="outline" className="min-h-11 px-4 text-sm" data-tour="reportes-exportar">
           <FileSpreadsheet className="size-4" strokeWidth={1.9} />
           Exportar planillas
           <ChevronDown className="size-4 opacity-70" strokeWidth={2} />

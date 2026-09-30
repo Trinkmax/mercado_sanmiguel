@@ -236,7 +236,7 @@ export function CargaRapida({
     <Card>
       <CardContent className="space-y-5">
         {/* Progreso del período */}
-        <div className="space-y-2">
+        <div className="space-y-2" data-tour="energia-progreso">
           <div className="flex items-baseline justify-between gap-3">
             <p className="font-semibold">
               <span className={cargadas > 0 ? "text-pagado" : undefined}>
@@ -401,7 +401,10 @@ export function CargaRapida({
                   </div>
 
                   {/* Actual */}
-                  <div className="min-w-0 [grid-area:act] @5xl:text-right">
+                  <div
+                    className="min-w-0 [grid-area:act] @5xl:text-right"
+                    data-tour={editando ? "energia-actual energia-actual-pendiente" : "energia-actual"}
+                  >
                     <p className="mb-1 text-sm text-muted-foreground @5xl:sr-only">Actual</p>
                     {editando ? (
                       <Input

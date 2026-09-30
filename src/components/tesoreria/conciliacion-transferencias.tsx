@@ -176,6 +176,7 @@ export function ConciliacionTransferencias({
           return (
             <li
               key={f.id}
+              data-tour="tesoreria-transferencia"
               className={cn(
                 "grid items-center gap-x-4 gap-y-2 px-4 py-3",
                 columnas,

@@ -29,7 +29,10 @@ export function GastosCaja({ gastos, pagarHref }: { gastos: GastoCaja[]; pagarHr
 
   if (gastos.length === 0) {
     return (
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed bg-card px-5 py-3">
+      <div
+        className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed bg-card px-5 py-3"
+        data-tour="caja-gastos"
+      >
         <p className="flex items-center gap-2 text-sm text-muted-foreground">
           <Receipt className="size-5" strokeWidth={1.8} />
           No se pagaron gastos con la plata de esta caja.
@@ -40,7 +43,7 @@ export function GastosCaja({ gastos, pagarHref }: { gastos: GastoCaja[]; pagarHr
   }
 
   return (
-    <Card>
+    <Card data-tour="caja-gastos">
       <CardHeader className="flex flex-row flex-wrap items-baseline justify-between gap-2">
         <CardTitle className="text-lg">Gastos pagados desde esta caja</CardTitle>
         <span className="tabular text-lg font-bold text-pendiente">

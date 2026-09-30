@@ -23,9 +23,20 @@ function esImagen(path: string): boolean {
   return /\.(jpe?g|png|webp)$/i.test(path);
 }
 
-function Titulo({ titulo, descripcion, children }: { titulo: string; descripcion: string; children?: React.ReactNode }) {
+function Titulo({
+  titulo,
+  descripcion,
+  tour,
+  children,
+}: {
+  titulo: string;
+  descripcion: string;
+  /** Ancla del tour guiado (`data-tour`). */
+  tour?: string;
+  children?: React.ReactNode;
+}) {
   return (
-    <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+    <div data-tour={tour} className="flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
       <div>
         <h2 className="font-display text-lg font-bold tracking-tight">{titulo}</h2>
         <p className="text-sm text-muted-foreground">{descripcion}</p>
@@ -160,6 +171,7 @@ export async function PestanaConciliar({ puedeOperar }: { puedeOperar: boolean }
     <div className="space-y-10">
       <section className="space-y-4" aria-label="Transferencias sin conciliar">
         <Titulo
+          tour="tesoreria-transferencias"
           titulo="Transferencias contra el banco"
           descripcion="Marcá cada transferencia cuando la veas acreditada en el resumen del banco."
         >
@@ -267,6 +279,7 @@ export async function PestanaConciliar({ puedeOperar }: { puedeOperar: boolean }
 
       <section className="space-y-4" aria-label="Facturas de gastos pagados">
         <Titulo
+          tour="tesoreria-facturas"
           titulo="Facturas de gastos pagados"
           descripcion={
             conFactura.length > 0
@@ -292,6 +305,7 @@ export async function PestanaConciliar({ puedeOperar }: { puedeOperar: boolean }
               return (
                 <li
                   key={g.id}
+                  data-tour="tesoreria-factura"
                   className="grid gap-x-4 gap-y-2 px-4 py-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
                 >
                   <div className="min-w-0 space-y-0.5">
@@ -328,7 +342,7 @@ export async function PestanaConciliar({ puedeOperar }: { puedeOperar: boolean }
 
         {sinFactura.length > 0 ? (
           <div className="overflow-hidden rounded-xl border border-parcial/40 bg-parcial-suave/60">
-            <div className="flex items-start gap-3 px-4 py-3.5">
+            <div data-tour="tesoreria-sin-factura" className="flex items-start gap-3 px-4 py-3.5">
               <FileWarning className="mt-0.5 size-5 shrink-0 text-parcial" strokeWidth={1.9} />
               <div>
                 <p className="font-semibold">

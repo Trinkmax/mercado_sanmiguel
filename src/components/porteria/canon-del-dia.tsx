@@ -96,6 +96,7 @@ export function CanonDelDia({
     return (
       <div
         key={e.id}
+        data-tour="porteria-cobro"
         className={cn("flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3", e.anulado && "bg-muted/40")}
       >
         <div className="w-14 shrink-0">
@@ -174,7 +175,7 @@ export function CanonDelDia({
   return (
     <div className="space-y-4">
       {sinResumen ? null : (
-        <div className="space-y-3 rounded-lg border bg-card px-4 py-4">
+        <div className="space-y-3 rounded-lg border bg-card px-4 py-4" data-tour="porteria-cobros">
           <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
             <div>
               <p className="text-sm font-medium text-muted-foreground">

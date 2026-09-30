@@ -143,7 +143,7 @@ export default async function RegistroPage({
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
         <div className="space-y-6">
           {/* Recorrido y si lo vio */}
-          <Card>
+          <Card data-tour="comunicaciones-seguimiento">
             <CardContent className="space-y-4">
               <LineaEstadoRegistro
                 tipo={tipo}

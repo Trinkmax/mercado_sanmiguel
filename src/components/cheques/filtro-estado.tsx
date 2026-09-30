@@ -39,7 +39,7 @@ export function FiltroEstado({
   q?: string;
 }) {
   return (
-    <nav aria-label="Filtrar cheques" className="flex flex-wrap gap-2">
+    <nav aria-label="Filtrar cheques" className="flex flex-wrap gap-2" data-tour="cheques-filtros">
       {FILTROS_CHEQUES.map((f) => {
         const esActivo = activo === f.valor;
         const atencion = (f.valor === "listos" || f.valor === "sin_gasto") && conteos[f.valor] > 0;

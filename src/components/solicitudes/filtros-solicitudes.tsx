@@ -194,7 +194,7 @@ export function FiltrosSolicitudes({
   conteos: Record<string, number>;
 }) {
   return (
-    <FilaDeslizable role="tablist" aria-label="Filtrar por estado">
+    <FilaDeslizable role="tablist" aria-label="Filtrar por estado" data-tour="solicitudes-pestanas">
       {filtros.map((f, i) => {
         const esActivo = activo === f.valor;
         const cantidad = conteos[f.valor] ?? 0;

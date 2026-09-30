@@ -40,7 +40,7 @@ export function RendicionesPorRecibir({
   return (
     <>
       {rendiciones.length > 0 ? (
-        <Card className="border-primary/30">
+        <Card className="border-primary/30" data-tour="caja-recibir">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <HandCoins className="size-5 text-primary" strokeWidth={2} />

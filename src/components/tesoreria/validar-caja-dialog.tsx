@@ -167,14 +167,14 @@ export function ValidarCajaDialog({
     >
       <DialogTrigger asChild>
         {pideConteo ? (
-          <Button size="lg" className="h-12 px-6 text-base font-semibold">
+          <Button size="lg" className="h-12 px-6 text-base font-semibold" data-tour="tesoreria-contar-validar">
             <Stamp className="size-5" strokeWidth={2} />
             Contar y validar
           </Button>
         ) : (
           // Portería ya recibida: se valida sola con la caja de administración. Validarla
           // aparte es opcional, así que no va como botón principal ni dice "Contar".
-          <Button size="lg" variant="outline" className="h-12 px-6 text-base">
+          <Button size="lg" variant="outline" className="h-12 px-6 text-base" data-tour="tesoreria-validar-porteria">
             <Stamp className="size-5" strokeWidth={2} />
             Validar solo esta caja
           </Button>

@@ -23,7 +23,7 @@ export function SelectorMes({
     "inline-flex size-12 shrink-0 items-center justify-center rounded-md border bg-card transition-colors";
 
   return (
-    <nav className={cn("flex items-center gap-2", className)} aria-label="Elegir mes">
+    <nav className={cn("flex items-center gap-2", className)} aria-label="Elegir mes" data-tour="novedades-mes">
       <Link href={hrefMes(anterior)} className={cn(boton, "hover:bg-accent")} aria-label={`Ver ${labelPeriodo(anterior)}`}>
         <ChevronLeft className="size-5" strokeWidth={2.2} />
       </Link>

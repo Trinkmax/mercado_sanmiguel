@@ -14,6 +14,7 @@ export function PageHeader({
 }) {
   return (
     <div
+      data-tour="encabezado"
       className={cn(
         "flex flex-wrap items-end justify-between gap-4 pb-5",
         className

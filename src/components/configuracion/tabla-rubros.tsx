@@ -72,7 +72,7 @@ export function TablaRubros({ rubros }: { rubros: RubroFila[] }) {
 
   return (
     <div className="space-y-6">
-      <Card>
+      <Card data-tour="config-rubro-nuevo">
         <CardHeader>
           <CardTitle className="text-lg">Nuevo rubro</CardTitle>
         </CardHeader>

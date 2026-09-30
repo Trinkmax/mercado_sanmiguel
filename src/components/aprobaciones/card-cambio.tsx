@@ -98,7 +98,7 @@ export function CardCambio({
       aria-labelledby={`cambio-${cambio.id}`}
     >
       {/* Encabezado: chips + resumen + quién / cuándo */}
-      <header className="space-y-2">
+      <header className="space-y-2" data-tour="aprobaciones-cambio">
         <div className="flex flex-wrap items-center gap-2">
           <ChipsCambio entidad={cambio.entidad} accion={cambio.accion} />
           {cambio.concepto ? <Codigo codigo={cambio.concepto.codigo} /> : null}
@@ -140,7 +140,9 @@ export function CardCambio({
       </header>
 
       {/* Qué cambia */}
-      <DiffCambio cambio={cambio} conceptosPorId={conceptosPorId} />
+      <div data-tour="aprobaciones-diff">
+        <DiffCambio cambio={cambio} conceptosPorId={conceptosPorId} />
+      </div>
 
       {/* Acciones */}
       <div className="flex flex-col-reverse gap-3 border-t pt-5 sm:flex-row sm:justify-end">
@@ -153,6 +155,7 @@ export function CardCambio({
             setErrorMotivo(null);
             setRechazando(true);
           }}
+          data-tour="aprobaciones-rechazar"
         >
           <XCircle className="size-5" strokeWidth={2} />
           Rechazar
@@ -162,6 +165,7 @@ export function CardCambio({
           className="h-12 px-8 text-base font-semibold"
           disabled={ocupado}
           onClick={aprobar}
+          data-tour="aprobaciones-aprobar"
         >
           {aprobandoPendiente ? (
             <Spinner className="size-5" />

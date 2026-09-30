@@ -165,7 +165,7 @@ export default async function ChequesPage({
         descripcion="Los cheques que se reciben al cobrar: por cobrar, depositados, entregados a proveedores y rechazados."
       >
         <BotonExportar dataset="cheques" periodo={periodoActual()} label="Cheques del mes (.xlsx)" />
-        <div className="rounded-xl border bg-card px-5 py-2.5 text-right">
+        <div className="rounded-xl border bg-card px-5 py-2.5 text-right" data-tour="cheques-por-cobrar">
           <p className="text-sm text-muted-foreground">Por cobrar</p>
           <Money monto={totalPorCobrar} className="text-2xl font-bold" />
         </div>
@@ -179,7 +179,10 @@ export default async function ChequesPage({
       ) : null}
 
       {listos.length > 0 && filtro !== "listos" ? (
-        <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-parcial/40 bg-parcial-suave px-5 py-4">
+        <div
+          className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-parcial/40 bg-parcial-suave px-5 py-4"
+          data-tour="cheques-listos"
+        >
           <div className="flex items-start gap-3">
             <Landmark className="mt-0.5 size-6 shrink-0 text-parcial" strokeWidth={1.9} />
             <div>
@@ -191,7 +194,12 @@ export default async function ChequesPage({
               <p className="text-sm text-muted-foreground">Ya se pueden cobrar: llevalos al banco y marcalos.</p>
             </div>
           </div>
-          <Button asChild variant="outline" className="h-11 bg-card px-4 text-base font-semibold">
+          <Button
+            asChild
+            variant="outline"
+            className="h-11 bg-card px-4 text-base font-semibold"
+            data-tour="cheques-ver-listos"
+          >
             <Link href={hrefFiltroCheque("listos")}>
               Ver los listos
               <ArrowRight className="size-4" strokeWidth={2} />
@@ -201,7 +209,10 @@ export default async function ChequesPage({
       ) : null}
 
       {sinGasto.length > 0 && filtro !== "sin_gasto" ? (
-        <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-primary/30 bg-accent/60 px-5 py-4">
+        <div
+          className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-primary/30 bg-accent/60 px-5 py-4"
+          data-tour="cheques-sin-gasto"
+        >
           <div className="flex items-start gap-3">
             <Link2 className="mt-0.5 size-6 shrink-0 text-primary" strokeWidth={1.9} />
             <div>
@@ -227,7 +238,7 @@ export default async function ChequesPage({
       <div className="space-y-4">
         <FiltroEstado activo={filtro} conteos={conteos} q={q} />
 
-        <form action="/cheques" method="get" role="search" className="flex max-w-xl gap-2">
+        <form action="/cheques" method="get" role="search" className="flex max-w-xl gap-2" data-tour="cheques-buscar">
           {filtro !== "en_cartera" ? <input type="hidden" name="estado" value={filtro} /> : null}
           <div className="relative flex-1">
             <Search
@@ -286,6 +297,7 @@ export default async function ChequesPage({
                 // mismo lugar en todas las filas (antes cada fila calculaba las suyas).
                 <li
                   key={c.id}
+                  data-tour="cheques-fila"
                   className={cn(
                     "grid gap-3 px-4 py-4 lg:grid-cols-[12.5rem_minmax(0,1fr)_15rem] lg:items-center lg:gap-6",
                     esSinGasto(c) && "bg-accent/40"

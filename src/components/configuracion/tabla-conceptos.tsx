@@ -203,7 +203,7 @@ export function TablaConceptos({
 
   return (
     <div className="space-y-6">
-      <Alert className="px-4 py-3">
+      <Alert className="px-4 py-3" data-tour="config-orden">
         <Info strokeWidth={2} />
         <AlertTitle className="text-sm">
           Los precios nuevos rigen desde la próxima generación mensual. Lo ya
@@ -228,7 +228,10 @@ export function TablaConceptos({
           </div>
           {/* Las filas comparten columnas (subgrid): el interruptor "Activo" queda alineado aunque
               una fila no tenga "Editar" (el bono camioneros lo tenía corrido ~100 px). */}
-          <ul className="grid grid-cols-1 divide-y overflow-hidden rounded-xl border bg-card sm:grid-cols-[auto_minmax(0,1fr)_auto_auto]">
+          <ul
+            data-tour="config-conceptos"
+            className="grid grid-cols-1 divide-y overflow-hidden rounded-xl border bg-card sm:grid-cols-[auto_minmax(0,1fr)_auto_auto]"
+          >
             {grupo.items.map((concepto) => {
               const enEspera = pendientes[concepto.id] ?? [];
               const sinPrecio = SIN_PRECIO.includes(concepto.tipo);
@@ -296,6 +299,7 @@ export function TablaConceptos({
                         variant="outline"
                         className="min-h-11 px-4 text-sm"
                         onClick={() => abrirEdicion(concepto)}
+                        data-tour="config-editar"
                       >
                         <Pencil className="size-4" strokeWidth={2} />
                         Editar

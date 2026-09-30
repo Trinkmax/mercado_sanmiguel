@@ -131,7 +131,10 @@ export function TraerFijos({
 
   if (!abierto) {
     return (
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-primary/30 bg-accent/60 px-5 py-4">
+      <div
+        data-tour="gastos-traer-fijos"
+        className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-primary/30 bg-accent/60 px-5 py-4"
+      >
         <div className="flex items-start gap-3">
           <CopyPlus className="mt-0.5 size-6 shrink-0 text-primary" strokeWidth={1.9} />
           <div>
@@ -172,7 +175,10 @@ export function TraerFijos({
       className="rounded-xl border bg-card"
     >
       {/* Sin overflow-hidden: si no, el pie no queda pegado abajo al bajar por la lista. */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-t-xl border-b bg-muted/40 px-4 py-3">
+      <div
+        data-tour="gastos-fijos-lista"
+        className="flex flex-wrap items-center justify-between gap-3 rounded-t-xl border-b bg-muted/40 px-4 py-3"
+      >
         <div className="min-w-0 flex-1 basis-64">
           <h2 className="font-display text-lg font-bold tracking-tight">
             Fijos de {origen} → {destino}

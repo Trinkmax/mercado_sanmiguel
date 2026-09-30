@@ -141,6 +141,11 @@ const RUTAS_IMPRESION: { href: string; roles: Rol[] }[] = [
   { href: "/reporte-mensual", roles: ["lider"] },
 ];
 
+/** Pantallas fuera del menú a las que se llega desde «Ayuda» (la Guía del tour). */
+const RUTAS_AYUDA: { href: string; roles: Rol[] }[] = [
+  { href: "/guia", roles: ["admin", "guardia", "porteria", "tesoreria", "lider"] },
+];
+
 /**
  * ¿Ese rol puede ver esa pantalla? (ruta relativa, con o sin query). Sirve para
  * volver adonde estaba después de entrar: si no le corresponde, va a su inicio.
@@ -148,7 +153,7 @@ const RUTAS_IMPRESION: { href: string; roles: Rol[] }[] = [
  */
 export function puedeVerRuta(rol: Rol, ruta: string): boolean {
   const pathname = ruta.split(/[?#]/)[0];
-  return [...NAVEGACION, ...NAVEGACION_SOCIO, ...RUTAS_IMPRESION].some(
+  return [...NAVEGACION, ...NAVEGACION_SOCIO, ...RUTAS_IMPRESION, ...RUTAS_AYUDA].some(
     (item) =>
       (pathname === item.href || pathname.startsWith(`${item.href}/`)) &&
       item.roles.includes(rol)

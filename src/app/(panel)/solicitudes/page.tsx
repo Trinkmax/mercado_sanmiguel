@@ -97,7 +97,7 @@ export default async function SolicitudesPage({
           <BotonExportar dataset="solicitudes" periodo={periodoActual()} label="Solicitudes del mes (.xlsx)" />
         ) : null}
         <Button asChild size="lg" className="h-12 px-5 text-base font-semibold">
-          <Link href="/solicitudes/nueva">
+          <Link href="/solicitudes/nueva" data-tour="solicitudes-nueva">
             <Plus className="size-5" strokeWidth={2.2} />
             Nueva solicitud
           </Link>
@@ -132,6 +132,7 @@ export default async function SolicitudesPage({
                 <Link
                   key={s.id}
                   href={`/solicitudes/${s.id}`}
+                  data-tour="solicitudes-fila"
                   className={cn(
                     "flex min-h-14 items-start gap-3 px-4 py-3 transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none",
                     esperaAlJefe && "bg-parcial-suave/50",

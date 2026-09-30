@@ -112,6 +112,7 @@ export function BuscadorClientes({
           value={categoria}
           onValueChange={elegirCategoria}
           aria-label="Qué clientes ver"
+          data-tour="cobranza-categorias"
           className="w-full"
         >
           {categorias.map((cat) => (
@@ -129,7 +130,7 @@ export function BuscadorClientes({
         </ToggleGroup>
       ) : null}
 
-      <div className="relative">
+      <div className="relative" data-tour="cobranza-buscador">
         <Search
           className="absolute top-1/2 left-4 size-6 -translate-y-1/2 text-muted-foreground"
           strokeWidth={2}
@@ -181,6 +182,7 @@ export function BuscadorClientes({
               <li key={c.id}>
                 <Link
                   href={`/cobranza/${c.id}`}
+                  data-tour="cobranza-fila"
                   className="flex min-h-16 items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/50 active:bg-muted sm:items-center sm:py-2.5"
                 >
                   <span className="w-10 shrink-0 pt-px text-right font-display text-base font-bold tabular sm:pt-0">

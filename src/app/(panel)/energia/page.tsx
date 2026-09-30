@@ -273,7 +273,7 @@ export default async function EnergiaPage({
           propuesto={propuestoDe(ener?.id)}
           aplicaDirecto={aplicaDirecto(perfil.rol)}
         />
-        <Button asChild variant="outline" className="h-11 px-4 text-sm">
+        <Button asChild variant="outline" className="h-11 px-4 text-sm" data-tour="energia-planilla">
           <Link href="/planilla-lecturas">
             <Printer className="size-5" strokeWidth={2} />
             Imprimir planilla para el electricista
@@ -290,6 +290,7 @@ export default async function EnergiaPage({
           bajan enteros y nunca queda un signo colgando. */}
       <section
         aria-label={`Energía de ${mes}`}
+        data-tour="energia-mes"
         className="space-y-4 rounded-xl border bg-card p-4 sm:p-5"
       >
         <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-3">
@@ -328,13 +329,15 @@ export default async function EnergiaPage({
       ) : null}
 
       {filas.length === 0 ? (
-        <EmptyState
-          icono={Gauge}
-          titulo="No hay medidores activos"
-          descripcion="Tocá “Agregar un medidor”, elegí el cliente y cargá el número. Después aparece acá para cargarle la lectura."
-        >
-          <AgregarMedidor clientes={clientesParaMedidor} />
-        </EmptyState>
+        <div data-tour="energia-sin-medidores">
+          <EmptyState
+            icono={Gauge}
+            titulo="No hay medidores activos"
+            descripcion="Tocá “Agregar un medidor”, elegí el cliente y cargá el número. Después aparece acá para cargarle la lectura."
+          >
+            <AgregarMedidor clientes={clientesParaMedidor} />
+          </EmptyState>
+        </div>
       ) : (
         <CargaRapida key={periodo} filas={filas} periodo={periodo} precioKwh={precioKwh} />
       )}

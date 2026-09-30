@@ -9,7 +9,7 @@ export function SelectorPeriodo({ periodo }: { periodo: string }) {
   const siguiente = sumarMeses(periodo, 1);
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-2" data-tour="reportes-selector">
       <Button asChild variant="outline" size="icon-lg" className="size-11">
         <Link
           href={`/reportes?periodo=${anterior}`}

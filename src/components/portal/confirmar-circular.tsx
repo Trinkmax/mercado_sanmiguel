@@ -41,6 +41,7 @@ export function ConfirmarCircular({
       {error ? <AvisoError mensaje={error} /> : null}
       <Button
         size="lg"
+        data-tour="socio-comunicaciones-confirmar"
         className="h-14 w-full text-base font-semibold"
         disabled={pendiente}
         onClick={confirmar}

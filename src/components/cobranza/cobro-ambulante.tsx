@@ -356,7 +356,7 @@ export function CobroAmbulante({
         </Alert>
       ) : null}
 
-      <div className="space-y-3">
+      <div className="space-y-3" data-tour="cobranza-dias">
         <Label className="text-base font-medium">¿Cuántos días paga?</Label>
         <div className="flex items-center justify-center gap-4">
           <Button
@@ -486,7 +486,7 @@ export function CobroAmbulante({
       </div>
 
       {!mixto ? (
-        <div className="space-y-2">
+        <div className="space-y-2" data-tour="cobranza-medio">
           <Label className="text-base font-medium">¿Cómo te paga?</Label>
           <SelectorMedio
             medios={["efectivo", "transferencia"]}
@@ -622,6 +622,7 @@ export function CobroAmbulante({
       <Button
         type="button"
         size="lg"
+        data-tour="cobranza-registrar cobranza-cobrar-dias"
         onClick={registrar}
         disabled={bloqueado}
         className="h-auto min-h-14 w-full py-3 text-lg font-semibold whitespace-normal"

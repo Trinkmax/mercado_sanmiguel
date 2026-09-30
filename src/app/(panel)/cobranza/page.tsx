@@ -233,7 +233,7 @@ export default async function CobranzaPage({ searchParams }: { searchParams: Sp 
       <AvisoCajaCerrada caja={cajaHoy} rol={perfil.rol} className="-mt-4" />
 
       {esJefe || hoyTotal > 0 ? (
-        <div className="-mt-4 space-y-1 rounded-lg border bg-card px-4 py-3">
+        <div data-tour="cobranza-hoy" className="-mt-4 space-y-1 rounded-lg border bg-card px-4 py-3">
           <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
             {hoyTotal > 0 ? (
               <>

@@ -69,7 +69,11 @@ export default async function ComunicacionesSocioPage({
       />
 
       {/* Pestañas grandes: 2×2 en el celular, una fila en tablet */}
-      <nav aria-label="Tipo de comunicación" className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <nav
+        aria-label="Tipo de comunicación"
+        data-tour="socio-comunicaciones-pestanas"
+        className="grid grid-cols-2 gap-2 sm:grid-cols-4"
+      >
         {PESTANAS_PORTAL.map((p) => {
           const Icono = ICONO[p.valor];
           const activa = p.valor === pestana.valor;
@@ -79,6 +83,7 @@ export default async function ComunicacionesSocioPage({
               key={p.valor}
               href={`/mi-cuenta/comunicaciones?tab=${p.valor}`}
               aria-current={activa ? "page" : undefined}
+              data-tour={`socio-comunicaciones-pestana-${p.valor}`}
               className={cn(
                 "flex min-h-14 items-center gap-2 rounded-lg border px-3 py-2 text-[15px] font-semibold transition-colors",
                 activa
@@ -111,6 +116,7 @@ export default async function ComunicacionesSocioPage({
                 <li key={c.id}>
                   <Link
                     href={`/mi-cuenta/circulares/${c.id}`}
+                    data-tour="socio-comunicaciones-circular"
                     className="flex min-h-16 items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50 active:bg-muted"
                   >
                     <span className="min-w-0 flex-1">
@@ -179,6 +185,7 @@ function FilaRegistro({ r }: { r: RegistroPortal }) {
     <li>
       <Link
         href={`/mi-cuenta/comunicaciones/${r.id}`}
+        data-tour="socio-comunicaciones-registro"
         className="flex min-h-16 items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50 active:bg-muted"
       >
         <span className="min-w-0 flex-1 space-y-1">

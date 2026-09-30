@@ -95,7 +95,7 @@ export function BajaCliente({
     return (
       <Dialog open={abierto} onOpenChange={setAbierto}>
         <DialogTrigger asChild>
-          <Button variant="outline" size="lg" className="h-12 px-5 text-base">
+          <Button variant="outline" size="lg" className="h-12 px-5 text-base" data-tour="clientes-baja">
             <UserCheck className="size-5" strokeWidth={2} />
             Reactivar
           </Button>
@@ -153,6 +153,7 @@ export function BajaCliente({
           variant="ghost"
           size="lg"
           className="h-12 px-4 text-base text-destructive hover:text-destructive"
+          data-tour="clientes-baja"
         >
           <UserX className="size-5" strokeWidth={2} />
           Dar de baja

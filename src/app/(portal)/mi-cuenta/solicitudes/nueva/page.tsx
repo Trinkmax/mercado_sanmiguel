@@ -43,7 +43,10 @@ export default async function NuevaSolicitudSocioPage() {
             descripcion={`Para ${cliente.nombre} · Carpeta N° ${cliente.codigo}. La recibe el Líder de Procesos y te respondemos por acá.`}
             className="pb-0"
           />
-          <FormSolicitudSocio />
+          {/* Ancla del tour guiado (docs/GUIA-TOUR.md): envoltorio sin estilos. */}
+          <div data-tour="solicitudes-socio-formulario">
+            <FormSolicitudSocio />
+          </div>
         </>
       )}
     </div>

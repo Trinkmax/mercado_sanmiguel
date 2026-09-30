@@ -150,7 +150,7 @@ export function FilaUsuario({
   }
 
   return (
-    <li className={cn("px-4 py-4 sm:px-5", !usuario.activo && "bg-muted/40")}>
+    <li className={cn("px-4 py-4 sm:px-5", !usuario.activo && "bg-muted/40")} data-tour="config-usuario-fila">
       <div className="flex items-start gap-3">
         <span
           aria-hidden

@@ -33,6 +33,7 @@ export function BotonReabrirCaja({
   motivoObligatorio = true,
   variant = "outline",
   className,
+  "data-tour": dataTour,
 }: {
   cajaId: string;
   etiqueta?: string;
@@ -40,6 +41,8 @@ export function BotonReabrirCaja({
   motivoObligatorio?: boolean;
   variant?: "outline" | "default";
   className?: string;
+  /** Ancla del tour guiado (docs/GUIA-TOUR.md) en el botón. */
+  "data-tour"?: string;
 }) {
   const router = useRouter();
   const [abierto, setAbierto] = useState(false);
@@ -97,7 +100,7 @@ export function BotonReabrirCaja({
       }}
     >
       <DialogTrigger asChild>
-        <Button variant={variant} size="lg" className={className ?? "h-12 px-5 text-base"}>
+        <Button variant={variant} size="lg" className={className ?? "h-12 px-5 text-base"} data-tour={dataTour}>
           <LockOpen className="size-5" strokeWidth={2} />
           {etiqueta}
         </Button>

@@ -1051,6 +1051,7 @@ export function MapaMercado({
             // Corto: tiene que entrar entero al lado de los botones en un celular de 360 px.
             placeholder={esPorteria ? "Buscá quintero o puesto" : undefined}
             className="min-w-0 flex-1 sm:max-w-md"
+            data-tour="mapa-buscador"
           />
           <div className="ml-auto flex shrink-0 items-center gap-2">
             {puedeEditar ? (
@@ -1061,6 +1062,7 @@ export function MapaMercado({
                   className="min-h-11 min-w-11 px-3 text-sm font-semibold sm:px-4"
                   onClick={() => entrarAsignar()}
                   aria-label="Asignar puestos"
+                  data-tour="mapa-asignar"
                 >
                   <Paintbrush className="size-4" strokeWidth={2} />
                   <span className="hidden sm:inline">Asignar puestos</span>
@@ -1068,7 +1070,12 @@ export function MapaMercado({
               ) : (
                 // En el celular sin el tilde: así "Buscá puestero o puesto" entra entero
                 // también a 360 px (con el tilde quedaba "Buscá puestero o pu").
-                <Button type="button" className="min-h-11 px-4 text-sm font-semibold max-sm:px-3.5" onClick={salirAsignar}>
+                <Button
+                  type="button"
+                  className="min-h-11 px-4 text-sm font-semibold max-sm:px-3.5"
+                  onClick={salirAsignar}
+                  data-tour="mapa-listo"
+                >
                   <Check className="size-4 max-sm:hidden" strokeWidth={2.2} />
                   Listo
                 </Button>
@@ -1118,7 +1125,12 @@ export function MapaMercado({
             algo: el detalle flota encima (hoja abajo en el celular, tarjeta
             abajo a la derecha desde tablet). Asignar, en escritorio, va en una
             columna al costado. */}
-        <div className="relative flex min-h-[12rem] flex-1 flex-col lg:flex-row">
+        <div
+          className="relative flex min-h-[12rem] flex-1 flex-col lg:flex-row"
+          // Tour: con una tarjeta o el panel de asignar abiertos, los pasos "tocá" del plano
+          // pasan a "mirá" (el panel tiene botones que guardan: Sumárselo, Avisar al Líder…).
+          data-tour={hayPanel ? "mapa-plano mapa-plano-con-tarjeta" : "mapa-plano"}
+        >
         <LienzoPlano
           ref={lienzo}
           limites={limites}
@@ -1176,6 +1188,15 @@ export function MapaMercado({
         {hayPanel ? (
         <div
           ref={panelRef}
+          data-tour={
+            modo === "asignar"
+              ? undefined
+              : clienteDetalle
+                ? "mapa-detalle-cliente"
+                : esPorteria
+                  ? "mapa-aviso"
+                  : "mapa-detalle-espacio"
+          }
           className={cn(
             "@container absolute inset-x-2 bottom-2 z-30 max-h-[64%] overflow-y-auto overscroll-contain rounded-2xl bg-card shadow-[0_18px_40px_-12px_rgb(15_23_60/0.45)] ring-1 ring-foreground/10",
             // Desde tablet flota CENTRADO sobre el plano, sin tapar los botones de zoom

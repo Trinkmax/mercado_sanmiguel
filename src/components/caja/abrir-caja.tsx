@@ -29,7 +29,13 @@ export function BotonAbrirCaja({ tipo }: { tipo: Enums<"tipo_caja"> }) {
   }
 
   return (
-    <Button size="lg" onClick={abrir} disabled={enviando} className="h-13 px-8 text-base font-semibold">
+    <Button
+      size="lg"
+      onClick={abrir}
+      disabled={enviando}
+      className="h-13 px-8 text-base font-semibold"
+      data-tour="caja-abrir"
+    >
       {enviando ? <Spinner className="size-5" /> : <CajaRegistradora className="size-5" strokeWidth={2} />}
       {tipo === "guardia" ? "Abrir la caja de portería" : "Abrir caja"}
     </Button>

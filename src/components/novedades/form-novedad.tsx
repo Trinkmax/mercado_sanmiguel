@@ -397,7 +397,7 @@ export function FormNovedad({
   return (
     <form onSubmit={onSubmit} className="space-y-8" noValidate>
       {/* ¿A quién? */}
-      <section className="space-y-3" aria-labelledby="nov-quien">
+      <section className="space-y-3" aria-labelledby="nov-quien" data-tour="novedades-quien">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 id="nov-quien" className="font-display text-lg font-bold tracking-tight">
             ¿A quién?
@@ -477,6 +477,7 @@ export function FormNovedad({
                             type="button"
                             onClick={() => alternar(e.id)}
                             aria-pressed={activo}
+                            data-tour="novedades-empleado-opcion"
                             className={cn(
                               "flex min-h-14 items-center gap-3 rounded-lg border px-4 py-2 text-left transition-colors",
                               activo
@@ -517,7 +518,7 @@ export function FormNovedad({
 
       {/* ¿Qué pasó? */}
       {elegidosEmp.length > 0 ? (
-        <section className="space-y-3" aria-labelledby="nov-que">
+        <section className="space-y-3" aria-labelledby="nov-que" data-tour="novedades-que-paso">
           <h2 id="nov-que" className="font-display text-lg font-bold tracking-tight">
             ¿Qué pasó?
           </h2>
@@ -805,7 +806,7 @@ export function FormNovedad({
 
       {/* Confirmación */}
       {frase ? (
-        <div className="space-y-4">
+        <div className="space-y-4" data-tour="novedades-confirmar">
           <div className="rounded-xl border-2 border-primary/25 bg-accent/50 px-5 py-4">
             <p className="text-sm font-medium text-muted-foreground">Vas a {editar ? "guardar" : esJefe ? "enviar" : "guardar"}:</p>
             <p className="mt-1 text-lg leading-snug font-semibold">{frase}</p>

@@ -13,7 +13,7 @@ export function SelectorPeriodo({ periodo }: { periodo: string }) {
   const haySiguiente = siguiente <= periodoActual();
 
   return (
-    <div className="flex items-center justify-center gap-2">
+    <div className="flex items-center justify-center gap-2" data-tour="energia-selector">
       <Button
         asChild
         variant="outline"

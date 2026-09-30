@@ -119,13 +119,14 @@ export function BarraInferior({
       aria-label="Navegación principal"
       className="no-print pointer-events-none fixed inset-x-0 bottom-0 z-40 pt-2 pr-[max(0.75rem,env(safe-area-inset-right))] pb-[max(0.75rem,env(safe-area-inset-bottom))] pl-[max(0.75rem,env(safe-area-inset-left))] lg:hidden"
     >
-      <div className="pointer-events-auto mx-auto flex h-[4.25rem] max-w-lg items-stretch gap-1 rounded-[1.4rem] bg-sidebar p-1.5 text-sidebar-foreground shadow-[0_14px_34px_-14px_rgb(15_23_60/0.7)] ring-1 ring-white/10">
+      <div data-tour="nav:barra" className="pointer-events-auto mx-auto flex h-[4.25rem] max-w-lg items-stretch gap-1 rounded-[1.4rem] bg-sidebar p-1.5 text-sidebar-foreground shadow-[0_14px_34px_-14px_rgb(15_23_60/0.7)] ring-1 ring-white/10">
         {tabs.map((t) => {
           const activo = esActivo(pathname, t.href);
           return (
             <Link
               key={t.href}
               href={t.href}
+              data-tour={`nav:${t.href}`}
               aria-current={activo ? "page" : undefined}
               className={cn(
                 CLASE_TAB,
@@ -148,6 +149,7 @@ export function BarraInferior({
           <SheetTrigger asChild>
             <button
               type="button"
+              data-tour="nav:menu"
               className={cn(
                 CLASE_TAB,
                 enMenu

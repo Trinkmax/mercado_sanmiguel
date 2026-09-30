@@ -44,7 +44,7 @@ export function IngresosDelDia({
   return (
     <div className="space-y-6">
       {esHoy && anteriores.length > 0 ? (
-        <section className="space-y-3 rounded-lg border border-parcial bg-parcial-suave/60 p-4">
+        <section className="space-y-3 rounded-lg border border-parcial bg-parcial-suave/60 p-4" data-tour="porteria-quedaron">
           <div className="space-y-0.5">
             <h3 className="flex items-center gap-2 font-display text-lg font-bold tracking-tight">
               <History className="size-5 text-parcial" strokeWidth={2} />
@@ -94,7 +94,7 @@ export function IngresosDelDia({
             const salio = Boolean(i.egreso_en);
             const nombre = `${i.apellido}, ${i.nombre}`;
             return (
-              <div key={i.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3">
+              <div key={i.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3" data-tour="porteria-ingreso">
                 <p className="w-14 shrink-0 font-display text-lg font-bold tabular">{horaAR(i.ingreso_en)}</p>
                 {url ? (
                   // URL privada firmada: no pasa por el optimizador de imágenes.

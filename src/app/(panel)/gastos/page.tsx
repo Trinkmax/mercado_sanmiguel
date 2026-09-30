@@ -362,7 +362,7 @@ export default async function GastosPage({
         </div>
       ) : null}
 
-      <div className="flex flex-wrap items-center justify-between gap-4">
+      <div data-tour="gastos-resumen" className="flex flex-wrap items-center justify-between gap-4">
         <SelectorMes periodo={periodo} caja={cajaPreseleccionada?.id ?? null} />
         {/* Cada dato lleva su borde arriba y a la izquierda, y el recuadro recorta los que
             caen sobre el borde: cuando en el celular pasan a otra línea, ocupan todo el

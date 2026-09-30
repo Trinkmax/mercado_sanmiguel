@@ -416,7 +416,10 @@ export function FormCobro({
   if (deudaTotal <= 0 && !modoAdelanto) {
     const cubreConSaldo = deudaBruta > 0 && saldoFavorPrevio > 0;
     return (
-      <section className="space-y-4 rounded-lg border bg-card p-6 text-center">
+      <section
+        data-tour={cubreConSaldo ? "cobranza-saldo-cubre" : "cobranza-al-dia"}
+        className="space-y-4 rounded-lg border bg-card p-6 text-center"
+      >
         {cubreConSaldo ? (
           <>
             <p className="text-muted-foreground">
@@ -547,7 +550,7 @@ export function FormCobro({
       {!mixto ? (
         // ---------- camino simple: una línea ----------
         <>
-          <div className="space-y-2">
+          <div className="space-y-2" data-tour="cobranza-monto">
             <Label htmlFor="monto-cobro" className="text-base font-medium">
               ¿Cuánto te pagan?
             </Label>
@@ -614,7 +617,7 @@ export function FormCobro({
             ) : null}
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-2" data-tour="cobranza-medio">
             <Label className="text-base font-medium">¿Cómo te paga?</Label>
             <SelectorMedio
               medios={medios}
@@ -783,6 +786,7 @@ export function FormCobro({
       <Button
         type="submit"
         size="lg"
+        data-tour="cobranza-registrar"
         disabled={isPending || total <= 0 || cajaCerrada || preparandoFoto}
         className="h-auto min-h-14 w-full py-3 text-lg font-semibold whitespace-normal"
       >

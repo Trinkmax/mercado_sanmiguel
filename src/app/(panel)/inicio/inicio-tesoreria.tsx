@@ -135,7 +135,7 @@ export async function InicioTesoreria({ perfil, supabase }: { perfil: Perfil; su
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
-      <Card>
+      <Card data-tour={conceptos.length === 0 ? "inicio-estimado-vacio" : "inicio-estimado"}>
         <CardHeader>
           <CardTitle className="text-lg">Estimado y cobrado de {labelPeriodo(periodo)}</CardTitle>
           <CardDescription>Lo que se tendría que cobrar en el mes y lo que ya entró.</CardDescription>
@@ -204,14 +204,14 @@ export async function InicioTesoreria({ perfil, supabase }: { perfil: Perfil; su
           <TarjetaAviso key={aviso.clave} aviso={aviso} />
         ))}
         {avisos.length === 0 ? (
-          <Card>
+          <Card data-tour="inicio-nada-pendiente">
             <CardContent className="text-sm text-muted-foreground">
               Nada espera tu control por ahora: no hay cajas para validar, transferencias sin
               conciliar ni cheques para depositar.
             </CardContent>
           </Card>
         ) : null}
-        <Card>
+        <Card data-tour="inicio-ultimos-14">
           <CardHeader>
             <CardTitle className="text-base">Últimos 14 días</CardTitle>
             <CardDescription>Lo que entró por día (cobros y bono camioneros)</CardDescription>

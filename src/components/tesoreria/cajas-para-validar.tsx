@@ -64,6 +64,7 @@ export function CajasParaValidar({ cajas }: { cajas: CajaPendiente[] }) {
           // todas las filas (el sello "En caja mayor" ya no la corre).
           <li
             key={c.id}
+            data-tour="tesoreria-caja-fila"
             className="grid gap-4 px-4 py-4 sm:px-5 md:grid-cols-[14rem_minmax(0,1fr)] md:items-center xl:grid-cols-[16rem_minmax(0,1fr)_auto]"
           >
             <div className="min-w-0 space-y-1">

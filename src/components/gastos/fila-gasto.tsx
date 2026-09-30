@@ -108,6 +108,7 @@ export function FilaGasto({
 
   return (
     <li
+      data-tour="gastos-fila"
       className={cn(
         "grid gap-3 px-4 py-4",
         COLUMNAS_FILA_GASTO,
@@ -164,7 +165,7 @@ export function FilaGasto({
           </p>
         ) : null}
         {g.estado !== "anulado" ? (
-          <div className="flex flex-wrap items-center gap-2 pt-0.5">
+          <div data-tour="gastos-comprobante" className="flex flex-wrap items-center gap-2 pt-0.5">
             <SelloComprobante
               estadoGasto={g.estado}
               tieneFactura={Boolean(g.facturaPath)}

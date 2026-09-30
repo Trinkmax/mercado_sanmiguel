@@ -189,20 +189,20 @@ export default async function AprobacionesPage({ searchParams }: Props) {
       />
 
       <Tabs defaultValue={pestanaInicial}>
-        <TabsList className="h-auto! w-full flex-wrap justify-start gap-1 p-1 sm:w-fit">
-          <TabsTrigger value="pendientes" className={claseTab}>
+        <TabsList className="h-auto! w-full flex-wrap justify-start gap-1 p-1 sm:w-fit" data-tour="aprobaciones-pestanas">
+          <TabsTrigger value="pendientes" className={claseTab} data-tour="aprobaciones-pestana-pendientes">
             Pendientes
             <Contador n={pendientes.length} activo={pendientes.length > 0} />
           </TabsTrigger>
-          <TabsTrigger value="revisar" className={claseTab}>
+          <TabsTrigger value="revisar" className={claseTab} data-tour="aprobaciones-pestana-revisar">
             Aplicadas por el Jefe
             <Contador n={porRevisar.length} activo={porRevisar.length > 0} />
           </TabsTrigger>
-          <TabsTrigger value="aprobados" className={claseTab}>
+          <TabsTrigger value="aprobados" className={claseTab} data-tour="aprobaciones-pestana-aprobados">
             Aprobados
             <Contador n={aprobados.length} />
           </TabsTrigger>
-          <TabsTrigger value="rechazados" className={claseTab}>
+          <TabsTrigger value="rechazados" className={claseTab} data-tour="aprobaciones-pestana-rechazados">
             Rechazados
             <Contador n={rechazados.length} />
           </TabsTrigger>

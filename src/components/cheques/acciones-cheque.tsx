@@ -300,7 +300,7 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
               <TooltipProvider>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <span tabIndex={0} className="inline-flex rounded-md">
+                    <span tabIndex={0} className="inline-flex rounded-md" data-tour="cheques-depositar-diferido">
                       <Button className="h-11 px-4 text-base font-semibold lg:w-full" disabled>
                         <CalendarClock className="size-4" strokeWidth={2} />
                         Depositar
@@ -313,12 +313,12 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
                 </Tooltip>
               </TooltipProvider>
             ) : (
-              <Button className="h-11 px-4 text-base font-semibold" onClick={() => abrir("depositar")}>
+              <Button className="h-11 px-4 text-base font-semibold" onClick={() => abrir("depositar")} data-tour="cheques-depositar">
                 <Landmark className="size-4" strokeWidth={2} />
                 Depositar
               </Button>
             )}
-            <Button variant="outline" className="h-11 px-4 text-base" onClick={() => abrir("entregar")}>
+            <Button variant="outline" className="h-11 px-4 text-base" onClick={() => abrir("entregar")} data-tour="cheques-entregar">
               <HandCoins className="size-4" strokeWidth={2} />
               Entregar a proveedor
             </Button>
@@ -326,7 +326,7 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
         ) : null}
         {cheque.estado === "depositado" ? (
           <>
-            <Button className="h-11 px-4 text-base font-semibold" onClick={() => abrir("acreditar")}>
+            <Button className="h-11 px-4 text-base font-semibold" onClick={() => abrir("acreditar")} data-tour="cheques-acreditar">
               Se acreditó
             </Button>
             <Button
@@ -334,6 +334,7 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
               className="h-11 px-3 text-base"
               disabled={pendiente}
               onClick={() => abrir("deshacer_deposito")}
+              data-tour="cheques-deshacer"
             >
               <Undo2 className="size-4" strokeWidth={2} />
               Deshacer depósito
@@ -341,19 +342,29 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
           </>
         ) : null}
         {cheque.estado === "acreditado" ? (
-          <Button variant="outline" className="h-11 px-3 text-base" onClick={() => abrir("deshacer_acreditacion")}>
+          <Button
+            variant="outline"
+            className="h-11 px-3 text-base"
+            onClick={() => abrir("deshacer_acreditacion")}
+            data-tour="cheques-deshacer"
+          >
             <Undo2 className="size-4" strokeWidth={2} />
             Deshacer
           </Button>
         ) : null}
         {sinGasto ? (
-          <Button className="h-11 px-4 text-base font-semibold" onClick={() => abrir("vincular")}>
+          <Button className="h-11 px-4 text-base font-semibold" onClick={() => abrir("vincular")} data-tour="cheques-que-gasto">
             <Link2 className="size-4" strokeWidth={2} />
             ¿Qué gasto pagó?
           </Button>
         ) : null}
         {cheque.estado === "entregado" ? (
-          <Button variant="outline" className="h-11 px-3 text-base" onClick={() => abrir("deshacer_entrega")}>
+          <Button
+            variant="outline"
+            className="h-11 px-3 text-base"
+            onClick={() => abrir("deshacer_entrega")}
+            data-tour="cheques-deshacer"
+          >
             <Undo2 className="size-4" strokeWidth={2} />
             Deshacer
           </Button>
@@ -363,6 +374,7 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
             variant="outline"
             className="h-11 px-4 text-base text-destructive hover:text-destructive"
             onClick={() => abrir("rechazar")}
+            data-tour="cheques-rechazar"
           >
             Rechazar
           </Button>

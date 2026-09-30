@@ -42,6 +42,7 @@ export function NavPortal({ nuevas, respuestas = 0 }: { nuevas: number; respuest
           <Link
             key={it.href}
             href={it.href}
+            data-tour={`nav:${it.href}`}
             aria-current={it.activo ? "page" : undefined}
             className={cn(
               "relative flex min-h-12 items-center justify-center gap-2 rounded-lg border px-3 text-base font-semibold transition-colors",

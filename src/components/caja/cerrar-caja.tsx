@@ -125,6 +125,7 @@ export function BotonCerrarCaja({
           <Button
             size="lg"
             className="h-13 w-full px-8 text-base font-semibold sm:w-auto"
+            data-tour="caja-cerrar"
             onClick={() => {
               setAbierto(true);
               // La vista previa usa el arqueo de la página: se trae de nuevo por si hubo cobros recién.

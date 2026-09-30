@@ -112,6 +112,7 @@ export function ResponderRegistro({
       ref={formRef}
       onSubmit={onSubmit}
       noValidate
+      data-tour="comunicaciones-responder"
       className={cn(
         "space-y-3 rounded-xl border bg-card p-4",
         esperaRespuesta && "border-2 border-pendiente/40"

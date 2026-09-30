@@ -44,6 +44,7 @@ export function SemaforoDeuda({
   return (
     <section
       aria-label="Estado de tu cuenta"
+      data-tour={`portal-semaforo ${ANCLA_NIVEL[nivel]}`}
       className={cn("flex items-stretch gap-4 rounded-xl border-2 p-4 sm:gap-6 sm:p-6", fondo)}
     >
       <Luces nivel={nivel} />
@@ -66,14 +67,14 @@ export function SemaforoDeuda({
           <div className="space-y-1">
             <Money monto={aPagar} className="block text-3xl font-bold text-parcial" />
             <p className="text-lg leading-snug">
-              para pagar antes del{" "}
+              para pagar hasta el{" "}
               <span className="font-semibold tabular">{formatFecha(proximoVencimiento)}</span>
             </p>
             {proximoVencimiento ? (
               <p className="text-[15px] font-medium">{textoDias(diasHasta(proximoVencimiento))}</p>
             ) : null}
             {beneficio > 0 ? (
-              <p className="border-t border-parcial/30 pt-2 text-[15px]">
+              <p data-tour="portal-beneficio" className="border-t border-parcial/30 pt-2 text-[15px]">
                 Pagando a tiempo mantenés el beneficio de{" "}
                 <Money monto={beneficio} className="font-semibold" />.
               </p>
@@ -83,7 +84,7 @@ export function SemaforoDeuda({
           <div className="space-y-1">
             <Money monto={aPagar} className="block text-3xl font-bold text-pendiente" />
             <p className="text-lg leading-snug">es lo que tenés que pagar hoy</p>
-            <p className="border-t border-pendiente/20 pt-2 text-[15px]">
+            <p data-tour="portal-beneficio-perdido" className="border-t border-pendiente/20 pt-2 text-[15px]">
               <Money monto={vencido} className="font-semibold" /> vencido desde el{" "}
               <span className="tabular">{formatFecha(vencidoDesde)}</span>: perdiste el beneficio.
             </p>
@@ -104,7 +105,7 @@ export function SemaforoDeuda({
         )}
 
         {saldoFavorAplicado > 0 && nivel !== "al_dia" ? (
-          <p className="flex flex-wrap items-center gap-2 text-sm">
+          <p data-tour="portal-saldo-favor" className="flex flex-wrap items-center gap-2 text-sm">
             <Sello estado="saldo_favor" />
             <span>
               Ya descontamos tus <Money monto={saldoFavorAplicado} className="font-semibold" /> a favor.
@@ -112,7 +113,7 @@ export function SemaforoDeuda({
           </p>
         ) : null}
         {saldoFavorSobrante > 0 ? (
-          <p className="flex flex-wrap items-center gap-2 text-sm">
+          <p data-tour="portal-saldo-favor" className="flex flex-wrap items-center gap-2 text-sm">
             <Sello estado="saldo_favor" />
             <span>
               Te quedan <Money monto={saldoFavorSobrante} className="font-semibold text-pagado" /> a
@@ -124,6 +125,13 @@ export function SemaforoDeuda({
     </section>
   );
 }
+
+/** Ancla del tour según el color encendido (docs/GUIA-TOUR.md): el paso cambia su texto. */
+const ANCLA_NIVEL: Record<NivelDeuda, string> = {
+  al_dia: "portal-cuenta-al-dia",
+  en_termino: "portal-cuenta-en-termino",
+  vencido: "portal-cuenta-vencido",
+};
 
 function textoDias(dias: number): string {
   if (dias <= 0) return "Vence hoy";

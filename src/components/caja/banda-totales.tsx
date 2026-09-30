@@ -124,6 +124,7 @@ export function BandaTotales({
     <section
       aria-label="Lo juntado en la caja"
       className="overflow-hidden rounded-lg border-2 border-foreground/70 bg-card"
+      data-tour="caja-totales"
     >
       {/* El total del día con su propio tamaño: no es lo más chico de la banda. Si no entra al
           lado del rótulo (celular, fecha de otro día), baja de renglón entero. */}

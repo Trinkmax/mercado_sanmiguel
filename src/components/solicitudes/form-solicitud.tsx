@@ -234,7 +234,7 @@ function Formulario({
   return (
     <form onSubmit={onSubmit} className="space-y-7" noValidate>
       {/* Tipo */}
-      <fieldset className="space-y-2">
+      <fieldset className="space-y-2" data-tour="solicitudes-form-tipo">
         <legend className="text-base font-medium">¿Qué es?</legend>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {TIPOS_SOLICITUD.map((t) => {
@@ -260,7 +260,7 @@ function Formulario({
       </fieldset>
 
       {/* Asunto */}
-      <div className="space-y-2">
+      <div className="space-y-2" data-tour="solicitudes-form-asunto">
         <Label htmlFor="sol-asunto" className="text-base">
           Asunto
         </Label>
@@ -292,7 +292,7 @@ function Formulario({
       </div>
 
       {/* ¿Sobre qué? */}
-      <fieldset className="space-y-3">
+      <fieldset className="space-y-3" data-tour="solicitudes-form-sobre">
         <legend className="text-base font-medium">¿Sobre qué es?</legend>
         <div className={cn("grid gap-2", opciones.length === 3 ? "grid-cols-3" : "grid-cols-2")}>
           {opciones.map((o) => {
@@ -457,7 +457,7 @@ function Formulario({
 
       {/* Origen (solo quien carga formularios de otros) */}
       {puedeElegirOrigen ? (
-        <fieldset className="space-y-2">
+        <fieldset className="space-y-2" data-tour="solicitudes-form-origen">
           <legend className="text-base font-medium">¿De dónde viene?</legend>
           <div className="flex flex-wrap gap-2">
             {ORIGENES_SOLICITUD.map((o) => {
@@ -485,7 +485,13 @@ function Formulario({
 
       {error ? <AlertaError error={error} titulo="No se pudo enviar" /> : null}
 
-      <Button type="submit" size="lg" disabled={pendiente} className="h-12 w-full text-base font-semibold sm:w-auto sm:px-8">
+      <Button
+        type="submit"
+        size="lg"
+        disabled={pendiente}
+        data-tour="solicitudes-form-enviar"
+        className="h-12 w-full text-base font-semibold sm:w-auto sm:px-8"
+      >
         {pendiente ? <Spinner className="size-5" /> : null}
         Enviar solicitud
       </Button>

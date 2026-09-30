@@ -144,6 +144,7 @@ export function AccesosSocios({
           }}
           className="w-full md:w-auto"
           aria-label="Ver clientes"
+          data-tour="config-portal-vista"
         >
           <ToggleGroupItem value="sin" className="h-12 flex-1 px-5 text-base md:flex-none">
             Sin acceso <span className="tabular opacity-80">{sinAcceso.length}</span>
@@ -256,7 +257,7 @@ function FilaSinAcceso({
   hayClaveAdmin: boolean;
 }) {
   return (
-    <li className="px-4 py-4 sm:px-5">
+    <li className="px-4 py-4 sm:px-5" data-tour="config-socio-fila">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-base font-semibold break-words">
@@ -270,6 +271,7 @@ function FilaSinAcceso({
           variant={abierto ? "secondary" : "default"}
           className="min-h-11 px-4 text-sm font-semibold"
           onClick={onAbrir}
+          data-tour="config-dar-acceso"
           aria-expanded={abierto}
           disabled={!hayClaveAdmin}
         >

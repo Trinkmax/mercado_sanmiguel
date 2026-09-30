@@ -159,7 +159,12 @@ export function BotonIntegrarRendicion({
 
   return (
     <>
-      <Button size="lg" className="h-12 w-full px-5 text-base font-semibold sm:w-auto" onClick={abrir}>
+      <Button
+        size="lg"
+        className="h-12 w-full px-5 text-base font-semibold sm:w-auto"
+        onClick={abrir}
+        data-tour="caja-recibir-boton"
+      >
         <ArrowDownToLine className="size-5" strokeWidth={2} />
         Recibir e integrar
       </Button>
@@ -359,7 +364,10 @@ export function RecibirCajaPorteria({ rendicion, mostrar }: { rendicion: Rendici
   return (
     <>
       {mostrar ? (
-        <div className="flex flex-wrap items-center justify-between gap-4 rounded-lg border bg-card p-5 sm:p-6">
+        <div
+          className="flex flex-wrap items-center justify-between gap-4 rounded-lg border bg-card p-5 sm:p-6"
+          data-tour="caja-recibir"
+        >
           <div className="min-w-0 space-y-1">
             <p className="text-lg font-semibold">
               Recibí <Money monto={rendicion.efectivo} className="font-bold" /> en efectivo

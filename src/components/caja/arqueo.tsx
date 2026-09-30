@@ -112,7 +112,7 @@ export function ArqueoCaja({
   const titulo = porteria ? (jefeRinde ? "Rendición" : "Caja de portería") : "Arqueo";
 
   return (
-    <section aria-label="Arqueo de la caja" className="etiqueta">
+    <section aria-label="Arqueo de la caja" className="etiqueta" data-tour="caja-arqueo">
       <div className="etiqueta-interior space-y-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -180,6 +180,7 @@ export function ArqueoCaja({
               ) : null}
               {permisos.reabrir ? (
                 <BotonReabrirCaja
+                  data-tour="caja-reabrir"
                   cajaId={caja.id}
                   descripcion="La caja de portería vuelve a quedar abierta y se desengancha de la caja mayor. Queda registrado en la bitácora."
                   motivoObligatorio={pedido === null}
@@ -207,6 +208,7 @@ export function ArqueoCaja({
               ) : null}
               {permisos.reabrir ? (
                 <BotonReabrirCaja
+                  data-tour="caja-reabrir"
                   cajaId={caja.id}
                   descripcion="La caja de portería vuelve a quedar abierta para corregir cobros. Después la rinden de nuevo. Queda registrado en la bitácora."
                   motivoObligatorio={pedido === null}
@@ -231,6 +233,7 @@ export function ArqueoCaja({
                     ¿Faltó cargar algo? Reabrila mientras Tesorería no la valide.
                   </p>
                   <BotonReabrirCaja
+                    data-tour="caja-reabrir"
                     cajaId={caja.id}
                     descripcion="La caja vuelve a quedar abierta para corregir cobros o gastos. Después la cerrás de nuevo. Queda registrado en la bitácora."
                     motivoObligatorio={pedido === null}

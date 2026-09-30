@@ -35,7 +35,7 @@ export function CambiosPendientesCliente({
   if (pendientes.length === 0 && rechazados.length === 0) return null;
 
   return (
-    <Card className={cn("text-base", className)}>
+    <Card className={cn("text-base", className)} data-tour="clientes-cambios">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-lg">
           <ClipboardClock className="size-5 text-muted-foreground" strokeWidth={1.9} />

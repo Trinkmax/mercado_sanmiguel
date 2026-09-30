@@ -496,6 +496,7 @@ export function FormEmpleado({
           size="lg"
           disabled={pendiente}
           className="h-13 w-full text-base font-semibold sm:flex-1"
+          data-tour="personal-crear"
         >
           {pendiente ? (
             <Spinner className="size-5" />

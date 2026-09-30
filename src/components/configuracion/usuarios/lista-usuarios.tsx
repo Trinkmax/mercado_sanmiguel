@@ -71,7 +71,7 @@ export function ListaUsuarios({
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+      <div className="flex flex-wrap items-end justify-between gap-3" data-tour="config-usuarios">
         <div>
           <h2 className="font-display text-lg font-bold">
             {esJefe ? "Usuarios de Portería" : "Equipo"}
@@ -92,6 +92,7 @@ export function ListaUsuarios({
             className="h-12 px-5 text-base font-semibold"
             onClick={() => setCreando(true)}
             disabled={!hayClaveAdmin}
+            data-tour="config-nuevo-usuario"
           >
             <UserPlus className="size-5" strokeWidth={2} />
             {esJefe ? "Nuevo usuario de Portería" : "Nuevo usuario"}
@@ -191,7 +192,13 @@ export function ListaUsuarios({
               : "Creá el primero con su DNI: le damos una contraseña para imprimir."
           }
         >
-          <Button size="lg" className="mt-2 h-12 px-5 text-base font-semibold" onClick={() => setCreando(true)} disabled={!hayClaveAdmin}>
+          <Button
+            size="lg"
+            className="mt-2 h-12 px-5 text-base font-semibold"
+            onClick={() => setCreando(true)}
+            disabled={!hayClaveAdmin}
+            data-tour="config-crear-primero"
+          >
             <UserPlus className="size-5" strokeWidth={2} />
             Crear el primero
           </Button>

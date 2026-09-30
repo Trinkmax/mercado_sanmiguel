@@ -63,25 +63,28 @@ export function VistaCaja({
     return (
       <div className="space-y-8">
         {encabezado}
-        {esHoy ? (
-          <EmptyState
-            icono={CajaRegistradora}
-            titulo={porteria ? "Todavía no hay caja de portería hoy" : "Todavía no se abrió la caja de hoy"}
-            descripcion={
-              permisos.abrir
-                ? `${quienAbre} Si querés, abrila ahora.`
-                : `${quienAbre} La abre quien cobra: Tesorería no abre cajas.`
-            }
-          >
-            {permisos.abrir ? <BotonAbrirCaja tipo={tipo} /> : null}
-          </EmptyState>
-        ) : (
-          <EmptyState
-            icono={CalendarX2}
-            titulo={`No hubo ${porteria ? "caja de portería" : "caja"} el ${formatFecha(fecha)}`}
-            descripcion="Ese día no se abrió esta caja. Elegí otro día de la lista de abajo."
-          />
-        )}
+        {/* El div solo lleva el ancla del tour (EmptyState no pasa atributos al DOM). */}
+        <div data-tour="caja-sin-abrir">
+          {esHoy ? (
+            <EmptyState
+              icono={CajaRegistradora}
+              titulo={porteria ? "Todavía no hay caja de portería hoy" : "Todavía no se abrió la caja de hoy"}
+              descripcion={
+                permisos.abrir
+                  ? `${quienAbre} Si querés, abrila ahora.`
+                  : `${quienAbre} La abre quien cobra: Tesorería no abre cajas.`
+              }
+            >
+              {permisos.abrir ? <BotonAbrirCaja tipo={tipo} /> : null}
+            </EmptyState>
+          ) : (
+            <EmptyState
+              icono={CalendarX2}
+              titulo={`No hubo ${porteria ? "caja de portería" : "caja"} el ${formatFecha(fecha)}`}
+              descripcion="Ese día no se abrió esta caja. Elegí otro día de la lista de abajo."
+            />
+          )}
+        </div>
         <UltimosDias previas={datos.previas} tipo={tipo} />
       </div>
     );
@@ -151,6 +154,7 @@ export function VistaCaja({
         <div
           key="accion-validar"
           className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-primary/30 bg-card p-5 sm:p-6"
+          data-tour="caja-validar"
         >
           <div className="min-w-0">
             <p className="flex items-center gap-2 text-lg font-semibold">
@@ -177,7 +181,7 @@ export function VistaCaja({
       <CobrosDia key="cobros" recibos={datos.recibos} puedeAnular={permisos.anularCobros} porteria={porteria} esHoy={esHoy} />
 
       {porteria ? (
-        <section key="canon" aria-labelledby={`canon-${caja.id}`} className="space-y-3">
+        <section key="canon" aria-labelledby={`canon-${caja.id}`} className="space-y-3" data-tour="caja-canon">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 id={`canon-${caja.id}`} className="flex items-center gap-2 font-display text-lg font-bold tracking-tight">
               <Truck className="size-5 text-muted-foreground" strokeWidth={2} />

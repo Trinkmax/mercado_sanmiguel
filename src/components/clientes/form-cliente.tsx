@@ -384,7 +384,7 @@ export function FormCliente({
   return (
     <form onSubmit={onSubmit} className="space-y-6" noValidate>
       {mostrarCategorias ? (
-        <fieldset className="space-y-2">
+        <fieldset className="space-y-2" data-tour="clientes-alta-que-es">
           <legend className="mb-2 text-base font-medium">¿Qué es?</legend>
           <div
             role="radiogroup"
@@ -730,7 +730,7 @@ export function FormCliente({
         </p>
       ) : null}
 
-      <div className="space-y-2">
+      <div className="space-y-2" data-tour="clientes-alta-enviar">
         <Button
           type="submit"
           size="lg"

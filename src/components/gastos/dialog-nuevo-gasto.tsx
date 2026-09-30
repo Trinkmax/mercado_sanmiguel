@@ -190,7 +190,7 @@ export function DialogNuevoGasto({
       }}
     >
       <DialogTrigger asChild>
-        <Button size="lg" className="h-12 px-6 text-base font-semibold">
+        <Button size="lg" className="h-12 px-6 text-base font-semibold" data-tour="gastos-cargar">
           <Plus className="size-5" strokeWidth={2} />
           Cargar gasto
         </Button>

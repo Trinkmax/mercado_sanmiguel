@@ -94,6 +94,7 @@ export function CajaMensaje({
       ref={formRef}
       onSubmit={onSubmit}
       noValidate
+      data-tour="solicitudes-escribir"
       className={cn(
         "space-y-3 rounded-xl border bg-card p-4 transition-colors",
         interno && "border-parcial/50 bg-parcial-suave/60",

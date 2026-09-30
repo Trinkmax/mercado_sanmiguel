@@ -24,7 +24,10 @@ export function BannerOtroDia({
 
   if (!esHoy) {
     return (
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-accent-foreground/20 bg-accent px-4 py-3">
+      <div
+        className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-accent-foreground/20 bg-accent px-4 py-3"
+        data-tour="caja-otro-dia"
+      >
         {/* El texto va en un solo <span>: suelto dentro del flex, el gap separaba "del", la fecha
             y el punto ("28/09/2026 ."). */}
         <p className="flex items-start gap-2 text-base">
@@ -46,7 +49,10 @@ export function BannerOtroDia({
   if (!cajaAbiertaOtroDia) return null;
 
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-parcial bg-parcial-suave px-4 py-3">
+    <div
+      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-parcial bg-parcial-suave px-4 py-3"
+      data-tour="caja-quedo-abierta"
+    >
       <p className="flex items-start gap-2 text-base">
         <CalendarClock className="mt-0.5 size-5 shrink-0 text-parcial" strokeWidth={2} />
         <span>
@@ -55,7 +61,7 @@ export function BannerOtroDia({
           {cajaAbiertaOtroDia.reaperturas > 0 ? "está reabierta" : "quedó abierta"}: corregila y cerrala.
         </span>
       </p>
-      <Button asChild className="h-11 px-4 text-sm font-semibold">
+      <Button asChild className="h-11 px-4 text-sm font-semibold" data-tour="caja-ir-a-esa-caja">
         <Link href={`/caja?fecha=${cajaAbiertaOtroDia.fecha}${sufijo}`}>
           Ir a esa caja
           <ArrowRight className="size-4" strokeWidth={2} />

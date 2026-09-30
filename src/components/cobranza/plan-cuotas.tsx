@@ -109,7 +109,7 @@ export function PlanCuotas({
   const porDia = cuotas > 10;
 
   return (
-    <section className="space-y-4 rounded-lg border bg-card p-5">
+    <section data-tour="cobranza-plan" className="space-y-4 rounded-lg border bg-card p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <p className="flex items-center gap-2 font-medium">
           <CalendarRange className="size-5 text-muted-foreground" strokeWidth={2} />

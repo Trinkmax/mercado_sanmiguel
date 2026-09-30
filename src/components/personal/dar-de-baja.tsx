@@ -120,7 +120,7 @@ export function DarDeBaja({
     return (
       <Dialog open={abierto} onOpenChange={abrir}>
         <DialogTrigger asChild>
-          <Button type="button" variant="outline" size="lg" className="h-12 px-5 text-base">
+          <Button type="button" variant="outline" size="lg" className="h-12 px-5 text-base" data-tour="personal-reincorporar">
             <UserCheck className="size-5" strokeWidth={2} />
             Reincorporar
           </Button>
@@ -215,6 +215,7 @@ export function DarDeBaja({
           variant="outline"
           size="lg"
           className="h-12 px-5 text-base text-pendiente hover:text-pendiente"
+          data-tour="personal-baja"
         >
           <UserMinus className="size-5" strokeWidth={2} />
           Dar de baja

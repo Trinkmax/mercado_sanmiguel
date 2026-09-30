@@ -60,7 +60,7 @@ export function ConceptosAlta({
   })).filter((g) => g.conceptos.length > 0);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3" data-tour="clientes-alta-conceptos">
       <div>
         <p className="text-base font-medium">¿Qué paga cada mes?</p>
         <p className="text-sm text-muted-foreground">

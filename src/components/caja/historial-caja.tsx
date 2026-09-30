@@ -42,7 +42,7 @@ export function HistorialCaja({ eventos }: { eventos: EventoCaja[] }) {
   const correcciones = eventos.filter((e) => CORRECCIONES.has(e.tipo)).length;
 
   return (
-    <details className="group rounded-lg border bg-card">
+    <details className="group rounded-lg border bg-card" data-tour="caja-historial">
       <summary className="flex min-h-12 cursor-pointer list-none items-center gap-2 px-5 py-3 font-medium select-none [&::-webkit-details-marker]:hidden">
         <History className="size-5 text-muted-foreground" strokeWidth={2} />
         <span>

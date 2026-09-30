@@ -11,6 +11,9 @@ import { Principal } from "@/components/shared/principal";
 import { Marca } from "@/components/shared/marca";
 import { SesionViva } from "@/components/shared/sesion-viva";
 import { SelectorVista } from "@/components/shared/selector-vista";
+import { ProveedorTour } from "@/components/tour/proveedor-tour";
+import { BotonAyuda } from "@/components/tour/boton-ayuda";
+import { BienvenidaTour } from "@/components/tour/bienvenida-tour";
 
 /** Salir: en la barra lateral (azul) o en la hoja del menú del celular (clara). */
 function BotonSalir({ claro = false }: { claro?: boolean }) {
@@ -18,6 +21,7 @@ function BotonSalir({ claro = false }: { claro?: boolean }) {
     <form action={cerrarSesion} className="shrink-0">
       <Button
         type="submit"
+        data-tour="salir"
         variant={claro ? "outline" : "ghost"}
         className={cn(
           "gap-2 text-sm",
@@ -57,15 +61,21 @@ export default async function PanelLayout({
   const badges = await pendientesNav(perfil);
 
   return (
+    <ProveedorTour rol={perfil.rol} usuario={perfil.user_id}>
     <div className="flex min-h-svh w-full">
       <SesionViva />
+      <BienvenidaTour nombre={perfil.nombre} />
       {/* Barra lateral (escritorio y tablet apaisada) */}
       <aside className="no-print fixed inset-y-0 left-0 z-30 hidden w-56 flex-col bg-sidebar text-sidebar-foreground lg:flex">
         <div className="border-b border-sidebar-border p-4">
           <Marca className="text-sidebar-foreground" />
         </div>
         <div className="flex-1 overflow-y-auto overscroll-contain p-2.5" style={SOMBRAS_DESPLAZAR}>
-          <NavLinks rol={perfil.rol} badges={badges} />
+          <NavLinks rol={perfil.rol} badges={badges} data-tour="menu-lateral" />
+        </div>
+        {/* Ayuda: la guía paso a paso de la pantalla actual o del trabajo completo. */}
+        <div className="border-t border-sidebar-border p-2.5">
+          <BotonAyuda variante="barra" />
         </div>
         {perfil.superadmin ? (
           <div className="border-t border-sidebar-border p-2.5">
@@ -87,9 +97,13 @@ export default async function PanelLayout({
             está usando el sistema; la navegación va en la barra de abajo. */}
         <header className="no-print sticky top-0 z-20 flex h-14 items-center justify-between gap-3 bg-sidebar px-4 text-sidebar-foreground lg:hidden">
           <Marca compacta className="text-sidebar-foreground" />
-          <span className="truncate rounded-full bg-sidebar-accent px-3 py-1 text-xs font-semibold text-sidebar-accent-foreground">
-            {rolLabel}
-          </span>
+          <div className="flex min-w-0 items-center gap-2">
+            <BotonAyuda variante="cabecera" />
+            {/* En celulares angostos el rol se ve en «Menú» (le deja lugar a Ayuda). */}
+            <span className="truncate rounded-full bg-sidebar-accent px-3 py-1 text-xs font-semibold text-sidebar-accent-foreground max-[420px]:hidden">
+              {rolLabel}
+            </span>
+          </div>
         </header>
 
         <Principal>{children}</Principal>
@@ -104,5 +118,6 @@ export default async function PanelLayout({
         />
       </div>
     </div>
+    </ProveedorTour>
   );
 }

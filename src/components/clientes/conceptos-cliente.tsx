@@ -126,7 +126,7 @@ export function ConceptosCliente({
     const prendidos = items.filter((i) => i.activo);
     return (
       <div className="space-y-6">
-        <Card className="text-base">
+        <Card className="text-base" data-tour="clientes-paga-ambulante">
           <CardContent className="flex flex-wrap items-center gap-4 py-2">
             <Footprints className="size-8 shrink-0 text-muted-foreground" strokeWidth={1.7} />
             <div className="min-w-0 flex-1 space-y-1">
@@ -188,7 +188,7 @@ export function ConceptosCliente({
         </AlertDescription>
       </Alert>
 
-      <Card className="text-base">
+      <Card className="text-base" data-tour="clientes-conceptos">
         <CardHeader>
           <CardTitle className="text-lg">Qué paga cada mes</CardTitle>
         </CardHeader>
@@ -625,7 +625,7 @@ function FilaConcepto({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-3 py-3">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 px-3 py-3" data-tour="clientes-concepto-fila">
       {/* En pantallas angostas el nombre ocupa su propio renglón. */}
       <div className="flex min-w-0 flex-1 basis-full items-start gap-3 sm:basis-0">
         <Codigo codigo={item.codigo} className="mt-0.5" />

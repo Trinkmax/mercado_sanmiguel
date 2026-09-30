@@ -363,7 +363,7 @@ export function LienzoPlano({
       ) : null}
 
       {/* Zoom */}
-      <div className="absolute bottom-3 left-3 flex overflow-hidden rounded-lg border bg-card shadow-sm">
+      <div className="absolute bottom-3 left-3 flex overflow-hidden rounded-lg border bg-card shadow-sm" data-tour="mapa-zoom">
         <BotonZoom etiqueta="Acercar" onClick={acercar}>
           <Plus className="size-[1.1rem]" strokeWidth={2.2} />
         </BotonZoom>

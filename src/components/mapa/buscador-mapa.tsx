@@ -68,6 +68,7 @@ export function BuscadorMapa({
   anonimo = false,
   vacio,
   className,
+  "data-tour": dataTour,
 }: {
   clientes: ClienteMapa[];
   espacios: Espacio[];
@@ -80,6 +81,8 @@ export function BuscadorMapa({
   /** Texto cuando no hay resultados (sin la búsqueda, que se agrega sola). */
   vacio?: string;
   className?: string;
+  /** Ancla del tour guiado (docs/GUIA-TOUR.md). */
+  "data-tour"?: string;
 }) {
   const [texto, setTexto] = useState("");
   const [abierto, setAbierto] = useState(false);
@@ -209,7 +212,7 @@ export function BuscadorMapa({
   const mostrar = abierto && (filas.length > 0 || texto.trim() !== "");
 
   return (
-    <div className={cn("relative", className)}>
+    <div className={cn("relative", className)} data-tour={dataTour}>
       {/* La lupa y la X se centran en el campo, no en el bloque: con la lista en línea
           (dentro de un panel) el bloque crece hacia abajo y se le subirían encima. */}
       <div className="relative">

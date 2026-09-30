@@ -266,7 +266,7 @@ export async function InicioGestion({ perfil, supabase }: { perfil: Perfil; supa
       {esLider ? (
         <>
           <div className="grid gap-6 lg:grid-cols-[1fr_22rem]">
-            <Card>
+            <Card data-tour="inicio-escritorio">
               <CardHeader>
                 <CardTitle className="text-lg">Tu escritorio</CardTitle>
                 <CardDescription>
@@ -331,7 +331,7 @@ export async function InicioGestion({ perfil, supabase }: { perfil: Perfil; supa
       ) : null}
 
       <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
-        <Card>
+        <Card data-tour={conceptos.length === 0 ? "inicio-cobranza-vacia" : "inicio-cobranza-mes"}>
           <CardHeader>
             <CardTitle className="text-lg">Cobranza de {labelPeriodo(periodo)}</CardTitle>
             {rol === "admin" ? (
@@ -422,7 +422,7 @@ export async function InicioGestion({ perfil, supabase }: { perfil: Perfil; supa
 
         <div className="space-y-6 max-lg:order-first">
           {rol === "admin" ? <CajaAdministracionHoy caja={cajaAdmin} /> : null}
-          <Card>
+          <Card data-tour="inicio-ultimos-14">
             <CardHeader>
               <CardTitle className="text-base">Últimos 14 días</CardTitle>
               <CardDescription>Cobranza por día</CardDescription>
@@ -443,7 +443,7 @@ export async function InicioGestion({ perfil, supabase }: { perfil: Perfil; supa
 /** La caja de Administración de hoy: lo juntado y lo que tiene que haber en efectivo. */
 function CajaAdministracionHoy({ caja }: { caja: CajaHoy | null }) {
   return (
-    <Card>
+    <Card data-tour={caja ? "inicio-caja-hoy" : "inicio-caja-sin-abrir"}>
       <CardHeader>
         <CardTitle className="text-lg">Caja de hoy</CardTitle>
         {caja ? (

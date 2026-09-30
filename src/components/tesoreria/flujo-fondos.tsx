@@ -45,7 +45,10 @@ function Dato({
 export function FlujoFondos({ flujo, sinSaldo }: { flujo: Flujo; sinSaldo: SinSaldoInicial }) {
   return (
     <section aria-label="Plata de la cooperativa hoy" className="overflow-hidden rounded-xl border bg-card">
-      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 bg-primary px-5 py-4 text-primary-foreground sm:px-6">
+      <div
+        data-tour="tesoreria-plata-total"
+        className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 bg-primary px-5 py-4 text-primary-foreground sm:px-6"
+      >
         <div>
           <h2 className="font-display text-lg font-bold tracking-tight">Plata de la cooperativa hoy</h2>
           <p className="text-sm opacity-85">Efectivo + banco + cheques, en pesos</p>

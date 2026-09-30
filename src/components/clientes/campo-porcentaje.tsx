@@ -52,7 +52,7 @@ export function CampoPorcentaje({
   }
 
   return (
-    <div className={cn("relative w-[7rem]", className)}>
+    <div className={cn("relative w-[7rem]", className)} data-tour="clientes-porcentaje">
       <Input
         id={id}
         inputMode="decimal"

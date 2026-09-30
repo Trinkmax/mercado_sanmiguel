@@ -176,6 +176,7 @@ export function EditorHorarios({
           variant="outline"
           size="lg"
           className="h-11 px-4 text-sm"
+          data-tour="personal-copiar-lunes"
           onClick={copiarLunes}
           disabled={lunesVacio || Boolean(errores[1])}
           title={lunesVacio ? "Primero cargá el lunes" : undefined}
@@ -192,6 +193,7 @@ export function EditorHorarios({
           return (
             <div
               key={dia.valor}
+              data-tour="personal-dia"
               className="grid gap-3 px-4 py-3 sm:grid-cols-[7.5rem_1fr] sm:items-start"
             >
               <div className="pt-2.5">
@@ -262,7 +264,7 @@ export function EditorHorarios({
 
       {errorServidor ? <AlertaError error={errorServidor} titulo="No se guardaron los horarios" /> : null}
 
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3" data-tour="personal-guardar-horarios">
         <Button
           type="button"
           size="lg"

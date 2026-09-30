@@ -122,7 +122,7 @@ export default async function ComunicacionesPage({
         {pestana === "circulares" ? (
           <div className="flex flex-wrap gap-2">
             <BotonExportar dataset="circulares" />
-            <Button asChild size="lg" className="h-12 px-5 text-base font-semibold">
+            <Button asChild size="lg" className="h-12 px-5 text-base font-semibold" data-tour="comunicaciones-nueva-circular">
               <Link href="/comunicaciones/nueva">
                 <Plus className="size-5" strokeWidth={2.2} />
                 Nueva circular
@@ -132,7 +132,7 @@ export default async function ComunicacionesPage({
         ) : tipo ? (
           <div className="flex flex-wrap gap-2">
             <BotonExportar dataset="registros" />
-            <Button asChild size="lg" className="h-12 px-5 text-base font-semibold">
+            <Button asChild size="lg" className="h-12 px-5 text-base font-semibold" data-tour="comunicaciones-nuevo-registro">
               <Link href={`/comunicaciones/registros/nuevo?tipo=${tipo}`}>
                 <Plus className="size-5" strokeWidth={2.2} />
                 {infoTipoRegistro(tipo).nuevo}

@@ -245,7 +245,7 @@ export default async function ClientesPage({ searchParams }: Props) {
         }
       >
         {hayClientes ? <BotonExportar dataset="clientes" className="h-12 px-4 text-base" /> : null}
-        <Button asChild size="lg" className="h-12 px-6 text-base font-semibold">
+        <Button asChild size="lg" className="h-12 px-6 text-base font-semibold" data-tour="clientes-nuevo">
           <Link href="/clientes/nuevo">
             <UserPlus className="size-5" />
             {nuevo}
@@ -281,7 +281,7 @@ export default async function ClientesPage({ searchParams }: Props) {
       ) : null}
 
       {hayClientes ? (
-        <div className="space-y-3 sm:space-y-4">
+        <div className="space-y-3 sm:space-y-4" data-tour="clientes-buscar">
           <BuscadorClientes
             inicial={texto}
             seg={seg}
@@ -399,6 +399,7 @@ export default async function ClientesPage({ searchParams }: Props) {
                 <Link
                   key={c.id}
                   href={`/clientes/${c.id}`}
+                  data-tour="clientes-fila"
                   className="flex min-h-16 items-start gap-3 px-4 py-3 transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none sm:items-center sm:py-2.5"
                 >
                   <Codigo codigo={String(c.codigo)} className="mt-0.5 sm:mt-0" />

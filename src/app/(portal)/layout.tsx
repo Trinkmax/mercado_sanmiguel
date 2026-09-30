@@ -13,6 +13,9 @@ import {
   getSolicitudesConRespuesta,
 } from "@/components/portal/datos-portal";
 import { SelectorVista } from "@/components/shared/selector-vista";
+import { ProveedorTour } from "@/components/tour/proveedor-tour";
+import { BotonAyuda } from "@/components/tour/boton-ayuda";
+import { BienvenidaTour } from "@/components/tour/bienvenida-tour";
 
 /** Portal del socio: una sola columna, simple, pensado para el celular.
  * Antes de mostrar cualquier cosa, exige aceptar los términos vigentes y confirmar las
@@ -32,20 +35,26 @@ export default async function PortalLayout({
   ]);
   const contenido = (
     <>
+      <BienvenidaTour nombre={perfil.nombre} />
       <NavPortal nuevas={resumen.total} respuestas={conRespuesta.length} />
       {children}
     </>
   );
 
   return (
+    <ProveedorTour rol={perfil.rol} usuario={perfil.user_id}>
     <div className="flex min-h-svh flex-col">
       <SesionViva />
       <header className="no-print bg-sidebar text-sidebar-foreground">
         <div className="mx-auto flex w-full max-w-2xl items-center justify-between px-4 py-3">
           <Marca compacta className="text-sidebar-foreground" />
+          {/* Ayuda y Salir separados: al buscar ayuda no se cierra la sesión. */}
+          <div className="flex items-center gap-4">
+          <BotonAyuda variante="cabecera" />
           <form action={cerrarSesion}>
             <Button
               type="submit"
+              data-tour="salir"
               variant="ghost"
               size="sm"
               className="gap-2 text-sidebar-foreground/85 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground min-h-11"
@@ -54,6 +63,7 @@ export default async function PortalLayout({
               Salir
             </Button>
           </form>
+          </div>
         </div>
       </header>
       {vistaPrevia ? (
@@ -86,5 +96,6 @@ export default async function PortalLayout({
         )}
       </main>
     </div>
+    </ProveedorTour>
   );
 }

@@ -333,7 +333,7 @@ export function AjustesCaja({
   const total = ajustes.reduce((acc, a) => acc + a.monto, 0);
 
   return (
-    <Card>
+    <Card data-tour="caja-ajustes">
       <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-2">
         <div className="space-y-1">
           <CardTitle className="text-lg">Ajustes de tesorería</CardTitle>
@@ -367,7 +367,7 @@ export function AjustesCaja({
         {puedeAjustar ? (
           <Collapsible open={abierto} onOpenChange={setAbierto}>
             <CollapsibleTrigger asChild>
-              <Button variant="outline" size="lg" className="h-12 gap-2 px-5 text-base">
+              <Button variant="outline" size="lg" className="h-12 gap-2 px-5 text-base" data-tour="caja-cargar-ajuste">
                 <SlidersHorizontal className="size-5" strokeWidth={2} />
                 Cargar un ajuste
                 <ChevronDown className={cn("size-4 transition-transform", abierto && "rotate-180")} strokeWidth={2} />

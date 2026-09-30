@@ -59,7 +59,7 @@ export function QuintasAmbulantes({
               : "Los cambios los aprueba el Líder de Procesos. Hasta que los apruebe, se sigue cobrando el precio de ahora."}
           </p>
         </div>
-        <div className="divide-y overflow-hidden rounded-xl border bg-card">
+        <div className="divide-y overflow-hidden rounded-xl border bg-card" data-tour="config-precios-porteria">
           {quinta ? (
             <FilaPrecio
               concepto={quinta}
@@ -134,7 +134,7 @@ function CuotasQuinta({ cuotasDefault, precioQuinta }: { cuotasDefault: number; 
   }
 
   return (
-    <section className="space-y-4 rounded-xl border bg-card p-4 sm:p-5">
+    <section className="space-y-4 rounded-xl border bg-card p-4 sm:p-5" data-tour="config-cuotas-quinta">
       <div>
         <h2 className="font-display text-lg font-bold">¿En cuántos pagos cobrás la quinta?</h2>
         <p className="text-sm text-muted-foreground">
@@ -311,7 +311,12 @@ function FilaPrecio({
           </div>
         </div>
       ) : (
-        <Button variant="outline" className="min-h-11 px-4 text-sm" onClick={() => setEditando(true)}>
+        <Button
+          variant="outline"
+          className="min-h-11 px-4 text-sm"
+          onClick={() => setEditando(true)}
+          data-tour="config-cambiar-precio"
+        >
           Cambiar el precio
         </Button>
       )}

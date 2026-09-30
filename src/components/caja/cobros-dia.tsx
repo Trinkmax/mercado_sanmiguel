@@ -75,7 +75,7 @@ export function CobrosDia({
   }
 
   return (
-    <Card>
+    <Card data-tour="caja-cobros">
       <CardHeader className="flex flex-row flex-wrap items-baseline justify-between gap-2">
         <CardTitle className="text-lg">{porteria ? "Cobros a quinteros y ambulantes" : "Cobros del día"}</CardTitle>
         {recibos.length > 0 ? (
@@ -105,7 +105,7 @@ export function CobrosDia({
               {recibos.map((r) => {
                 const medios = r.lineas.map((l) => labelMedio(l.medio).toLowerCase()).join(" + ");
                 return (
-                  <li key={r.loteId} className="flex items-start gap-x-3 py-3 sm:gap-x-4">
+                  <li key={r.loteId} className="flex items-start gap-x-3 py-3 sm:gap-x-4" data-tour="caja-cobro">
                     <span className="w-11 shrink-0 pt-0.5 text-sm text-muted-foreground tabular">
                       {formatSoloHora(r.fecha)}
                     </span>

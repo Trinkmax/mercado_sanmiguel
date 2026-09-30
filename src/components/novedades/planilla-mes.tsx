@@ -111,7 +111,10 @@ function FilaEmpleado({
 
   return (
     <Collapsible open={abierta} onOpenChange={setAbierta}>
-      <div className={cn("relative px-4 py-4 transition-colors hover:bg-accent/40", abierta && "bg-accent/30")}>
+      <div
+        data-tour="novedades-empleado"
+        className={cn("relative px-4 py-4 transition-colors hover:bg-accent/40", abierta && "bg-accent/30")}
+      >
         <div className="flex items-start gap-3">
           <div className="min-w-0 flex-1 space-y-2.5">
             <div className="flex flex-wrap items-center gap-2">

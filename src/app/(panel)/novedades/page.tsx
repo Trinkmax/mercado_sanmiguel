@@ -158,13 +158,13 @@ export default async function NovedadesPage({ searchParams }: Props) {
       <PageHeader titulo="Novedades del personal" descripcion={descripcion}>
         <BotonExportar dataset={DATASET_NOVEDADES} periodo={periodo} label="Exportar el mes" />
         {/* Mismo tamaño de letra que "Exportar el mes", al lado. */}
-        <Button asChild variant="outline" className="min-h-11 text-sm">
+        <Button asChild variant="outline" className="min-h-11 text-sm" data-tour="novedades-imprimir">
           <Link href={`/novedades/${periodo}`}>
             <Printer className="size-4" strokeWidth={2} />
             Imprimir planilla
           </Link>
         </Button>
-        <Button asChild size="lg" className="h-12 px-5 text-base font-semibold">
+        <Button asChild size="lg" className="h-12 px-5 text-base font-semibold" data-tour="novedades-cargar">
           <Link href="/novedades/nueva">
             <Plus className="size-5" strokeWidth={2.2} />
             Cargar novedad

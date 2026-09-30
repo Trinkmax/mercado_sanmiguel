@@ -22,6 +22,7 @@ import {
 
 function Bloque({
   id,
+  tour,
   titulo,
   detalle,
   accion,
@@ -29,13 +30,15 @@ function Bloque({
 }: {
   /** Ancla para llegar directo (p. ej. "/tesoreria#cajas-para-validar" desde el Inicio). */
   id?: string;
+  /** Ancla del tour guiado (`data-tour`). */
+  tour?: string;
   titulo: string;
   detalle?: React.ReactNode;
   accion?: React.ReactNode;
   children: React.ReactNode;
 }) {
   return (
-    <section id={id} className="scroll-mt-24 space-y-3" aria-label={titulo}>
+    <section id={id} data-tour={tour} className="scroll-mt-24 space-y-3" aria-label={titulo}>
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
         <div>
           <h2 className="font-display text-lg font-bold tracking-tight">{titulo}</h2>
@@ -75,7 +78,7 @@ export async function PestanaHoy({
     return (
       <div className="space-y-10">
         <section className="space-y-5" aria-label="Saldos iniciales">
-          <div className="rounded-xl border border-primary/30 bg-accent/60 px-5 py-4">
+          <div data-tour="tesoreria-saldos-aviso" className="rounded-xl border border-primary/30 bg-accent/60 px-5 py-4">
             <h2 className="font-display text-xl font-bold tracking-tight">Antes de empezar, cargá cuánta plata había</h2>
             <p className="mt-1 max-w-prose text-base text-muted-foreground">
               Poné el efectivo y el saldo del banco (en pesos y, si hay, en dólares) de un día. Desde ese
@@ -86,7 +89,7 @@ export async function PestanaHoy({
           <SaldosIniciales saldos={saldos} />
         </section>
         {cajasSinSaldos.length > 0 ? (
-          <Bloque id="cajas-para-validar" titulo="Cajas para contar y validar">
+          <Bloque id="cajas-para-validar" tour="tesoreria-cajas" titulo="Cajas para contar y validar">
             <CajasParaValidar cajas={cajasSinSaldos} />
           </Bloque>
         ) : null}
@@ -145,6 +148,7 @@ export async function PestanaHoy({
 
       <Bloque
         id="cajas-para-validar"
+        tour="tesoreria-cajas"
         titulo="Cajas para contar y validar"
         detalle={
           cajas.length === 0
@@ -202,6 +206,7 @@ export async function PestanaHoy({
       </Bloque>
 
       <Bloque
+        tour="tesoreria-gastos-pagar"
         titulo="Gastos a pagar"
         detalle={
           gastos.length === 0
@@ -229,6 +234,7 @@ export async function PestanaHoy({
                 // abajo en el celular), aunque el título ocupe dos renglones.
                 <li
                   key={g.id}
+                  data-tour="tesoreria-gasto"
                   className={cn(
                     "grid gap-x-4 gap-y-2 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center",
                     vencido && "bg-pendiente-suave/50"

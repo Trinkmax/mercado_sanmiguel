@@ -318,7 +318,7 @@ async function Usuarios(supabase: Supabase, perfil: Perfil, ver: "equipo" | "soc
 
   const selectorLider =
     perfil.rol === "lider" ? (
-      <div className="mb-5 flex flex-wrap gap-2" role="group" aria-label="Qué usuarios ver">
+      <div className="mb-5 flex flex-wrap gap-2" role="group" aria-label="Qué usuarios ver" data-tour="config-usuarios-ver">
         {(
           [
             { valor: "equipo", label: "Equipo", n: todos.filter((p) => p.rol !== "socio").length },

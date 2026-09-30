@@ -169,6 +169,7 @@ export function AccionesGasto({
             className="h-11 min-w-24 px-5 text-base font-semibold"
             onClick={() => abrir("pagar")}
             aria-label={`Pagar ${gasto.etiqueta}`}
+            data-tour="gastos-pagar"
           >
             Pagar
           </Button>

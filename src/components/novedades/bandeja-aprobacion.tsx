@@ -58,6 +58,7 @@ export function BandejaAprobacion({
     <section
       className="rounded-xl border border-parcial/40 bg-parcial-suave/70 p-4 sm:p-5"
       aria-label="Novedades para aprobar"
+      data-tour="novedades-bandeja"
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">

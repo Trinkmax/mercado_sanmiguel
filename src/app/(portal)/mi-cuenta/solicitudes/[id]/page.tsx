@@ -103,7 +103,7 @@ export default async function SolicitudSocioPage({
       </PageHeader>
 
       {/* Estado explicado + recorrido */}
-      <Card>
+      <Card data-tour="solicitudes-socio-estado">
         <CardContent className="space-y-4">
           <p className="text-[15px]">
             <span className="font-semibold">{LABEL_ESTADO[s.estado]}.</span>{" "}
@@ -169,7 +169,7 @@ export default async function SolicitudSocioPage({
       </Card>
 
       {/* Hilo */}
-      <section className="space-y-4" aria-label="Mensajes">
+      <section className="space-y-4" aria-label="Mensajes" data-tour="solicitudes-socio-mensajes">
         <h2 className="font-display text-lg font-bold tracking-tight">Mensajes</h2>
         <HiloMensajes mensajes={mensajes} usuarioId={perfil.user_id} />
         <CajaMensaje

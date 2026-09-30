@@ -124,6 +124,7 @@ export function AccionesSolicitud({
           return (
             <Button
               key={def.accion}
+              data-tour={`solicitudes-accion-${def.accion.replace(/_/g, "-")}`}
               size="lg"
               variant={def.primaria ? "default" : "outline"}
               disabled={pendiente}

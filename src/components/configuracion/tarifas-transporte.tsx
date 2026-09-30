@@ -54,7 +54,7 @@ export function TarifasTransporte({
   const [agregando, setAgregando] = useState(false);
 
   return (
-    <Card id="tarifas-transporte" className="text-base">
+    <Card id="tarifas-transporte" className="text-base" data-tour="config-tarifas">
       <CardHeader className="gap-1.5">
         <CardTitle className="flex flex-wrap items-center gap-2 font-display text-lg font-bold">
           Tarifas de transporte <Codigo codigo="BC" />

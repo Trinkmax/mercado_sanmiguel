@@ -30,14 +30,14 @@ export default async function InicioPage() {
   return (
     <div className="space-y-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <div>
+        <div data-tour="encabezado">
           <p className="text-muted-foreground first-letter:uppercase">{formatFechaLarga(hoyISO())}</p>
           <h1 className="font-display text-[1.7rem] font-extrabold tracking-tight">
             Hola, {perfil.nombre.split(" ")[0]}
           </h1>
         </div>
         {puedeCobrar ? (
-          <Button asChild size="lg" className="h-13 px-6 text-base font-semibold">
+          <Button asChild size="lg" className="h-13 px-6 text-base font-semibold" data-tour="inicio-cobrar">
             <Link href="/cobranza">
               <HandCoins className="size-5" />
               Cobrar

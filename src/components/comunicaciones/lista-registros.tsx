@@ -81,6 +81,7 @@ export function ListaRegistros({
           <li key={r.id}>
             <Link
               href={`/comunicaciones/registros/${r.id}`}
+              data-tour="comunicaciones-registro"
               className={cn(
                 "flex min-h-16 items-start gap-3 px-4 py-3 transition-colors hover:bg-accent focus-visible:bg-accent focus-visible:outline-none",
                 espera && "bg-pendiente-suave/40"

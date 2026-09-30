@@ -26,7 +26,7 @@ export function SelectorFecha({ fecha }: { fecha: string }) {
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2" data-tour="porteria-fecha">
       <label htmlFor="fecha-porteria" className="sr-only">
         Ver la garita de otro día
       </label>

@@ -189,7 +189,7 @@ export default async function ReportesPage({
           periodo={periodo}
           label="Balance del mes (.xlsx)"
         />
-        <Button asChild size="lg" className="h-13 px-6 text-base font-semibold">
+        <Button asChild size="lg" className="h-13 px-6 text-base font-semibold" data-tour="reportes-contadora">
           <Link href={`/reporte-mensual/${periodo}`}>
             <FileText className="size-5" strokeWidth={2} />
             Reporte para la contadora
@@ -200,13 +200,15 @@ export default async function ReportesPage({
       <SelectorPeriodo periodo={periodo} />
 
       {/* Cobranza día a día */}
-      <Card>
+      <Card data-tour="reportes-cobranza">
         <CardHeader>
           <CardTitle className="text-base">Cobranza día a día</CardTitle>
         </CardHeader>
         <CardContent>
           {hayCobros ? (
-            <ChartCobranzaDiaria data={serieCobranza} />
+            <div data-tour="reportes-grafico">
+              <ChartCobranzaDiaria data={serieCobranza} />
+            </div>
           ) : (
             <p className="py-6 text-sm text-muted-foreground">
               Sin cobros registrados en {labelPeriodo(periodo)}. Cuando entren
@@ -217,7 +219,7 @@ export default async function ReportesPage({
       </Card>
 
       {/* Ingresos por concepto */}
-      <Card>
+      <Card data-tour="reportes-ingresos">
         <CardHeader>
           <CardTitle className="text-lg">Ingresos de {labelPeriodo(periodo)}</CardTitle>
         </CardHeader>
@@ -237,12 +239,13 @@ export default async function ReportesPage({
             </EmptyState>
           ) : (
             <>
-              <div className="divide-y">
+              <div className="divide-y" data-tour="reportes-conceptos">
                 {ingresos.map((fila) => (
                   <FilaIngreso key={fila.codigo} fila={fila} />
                 ))}
               </div>
               <div
+                data-tour="reportes-totales"
                 className={cn(
                   "mt-4 grid grid-cols-2 gap-4 border-t pt-4",
                   hayEnTermino ? "sm:grid-cols-3 xl:grid-cols-5" : "sm:grid-cols-4"
@@ -297,7 +300,7 @@ export default async function ReportesPage({
       </Card>
 
       {/* Gastos por rubro */}
-      <Card>
+      <Card data-tour="reportes-gastos">
         <CardHeader>
           <CardTitle className="text-lg">Gastos de {labelPeriodo(periodo)}</CardTitle>
         </CardHeader>
@@ -420,7 +423,7 @@ export default async function ReportesPage({
       </Card>
 
       {/* Balance simple del mes */}
-      <Card>
+      <Card data-tour="reportes-balance">
         <CardHeader>
           <CardTitle className="text-lg">Balance de {labelPeriodo(periodo)}</CardTitle>
         </CardHeader>

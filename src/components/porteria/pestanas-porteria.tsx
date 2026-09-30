@@ -27,6 +27,12 @@ export function PestanasPorteria({
   personal: React.ReactNode;
 }) {
   const [vista, setVista] = useState<VistaPorteria>(vistaInicial);
+  // Si la dirección cambia desde afuera (un link a ?vista=personal, la guía), la pestaña la sigue.
+  const [vistaPrevia, setVistaPrevia] = useState(vistaInicial);
+  if (vistaInicial !== vistaPrevia) {
+    setVistaPrevia(vistaInicial);
+    setVista(vistaInicial);
+  }
 
   function cambiar(v: string) {
     const nueva: VistaPorteria = v === "personal" ? "personal" : "canon";
@@ -43,9 +49,13 @@ export function PestanasPorteria({
 
   return (
     <Tabs value={vista} onValueChange={cambiar} className="gap-6">
-      <TabsList className="grid h-auto! w-full grid-cols-2 gap-1 p-1 sm:w-fit sm:min-w-[32rem]">
+      <TabsList
+        className="grid h-auto! w-full grid-cols-2 gap-1 p-1 sm:w-fit sm:min-w-[32rem]"
+        data-tour="porteria-pestanas"
+      >
         <TabsTrigger
           value="canon"
+          data-tour={vista === "canon" ? "porteria-pestana-canon" : "porteria-pestana-canon porteria-abrir-canon"}
           className="min-h-14 flex-col gap-0 px-4 py-2 text-base font-semibold whitespace-normal sm:flex-row sm:gap-2"
         >
           <span className="inline-flex items-center gap-2">
@@ -58,6 +68,7 @@ export function PestanasPorteria({
         </TabsTrigger>
         <TabsTrigger
           value="personal"
+          data-tour={vista === "personal" ? "porteria-pestana-personal" : "porteria-pestana-personal porteria-abrir-personal"}
           className="min-h-14 flex-col gap-0 px-4 py-2 text-base font-semibold whitespace-normal sm:flex-row sm:gap-2"
         >
           <span className="inline-flex items-center gap-2">

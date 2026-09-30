@@ -20,7 +20,7 @@ export function UltimosDias({ previas, tipo }: { previas: CajaPrevia[]; tipo: Ti
   const porteria = tipo === "guardia";
 
   return (
-    <Card>
+    <Card data-tour="caja-ultimos">
       <CardHeader>
         <CardTitle className="text-lg">Últimos días</CardTitle>
       </CardHeader>
@@ -48,6 +48,7 @@ export function UltimosDias({ previas, tipo }: { previas: CajaPrevia[]; tipo: Ti
                     <Link
                       href={href}
                       className="inline-flex min-h-11 items-center text-primary underline-offset-4 hover:underline"
+                      data-tour="caja-ultimos-dia"
                     >
                       {formatFecha(caja.fecha)}
                     </Link>

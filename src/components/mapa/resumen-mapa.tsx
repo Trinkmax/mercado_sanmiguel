@@ -143,7 +143,7 @@ export function ResumenMapa({
   const { ref: filaRef, estilo: estiloFila } = useFilaDeslizable<HTMLDivElement>();
 
   return (
-    <div className={cn("space-y-2.5", className)}>
+    <div className={cn("space-y-2.5", className)} data-tour="mapa-resumen">
       {/* En el celular es una sola fila que se desliza de costado (el borde se esfuma
           mientras quede algo sin ver). El resumen toma el ancho que necesita: con uno
           fijo, el primer chip le pisaba "ocupados". */}
@@ -290,7 +290,7 @@ export function ResumenQuintas({
   // ResumenMapa: con los márgenes negativos en el bloque mismo quedaba más ancho que la
   // pantalla, y el esfumado se comía el borde de abajo.
   return (
-    <div className={className}>
+    <div className={className} data-tour="mapa-resumen">
       <div
         ref={filaRef}
         style={estiloFila}

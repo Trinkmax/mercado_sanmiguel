@@ -74,6 +74,7 @@ export function SumarAbonos({
   return (
     <section
       aria-label="Abonos que faltan"
+      data-tour="energia-sumar-abonos"
       className="flex flex-wrap items-center gap-4 rounded-xl bg-parcial-suave px-4 py-3.5 sm:px-5"
     >
       <PlugZap className="size-6 shrink-0 text-parcial" strokeWidth={2} aria-hidden />

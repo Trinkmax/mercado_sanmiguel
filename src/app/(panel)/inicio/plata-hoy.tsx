@@ -26,7 +26,7 @@ export async function PlataDeHoy({ org, supabase }: { org: string; supabase: Sup
   const entro = cobradoAdmin + juntadoPorteria;
 
   return (
-    <Card>
+    <Card data-tour="inicio-plata-hoy">
       <CardHeader>
         <CardTitle className="text-lg">Plata de hoy</CardTitle>
         <CardDescription>Lo que entró en las dos cajas y lo que salió en gastos.</CardDescription>

@@ -316,7 +316,7 @@ export default async function MiCuentaPage() {
 
       {/* 2. Lo que requiere acción */}
       {acciones.length > 0 ? (
-        <Card className="gap-0 overflow-hidden border-2 border-parcial/50 py-0">
+        <Card data-tour="portal-avisos" className="gap-0 overflow-hidden border-2 border-parcial/50 py-0">
           {acciones.map((a) => {
             const Icono = a.icono;
             return (
@@ -340,7 +340,7 @@ export default async function MiCuentaPage() {
       ) : null}
 
       {/* 3. Conceptos del mes actual */}
-      <Card>
+      <Card data-tour={cargosMes.length === 0 ? "portal-conceptos portal-conceptos-vacio" : "portal-conceptos"}>
         <CardHeader>
           <CardTitle className="text-lg">Tus conceptos de {labelPeriodo(periodo)}</CardTitle>
         </CardHeader>
@@ -360,7 +360,7 @@ export default async function MiCuentaPage() {
       </Card>
 
       {/* 4. Pagos, con su recibo */}
-      <Card>
+      <Card data-tour={ultimosRecibos.length === 0 ? "portal-pagos portal-pagos-vacio" : "portal-pagos"}>
         <CardHeader>
           <CardTitle className="text-lg">Tus pagos</CardTitle>
         </CardHeader>
@@ -389,7 +389,7 @@ export default async function MiCuentaPage() {
                       </p>
                     </div>
                     <Money monto={r.total} className="shrink-0 font-semibold" />
-                    <Button asChild variant="outline" className="min-h-11 shrink-0 px-3.5">
+                    <Button asChild variant="outline" className="min-h-11 shrink-0 px-3.5" data-tour="portal-recibo">
                       <Link href={`/recibos/${r.pagoId}`} aria-label={`Ver el recibo N° ${r.numero}`}>
                         <Download className="size-4" strokeWidth={2} />
                         Recibo
@@ -447,7 +447,15 @@ export default async function MiCuentaPage() {
       ) : null}
 
       {/* 6. Solicitudes */}
-      <Card id="solicitudes" className="scroll-mt-4">
+      <Card
+        id="solicitudes"
+        data-tour={
+          solicitudes.length === 0
+            ? "portal-solicitudes solicitudes-socio-lista solicitudes-socio-vacia"
+            : "portal-solicitudes solicitudes-socio-lista"
+        }
+        className="scroll-mt-4"
+      >
         <CardHeader>
           <CardTitle className="text-lg">Tus solicitudes</CardTitle>
         </CardHeader>
@@ -473,6 +481,7 @@ export default async function MiCuentaPage() {
                   <li key={s.id}>
                     <Link
                       href={`/mi-cuenta/solicitudes/${s.id}`}
+                      data-tour="solicitudes-socio-fila"
                       className={cn(
                         "flex min-h-16 items-center gap-3 px-4 py-3 transition-colors hover:bg-muted/50 active:bg-muted",
                         respuestaNueva && "bg-accent/60"
@@ -508,7 +517,7 @@ export default async function MiCuentaPage() {
             </ul>
           )}
           <Button asChild size="lg" className="h-12 w-full text-base font-semibold">
-            <Link href="/mi-cuenta/solicitudes/nueva">
+            <Link href="/mi-cuenta/solicitudes/nueva" data-tour="solicitudes-socio-nueva">
               <Plus className="size-5" strokeWidth={2.2} />
               Nueva solicitud
             </Link>
@@ -517,7 +526,7 @@ export default async function MiCuentaPage() {
       </Card>
 
       {/* 7. Documentos */}
-      <Card>
+      <Card data-tour="portal-documentos">
         <CardHeader>
           <CardTitle className="text-lg">Tus documentos</CardTitle>
         </CardHeader>

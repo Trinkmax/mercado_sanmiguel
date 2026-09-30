@@ -289,7 +289,7 @@ export async function Correcciones({ org, supabase }: { org: string; supabase: S
   const resto = lista.slice(VISIBLES);
 
   return (
-    <Card>
+    <Card data-tour="inicio-correcciones">
       <CardHeader>
         <CardTitle className="text-lg">
           Correcciones de los últimos 7 días{" "}

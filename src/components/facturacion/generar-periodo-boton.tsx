@@ -114,7 +114,11 @@ export function GenerarPeriodoBoton({
         }}
       >
         <DialogTrigger asChild>
-          <Button size="lg" className="h-13 w-full px-6 text-base font-semibold sm:w-auto">
+          <Button
+            size="lg"
+            className="h-13 w-full px-6 text-base font-semibold sm:w-auto"
+            data-tour="facturacion-generar"
+          >
             <CalendarCheck className="size-5" strokeWidth={2} />
             Generar {label}
           </Button>

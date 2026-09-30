@@ -103,6 +103,7 @@ export function AdjuntarFactura({
           variant="outline"
           className="h-11 px-3 text-sm font-medium"
           aria-label={`Adjuntar factura: ${gasto.etiqueta}`}
+          data-tour="gastos-adjuntar-factura"
         >
           <Paperclip className="size-4" strokeWidth={2} />
           Adjuntar factura

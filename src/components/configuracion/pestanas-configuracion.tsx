@@ -54,7 +54,7 @@ export function PestanasConfiguracion({
 }) {
   const pestanas = pestanasDeRol(rol);
   return (
-    <nav aria-label="Secciones de configuración">
+    <nav aria-label="Secciones de configuración" data-tour="config-pestanas">
       <ul className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
         {pestanas.map((p, i) => {
           const { icono: Icono } = TODAS[p];
@@ -65,6 +65,7 @@ export function PestanasConfiguracion({
               <Link
                 href={i === 0 ? "/configuracion" : `/configuracion?tab=${p}`}
                 aria-current={esActiva ? "page" : undefined}
+                data-tour={`config-pestana-${p}`}
                 className={cn(
                   "flex h-full min-h-12 items-center gap-2 rounded-lg border px-3 py-1.5 text-sm leading-tight font-semibold transition-colors sm:px-4 sm:whitespace-nowrap",
                   esActiva

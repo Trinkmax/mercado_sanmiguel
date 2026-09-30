@@ -44,6 +44,7 @@ export function AvisoDeuda({
       {hayVencidos ? (
         <div
           role="status"
+          data-tour="cobranza-vencida"
           className="flex items-start gap-3 rounded-lg border border-pendiente/50 bg-pendiente-suave px-4 py-3"
         >
           <AlertTriangle
@@ -68,6 +69,7 @@ export function AvisoDeuda({
       {ahorroEnTermino > 0 && vencimientoBeneficio ? (
         <div
           role="status"
+          data-tour="cobranza-beneficio"
           className={cn(
             "flex items-start gap-3 rounded-lg border px-4 py-3",
             urgente

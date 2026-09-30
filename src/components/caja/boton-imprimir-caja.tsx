@@ -14,7 +14,7 @@ export function BotonImprimirCaja({
   className?: string;
 }) {
   return (
-    <Button asChild variant="outline" className={cn("min-h-11 text-sm", className)}>
+    <Button asChild variant="outline" className={cn("min-h-11 text-sm", className)} data-tour="caja-imprimir">
       <Link href={`/cierre-caja/${cajaId}`}>
         <Printer className="size-4" strokeWidth={2} />
         {abierta ? "Imprimir parcial" : "Imprimir cierre"}

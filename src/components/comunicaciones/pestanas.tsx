@@ -34,7 +34,7 @@ export function PestanasComunicaciones({
   badges?: Partial<Record<PestanaComunicaciones, number>>;
 }) {
   return (
-    <nav aria-label="Secciones de Comunicaciones" className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+    <nav aria-label="Secciones de Comunicaciones" data-tour="comunicaciones-pestanas" className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
       {PESTANAS.map((p) => {
         const Icono = p.icono;
         const esActiva = activa === p.valor;
@@ -43,6 +43,7 @@ export function PestanasComunicaciones({
           <Link
             key={p.valor}
             aria-current={esActiva ? "page" : undefined}
+            data-tour={`comunicaciones-pestana-${p.valor}`}
             href={p.valor === "circulares" ? "/comunicaciones" : `/comunicaciones?tab=${p.valor}`}
             className={cn(
               "relative flex min-h-12 min-w-0 items-center gap-2 rounded-md border px-3 py-1.5 text-sm leading-tight font-medium transition-colors sm:shrink-0 sm:px-4 sm:whitespace-nowrap",

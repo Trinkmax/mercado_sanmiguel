@@ -116,7 +116,7 @@ export default async function SolicitudPage({ params }: Props) {
         <PageHeader titulo={`Solicitud N° ${s.numero}`} descripcion={s.asunto} className="pb-0">
           <Sello estado={selloSolicitud(s)} className="text-sm" />
           <Button asChild variant="outline" className="min-h-11">
-            <Link href={`/solicitudes/${s.id}/imprimir`}>
+            <Link href={`/solicitudes/${s.id}/imprimir`} data-tour="solicitudes-imprimir">
               <Printer className="size-4" strokeWidth={2} />
               Imprimir
             </Link>
@@ -125,7 +125,7 @@ export default async function SolicitudPage({ params }: Props) {
       </div>
 
       {/* Recorrido */}
-      <Card>
+      <Card data-tour="solicitudes-recorrido">
         <CardContent className="space-y-3">
           <LineaEstado solicitud={s} />
           {laTiene ? (
@@ -140,7 +140,7 @@ export default async function SolicitudPage({ params }: Props) {
           vertical: detalle → acciones → hilo, para que el botón principal no quede debajo de
           todos los mensajes. */}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:items-start">
-        <Card className="lg:col-start-1 lg:row-start-1">
+        <Card className="lg:col-start-1 lg:row-start-1" data-tour="solicitudes-detalle">
           <CardHeader>
             <CardTitle className="flex flex-wrap items-center gap-2 text-lg">
               <ChipTipo tipo={s.tipo} />
@@ -259,7 +259,7 @@ export default async function SolicitudPage({ params }: Props) {
 
         {/* Columna lateral (en tablet vertical va entre el detalle y el hilo) */}
         <aside className="space-y-6 lg:sticky lg:top-6 lg:col-start-2 lg:row-span-2 lg:row-start-1">
-          <Card>
+          <Card data-tour={puedeActuar && hayAcciones ? "solicitudes-acciones" : "solicitudes-como-sigue"}>
             <CardHeader>
               <CardTitle className="text-lg">{puedeActuar && hayAcciones ? "Acciones" : "Cómo sigue"}</CardTitle>
             </CardHeader>
@@ -319,7 +319,7 @@ export default async function SolicitudPage({ params }: Props) {
         </aside>
 
         {/* Hilo */}
-        <section className="space-y-4 lg:col-start-1 lg:row-start-2" aria-label="Mensajes">
+        <section className="space-y-4 lg:col-start-1 lg:row-start-2" aria-label="Mensajes" data-tour="solicitudes-mensajes">
           <h2 className="font-display text-lg font-bold tracking-tight">
             Mensajes
             <span className="ml-2 text-base font-normal text-muted-foreground tabular">{mensajes.length}</span>

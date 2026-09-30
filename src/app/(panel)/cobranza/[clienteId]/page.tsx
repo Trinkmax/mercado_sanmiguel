@@ -277,7 +277,7 @@ export default async function CobrarClientePage({
     .join(" · ");
 
   const deudaDelDia = (
-    <section className="rounded-lg border bg-card">
+    <section data-tour="cobranza-deuda" className="rounded-lg border bg-card">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b p-5">
         <div>
           <p className="text-sm text-muted-foreground">Debe hoy</p>

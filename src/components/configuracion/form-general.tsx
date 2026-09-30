@@ -68,7 +68,7 @@ function CardVencimiento({ diaVencimiento }: { diaVencimiento: number }) {
   }
 
   return (
-    <Card>
+    <Card data-tour="config-vencimiento">
       <CardHeader>
         <CardTitle className="text-lg">Vencimiento</CardTitle>
         <CardDescription className="text-sm">
@@ -137,7 +137,7 @@ function CardImpresionDirecta({ impresionDirecta }: { impresionDirecta: boolean 
   }
 
   return (
-    <Card>
+    <Card data-tour="config-impresion">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-lg">
           <Printer className="size-5 text-muted-foreground" strokeWidth={2} />

@@ -21,7 +21,7 @@ export function FiltroTipo({
   hrefBase: string;
 }) {
   return (
-    <nav aria-label="Filtrar por tipo" className="flex flex-wrap gap-2">
+    <nav aria-label="Filtrar por tipo" data-tour="gastos-filtro" className="flex flex-wrap gap-2">
       {OPCIONES.map((o) => {
         const esActivo = o.valor === activo;
         const qs = [hrefBase, o.valor === "todos" ? "" : `tipo=${o.valor}`].filter(Boolean).join("&");

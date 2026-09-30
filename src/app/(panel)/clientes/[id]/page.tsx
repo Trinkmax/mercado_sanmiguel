@@ -645,7 +645,7 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
         </div>
 
         {/* Debe hoy + Saldo a favor: el número que importa, grande */}
-        <div className="flex flex-wrap items-end gap-x-10 gap-y-4">
+        <div className="flex flex-wrap items-end gap-x-10 gap-y-4" data-tour="clientes-deuda">
           <div>
             <p className="text-sm text-muted-foreground">Debe hoy</p>
             <p
@@ -686,10 +686,16 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
         />
       </div>
 
-      <Tabs defaultValue={solapaInicial}>
-        <TabsList className="h-auto! w-full flex-wrap justify-start gap-1 p-1">
+      {/* key: si la dirección pide otra solapa (?tab=, la guía), se abre esa. */}
+      <Tabs key={solapaInicial} defaultValue={solapaInicial}>
+        <TabsList className="h-auto! w-full flex-wrap justify-start gap-1 p-1" data-tour="clientes-solapas">
           {solapas.map((p) => (
-            <TabsTrigger key={p.valor} value={p.valor} className="h-11 flex-none px-4 text-sm font-medium">
+            <TabsTrigger
+              key={p.valor}
+              value={p.valor}
+              className="h-11 flex-none px-4 text-sm font-medium"
+              data-tour={`clientes-solapa-${p.valor}`}
+            >
               {p.label}
             </TabsTrigger>
           ))}

@@ -82,7 +82,7 @@ export async function InicioJefe({ perfil, supabase }: { perfil: Perfil; supabas
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_20rem]">
       {/* Principal: las quintas del mes y los ambulantes */}
-      <Card>
+      <Card data-tour={mesGenerado && estimado > 0 ? "inicio-quintas" : "inicio-quintas-sin-generar"}>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
             <Tractor className="size-5 text-primary" strokeWidth={2} />
@@ -130,14 +130,19 @@ export async function InicioJefe({ perfil, supabase }: { perfil: Perfil; supabas
             </p>
           )}
 
-          <Button asChild size="lg" className="h-12 w-full px-5 text-base font-semibold sm:w-auto">
+          <Button
+            asChild
+            size="lg"
+            className="h-12 w-full px-5 text-base font-semibold sm:w-auto"
+            data-tour="inicio-cobrar-quintero"
+          >
             <Link href="/cobranza?cat=quintero">
               <HandCoins className="size-5" strokeWidth={2} />
               Cobrar a un quintero
             </Link>
           </Button>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t pt-5" data-tour="inicio-ambulantes">
             <div className="flex items-center gap-3">
               <span className="flex size-11 items-center justify-center rounded-xl bg-accent text-primary">
                 <Footprints className="size-5" strokeWidth={2} />
@@ -159,7 +164,7 @@ export async function InicioJefe({ perfil, supabase }: { perfil: Perfil; supabas
 
       {/* Lateral: la caja de portería de hoy y lo que espera al Jefe */}
       <div className="space-y-6 max-lg:order-first">
-        <Card>
+        <Card data-tour={caja ? "inicio-caja-hoy" : "inicio-caja-sin-abrir"}>
           <CardHeader>
             <CardTitle className="text-lg">Caja de portería de hoy</CardTitle>
             {caja ? (

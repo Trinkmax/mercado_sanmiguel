@@ -202,7 +202,7 @@ export default async function PorteriaPage({ searchParams }: Props) {
         />
       ) : null}
 
-      <section className="space-y-4" aria-labelledby="titulo-cobros">
+      <section className="space-y-4" aria-labelledby="titulo-cobros" data-tour="porteria-seccion-cobros">
         <div className="space-y-0.5">
           <h2 id="titulo-cobros" className="font-display text-xl font-bold tracking-tight">
             {esHoy ? "Cobros de hoy" : `Canon del ${formatFecha(fecha)}`}
@@ -240,7 +240,7 @@ export default async function PorteriaPage({ searchParams }: Props) {
     >
       {esHoy ? <RegistroIngreso /> : null}
 
-      <section className="space-y-4" aria-labelledby="titulo-ingresos">
+      <section className="space-y-4" aria-labelledby="titulo-ingresos" data-tour="porteria-seccion-ingresos">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="space-y-0.5">
             <h2 id="titulo-ingresos" className="font-display text-xl font-bold tracking-tight">
@@ -302,7 +302,7 @@ export default async function PorteriaPage({ searchParams }: Props) {
         {esLider ? (
           <>
             <SelectorFecha fecha={fecha} />
-            <Button asChild variant="outline" size="lg" className="h-12 px-4 text-base">
+            <Button asChild variant="outline" size="lg" className="h-12 px-4 text-base" data-tour="porteria-tarifas">
               <Link href="/configuracion?tab=tarifas">
                 <Settings2 className="size-5" strokeWidth={2} />
                 Editar tarifas
@@ -327,7 +327,7 @@ export default async function PorteriaPage({ searchParams }: Props) {
       />
 
       {perfil.rol === "porteria" ? (
-        <Card className="text-base">
+        <Card className="text-base" data-tour="porteria-solicitudes">
           <CardHeader>
             <CardTitle className="font-display text-lg font-bold">Solicitudes e informes</CardTitle>
             <CardDescription className="text-sm">

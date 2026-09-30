@@ -45,7 +45,7 @@ export function BandejaAdministracion({ bandeja, rol }: { bandeja: BandejaAdmin;
       />
 
       {pedidos.length > 0 ? (
-        <Card className="border-parcial/60">
+        <Card className="border-parcial/60" data-tour="caja-pedidos-reapertura">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
               <LockOpen className="size-5 text-parcial" strokeWidth={2} />

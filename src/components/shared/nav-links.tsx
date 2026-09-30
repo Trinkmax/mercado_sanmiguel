@@ -80,11 +80,14 @@ export function NavLinks({
   badges,
   onNavigate,
   className,
+  "data-tour": dataTour,
 }: {
   rol: Rol;
   badges?: BadgesNav;
   onNavigate?: () => void;
   className?: string;
+  /** Ancla del tour guiado para la lista entera ("menu-lateral"). */
+  "data-tour"?: string;
 }) {
   const pathname = usePathname();
   const items = rol === "socio" ? NAVEGACION_SOCIO : navParaRol(rol);
@@ -132,6 +135,7 @@ export function NavLinks({
       <Link
         key={href}
         href={href}
+        data-tour={`nav:${href}`}
         onClick={onNavigate}
         aria-current={activo ? "page" : undefined}
         className={cn(
@@ -150,11 +154,15 @@ export function NavLinks({
   };
 
   if (plano) {
-    return <nav className={cn("flex flex-col gap-1", className)}>{items.map(link)}</nav>;
+    return (
+      <nav data-tour={dataTour} className={cn("flex flex-col gap-1", className)}>
+        {items.map(link)}
+      </nav>
+    );
   }
 
   return (
-    <nav className={cn("flex flex-col gap-1", className)}>
+    <nav data-tour={dataTour} className={cn("flex flex-col gap-1", className)}>
       {grupos.map(({ grupo, items: its }) => {
         const fijo = grupo === "hoy";
         const abiertoAhora = estaAbierto(grupo);
@@ -171,6 +179,7 @@ export function NavLinks({
             ) : (
               <button
                 type="button"
+                data-tour={`nav-grupo:${grupo}`}
                 onClick={() => alternar(grupo)}
                 aria-expanded={abiertoAhora}
                 aria-controls={idPanel}

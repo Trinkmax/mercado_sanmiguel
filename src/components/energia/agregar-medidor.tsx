@@ -50,7 +50,7 @@ export function AgregarMedidor({ clientes }: { clientes: ClienteParaMedidor[] })
   return (
     <Dialog onOpenChange={(abierto) => !abierto && setTexto("")}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="h-11 px-4 text-sm">
+        <Button variant="outline" className="h-11 px-4 text-sm" data-tour="energia-agregar-medidor">
           <Plus className="size-5" strokeWidth={2} />
           Agregar un medidor
         </Button>

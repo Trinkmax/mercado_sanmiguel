@@ -88,7 +88,7 @@ export function FormSolicitudSocio() {
 
   return (
     <form onSubmit={onSubmit} noValidate className="space-y-7">
-      <fieldset className="space-y-2">
+      <fieldset className="space-y-2" data-tour="solicitudes-socio-tipo">
         <legend className="text-base font-medium">¿Qué querés hacer?</legend>
         <div className="grid grid-cols-2 gap-2">
           {TIPOS_SOLICITUD.map((t) => {
@@ -117,7 +117,7 @@ export function FormSolicitudSocio() {
         </p>
       </fieldset>
 
-      <div className="space-y-2">
+      <div className="space-y-2" data-tour="solicitudes-socio-asunto">
         <Label htmlFor="soc-asunto" className="text-base">
           Asunto
         </Label>
@@ -200,6 +200,7 @@ export function FormSolicitudSocio() {
         size="lg"
         disabled={pendiente}
         className="h-14 w-full text-base font-semibold"
+        data-tour="solicitudes-socio-enviar"
       >
         {pendiente ? (
           <Spinner className="size-5" />

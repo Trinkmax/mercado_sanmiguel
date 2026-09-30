@@ -67,6 +67,7 @@ export function AvisoCajaCerrada({
   return (
     <div
       role="status"
+      data-tour="cobranza-aviso-caja"
       className={cn(
         "flex flex-wrap items-center justify-between gap-3 rounded-lg border border-parcial bg-parcial-suave px-4 py-3",
         className

@@ -32,7 +32,7 @@ export async function GateCirculares({
 
   return (
     <section className="space-y-6" aria-label="Circulares para confirmar">
-      <div className="flex items-start gap-3">
+      <div className="flex items-start gap-3" data-tour="encabezado socio-comunicaciones-bloqueo">
         <Megaphone className="mt-1 size-7 shrink-0 text-parcial" strokeWidth={2} />
         <div className="space-y-1">
           <h1 className="font-display text-2xl font-bold tracking-tight">

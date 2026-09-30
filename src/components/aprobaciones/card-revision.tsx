@@ -86,6 +86,7 @@ export function CardRevision({
     <article
       className="space-y-5 rounded-lg bg-card p-5 ring-1 ring-foreground/10 sm:p-6"
       aria-labelledby={`revision-${cambio.id}`}
+      data-tour="aprobaciones-revision"
     >
       <header className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">

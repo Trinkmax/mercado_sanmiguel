@@ -99,7 +99,10 @@ export function PrecioConcepto({
   }
 
   return (
-    <div className={cn("flex items-center gap-2 rounded-lg border bg-card py-2 pr-2 pl-4", className)}>
+    <div
+      data-tour={codigo === "ENER" ? "energia-precio-kwh" : "energia-abono"}
+      className={cn("flex items-center gap-2 rounded-lg border bg-card py-2 pr-2 pl-4", className)}
+    >
       <div>
         <p className="text-sm font-medium text-muted-foreground">{t.etiqueta}</p>
         <p className="text-2xl leading-tight font-bold tabular">{formatARS(precio)}</p>

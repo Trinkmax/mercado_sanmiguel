@@ -220,7 +220,7 @@ export function RegistroIngreso() {
   // ---------- Confirmación: el sello reemplaza al formulario ----------
   if (resultado) {
     return (
-      <section className="space-y-6 rounded-lg border bg-card p-5 sm:p-6" aria-live="polite">
+      <section className="space-y-6 rounded-lg border bg-card p-5 sm:p-6" aria-live="polite" data-tour="porteria-ingreso-registrado">
         <div className="flex flex-col items-center gap-3 py-4 text-center">
           <Sello grande estado="pagado" texto="Ingreso registrado" className="animar-estampado" />
           <p className="font-display text-2xl font-bold tracking-tight">
@@ -258,7 +258,7 @@ export function RegistroIngreso() {
   }
 
   return (
-    <section className="rounded-lg border bg-card p-5 sm:p-6">
+    <section className="rounded-lg border bg-card p-5 sm:p-6" data-tour="porteria-registro">
       <form onSubmit={onSubmit} className="space-y-6" autoComplete="off">
         <div className="space-y-0.5">
           <h2 className="font-display text-xl font-bold tracking-tight">Registrar ingreso</h2>
@@ -268,7 +268,7 @@ export function RegistroIngreso() {
         </div>
 
         {/* ---------- DNI ---------- */}
-        <div className="space-y-2">
+        <div className="space-y-2" data-tour="porteria-dni">
           <Label htmlFor="dni-ingreso" className="text-base">
             DNI
           </Label>
@@ -374,7 +374,7 @@ export function RegistroIngreso() {
         </div>
 
         {/* ---------- Firma ---------- */}
-        <div className="space-y-2">
+        <div className="space-y-2" data-tour="porteria-firma">
           <Label className="text-base">
             Firma{" "}
             <span className="font-normal text-muted-foreground">(obligatoria)</span>
@@ -384,7 +384,7 @@ export function RegistroIngreso() {
 
         {error ? <AlertaError error={error} titulo="No se pudo registrar el ingreso" /> : null}
 
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-3" data-tour="porteria-registrar">
           <Button
             type="submit"
             size="lg"

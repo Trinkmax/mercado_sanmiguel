@@ -66,7 +66,7 @@ export function TarjetaAviso({ aviso }: { aviso: Aviso }) {
   const titulo = aviso.n === 1 ? aviso.singular : aviso.plural;
   if (aviso.tono === "pendiente") {
     return (
-      <Card>
+      <Card data-tour="inicio-aviso">
         <CardContent>
           <p className="text-base leading-snug font-semibold">
             <span className="text-pendiente tabular">{aviso.n}</span> {titulo}
@@ -80,7 +80,7 @@ export function TarjetaAviso({ aviso }: { aviso: Aviso }) {
     );
   }
   return (
-    <Card className="border-parcial bg-parcial-suave">
+    <Card className="border-parcial bg-parcial-suave" data-tour="inicio-aviso">
       {/* Si no entra al lado (columna angosta, celular), el botón baja: nunca aprieta el texto. */}
       <CardContent className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-40 flex-1">
