@@ -4,9 +4,10 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Undo2 } from "lucide-react";
-import { formatARS, formatFecha } from "@/lib/format";
+import { formatARS, formatFecha, montoATexto, parseMonto, sanitizarMonto } from "@/lib/format";
 import {
   anularGasto,
+  corregirMontoGasto,
   pagarGasto,
   revertirPagoGasto,
   type ResultadoPagoGasto,
@@ -20,6 +21,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
@@ -42,7 +44,7 @@ export type GastoAcciones = {
   pagadoDesde: string | null;
 };
 
-type Dialogo = "pagar" | "anular" | "deshacer" | null;
+type Dialogo = "pagar" | "anular" | "deshacer" | "monto" | null;
 
 const MOTIVOS_DESHACER = [
   "Se cargó dos veces",
@@ -103,6 +105,7 @@ export function AccionesGasto({
     origenInicial({ cajas, preferirCaja, cajaPreseleccionadaId, hoy })
   );
   const [motivo, setMotivo] = useState("");
+  const [montoNuevo, setMontoNuevo] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pendiente, startTransition] = useTransition();
 
@@ -112,6 +115,7 @@ export function AccionesGasto({
     if (cual === "pagar") {
       setOrigen(origenInicial({ cajas, preferirCaja, cajaPreseleccionadaId, hoy }));
     }
+    if (cual === "monto") setMontoNuevo(montoATexto(gasto.monto));
     setDialogo(cual);
   }
 
@@ -146,6 +150,22 @@ export function AccionesGasto({
     });
   }
 
+  function corregirMonto() {
+    setError(null);
+    const monto = parseMonto(montoNuevo);
+    startTransition(async () => {
+      const res = await llamarAccion(() => corregirMontoGasto({ id: gasto.id, monto }));
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      setDialogo(null);
+      toast.success(`${gasto.etiqueta}: ahora es de ${formatARS(monto)}.`, {
+        description: "Cambió solo este gasto. Si cambia para todos los meses, cambialo en los fijos.",
+      });
+    });
+  }
+
   function deshacer() {
     setError(null);
     startTransition(async () => {
@@ -173,6 +193,17 @@ export function AccionesGasto({
           >
             Pagar
           </Button>
+          {!soloPagar ? (
+            <Button
+              variant="outline"
+              className="h-11 px-4 text-base"
+              onClick={() => abrir("monto")}
+              aria-label={`Cambiar el monto de ${gasto.etiqueta}`}
+              data-tour="gastos-cambiar-monto"
+            >
+              Cambiar monto
+            </Button>
+          ) : null}
           {!soloPagar ? (
             <Button
               variant="outline"
@@ -235,6 +266,51 @@ export function AccionesGasto({
             >
               {pendiente ? <Spinner className="size-5" /> : null}
               {textoBotonPago(origen, gasto.monto, hoy)}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cambiar monto (solo este gasto) */}
+      <Dialog open={dialogo === "monto"} onOpenChange={(o) => !o && !pendiente && setDialogo(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-lg">Cambiar el monto de {gasto.etiqueta}</DialogTitle>
+            <DialogDescription className="text-base">
+              Ahora es de {formatARS(gasto.monto)}. Cambia solo este gasto, no los meses que vienen.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor={`monto-${gasto.id}`} className="text-base">
+              Monto nuevo
+            </Label>
+            <Input
+              id={`monto-${gasto.id}`}
+              inputMode="decimal"
+              autoComplete="off"
+              value={montoNuevo}
+              onChange={(e) => {
+                setMontoNuevo(sanitizarMonto(e.target.value).slice(0, 15));
+                setError(null);
+              }}
+              className="h-13 text-xl font-semibold tabular"
+            />
+            <p className="min-h-5 text-base font-semibold tabular text-muted-foreground">
+              {parseMonto(montoNuevo) > 0 ? formatARS(parseMonto(montoNuevo)) : "Los centavos van con coma: 1234,50"}
+            </p>
+          </div>
+          {error ? <AlertaError error={error} titulo="No se pudo cambiar el monto" /> : null}
+          <DialogFooter className="gap-2">
+            <Button variant="outline" className="h-12 px-5 text-base" disabled={pendiente} onClick={() => setDialogo(null)}>
+              No, volver
+            </Button>
+            <Button
+              className="h-12 px-5 text-base font-semibold"
+              disabled={pendiente || !(parseMonto(montoNuevo) > 0) || parseMonto(montoNuevo) === gasto.monto}
+              onClick={corregirMonto}
+            >
+              {pendiente ? <Spinner className="size-5" /> : null}
+              Guardar monto
             </Button>
           </DialogFooter>
         </DialogContent>

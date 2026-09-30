@@ -78,7 +78,7 @@ Un electricista recorre +100 medidores una vez al mes **con planilla en papel**.
 
 ### Gastos
 
-Fijos y variables por rubro (30 códigos: AGUA, ALQ, SJ, GINT…). Carga manual estilo planilla: vencimiento, monto, pagado/pendiente, medio de pago, factura adjunta. Los chicos los paga administración desde caja; los grandes, tesorería.
+Fijos y variables por rubro (30 códigos: AGUA, ALQ, SJ, GINT…). Cada rubro se configura (Configuración → Rubros de gasto) como **fijo**, con su monto y el día del mes en que vence, o **variable**. Los fijos **se cargan solos** en Gastos todos los meses (tarea programada del día 1; nunca se duplican ni se cargan encima de uno cargado a mano); los variables se van imputando a medida que pasan, con un botón por rubro. Cada gasto lleva vencimiento, monto, pagado/pendiente, medio de pago y factura adjunta. Los chicos los paga administración desde caja; los grandes, tesorería.
 
 ### Reportería
 

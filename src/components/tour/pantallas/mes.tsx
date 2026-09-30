@@ -1896,6 +1896,44 @@ export function PantallaDarAcceso() {
   );
 }
 
+/** «Rubros de gasto»: un rubro fijo con su monto y su día, y los variables. */
+export function PantallaRubroFijo() {
+  return (
+    <MarcoPantalla titulo="Configuración · Rubros de gasto">
+      <div className="space-y-1.5 rounded-lg border border-border bg-card px-2 py-2">
+        <div className="flex items-center gap-2">
+          <Codigo codigo="ALQ" />
+          <p className="min-w-0 flex-1 text-[0.75rem] font-medium">Alquiler del Predio</p>
+          <Resaltado mano={false}>
+            <span className="flex gap-0.5 rounded-md bg-muted p-0.5 text-[0.7rem] font-semibold">
+              <span className="rounded px-1.5 py-0.5 text-muted-foreground">Variable</span>
+              <span className="rounded bg-card px-1.5 py-0.5 text-primary shadow-sm">Fijo</span>
+            </span>
+          </Resaltado>
+        </div>
+        <div className="flex items-end gap-1.5 rounded-md border border-primary/20 bg-accent/40 p-1.5">
+          <CampoEjemplo etiqueta="Monto de cada mes" valor={<span className="font-semibold tabular">850.000</span>} className="flex-1" />
+          <CampoEjemplo etiqueta="Vence el día" valor={<span className="font-semibold tabular">10</span>} className="w-16" />
+        </div>
+        <p className="text-[0.7rem] text-muted-foreground">
+          Todos los meses se carga solo en «Gastos»: <strong className="text-foreground">$ 850.000</strong>, vence el 10.
+        </p>
+        <Resaltado>
+          <BotonEjemplo>Guardar fijo</BotonEjemplo>
+        </Resaltado>
+      </div>
+      <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-2 py-1.5">
+        <Codigo codigo="COMB" />
+        <p className="min-w-0 flex-1 text-[0.75rem] font-medium">Combustible</p>
+        <span className="flex gap-0.5 rounded-md bg-muted p-0.5 text-[0.7rem] font-semibold">
+          <span className="rounded bg-card px-1.5 py-0.5 text-primary shadow-sm">Variable</span>
+          <span className="rounded px-1.5 py-0.5 text-muted-foreground">Fijo</span>
+        </span>
+      </div>
+    </MarcoPantalla>
+  );
+}
+
 /** «Rubros de gasto»: el alta de un rubro y la lista con su interruptor. */
 export function PantallaRubros() {
   const rubros = [

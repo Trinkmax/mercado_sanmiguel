@@ -52,8 +52,8 @@ export default function LoadingGastos() {
         <Skeleton className="h-20 w-full rounded-xl sm:w-[28rem] sm:max-w-full" />
       </div>
 
-      {/* Aviso de fijos para traer */}
-      <Skeleton className="h-20 w-full rounded-xl" />
+      {/* Fijos (se cargan solos) y variables (botones por rubro) */}
+      <Skeleton className="h-36 w-full rounded-xl lg:h-32" />
 
       {/* Chips de tipo */}
       <div className="flex gap-2">

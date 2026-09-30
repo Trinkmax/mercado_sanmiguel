@@ -312,57 +312,6 @@ export async function revertirPagoGasto(input: unknown): Promise<ActionResult> {
   return ok(undefined);
 }
 
-/* ---------------- Traer los fijos del mes anterior (E3) ---------------- */
-
-const traerSchema = z
-  .object({
-    desde: periodoSchema,
-    hasta: periodoSchema,
-    items: z
-      .array(
-        z.object({
-          origenId: z.uuid("Uno de los gastos no se reconoce. Actualizá la página."),
-          monto: z
-            .number("Poné el monto de cada gasto.")
-            .positive("Cada gasto necesita un monto mayor a cero."),
-          vencimiento: z.iso.date("Hay una fecha de vencimiento que no es válida.").nullable(),
-          descripcion: z.string().trim().max(200).nullable().optional(),
-        })
-      )
-      .min(1, "Elegí al menos un gasto para traer.")
-      .max(200, "Traé hasta 200 gastos por vez."),
-  })
-  .refine((d) => d.hasta > d.desde, { message: "Los gastos se traen a un mes posterior." });
-
-export async function traerGastosFijos(
-  input: unknown
-): Promise<ActionResult<{ creados: number; omitidos: number; total: number }>> {
-  await requireRol("admin", "tesoreria", "lider");
-  const parsed = traerSchema.safeParse(input);
-  if (!parsed.success) return fallo(parsed.error.issues[0].message);
-
-  const supabase = await createClient();
-  const { data, error } = await supabase.rpc("replicar_gastos_fijos", {
-    p_desde_periodo: parsed.data.desde,
-    p_hasta_periodo: parsed.data.hasta,
-    p_items: parsed.data.items.map((i) => ({
-      origen_id: i.origenId,
-      monto: i.monto,
-      vencimiento: i.vencimiento,
-      descripcion: i.descripcion ?? null,
-    })),
-  });
-  if (error) return fallo(error);
-
-  const r = (data ?? {}) as { creados?: number; omitidos?: unknown[]; total?: number };
-  revalidarGastos();
-  return ok({
-    creados: Number(r.creados ?? 0),
-    omitidos: Array.isArray(r.omitidos) ? r.omitidos.length : 0,
-    total: Number(r.total ?? 0),
-  });
-}
-
 /* ---------------- Anular / factura ---------------- */
 
 const idSchema = z.object({ id: z.uuid("No se reconoce el gasto. Actualizá la página.") });
@@ -385,6 +334,40 @@ export async function anularGasto(input: unknown): Promise<ActionResult> {
   if (error) return fallo(error);
   if (!data || data.length === 0)
     return fallo("Ese gasto ya no se puede anular. Actualizá la página.");
+
+  revalidarGastos();
+  return ok(undefined);
+}
+
+const montoGastoSchema = z.object({
+  id: z.uuid("No se reconoce el gasto. Actualizá la página."),
+  monto: z
+    .number("Poné el monto del gasto.")
+    .positive("El monto tiene que ser mayor a cero.")
+    .max(999_999_999_999, "Revisá el monto: es demasiado grande."),
+});
+
+/**
+ * Cambia el monto de un gasto sin pagar (un fijo que este mes vino distinto): cambia solo
+ * este gasto; el monto de todos los meses se cambia en Configuración → Rubros de gasto.
+ */
+export async function corregirMontoGasto(input: unknown): Promise<ActionResult> {
+  const perfil = await requireRol("admin", "tesoreria", "lider");
+  const parsed = montoGastoSchema.safeParse(input);
+  if (!parsed.success) return fallo(parsed.error.issues[0].message);
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("gastos")
+    .update({ monto: Math.round(parsed.data.monto * 100) / 100 })
+    .eq("id", parsed.data.id)
+    .eq("org_id", perfil.org_id)
+    .eq("estado", "pendiente")
+    .select("id");
+
+  if (error) return fallo(error);
+  if (!data || data.length === 0)
+    return fallo("Ese gasto ya no se puede cambiar (¿ya se pagó?). Actualizá la página.");
 
   revalidarGastos();
   return ok(undefined);

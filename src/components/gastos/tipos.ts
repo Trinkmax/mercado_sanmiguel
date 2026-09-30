@@ -32,7 +32,13 @@ export type GastoPendiente = {
   periodo: string;
 };
 
-export type Rubro = { id: string; codigo: string; nombre: string };
+export type Rubro = {
+  id: string;
+  codigo: string;
+  nombre: string;
+  /** Cómo está configurado el rubro (0037): el gasto nuevo arranca con ese tipo. */
+  tipo?: "fijo" | "variable";
+};
 
 /** Días entre dos fechas "YYYY-MM-DD" (b − a). */
 export function diasEntre(a: string, b: string): number {
@@ -67,13 +73,6 @@ export function etiquetaGasto(descripcion: string | null | undefined, rubroNombr
   return d ? d : rubroNombre?.trim() || "Gasto";
 }
 
-/** Suma un mes a una fecha "YYYY-MM-DD" (fin de mes seguro: 31/01 → 28/02). */
-export function sumarUnMes(fecha: string): string {
-  const [y, m, d] = fecha.split("-").map(Number);
-  const ultimo = new Date(y, m + 1, 0).getDate();
-  const nueva = new Date(y, m, Math.min(d, ultimo));
-  return `${nueva.getFullYear()}-${String(nueva.getMonth() + 1).padStart(2, "0")}-${String(nueva.getDate()).padStart(2, "0")}`;
-}
 
 export const LABEL_MEDIO_GASTO: Record<string, string> = {
   efectivo: "Efectivo",

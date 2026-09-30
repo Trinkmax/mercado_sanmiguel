@@ -4,7 +4,7 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { ChevronDown, Plus } from "lucide-react";
-import { formatARS, labelPeriodo, parseMonto, sanitizarMonto } from "@/lib/format";
+import { formatARS, formatFecha, labelPeriodo, parseMonto, sanitizarMonto } from "@/lib/format";
 import { crearGasto } from "@/lib/actions/gastos";
 import { comprimirImagen } from "@/lib/imagen";
 import { MIME_PERMITIDOS, TAMANO_MAX_SUBIDA } from "@/lib/storage";
@@ -44,10 +44,15 @@ import { AlertaError } from "@/components/cobranza/alerta-error";
 import { delDia, type CajaElegible, type OrigenPago, type Rubro } from "@/components/gastos/tipos";
 import { llamarAccion } from "@/lib/llamar-accion";
 
-const AYUDA_TIPO = {
-  fijo: "Se repite todos los meses: el mes que viene lo traés con un toque, cambiando solo el monto.",
-  variable: "Es solo de este mes: no se trae al mes siguiente.",
-} as const;
+/** Qué quiere decir fijo o variable, según el rubro elegido y quién carga. */
+function ayudaTipo(tipo: "fijo" | "variable" | null, rubro: Rubro | null, puedeConfigurar: boolean): string {
+  if (!tipo) return "Los fijos se cargan solos cada mes; los variables, cada vez que pasan.";
+  if (tipo === "variable") return "Se carga cada vez que pasa: una compra, un arreglo, una boleta.";
+  if (rubro?.tipo === "fijo") return "Este rubro es fijo: se carga solo el 1° de cada mes.";
+  return puedeConfigurar
+    ? "Para que se cargue solo cada mes, poné su monto y el día que vence en Configuración → Rubros de gasto."
+    : "Para que se cargue solo cada mes, pedíselo a Administración o al Líder de Procesos.";
+}
 
 /** "Cargar gasto" del mes elegido: descripción opcional y, si ya se pagó, de dónde salió la plata. */
 export function DialogNuevoGasto({
@@ -58,6 +63,10 @@ export function DialogNuevoGasto({
   hoy,
   preferirCaja,
   cajaPreseleccionadaId = null,
+  rubroInicial = null,
+  trigger,
+  fijosCargados = {},
+  puedeConfigurar = false,
 }: {
   rubros: Rubro[];
   frecuentes: string[];
@@ -68,14 +77,22 @@ export function DialogNuevoGasto({
   preferirCaja: boolean;
   /** Viene de la caja (`/gastos?caja=…`): arranca en "¿Ya lo pagaste? Sí" con esa caja elegida. */
   cajaPreseleccionadaId?: string | null;
+  /** Se abre con este rubro ya elegido (los botones de «Imputar un variable»). */
+  rubroInicial?: Rubro | null;
+  /** Botón que abre la ventana (por defecto, «Cargar gasto»). */
+  trigger?: React.ReactNode;
+  /** Fijos que ya se cargaron solos en el mes (por id de rubro): se avisa para no duplicarlos. */
+  fijosCargados?: Record<string, { monto: number; vencimiento: string | null; estado: string }>;
+  /** Administración y el Líder configuran los fijos (cambia la ayuda). */
+  puedeConfigurar?: boolean;
 }) {
   const router = useRouter();
   const cajaElegida = cajaPreseleccionadaId
     ? cajas.find((c) => c.id === cajaPreseleccionadaId) ?? null
     : null;
   const [abierto, setAbierto] = useState(false);
-  const [rubro, setRubro] = useState<Rubro | null>(null);
-  const [tipo, setTipo] = useState<"fijo" | "variable" | null>(null);
+  const [rubro, setRubro] = useState<Rubro | null>(rubroInicial);
+  const [tipo, setTipo] = useState<"fijo" | "variable" | null>(rubroInicial?.tipo ?? null);
   const [monto, setMonto] = useState("");
   const [yaPagado, setYaPagado] = useState(Boolean(cajaElegida));
   const [origen, setOrigen] = useState<OrigenPago>(() =>
@@ -90,8 +107,8 @@ export function DialogNuevoGasto({
   const montoNumero = parseMonto(monto);
 
   function reiniciar() {
-    setRubro(null);
-    setTipo(null);
+    setRubro(rubroInicial);
+    setTipo(rubroInicial?.tipo ?? null);
     setMonto("");
     setYaPagado(Boolean(cajaElegida));
     setOrigen(origenInicial({ cajas, preferirCaja, cajaPreseleccionadaId, hoy }));
@@ -190,10 +207,12 @@ export function DialogNuevoGasto({
       }}
     >
       <DialogTrigger asChild>
-        <Button size="lg" className="h-12 px-6 text-base font-semibold" data-tour="gastos-cargar">
-          <Plus className="size-5" strokeWidth={2} />
-          Cargar gasto
-        </Button>
+        {trigger ?? (
+          <Button size="lg" className="h-12 px-6 text-base font-semibold" data-tour="gastos-cargar">
+            <Plus className="size-5" strokeWidth={2} />
+            Cargar gasto
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-lg">
         <DialogHeader className="pr-8">
@@ -213,10 +232,30 @@ export function DialogNuevoGasto({
               valor={rubro}
               onCambiar={(r) => {
                 setRubro(r);
+                // El rubro ya dice si es fijo o variable (Configuración → Rubros de gasto); uno
+                // recién creado es variable.
+                if (r) setTipo(r.tipo ?? "variable");
                 setError(null);
               }}
             />
           </div>
+
+          {rubro && fijosCargados[rubro.id] ? (
+            // Ese fijo ya se cargó solo este mes: que no se cargue dos veces por costumbre.
+            <p
+              role="status"
+              className="rounded-lg border border-parcial/40 bg-parcial-suave px-3 py-2.5 text-base leading-snug"
+            >
+              <strong>El de {labelPeriodo(periodo).toLowerCase()} ya se cargó solo</strong>:{" "}
+              {formatARS(fijosCargados[rubro.id].monto)}
+              {fijosCargados[rubro.id].vencimiento
+                ? `, vence el ${formatFecha(fijosCargados[rubro.id].vencimiento).slice(0, 5)}`
+                : ""}
+              {fijosCargados[rubro.id].estado === "pagado" ? " (ya está pagado)" : ""}. Si es ese mismo, no lo cargues de
+              nuevo: {fijosCargados[rubro.id].estado === "pagado" ? "ya está." : "pagalo desde la lista."} Cargalo solo si es
+              otro gasto aparte.
+            </p>
+          ) : null}
 
           <div className="space-y-2">
             <Label htmlFor="gasto-monto" className="text-base">
@@ -240,7 +279,7 @@ export function DialogNuevoGasto({
           </div>
 
           <fieldset className="space-y-2">
-            <legend className="mb-2 text-base font-medium">¿Se repite todos los meses?</legend>
+            <legend className="mb-2 text-base font-medium">¿Es un gasto fijo?</legend>
             <div className="grid grid-cols-2 gap-2">
               {(["fijo", "variable"] as const).map((t) => (
                 <button
@@ -260,7 +299,7 @@ export function DialogNuevoGasto({
               ))}
             </div>
             <p className="text-sm text-muted-foreground">
-              {tipo ? AYUDA_TIPO[tipo] : "Los fijos se traen al mes siguiente con un toque; los variables no."}
+              {ayudaTipo(tipo, rubro, puedeConfigurar)}
             </p>
           </fieldset>
 

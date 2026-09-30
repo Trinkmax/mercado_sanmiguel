@@ -352,3 +352,86 @@ export async function cambiarActivoRubro(input: unknown): Promise<ActionResult> 
   revalidatePath("/gastos");
   return ok(undefined);
 }
+
+/* ---------- Rubros de gasto: fijo o variable (0037) ---------- */
+
+const configurarRubroSchema = z.discriminatedUnion("tipo", [
+  z.object({ id: z.uuid("No encontramos el rubro."), tipo: z.literal("variable") }),
+  z.object({
+    id: z.uuid("No encontramos el rubro."),
+    tipo: z.literal("fijo"),
+    monto: z
+      .number("Poné el monto de cada mes.")
+      .positive("Poné el monto de cada mes.")
+      .max(999_999_999_999, "Revisá el monto: es demasiado grande."),
+    dia: z
+      .number("Elegí el día del mes en que vence.")
+      .int("Elegí el día del mes en que vence (1 a 31).")
+      .min(1, "Elegí el día del mes en que vence (1 a 31).")
+      .max(31, "Elegí el día del mes en que vence (1 a 31)."),
+    /** true: también el mes en curso · false: empieza el que viene · sin mandar: lo de siempre. */
+    cargarEsteMes: z.boolean().optional(),
+  }),
+]);
+
+export type ResultadoConfigurarRubro = {
+  /** Mes en curso ("YYYY-MM-01"). */
+  periodo: string;
+  /** Qué pasó con el gasto del mes en curso (0038): se cargó ahora, se corrigió (sin pagar),
+   * ya estaba pagado / anulado / cargado solo / cargado a mano, empieza el mes que viene, o
+   * (al pasar a variable) el de este mes quedó pendiente. */
+  esteMes:
+    | "cargado"
+    | "actualizado"
+    | "pagado"
+    | "anulado"
+    | "ya_cargado_solo"
+    | "a_mano"
+    | "desde_el_proximo"
+    | "queda_pendiente"
+    | null;
+  /** Primer mes en que se carga solo ("YYYY-MM-01"), si es fijo. */
+  fijoDesde: string | null;
+  /** Vencimiento en el mes en curso ("YYYY-MM-DD"), si es fijo. */
+  vencimientoEsteMes: string | null;
+};
+
+/**
+ * Fijo (con su monto y el día en que vence) o variable. Los fijos se cargan solos en Gastos
+ * todos los meses; el del mes en curso se carga (o se corrige, si está sin pagar) en el acto.
+ */
+export async function configurarRubroGasto(input: unknown): Promise<ActionResult<ResultadoConfigurarRubro>> {
+  await requireRol("admin", "lider");
+  const parsed = configurarRubroSchema.safeParse(input);
+  if (!parsed.success) return fallo(parsed.error.issues[0].message);
+
+  const d = parsed.data;
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("configurar_rubro_gasto", {
+    p_rubro: d.id,
+    p_tipo: d.tipo,
+    ...(d.tipo === "fijo"
+      ? {
+          p_monto: Math.round(d.monto * 100) / 100,
+          p_dia: d.dia,
+          ...(d.cargarEsteMes === undefined ? {} : { p_cargar_este_mes: d.cargarEsteMes }),
+        }
+      : {}),
+  });
+  if (error) return fallo(error);
+
+  const r = (data ?? {}) as {
+    periodo?: string;
+    este_mes?: ResultadoConfigurarRubro["esteMes"];
+    fijo_desde?: string | null;
+    vencimiento_este_mes?: string | null;
+  };
+  // Puede cargar o corregir un gasto: se refresca todo lo que muestra gastos.
+  for (const ruta of ["/configuracion", "/gastos", "/tesoreria", "/inicio", "/caja"]) revalidatePath(ruta);
+  return ok({
+    periodo: r.periodo ?? "",
+    esteMes: r.este_mes ?? null,
+    fijoDesde: r.fijo_desde ?? null,
+    vencimientoEsteMes: r.vencimiento_este_mes ?? null,
+  });
+}

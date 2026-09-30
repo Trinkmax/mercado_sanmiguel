@@ -1342,6 +1342,7 @@ export type Database = {
       }
       gastos: {
         Row: {
+          automatico: boolean
           caja_id: string | null
           comprobante_validado: boolean
           creado_en: string
@@ -1371,6 +1372,7 @@ export type Database = {
           vencimiento: string | null
         }
         Insert: {
+          automatico?: boolean
           caja_id?: string | null
           comprobante_validado?: boolean
           creado_en?: string
@@ -1400,6 +1402,7 @@ export type Database = {
           vencimiento?: string | null
         }
         Update: {
+          automatico?: boolean
           caja_id?: string | null
           comprobante_validado?: boolean
           creado_en?: string
@@ -2251,23 +2254,35 @@ export type Database = {
         Row: {
           activo: boolean
           codigo: string
+          dia_vencimiento: number | null
+          fijo_desde: string | null
           id: string
+          monto_fijo: number | null
           nombre: string
           org_id: string
+          tipo: Database["public"]["Enums"]["tipo_gasto"]
         }
         Insert: {
           activo?: boolean
           codigo: string
+          dia_vencimiento?: number | null
+          fijo_desde?: string | null
           id?: string
+          monto_fijo?: number | null
           nombre: string
           org_id: string
+          tipo?: Database["public"]["Enums"]["tipo_gasto"]
         }
         Update: {
           activo?: boolean
           codigo?: string
+          dia_vencimiento?: number | null
+          fijo_desde?: string | null
           id?: string
+          monto_fijo?: number | null
           nombre?: string
           org_id?: string
+          tipo?: Database["public"]["Enums"]["tipo_gasto"]
         }
         Relationships: [
           {
@@ -3066,6 +3081,16 @@ export type Database = {
         Returns: Json
       }
       conciliar_canon: { Args: { p_ids: string[] }; Returns: Json }
+      configurar_rubro_gasto: {
+        Args: {
+          p_cargar_este_mes?: boolean
+          p_dia?: number
+          p_monto?: number
+          p_rubro: string
+          p_tipo: Database["public"]["Enums"]["tipo_gasto"]
+        }
+        Returns: Json
+      }
       datos_recibo: { Args: { p_pago: string }; Returns: Json }
       dejar_sin_efecto_multa: {
         Args: { p_motivo: string; p_registro: string }
@@ -3144,6 +3169,7 @@ export type Database = {
       }
       estado_caja_porteria: { Args: never; Returns: Json }
       flujo_caja: { Args: never; Returns: Json }
+      generar_gastos_fijos: { Args: never; Returns: number }
       generar_periodo: { Args: { p_periodo: string }; Returns: Json }
       guardar_cuotas_quinteros: {
         Args: { p_cuotas: number }

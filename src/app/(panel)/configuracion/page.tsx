@@ -227,10 +227,19 @@ async function Quintas(
 async function Rubros(supabase: Supabase, perfil: Perfil) {
   const { data } = await supabase
     .from("rubros_gasto")
-    .select("id, codigo, nombre, activo")
+    .select("id, codigo, nombre, activo, tipo, monto_fijo, dia_vencimiento, fijo_desde")
     .eq("org_id", perfil.org_id)
     .order("codigo");
-  const rubros: RubroFila[] = data ?? [];
+  const rubros: RubroFila[] = (data ?? []).map((r) => ({
+    id: r.id,
+    codigo: r.codigo,
+    nombre: r.nombre,
+    activo: r.activo,
+    tipo: r.tipo,
+    montoFijo: r.monto_fijo === null ? null : Number(r.monto_fijo),
+    diaVencimiento: r.dia_vencimiento,
+    fijoDesde: r.fijo_desde,
+  }));
   return <TablaRubros rubros={rubros} />;
 }
 

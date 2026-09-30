@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronDown, Receipt, X } from "lucide-react";
+import { CalendarClock, ChevronDown, Plus, Receipt, Settings, Shuffle, X } from "lucide-react";
 import { requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -23,7 +23,6 @@ import { Money } from "@/components/shared/money";
 import { BotonExportar } from "@/components/shared/boton-exportar";
 import { SelectorMes } from "@/components/gastos/selector-mes";
 import { DialogNuevoGasto } from "@/components/gastos/dialog-nuevo-gasto";
-import { TraerFijos, type FijoParaTraer } from "@/components/gastos/traer-fijos";
 import { FilaGasto, type GastoFila } from "@/components/gastos/fila-gasto";
 import { FiltroTipo, type FiltroTipoGasto } from "@/components/gastos/filtro-tipo";
 import { GrupoPlegable } from "@/components/gastos/grupo-plegable";
@@ -32,7 +31,7 @@ import {
   delDia,
   diasEntre,
   etiquetaGasto,
-  sumarUnMes,
+  type Rubro,
 } from "@/components/gastos/tipos";
 
 export const metadata = { title: "Gastos" };
@@ -40,7 +39,7 @@ export const metadata = { title: "Gastos" };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const COLUMNAS_GASTO =
-  "id, descripcion, tipo, monto, estado, vencimiento, periodo, fecha_pago, medio_pago, pagado_desde, pagado_por, pagado_en, factura_path, comprobante_validado, notas, origen_id, pago_revertido_por, pago_revertido_en, pago_revertido_motivo, rubro:rubros_gasto(codigo, nombre), caja:cajas(fecha)";
+  "id, descripcion, tipo, automatico, monto, estado, vencimiento, periodo, fecha_pago, medio_pago, pagado_desde, pagado_por, pagado_en, factura_path, comprobante_validado, notas, pago_revertido_por, pago_revertido_en, pago_revertido_motivo, rubro:rubros_gasto(codigo, nombre), caja:cajas(fecha)";
 
 /** "YYYY-MM-DD" (Argentina) de un momento: ¿el pago se registró hoy? */
 const diaAR = new Intl.DateTimeFormat("en-CA", {
@@ -81,7 +80,6 @@ export default async function GastosPage({
   const filtro: FiltroTipoGasto =
     sp.tipo === "fijo" || sp.tipo === "variable" ? sp.tipo : "todos";
   const cajaParam = UUID.test(sp.caja ?? "") ? sp.caja! : null;
-  const mesAnterior = sumarMeses(periodo, -1);
   // En el mes actual se ven también los impagos de meses anteriores: no quedan escondidos.
   const esMesActual = periodo === periodoActual();
   const hoy = hoyISO();
@@ -91,20 +89,26 @@ export default async function GastosPage({
   // Un pago con cheque se deshace en Cheques, que ven Tesorería y el Líder.
   const verCheques = perfil.rol === "tesoreria" || perfil.rol === "lider";
 
+  // Los administra Administración y el Líder (Configuración → Rubros de gasto).
+  const puedeConfigurar = perfil.rol === "admin" || perfil.rol === "lider";
+
   const supabase = await createClient();
-  const [gastosRes, rubrosRes, anterioresRes, usoRes, cajas, impagosRes, pagadosHoyAntRes] = await Promise.all([
+  // Los fijos del mes se cargan solos (tarea programada del día 1, 0037). Por si todavía no
+  // corrió, o se configuró un fijo hoy, la pantalla los carga al abrirse: nunca duplica.
+  if (esMesActual) {
+    const { error: errorFijos } = await supabase.rpc("generar_gastos_fijos");
+    if (errorFijos) console.error("generar_gastos_fijos", errorFijos.message);
+  }
+  const [gastosRes, rubrosRes, usoRes, cajas, impagosRes, pagadosHoyAntRes] = await Promise.all([
     supabase.from("gastos").select(COLUMNAS_GASTO).eq("periodo", periodo),
-    supabase.from("rubros_gasto").select("id, codigo, nombre").eq("activo", true).order("nombre"),
+    supabase
+      .from("rubros_gasto")
+      .select("id, codigo, nombre, tipo, monto_fijo, dia_vencimiento, fijo_desde")
+      .eq("activo", true)
+      .order("nombre"),
     supabase
       .from("gastos")
-      .select("id, descripcion, monto, vencimiento, rubro:rubros_gasto(codigo, nombre)")
-      .eq("periodo", mesAnterior)
-      .eq("tipo", "fijo")
-      .neq("estado", "anulado")
-      .order("vencimiento", { ascending: true, nullsFirst: false }),
-    supabase
-      .from("gastos")
-      .select("rubro_id")
+      .select("rubro_id, periodo")
       .gte("periodo", sumarMeses(periodo, -3))
       .lte("periodo", periodo)
       .limit(2000),
@@ -140,7 +144,8 @@ export default async function GastosPage({
       a.periodo.localeCompare(b.periodo) ||
       (a.vencimiento ?? "9999-12-31").localeCompare(b.vencimiento ?? "9999-12-31")
   );
-  const rubros = rubrosRes.data ?? [];
+  const rubrosConfig = rubrosRes.data ?? [];
+  const rubros: Rubro[] = rubrosConfig.map((r) => ({ id: r.id, codigo: r.codigo, nombre: r.nombre, tipo: r.tipo }));
 
   // Cheques que pagaron gastos de la lista ("Cheque N° 123 a Frutas del Sur").
   const idsConCheque = [...gastos, ...deMesesAnteriores]
@@ -185,6 +190,7 @@ export default async function GastosPage({
     rubroCodigo: g.rubro?.codigo ?? null,
     rubroNombre: g.rubro?.nombre ?? null,
     tipo: g.tipo,
+    automatico: g.automatico,
     monto: Number(g.monto),
     estado: g.estado,
     vencimiento: g.vencimiento,
@@ -215,26 +221,51 @@ export default async function GastosPage({
   const anteriores = filasAnteriores.filter((g) => g.estado === "pendiente");
   const pagadosHoyAnteriores = filasAnteriores.length - anteriores.length;
 
-  // Fijos del mes anterior que todavía no se trajeron (E3).
-  const yaTraidos = new Set(
-    gastos.filter((g) => g.origen_id && g.estado !== "anulado").map((g) => g.origen_id)
-  );
-  const fijosParaTraer: FijoParaTraer[] = (anterioresRes.data ?? [])
-    .filter((g) => !yaTraidos.has(g.id))
-    .map((g) => ({
-      id: g.id,
-      etiqueta: etiquetaGasto(g.descripcion, g.rubro?.nombre),
-      descripcion: g.descripcion,
-      rubroCodigo: g.rubro?.codigo ?? null,
-      rubroNombre: g.rubro?.nombre ?? null,
-      monto: Number(g.monto),
-      vencimientoSugerido: g.vencimiento ? sumarUnMes(g.vencimiento) : null,
-    }));
-
   // Rubros más usados en los últimos meses (arriba en el selector).
   const uso = new Map<string, number>();
   for (const u of usoRes.data ?? []) uso.set(u.rubro_id, (uso.get(u.rubro_id) ?? 0) + 1);
   const frecuentes = [...uso.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => id).slice(0, 8);
+
+  // Fijos (se cargan solos) y variables (se imputan cuando pasan), para el panel del mes.
+  const rubrosFijos = rubrosConfig.filter((r) => r.tipo === "fijo");
+  const fijosDelMes = filas.filter((g) => g.automatico && g.estado !== "anulado");
+  const esFuturo = periodo > periodoActual();
+  const totalPorRubro = new Map<string, number>();
+  for (const g of filas) {
+    if (g.estado === "anulado" || !g.rubroCodigo) continue;
+    totalPorRubro.set(g.rubroCodigo, redondear2((totalPorRubro.get(g.rubroCodigo) ?? 0) + g.monto));
+  }
+  // Los variables más usados en los meses anteriores primero (un orden que no cambia al
+  // cargar: el botón no se mueve bajo el dedo); después, por nombre.
+  const usoPrevio = new Map<string, number>();
+  for (const u of usoRes.data ?? []) {
+    if (u.periodo < periodo) usoPrevio.set(u.rubro_id, (usoPrevio.get(u.rubro_id) ?? 0) + 1);
+  }
+  const variables = rubros
+    .filter((r) => r.tipo !== "fijo")
+    .sort((a, b) => (usoPrevio.get(b.id) ?? 0) - (usoPrevio.get(a.id) ?? 0) || a.nombre.localeCompare(b.nombre));
+  const VARIABLES_A_LA_VISTA = 10;
+
+  // Cada fijo configurado y qué pasó con él en el mes que se mira.
+  const estadoFijo = (r: (typeof rubrosFijos)[number]): string => {
+    const delRubro = filas.filter((g) => g.rubroCodigo === r.codigo);
+    const auto = delRubro.find((g) => g.automatico);
+    const aMano = delRubro.find((g) => !g.automatico && g.tipo === "fijo" && g.estado !== "anulado");
+    if (auto?.estado === "pagado") return "Pagado";
+    if (auto?.estado === "pendiente") return "Por pagar";
+    if (auto?.estado === "anulado") return "Anulado";
+    if (aMano) return aMano.estado === "pagado" ? "Pagado (cargado a mano)" : "Cargado a mano";
+    if (r.fijo_desde && r.fijo_desde > periodo) return `Desde ${labelPeriodo(r.fijo_desde).toLowerCase()}`;
+    if (esFuturo) return "Se carga el 1°";
+    return "No se cargó";
+  };
+  // Para avisar en «Cargar gasto» si ese fijo ya se cargó solo este mes (no duplicarlo).
+  const fijosCargados: Record<string, { monto: number; vencimiento: string | null; estado: string }> = {};
+  for (const g of filas) {
+    if (!g.automatico || g.estado === "anulado" || !g.rubroCodigo) continue;
+    const r = rubros.find((x) => x.codigo === g.rubroCodigo);
+    if (r) fijosCargados[r.id] = { monto: g.monto, vencimiento: g.vencimiento, estado: g.estado };
+  }
 
   const conteos: Record<FiltroTipoGasto, number> = {
     todos: filas.filter((g) => g.estado !== "anulado").length,
@@ -289,6 +320,41 @@ export default async function GastosPage({
     cajaPreseleccionadaId: cajaPreseleccionada?.id ?? null,
   };
   const filaGasto = (g: GastoFila) => <FilaGasto key={g.id} g={g} {...filaProps} />;
+  const mesEnFrase = labelPeriodo(periodo).toLowerCase();
+  const propsDialogo = {
+    rubros,
+    frecuentes,
+    periodo,
+    cajas,
+    hoy,
+    preferirCaja,
+    cajaPreseleccionadaId: cajaPreseleccionada?.id ?? null,
+    fijosCargados,
+    puedeConfigurar,
+  };
+  const chipVariable = (r: Rubro) => {
+    const total = totalPorRubro.get(r.codigo) ?? 0;
+    return (
+      <li key={r.id}>
+        <DialogNuevoGasto
+          {...propsDialogo}
+          rubroInicial={{ ...r, tipo: "variable" }}
+          trigger={
+            <button
+              type="button"
+              className="inline-flex min-h-11 max-w-full items-center gap-2 rounded-full border border-border bg-background px-4 text-sm font-semibold transition-colors hover:border-primary/40 hover:bg-accent active:scale-[0.98]"
+              aria-label={`Cargar un gasto de ${r.nombre}${total > 0 ? ` (lleva ${formatARS(total)} en ${mesEnFrase})` : ""}`}
+            >
+              <Plus className="size-4 shrink-0 text-primary" strokeWidth={2.4} />
+              <span className="truncate">{r.nombre}</span>
+              {total > 0 ? <span className="shrink-0 font-medium text-muted-foreground tabular">{formatARS(total)}</span> : null}
+            </button>
+          }
+        />
+      </li>
+    );
+  };
+
   const detallePagados = (
     <>
       {pagados.length} · <Money monto={suma(pagados)} className="font-semibold text-foreground" />
@@ -320,16 +386,7 @@ export default async function GastosPage({
         descripcion="Lo que paga el mercado, mes a mes: cargalo, pagalo desde la caja del día o desde Tesorería, y guardá la factura."
       >
         <BotonExportar dataset="gastos" periodo={periodo} />
-        <DialogNuevoGasto
-          key={cajaPreseleccionada?.id ?? "sin-caja"}
-          rubros={rubros}
-          frecuentes={frecuentes}
-          periodo={periodo}
-          cajas={cajas}
-          hoy={hoy}
-          preferirCaja={preferirCaja}
-          cajaPreseleccionadaId={cajaPreseleccionada?.id ?? null}
-        />
+        <DialogNuevoGasto key={cajaPreseleccionada?.id ?? "sin-caja"} {...propsDialogo} />
       </PageHeader>
 
       {gastosRes.error ? (
@@ -416,33 +473,112 @@ export default async function GastosPage({
         </GrupoGastos>
       ) : null}
 
-      {fijosParaTraer.length > 0 && filas.length > 0 ? (
-        <TraerFijos items={fijosParaTraer} mesOrigen={mesAnterior} mesDestino={periodo} hoy={hoy} />
-      ) : null}
+      {/* Los fijos se cargan solos; los variables se imputan a medida que pasan. */}
+      <section
+        aria-label="Fijos y variables del mes"
+        className="grid overflow-hidden rounded-xl border bg-card lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]"
+        data-tour="gastos-fijos-variables"
+      >
+        <div className="space-y-2 border-b p-4 sm:p-5 lg:border-r lg:border-b-0" data-tour="gastos-fijos">
+          <h2 className="flex items-center gap-2 font-display text-lg font-bold">
+            <CalendarClock className="size-5 text-primary" strokeWidth={2} />
+            Fijos: se cargan solos
+          </h2>
+          {rubrosFijos.length === 0 ? (
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              {puedeConfigurar
+                ? "Todavía no hay rubros fijos. Marcá como fijo lo que se paga todos los meses (el alquiler, internet, los sueldos) con su monto y el día que vence, y aparece solo el 1° de cada mes, listo para pagar."
+                : "Todavía no hay rubros fijos. Cuando Administración o el Líder marquen uno como fijo, con su monto y el día que vence, aparece solo acá el 1° de cada mes, listo para pagar."}
+            </p>
+          ) : (
+            <>
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                {esFuturo
+                  ? `El 1° de ${labelPeriodo(periodo).toLowerCase()} se cargan solos, con su monto y su vencimiento.`
+                  : fijosDelMes.length > 0
+                    ? `Se cargaron solos en ${labelPeriodo(periodo).toLowerCase()}: están en la lista, con su vencimiento, para pagarlos como cualquier gasto.`
+                    : esMesActual
+                      ? "Este mes los fijos no se cargaron solos (ya estaban cargados a mano, o empiezan el mes que viene)."
+                      : `En ${labelPeriodo(periodo).toLowerCase()} los fijos todavía no se cargaban solos.`}
+              </p>
+              <ul className="divide-y rounded-lg border bg-background text-sm" data-tour="gastos-fijos-lista">
+                {rubrosFijos.map((r) => {
+                  const estado = estadoFijo(r);
+                  return (
+                    <li key={r.id} className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 px-3 py-2">
+                      <span className="min-w-0 font-medium break-words">{r.nombre}</span>
+                      <span className="text-muted-foreground tabular">
+                        {formatARS(Number(r.monto_fijo ?? 0))} · vence el {r.dia_vencimiento} ·{" "}
+                        <span
+                          className={
+                            estado === "Por pagar"
+                              ? "font-semibold text-pendiente"
+                              : estado.startsWith("Pagado")
+                                ? "font-semibold text-pagado"
+                                : "font-medium text-foreground"
+                          }
+                        >
+                          {estado}
+                        </span>
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
+          {puedeConfigurar ? (
+            <Button asChild variant="outline" className="h-11 gap-2 px-4 text-base">
+              <Link href="/configuracion?tab=rubros" data-tour="gastos-configurar-fijos">
+                <Settings className="size-4" strokeWidth={2} />
+                {rubrosFijos.length === 0 ? "Configurar los fijos" : "Cambiar los fijos"}
+              </Link>
+            </Button>
+          ) : null}
+        </div>
+        <div className="space-y-3 p-4 sm:p-5" data-tour="gastos-variables">
+          <div className="space-y-1">
+            <h2 className="flex items-center gap-2 font-display text-lg font-bold">
+              <Shuffle className="size-5 text-primary" strokeWidth={2} />
+              Variables: cargalos cuando pasan
+            </h2>
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              Tocá el rubro, poné el monto y listo. Al lado de cada uno ves lo que lleva {labelPeriodo(periodo).toLowerCase()}.
+            </p>
+          </div>
+          {variables.length === 0 ? (
+            <p className="text-sm text-muted-foreground">Todos los rubros son fijos: para otro gasto, usá «Cargar gasto».</p>
+          ) : (
+            <>
+              <ul className="flex flex-wrap gap-2">
+                {variables.slice(0, VARIABLES_A_LA_VISTA).map(chipVariable)}
+              </ul>
+              {variables.length > VARIABLES_A_LA_VISTA ? (
+                <details className="group">
+                  <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1.5 text-base font-medium text-primary">
+                    <ChevronDown className="size-4 transition-transform group-open:rotate-180" strokeWidth={2} />
+                    Ver los otros {variables.length - VARIABLES_A_LA_VISTA} rubros
+                  </summary>
+                  <ul className="flex flex-wrap gap-2 pt-2">
+                    {variables.slice(VARIABLES_A_LA_VISTA).map(chipVariable)}
+                  </ul>
+                </details>
+              ) : null}
+            </>
+          )}
+        </div>
+      </section>
 
       {filas.length === 0 ? (
-        fijosParaTraer.length > 0 ? (
-          <div className="space-y-4">
-            <EmptyState
-              icono={Receipt}
-              titulo={`Todavía no hay gastos en ${labelPeriodo(periodo)}`}
-              descripcion="Empezá trayendo los fijos del mes anterior: revisás los montos y quedan cargados."
-            />
-            <TraerFijos
-              items={fijosParaTraer}
-              mesOrigen={mesAnterior}
-              mesDestino={periodo}
-              hoy={hoy}
-              abiertoInicial
-            />
-          </div>
-        ) : (
-          <EmptyState
-            icono={Receipt}
-            titulo={`Todavía no hay gastos en ${labelPeriodo(periodo)}`}
-            descripcion="Cargá el primero con «Cargar gasto». Los fijos, el mes que viene los traés con un toque."
-          />
-        )
+        <EmptyState
+          icono={Receipt}
+          titulo={`Todavía no hay gastos en ${labelPeriodo(periodo)}`}
+          descripcion={
+            esFuturo && rubrosFijos.length > 0
+              ? `Los fijos aparecen solos el 1° de ${labelPeriodo(periodo).toLowerCase()}. Si ya sabés de un gasto, cargalo con «Cargar gasto».`
+              : "Cargá el primero con «Cargar gasto» o tocando un rubro en «Variables». Los fijos se cargan solos el 1° de cada mes."
+          }
+        />
       ) : (
         <div className="space-y-6">
           <FiltroTipo activo={filtro} conteos={conteos} hrefBase={hrefBase} />

@@ -1,11 +1,12 @@
 import {
   ArrowRight,
+  Banknote,
+  CalendarClock,
   Check,
   CheckCheck,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  CopyPlus,
   FileCheck2,
   FileText,
   FileWarning,
@@ -14,9 +15,8 @@ import {
   Percent,
   Plus,
   Printer,
+  Shuffle,
   Stamp,
-  ArrowUp,
-  Banknote,
   Undo2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -671,70 +671,71 @@ export function PantallaCargarGasto() {
   );
 }
 
-/** El aviso de los fijos del mes anterior y la lista que se abre para revisarlos. */
-export function PantallaTraerFijos() {
+/** Los fijos del mes, que se cargaron solos: el aviso y cómo quedan en «Por pagar». */
+export function PantallaFijosSolos() {
   return (
-    <MarcoPantalla titulo="Gastos · Septiembre de 2026">
-      <div className="space-y-2 rounded-lg border border-primary/30 bg-accent/60 px-2.5 py-2">
-        <div className="flex items-start gap-2">
-          <CopyPlus className="mt-0.5 size-4 shrink-0 text-primary" />
-          <div>
-            <p className="text-[0.8rem] font-semibold">Hay 3 gastos fijos de agosto para traer</p>
-            <p className="text-[0.72rem] text-muted-foreground">
-              Revisás los montos y los cargás en septiembre con un solo toque.
-            </p>
-          </div>
-        </div>
-        <Resaltado>
-          <BotonEjemplo className="w-full">Traer los 3 gastos fijos de agosto</BotonEjemplo>
-        </Resaltado>
-      </div>
-      <p className="pt-1 text-[0.72rem] font-medium text-muted-foreground">Al tocarlo, se abre la lista:</p>
-      <div className="overflow-hidden rounded-lg border bg-card">
-        <div className="border-b bg-muted/40 px-2.5 py-1.5">
-          <p className="font-display text-[0.8rem] font-bold">Fijos de agosto → septiembre</p>
+    <MarcoPantalla titulo="Gastos · Octubre de 2026">
+      <Resaltado>
+        <div className="space-y-1 rounded-lg border bg-card px-2.5 py-2">
+          <p className="flex items-center gap-1.5 font-display text-[0.8rem] font-bold">
+            <CalendarClock className="size-3.5 text-primary" /> Fijos: se cargan solos
+          </p>
           <p className="text-[0.72rem] text-muted-foreground">
-            Cambiá los montos que subieron o bajaron. Los que destildes no se traen.
+            3 gastos fijos se cargaron solos en octubre: <strong className="text-foreground">$ 1.227.000</strong>.
           </p>
         </div>
-        {[
-          { titulo: "Alquiler del Predio", codigo: "ALQ", rubro: null, monto: "385.000", antes: 350000, sube: 35000 },
-          { titulo: "Internet de la oficina", codigo: "GINT", rubro: "Gastos de Internet", monto: "42.000", antes: 42000, sube: 0 },
-        ].map((f) => (
-          <div key={f.titulo} className="grid grid-cols-[1fr_7rem] items-start gap-2 border-b px-2.5 py-2">
-            <div className="flex items-start gap-1.5">
-              <span className="mt-0.5 flex size-4 shrink-0 items-center justify-center rounded border border-primary bg-primary text-primary-foreground">
-                <Check className="size-3" strokeWidth={3} />
-              </span>
-              <span className="min-w-0 space-y-0.5">
-                <span className="block text-[0.8rem] font-medium">{f.titulo}</span>
-                <span className="flex flex-wrap items-center gap-1 text-[0.72rem] text-muted-foreground">
-                  <Codigo codigo={f.codigo} />
-                  {f.rubro}
-                </span>
-              </span>
-            </div>
-            <div className="space-y-0.5">
-              <div className="flex min-h-7 items-center justify-end rounded-md border bg-card px-2 text-[0.8rem] font-semibold tabular">
-                {f.monto}
-              </div>
-              <p className="text-[0.72rem] leading-snug text-muted-foreground tabular">
-                En agosto: <Money monto={f.antes} />
-              </p>
-              {f.sube > 0 ? (
-                <p className="flex items-center gap-0.5 text-[0.72rem] font-semibold text-pendiente tabular">
-                  <ArrowUp className="size-3" strokeWidth={2.4} />
-                  <Money monto={f.sube} /> más
-                </p>
-              ) : null}
-            </div>
-          </div>
+      </Resaltado>
+      <p className="pt-1 text-[0.72rem] font-medium text-muted-foreground">En «Por pagar», con su vencimiento:</p>
+      {[
+        { titulo: "Alquiler del Predio", codigo: "ALQ", vence: "10/10", monto: 850000 },
+        { titulo: "Gastos de Internet", codigo: "GINT", vence: "15/10", monto: 42000 },
+      ].map((f) => (
+        <FilaEjemplo
+          key={f.codigo}
+          derecha={
+            <span className="flex items-center gap-1.5">
+              <Money monto={f.monto} className="text-[0.8rem] font-bold" />
+              <BotonEjemplo className="min-h-7 px-2 text-[0.72rem]">Pagar</BotonEjemplo>
+            </span>
+          }
+        >
+          <p className="text-[0.8rem] font-semibold">{f.titulo}</p>
+          <p className="flex items-center gap-1 text-[0.72rem] text-muted-foreground">
+            <Codigo codigo={f.codigo} /> Fijo · se cargó solo · vence {f.vence}
+          </p>
+        </FilaEjemplo>
+      ))}
+    </MarcoPantalla>
+  );
+}
+
+/** Los variables: cada rubro es un botón que abre «Cargar gasto» con el rubro elegido. */
+export function PantallaVariables() {
+  return (
+    <MarcoPantalla titulo="Gastos · Octubre de 2026">
+      <p className="flex items-center gap-1.5 font-display text-[0.8rem] font-bold">
+        <Shuffle className="size-3.5 text-primary" /> Variables: cargalos cuando pasan
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        <Resaltado mano={false} className="rounded-full">
+          <span className="inline-flex min-h-7 items-center gap-1 rounded-full border bg-card px-2.5 text-[0.72rem] font-semibold">
+            <Plus className="size-3 text-primary" /> Combustible <span className="font-medium text-muted-foreground">$ 45.000</span>
+          </span>
+        </Resaltado>
+        {["Gastos de Limpieza", "Repuestos y Reparaciones", "Gastos Generales"].map((n) => (
+          <span key={n} className="inline-flex min-h-7 items-center gap-1 rounded-full border bg-card px-2.5 text-[0.72rem] font-semibold">
+            <Plus className="size-3 text-primary" /> {n}
+          </span>
         ))}
-        <div className="px-2.5 py-2">
-          <BotonEjemplo className="w-full">
-            Cargar 3 gastos · <Money monto={465300} />
-          </BotonEjemplo>
-        </div>
+      </div>
+      <p className="pt-1 text-[0.72rem] font-medium text-muted-foreground">Al tocar «Combustible» se abre:</p>
+      <div className="space-y-2 rounded-lg border bg-card p-2.5">
+        <p className="font-display text-[0.8rem] font-bold">Cargar gasto de Octubre de 2026</p>
+        <CampoEjemplo etiqueta="Rubro" valor={<span className="font-semibold">Combustible</span>} />
+        <Resaltado>
+          <CampoEjemplo etiqueta="Monto" valor={<span className="text-[0.95rem] font-semibold tabular">18.500</span>} />
+        </Resaltado>
+        <p className="text-[0.72rem] text-muted-foreground">«No, es variable» ya viene marcado.</p>
       </div>
     </MarcoPantalla>
   );

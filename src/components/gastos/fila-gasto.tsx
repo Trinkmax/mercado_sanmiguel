@@ -19,6 +19,8 @@ export type GastoFila = {
   rubroCodigo: string | null;
   rubroNombre: string | null;
   tipo: "fijo" | "variable";
+  /** Fijo que se cargó solo este mes (Configuración → Rubros de gasto, 0037). */
+  automatico: boolean;
   monto: number;
   estado: "pendiente" | "pagado" | "anulado";
   vencimiento: string | null;
@@ -134,7 +136,7 @@ export function FilaGasto({
         <p className="text-sm text-muted-foreground">
           {g.rubroCodigo ? <Codigo codigo={g.rubroCodigo} className="mr-1.5 align-middle" /> : null}
           {rubro ? `${rubro} · ` : ""}
-          {g.tipo === "fijo" ? "Fijo" : "Variable"}
+          {g.automatico ? "Fijo · se cargó solo" : g.tipo === "fijo" ? "Fijo" : "Variable"}
           <span className="xl:hidden">
             {" · "}
             {vencimiento}

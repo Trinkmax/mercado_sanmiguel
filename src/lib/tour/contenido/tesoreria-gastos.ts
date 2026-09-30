@@ -15,7 +15,8 @@ import {
   PantallaPagarTesoreria,
   PantallaPlataHoy,
   PantallaSaldosIniciales,
-  PantallaTraerFijos,
+  PantallaFijosSolos,
+  PantallaVariables,
   PortadaGastos,
   PortadaTesoreria,
 } from "@/components/tour/pantallas/tesoreria-gastos";
@@ -236,7 +237,7 @@ export const GASTOS: ContenidoCapitulo = {
         ancla: "gastos-cargar",
         titulo: "Tocá «Cargar gasto»",
         texto:
-          "Se abre una ventana: buscá el rubro (luz, limpieza, seguridad…), poné el monto y decí si se repite todos los meses. El vencimiento, la descripción y la factura son opcionales.",
+          "Se abre una ventana: buscá el rubro (luz, limpieza, seguridad…) y poné el monto. Si es fijo o variable ya viene marcado según el rubro. El vencimiento, la descripción y la factura son opcionales.",
         pantalla: PantallaCargarGasto,
         consejo: tesoreria
           ? "Si ya lo pagaste, prendé «¿Ya lo pagaste?»: ya viene elegido «Tesorería». Queda cargado y pagado de una vez."
@@ -254,22 +255,32 @@ export const GASTOS: ContenidoCapitulo = {
       },
       {
         id: "fijos",
-        ancla: ["gastos-traer-fijos", "gastos-fijos-lista"],
-        titulo: "Los fijos, con un toque",
+        ancla: "gastos-fijos",
+        titulo: "Los fijos se cargan solos",
         texto:
-          "Son los gastos fijos del mes pasado que todavía no trajiste. Tocá el botón azul que empieza con «Traer». Se abre la lista: cambiá los montos que subieron o bajaron y tocá el botón de abajo, que empieza con «Cargar».",
-        pantalla: PantallaTraerFijos,
-        consejo: "Así quedan todos cargados de una vez, sin escribirlos de nuevo.",
-        variantes: {
-          "gastos-fijos-lista": {
-            texto:
-              "Son los gastos fijos del mes pasado, listos para traer. Cambiá los montos que subieron o bajaron y destildá los que no van. Después tocá el botón de abajo, que empieza con «Cargar».",
-          },
-        },
+          "El 1° de cada mes, los gastos fijos (el alquiler, internet, los sueldos) aparecen solos en «Por pagar», con su monto y su vencimiento. No hay que escribirlos: solo pagarlos.",
+        pantalla: PantallaFijosSolos,
+        consejo: tesoreria
+          ? "Si un mes vino distinto, tocá «Cambiar monto» en ese gasto: cambia solo ese mes. Qué rubros son fijos lo configuran Administración o el Líder."
+          : "Si un mes vino distinto, tocá «Cambiar monto» en ese gasto: cambia solo ese mes. Si cambia para siempre, usá «Cambiar los fijos» (o «Configurar los fijos», si todavía no hay).",
         sinAncla: {
           texto:
-            "Los gastos que cargaste con «Sí, es fijo» (el alquiler, internet) no se escriben de nuevo cada mes. Al empezar el mes aparece este aviso: revisás los montos y los traés todos juntos.",
-          pantalla: PantallaTraerFijos,
+            "El 1° de cada mes, los gastos fijos (el alquiler, internet, los sueldos) aparecen solos en «Por pagar», con su monto y su vencimiento. Así se ve:",
+          pantalla: PantallaFijosSolos,
+        },
+      },
+      {
+        id: "variables",
+        ancla: "gastos-variables",
+        titulo: "Los variables, cuando pasan",
+        texto:
+          "Una compra, un arreglo, combustible: tocá su rubro acá y se abre «Cargar gasto» con el rubro ya elegido. Poné el monto y listo. Al lado de cada rubro ves cuánto lleva el mes.",
+        pantalla: PantallaVariables,
+        consejo: "¿El rubro no está entre estos botones? Usá «Cargar gasto», arriba, y buscalo.",
+        sinAncla: {
+          texto:
+            "Los variables se cargan cada vez que pasan: tocás su rubro y se abre «Cargar gasto» con el rubro ya elegido. Así se ve:",
+          pantalla: PantallaVariables,
         },
       },
       {

@@ -35,6 +35,7 @@ import {
   PantallaPreciosLider,
   PantallaQuitarAcceso,
   PantallaReporteContadora,
+  PantallaRubroFijo,
   PantallaRubros,
   PantallaTarifasPorteria,
   PantallaTotalesMes,
@@ -439,6 +440,24 @@ function pasosGeneral(): Paso[] {
   ];
 }
 
+/** Rubros de gasto: fijo (se carga solo cada mes) o variable. Administración y el Líder. */
+const PASO_RUBROS_FIJOS: Paso = {
+  id: "rubros-fijos",
+  ruta: pestana("rubros"),
+  ancla: ["config-rubros-fijos", "config-rubro-tipo"],
+  titulo: "Fijo o variable",
+  texto:
+    "Lo que se paga todos los meses (el alquiler, internet, los sueldos) marcalo «Fijo»: poné el monto de cada mes y el día que vence, y tocá «Guardar fijo». Desde ahí se carga solo en «Gastos» el 1° de cada mes. Lo demás queda «Variable» y se carga cada vez que pasa.",
+  pantalla: PantallaRubroFijo,
+  consejo:
+    "Si el monto cambia para siempre, cambialo acá. Si cambia solo un mes, tocá «Cambiar monto» en ese gasto, en «Gastos».",
+  sinAncla: {
+    texto:
+      "En «Rubros de gasto» cada rubro es «Fijo» o «Variable». El fijo lleva su monto y el día que vence, y se carga solo en «Gastos» el 1° de cada mes. Así se ve:",
+    pantalla: PantallaRubroFijo,
+  },
+};
+
 function pasosLider(): Paso[] {
   return [
     PASO_QUE_ES.lider,
@@ -447,7 +466,7 @@ function pasosLider(): Paso[] {
       ancla: "config-pestanas",
       titulo: "Seis pestañas",
       texto:
-        "«Precios» y «General»: lo que se cobra y cuándo vence. «Tarifas de transporte» y «Quintas y ambulantes»: lo que cobra Portería. «Usuarios» y «Rubros de gasto»: quién entra y cómo se ordenan los gastos.",
+        "«Precios» y «General»: lo que se cobra y cuándo vence. «Tarifas de transporte» y «Quintas y ambulantes»: lo que cobra Portería. «Usuarios» y «Rubros de gasto»: quién entra, y qué gastos son fijos (se cargan solos) o variables.",
       consejo: "Un número ámbar en una pestaña son precios que proponen otros y esperan tu OK en «Aprobaciones».",
     },
     pasoPrecios(true),
@@ -546,6 +565,7 @@ function pasosLider(): Paso[] {
           "En «Usuarios», «Nuevo usuario» abre este formulario: quién es, qué hace y su contraseña. Entra con su DNI.",
       },
     },
+    PASO_RUBROS_FIJOS,
   ];
 }
 
@@ -615,8 +635,9 @@ function pasosAdmin(): Paso[] {
       ancla: "config-pestana-rubros",
       accion: "tocar",
       titulo: "Tocá «Rubros de gasto»",
-      texto: "Son los códigos para ordenar los gastos: AGUA, ALQ…",
+      texto: "Son los códigos para ordenar los gastos (AGUA, ALQ…) y ahí decís cuáles son fijos.",
     },
+    PASO_RUBROS_FIJOS,
     {
       id: "rubros",
       ruta: pestana("rubros"),
