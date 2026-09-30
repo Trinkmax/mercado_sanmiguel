@@ -157,12 +157,16 @@ export function TablaRubros({ rubros }: { rubros: RubroFila[] }) {
                   </TableCell>
                   <TableCell className="font-medium">{rubro.nombre}</TableCell>
                   <TableCell className="pr-4">
-                    <Switch
-                      checked={rubro.activo}
-                      disabled={pendiente === rubro.id}
-                      onCheckedChange={(activo) => cambiarActivo(rubro, activo)}
-                      aria-label={`${rubro.nombre} activo`}
-                    />
+                    {/* Con su rótulo al lado: se ve qué se prende y se apaga, y la zona para tocar es más grande. */}
+                    <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+                      <Switch
+                        checked={rubro.activo}
+                        disabled={pendiente === rubro.id}
+                        onCheckedChange={(activo) => cambiarActivo(rubro, activo)}
+                        aria-label={`${rubro.nombre} activo`}
+                      />
+                      {rubro.activo ? "Activo" : "Apagado"}
+                    </label>
                   </TableCell>
                 </TableRow>
               ))}

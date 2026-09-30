@@ -33,7 +33,7 @@ export function pestanasDeRol(rol: Rol): PestanaConfiguracion[] {
 
 function labelDe(p: PestanaConfiguracion, rol: Rol): string {
   if (p === "usuarios" && rol === "guardia") return "Usuarios de Portería";
-  if (p === "usuarios" && rol === "admin") return "Usuarios de socios";
+  if (p === "usuarios" && rol === "admin") return "Portal de clientes";
   return TODAS[p].label;
 }
 

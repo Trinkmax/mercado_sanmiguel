@@ -390,10 +390,19 @@ export function TablaConceptos({
             </div>
           </div>
 
+          {/* Una salida clara además de la X. */}
           <DialogFooter>
             <Button
+              variant="outline"
+              className="h-auto min-h-12 px-5 text-base"
+              disabled={guardando}
+              onClick={() => setEditando(null)}
+            >
+              No, volver
+            </Button>
+            <Button
               size="lg"
-              className="h-12 w-full text-base font-semibold"
+              className="h-12 w-full text-base font-semibold sm:w-auto sm:flex-1"
               disabled={guardando || (!sinPrecioEditando && !precio) || !orden || descuentoFuera}
               onClick={guardar}
             >
