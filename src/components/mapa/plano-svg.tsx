@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, memo, useMemo, type CSSProperties, type ReactNode } from "react";
+import { Fragment, memo, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import {
   ALT,
   alturaDe,
@@ -502,10 +502,6 @@ export const DefsPlano = memo(function DefsPlano() {
         <stop offset={0.55} stopColor="oklch(0.78 0.06 124)" />
         <stop offset={1} stopColor="oklch(0.67 0.06 130)" />
       </radialGradient>
-      {/* El único filtro del plano: las sombras de lo fijo */}
-      <filter id="mapa-desenfoque" x="-2%" y="-2%" width="104%" height="104%">
-        <feGaussianBlur stdDeviation={4.5} />
-      </filter>
       {/* Plano girado (pantalla vertical): las texturas que tienen dirección, a 90° */}
       <pattern id="mapa-adoquin-girado" width={15} height={10} patternUnits="userSpaceOnUse" patternTransform="rotate(90)">
         <rect width={15} height={10} fill="oklch(0.925 0.01 75)" />
@@ -546,7 +542,9 @@ export type Arbol = { x: number; y: number; r: number };
 
 /** Pieza con volumen del fondo: se pinta por su base sur (z) y de oeste a este. */
 type Objeto = { z: number; x: number; k: string; n: ReactNode };
-type Capas = { suelos: ReactNode[]; sombras: ReactNode[]; objetos: Objeto[]; rotulos: ReactNode[] };
+/** Sombra de lo fijo (se desenfoca una sola vez, ver `SombrasFondo`). */
+export type SombraFondo = { d: string; fill: string; opacidad: number };
+type Capas = { suelos: ReactNode[]; sombras: SombraFondo[]; objetos: Objeto[]; rotulos: ReactNode[] };
 
 function placa(lim: Rect): ReactNode {
   // El predio como maqueta: una placa apenas cálida, con canto (sur y este) y sombra suave.
@@ -1008,19 +1006,16 @@ function muros(
   const zN = ALT.muroNorte;
   const zB = ALT.muroBajo;
   const zA = ALT.antepecho;
-  c.sombras.push(
-    <path
-      key={`${el.id}:muro`}
-      d={poly([
-        [x + t, y + t],
-        [x + w, y + t],
-        [x + w + 8, y + t + 14],
-        [x + t + 8, y + t + 14],
-      ])}
-      fill={TINTA_SOMBRA}
-      fillOpacity={0.16}
-    />
-  );
+  c.sombras.push({
+    d: poly([
+      [x + t, y + t],
+      [x + w, y + t],
+      [x + w + 8, y + t + 14],
+      [x + t + 8, y + t + 14],
+    ]),
+    fill: TINTA_SOMBRA,
+    opacidad: 0.16,
+  });
   const tramos: [number, number][] = corte ? [[x, corte[0]], [corte[1], x + w]] : [[x, x + w]];
   const norte = tramos.map(([a, b]) => {
     const bahias: number[] = [];
@@ -1130,9 +1125,7 @@ function cantero(el: ElementoPlano, finFichas: number | undefined, detalle: bool
   const r = 8;
   const tx = x - K * H;
   const ty = y - H;
-  c.sombras.push(
-    <rect key={el.id} x={x + 1} y={y + 2} width={w + 4} height={h + 5} rx={r + 2} fill={TINTA_SOMBRA} fillOpacity={0.2} />
-  );
+  c.sombras.push({ d: rrPath(x + 1, y + 2, w + 4, h + 5, r + 2), fill: TINTA_SOMBRA, opacidad: 0.2 });
   // Surcos (y brotes con zoom) en la franja libre bajo las fichas; a lo largo del
   // cantero (en el plano girado, el cantero parado lleva los surcos parados).
   const yc = (finFichas ?? y + 58) + 2;
@@ -1246,21 +1239,18 @@ function administracion(el: ElementoPlano, detalle: boolean, c: Capas) {
   const zc = ALT.adminCumbrera;
   const ym = y + h / 2;
   const al = 2.5;
-  c.sombras.push(
-    <path
-      key={el.id}
-      d={poly([
-        [x, y],
-        [x + w, y],
-        [x + w + 9, y + 13],
-        [x + w + 9, y + h + 13],
-        [x + 9, y + h + 13],
-        [x, y + h],
-      ])}
-      fill={TINTA_SOMBRA}
-      fillOpacity={0.22}
-    />
-  );
+  c.sombras.push({
+    d: poly([
+      [x, y],
+      [x + w, y],
+      [x + w + 9, y + 13],
+      [x + w + 9, y + h + 13],
+      [x + 9, y + h + 13],
+      [x, y + h],
+    ]),
+    fill: TINTA_SOMBRA,
+    opacidad: 0.22,
+  });
   const fr = (u0: number, u1: number, z0: number, z1: number) =>
     poly([P(x + u0, y + h, z0), P(x + u1, y + h, z0), P(x + u1, y + h, z1), P(x + u0, y + h, z1)]);
   const NO = P(x, y - al, zp - 0.5);
@@ -1358,18 +1348,7 @@ function invernadero(el: ElementoPlano, c: Capas) {
     return pts;
   };
   const tira = (ps: Pt[], m = "M") => ps.map((p, i) => `${i === 0 ? m : "L"}${pt(p)}`).join("");
-  c.sombras.push(
-    <rect
-      key={el.id}
-      x={x + 2}
-      y={y + 6}
-      width={w + 12}
-      height={h + 10}
-      rx={14}
-      fill="oklch(0.3 0.04 200)"
-      fillOpacity={0.2}
-    />
-  );
+  c.sombras.push({ d: rrPath(x + 2, y + 6, w + 12, h + 10, 14), fill: "oklch(0.3 0.04 200)", opacidad: 0.2 });
   let costillas = "";
   for (let yy = y + 26; yy < y + h - 4; yy += 26) costillas += tira(arcoEn(yy, false));
   const rx = cx - K * H;
@@ -1459,18 +1438,7 @@ function invernaderoAcostado(el: ElementoPlano, c: Capas) {
     `L${pt(P(x + w, y + h, 0))}${lineas(oeste.slice(iTop + 1).reverse())}Z`;
   let costillas = "";
   for (let xx = x + 26; xx < x + w - 4; xx += 26) costillas += tira(arcoEn(xx).slice(iTop));
-  c.sombras.push(
-    <rect
-      key={el.id}
-      x={x + 2}
-      y={y + 6}
-      width={w + 12}
-      height={h + 10}
-      rx={14}
-      fill="oklch(0.3 0.04 200)"
-      fillOpacity={0.2}
-    />
-  );
+  c.sombras.push({ d: rrPath(x + 2, y + 6, w + 12, h + 10, 14), fill: "oklch(0.3 0.04 200)", opacidad: 0.2 });
   c.objetos.push({
     z: y + h,
     x,
@@ -1530,7 +1498,7 @@ function arboledas(arboles: Arbol[], c: Capas) {
       circulo(cx, cy - 0.32 * r, 0.82 * r);
     c.objetos.push({ z: a.y, x: a.x, k: `arbol:${i}`, n: <path d={copa} fill="url(#mapa-copa)" /> });
   });
-  c.sombras.push(<path key="arboles" d={sombras} fill="oklch(0.3 0.04 130)" fillOpacity={0.22} />);
+  c.sombras.push({ d: sombras, fill: "oklch(0.3 0.04 130)", opacidad: 0.22 });
   // Los troncos quedan debajo de todo lo que tiene volumen.
   c.objetos.push({
     z: -1e9,
@@ -1590,6 +1558,71 @@ export function sembrarArboles(elementos: ElementoPlano[], espacios: Rect[], lim
   }
   return out;
 }
+
+/** Resolución de la imagen de las sombras (px por unidad del plano). Son desenfocadas:
+ * agrandadas con el zoom se siguen viendo suaves. */
+const RESOLUCION_SOMBRAS = 1.25;
+/** Desenfoque de las sombras de lo fijo (unidades del plano). */
+const DESENFOQUE_SOMBRAS = 4.5;
+
+/**
+ * Sombras de lo fijo (muros, invernaderos, árboles…), desenfocadas UNA vez en una imagen.
+ * Con un filtro SVG en vivo, Safari recalcula el desenfoque de todo el plano en cada
+ * cuadro en que algo se mueve (≈275 ms por cuadro: el zoom iba a 5 cuadros por segundo);
+ * como imagen, se ven igual y moverlas no cuesta nada. Mientras se arma (unos ms al abrir
+ * el plano), no hay sombras.
+ */
+const SombrasFondo = memo(function SombrasFondo({ sombras, limites }: { sombras: SombraFondo[]; limites: Rect }) {
+  // Fondo se vuelve a armar (al cruzar el zoom de detalle): la imagen se rehace solo si
+  // cambian las sombras.
+  const clave = useMemo(() => JSON.stringify([limites, sombras]), [limites, sombras]);
+  const [imagen, setImagen] = useState<{ clave: string; url: string } | null>(null);
+  useEffect(() => {
+    const [lim, lista] = JSON.parse(clave) as [Rect, SombraFondo[]];
+    const w = Math.ceil(lim.w * RESOLUCION_SOMBRAS);
+    const h = Math.ceil(lim.h * RESOLUCION_SOMBRAS);
+    const svg =
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="${lim.x} ${lim.y} ${lim.w} ${lim.h}">` +
+      `<filter id="d" x="-2%" y="-2%" width="104%" height="104%"><feGaussianBlur stdDeviation="${DESENFOQUE_SOMBRAS}"/></filter>` +
+      `<g filter="url(#d)">${lista.map((o) => `<path d="${o.d}" fill="${o.fill}" fill-opacity="${o.opacidad}"/>`).join("")}</g></svg>`;
+    let vigente = true;
+    let url: string | null = null;
+    const fuente = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(fuente);
+      if (!vigente) return;
+      const lienzo = document.createElement("canvas");
+      lienzo.width = w;
+      lienzo.height = h;
+      const ctx = lienzo.getContext("2d");
+      if (!ctx) return;
+      ctx.drawImage(img, 0, 0, w, h);
+      lienzo.toBlob((b) => {
+        if (!vigente || !b) return;
+        url = URL.createObjectURL(b);
+        setImagen({ clave, url });
+      }, "image/png");
+    };
+    img.onerror = () => URL.revokeObjectURL(fuente);
+    img.src = fuente;
+    return () => {
+      vigente = false;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [clave]);
+  if (!imagen || imagen.clave !== clave) return null;
+  return (
+    <image
+      href={imagen.url}
+      x={limites.x}
+      y={limites.y}
+      width={limites.w}
+      height={limites.h}
+      preserveAspectRatio="none"
+    />
+  );
+});
 
 /** Placa del predio + suelos + nave + todo lo fijo, en orden de pintado. Memo:
  * no se repinta al mover la cámara (solo al cruzar el umbral de `detalle`). */
@@ -1700,10 +1733,7 @@ export const Fondo = memo(function Fondo({
       />
       {placa(limites)}
       {c.suelos}
-      {/* Sombras de lo fijo: el único filtro del plano (se apaga mientras se arrastra) */}
-      <g className="mapa-sombras-fondo" filter="url(#mapa-desenfoque)">
-        {c.sombras}
-      </g>
+      <SombrasFondo sombras={c.sombras} limites={limites} />
       {c.objetos.map((o) => (
         <Fragment key={o.k}>{o.n}</Fragment>
       ))}

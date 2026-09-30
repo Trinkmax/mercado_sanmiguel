@@ -117,9 +117,9 @@ export function LienzoPlano({
   );
   const {
     contRef,
-    svgRef,
+    capaRef,
     viewBox,
-    estiloSvg,
+    estiloCapa,
     escala,
     fueArrastre,
     rectContenedor,
@@ -303,13 +303,12 @@ export function LienzoPlano({
       onKeyDown={alTeclado}
       className="relative min-h-0 flex-1 overflow-hidden bg-background outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-inset"
     >
+      {/* Capa propia (will-change): mover y escalar el plano lo compone la placa de video. */}
+      <div ref={capaRef} className={cn("absolute will-change-transform", !estiloCapa && "inset-0")} style={estiloCapa}>
       <svg
-        ref={svgRef}
         viewBox={viewBox ?? `${limitesVista.x} ${limitesVista.y} ${limitesVista.w} ${limitesVista.h}`}
         preserveAspectRatio="xMidYMid meet"
-        // Capa propia (will-change): mover y escalar el plano lo compone la placa de video.
-        className={cn("absolute touch-none select-none will-change-transform", !estiloSvg && "inset-0 size-full")}
-        style={estiloSvg}
+        className="absolute inset-0 size-full touch-none select-none"
         textRendering="geometricPrecision"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -356,6 +355,7 @@ export function LienzoPlano({
         />
         <Anillos anillos={anillosVista} pastilla={pastillaUbicada} />
       </svg>
+      </div>
 
       {/* Marco del modo asignar */}
       {resaltarBorde ? (
@@ -363,7 +363,7 @@ export function LienzoPlano({
       ) : null}
 
       {/* Zoom */}
-      <div className="absolute bottom-3 left-3 flex overflow-hidden rounded-lg border bg-card/95 shadow-sm backdrop-blur-sm">
+      <div className="absolute bottom-3 left-3 flex overflow-hidden rounded-lg border bg-card shadow-sm">
         <BotonZoom etiqueta="Acercar" onClick={acercar}>
           <Plus className="size-[1.1rem]" strokeWidth={2.2} />
         </BotonZoom>

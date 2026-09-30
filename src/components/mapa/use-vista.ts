@@ -104,7 +104,8 @@ const sobrante = (t: Tam) => Math.round(Math.max(t.w, t.h) * SOBRANTE);
  */
 export function useVista(limites: Rect, insetInferior = 0) {
   const contRef = useRef<HTMLDivElement>(null);
-  const svgRef = useRef<SVGSVGElement>(null);
+  /** Caja HTML que contiene al <svg>: es la que se mueve y escala (ver `pintar`). */
+  const capaRef = useRef<HTMLDivElement>(null);
   const [tam, setTam] = useState<Tam | null>(null);
   /** Cámara DIBUJADA (viewBox): cambia al terminar cada movimiento (y, si hace falta,
    * en el medio). */
@@ -143,18 +144,20 @@ export function useVista(limites: Rect, insetInferior = 0) {
   };
 
   /** Lleva lo dibujado (camDom) a lo que se ve (cámara viva) con una transformación
-   * CSS: sin maquetar ni dibujar de nuevo. Sin diferencia, sin transformación. */
+   * CSS: sin maquetar ni dibujar de nuevo. Sin diferencia, sin transformación. Va sobre
+   * la caja HTML y no sobre el <svg>: Safari, con la transformación en el <svg>, lo
+   * vuelve a dibujar entero en cada cuadro (5 cuadros por segundo). */
   const pintar = useCallback(() => {
-    const svg = svgRef.current;
+    const capa = capaRef.current;
     const d = camDomRef.current;
     const v = camRef.current;
     const t = tamRef.current;
-    if (!svg || !d || !v || !t) return;
+    if (!capa || !d || !v || !t) return;
     const s = v.k / d.k;
     const tx = (d.cx - t.w / (2 * d.k) - (v.cx - t.w / (2 * v.k))) * v.k;
     const ty = (d.cy - t.h / (2 * d.k) - (v.cy - t.h / (2 * v.k))) * v.k;
     const igual = Math.abs(s - 1) < 1e-6 && Math.abs(tx) < 0.01 && Math.abs(ty) < 0.01;
-    svg.style.transform = igual ? "" : `translate(${tx}px, ${ty}px) scale(${s})`;
+    capa.style.transform = igual ? "" : `translate(${tx}px, ${ty}px) scale(${s})`;
   }, []);
 
   /** ¿Lo dibujado (con su sobrante) alcanza para mostrar la cámara viva sin que se vea
@@ -648,17 +651,17 @@ export function useVista(limites: Rect, insetInferior = 0) {
   /** Rectángulo del contenedor en pantalla (para ubicar carteles). */
   const rectContenedor = useCallback(() => contRef.current?.getBoundingClientRect() ?? null, []);
 
-  // Lo dibujado abarca el lienzo más el sobrante de cada lado: el <svg> es más grande que
-  // el contenedor (que lo recorta) y la transformación gira alrededor de la esquina del
-  // contenedor.
+  // Lo dibujado abarca el lienzo más el sobrante de cada lado: la capa (y el <svg> que la
+  // llena) es más grande que el contenedor, que la recorta, y la transformación gira
+  // alrededor de la esquina del contenedor.
   let viewBox: string | null = null;
-  let estiloSvg: React.CSSProperties | undefined;
+  let estiloCapa: React.CSSProperties | undefined;
   if (cam && tam) {
     const m = sobrante(tam);
     const w = (tam.w + 2 * m) / cam.k;
     const h = (tam.h + 2 * m) / cam.k;
     viewBox = `${cam.cx - w / 2} ${cam.cy - h / 2} ${w} ${h}`;
-    estiloSvg = {
+    estiloCapa = {
       left: -m,
       top: -m,
       width: tam.w + 2 * m,
@@ -669,10 +672,10 @@ export function useVista(limites: Rect, insetInferior = 0) {
 
   return {
     contRef,
-    svgRef,
+    capaRef,
     viewBox,
-    /** Posición y tamaño del <svg> (con el sobrante); sin medir, ocupa el contenedor. */
-    estiloSvg,
+    /** Posición y tamaño de la capa del <svg> (con el sobrante); sin medir, ocupa el contenedor. */
+    estiloCapa,
     /** px de pantalla por unidad del plano con el plano quieto (para el zoom semántico). */
     escala: escalaQuieta,
     fueArrastre,

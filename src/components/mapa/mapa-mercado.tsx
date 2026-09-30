@@ -1121,7 +1121,7 @@ export function MapaMercado({
             </div>
           ) : null}
           {!hayPanel ? (
-            <p className="pointer-events-none absolute right-3 bottom-3 hidden items-center gap-2 rounded-full bg-card/90 px-3.5 py-2 text-xs text-muted-foreground shadow-sm ring-1 ring-foreground/10 backdrop-blur-sm md:flex">
+            <p className="pointer-events-none absolute right-3 bottom-3 hidden items-center gap-2 rounded-full bg-card px-3.5 py-2 text-xs text-muted-foreground shadow-sm ring-1 ring-foreground/10 md:flex">
               <MousePointerClick className="size-4 shrink-0" strokeWidth={1.8} />
               {esPorteria
                 ? "Tocá un puesto para avisarle algo al Líder"
