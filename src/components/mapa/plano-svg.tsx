@@ -2227,6 +2227,23 @@ function cuerpoQuinta(b: Bloque, mat: Material, H: number, libre: boolean) {
   const zc = H * 0.55;
   const chapa = `url(#mapa-faldon-${mat})`;
   const carga = tramo(v, 0, 0.62);
+  // Cabina adelante; el parabrisas, en la mitad de arriba del frente (sur o este).
+  const cab = tramo(v, 0.66, 1, 0.8);
+  const za = H * 0.5;
+  const zb = H - 1;
+  const parabrisas = v.parado
+    ? poly([
+        P(cab.x + 1.2, cab.y + cab.h, za),
+        P(cab.x + cab.w - 1.2, cab.y + cab.h, za),
+        P(cab.x + cab.w - 1.2, cab.y + cab.h, zb),
+        P(cab.x + 1.2, cab.y + cab.h, zb),
+      ])
+    : poly([
+        P(cab.x + cab.w, cab.y + 1.2, za),
+        P(cab.x + cab.w, cab.y + cab.h - 1.2, za),
+        P(cab.x + cab.w, cab.y + cab.h - 1.2, zb),
+        P(cab.x + cab.w, cab.y + 1.2, zb),
+      ]);
   return (
     <>
       {caja(carga, 1.5, 0.8, zc, { sur: chapa, este: M.lado, tapa: M.faldon[1] })}
@@ -2239,12 +2256,8 @@ function cuerpoQuinta(b: Bloque, mat: Material, H: number, libre: boolean) {
         tapa: `url(#mapa-tapa-${mat})`,
         borde: M.bisel,
       })}
-      {caja(tramo(v, 0.66, 1, 0.8), 2, 0.8, H, {
-        sur: v.parado ? "url(#mapa-ventana)" : chapa,
-        este: v.parado ? M.lado : "url(#mapa-ventana)",
-        tapa: M.faldon[0],
-        borde: M.faldonBorde,
-      })}
+      {caja(cab, 2, 0.8, H, { sur: chapa, este: M.lado, tapa: M.faldon[0], borde: M.faldonBorde })}
+      <path d={parabrisas} fill="url(#mapa-ventana)" stroke={M.faldonBorde} strokeOpacity={0.5} strokeWidth={0.5} />
     </>
   );
 }

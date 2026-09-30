@@ -23,7 +23,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Sello } from "@/components/shared/sello";
 import { avisarSobrePuesto } from "@/lib/actions/solicitudes";
 import { selloEstado, type EstadoSolicitud } from "@/components/solicitudes/constantes";
-import { etiquetaEspacio } from "./geometria";
+import { esFemenino, etiquetaEspacio, NOMBRE_TIPO } from "./geometria";
 import type { AvisoPuestoPrevio, Espacio } from "./tipos";
 import { llamarAccion } from "@/lib/llamar-accion";
 import { AlertaError } from "@/components/cobranza/alerta-error";
@@ -62,6 +62,8 @@ export function AvisoPuesto({
   const lugar = etiquetaEspacio(espacio);
   const numero = lugar.replace(/^(Puesto propio|Puesto|Local|Contéiner)\s+/, "");
   const sujeto = espacio.tipo === "puesto" ? `el puesto ${numero}` : lugar.toLowerCase();
+  // "este puesto", "esta quinta", "esta cochera", "este galpón"…
+  const este = `${esFemenino(espacio.tipo) ? "esta" : "este"} ${NOMBRE_TIPO[espacio.tipo].toLowerCase()}`;
 
   function avisar() {
     if (!motivo) return;
@@ -108,7 +110,7 @@ export function AvisoPuesto({
 
       <div className="pr-12">
         <p className="font-display text-lg font-bold">{lugar}</p>
-        <p className="text-sm text-muted-foreground">¿Viste algo en este puesto? Avisale al Líder de Procesos.</p>
+        <p className="text-sm text-muted-foreground">¿Viste algo en {este}? Avisale al Líder de Procesos.</p>
       </div>
 
       <div className="grid gap-4 @2xl:grid-cols-[minmax(0,1fr)_16rem]">
@@ -178,9 +180,9 @@ export function AvisoPuesto({
         </div>
 
         <div className="space-y-2 @2xl:border-l @2xl:pl-4">
-          <p className="text-sm font-semibold">Avisos anteriores de este puesto</p>
+          <p className="text-sm font-semibold">Avisos anteriores de {este}</p>
           {avisos.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Todavía nadie avisó nada de este puesto.</p>
+            <p className="text-sm text-muted-foreground">Todavía nadie avisó nada de {este}.</p>
           ) : (
             <ul className="space-y-1.5">
               {avisos.slice(0, 4).map((a) => (
