@@ -1,4 +1,5 @@
 import type { Perfil } from "@/lib/auth";
+import { filtroClientePortal } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { AceptarTerminos } from "@/components/portal/aceptar-terminos";
 
@@ -22,7 +23,7 @@ export async function GateTerminos({
     supabase
       .from("clientes")
       .select("id")
-      .eq("auth_user_id", perfil.user_id)
+      .eq(...filtroClientePortal(perfil))
       .maybeSingle(),
     supabase
       .from("terminos")

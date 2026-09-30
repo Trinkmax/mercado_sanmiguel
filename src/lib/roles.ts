@@ -13,7 +13,7 @@ export const LABEL_ROL: Record<Rol, string> = {
   socio: "Socio",
 };
 
-/** Qué hace cada rol, en una línea (login demo, alta de usuarios). */
+/** Qué hace cada rol, en una línea (alta de usuarios). */
 export const DESCRIPCION_ROL: Record<Rol, string> = {
   admin: "Cobra a los puesteros, integra la caja de portería y da acceso a los socios",
   guardia:

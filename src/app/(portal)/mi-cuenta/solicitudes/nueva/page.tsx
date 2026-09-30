@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft, UserX } from "lucide-react";
-import { requireRol } from "@/lib/auth";
+import { requireRol, filtroClientePortal } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
@@ -16,7 +16,7 @@ export default async function NuevaSolicitudSocioPage() {
   const { data: cliente } = await supabase
     .from("clientes")
     .select("id, nombre, codigo")
-    .eq("auth_user_id", perfil.user_id)
+    .eq(...filtroClientePortal(perfil))
     .maybeSingle();
 
   // Las circulares obligatorias sin confirmar las bloquea GateCirculares en el layout.

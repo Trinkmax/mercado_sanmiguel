@@ -391,7 +391,9 @@ export async function responderComoSocio(formData: FormData): Promise<ActionResu
  * Revalida el layout del portal para que el contador de "nuevas" quede al día.
  */
 export async function marcarRegistroVisto(input: unknown): Promise<ActionResult> {
-  await requireRol("socio");
+  const perfil = await requireRol("socio");
+  // Vista previa del superadministrador: no marca nada en nombre del cliente.
+  if (perfil.vistaClienteId) return ok(undefined);
   const parsed = z.object({ registroId: uuid("Registro inexistente") }).safeParse(input);
   if (!parsed.success) return fallo("Registro inexistente.");
   const supabase = await createClient();

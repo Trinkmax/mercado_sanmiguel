@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { requireRol } from "@/lib/auth";
+import { requireRol, filtroClientePortal } from "@/lib/auth";
 import { ok, fallo, type ActionResult } from "@/lib/actions/result";
 
 const schemaPublicar = z.object({
@@ -98,7 +98,7 @@ export async function aceptarTerminos(input: unknown): Promise<ActionResult> {
   const { data: cliente } = await supabase
     .from("clientes")
     .select("id")
-    .eq("auth_user_id", perfil.user_id)
+    .eq(...filtroClientePortal(perfil))
     .maybeSingle();
   if (!cliente)
     return fallo(

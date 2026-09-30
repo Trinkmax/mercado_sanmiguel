@@ -18,6 +18,10 @@ export type Perfil = {
   email: string;
   /** DNI de login (solo dígitos). Null en usuarios viejos sin DNI cargado. */
   dni: string | null;
+  /** Superadministrador: puede ver y operar el sistema con cualquier rol (selector "Ver como"). */
+  superadmin: boolean;
+  /** Superadministrador con rol socio: el cliente cuyo portal ve en vista previa (solo lectura). */
+  vistaClienteId: string | null;
 };
 
 /** Ruta del login cuando hay sesión pero el usuario ya no tiene acceso. */
@@ -43,7 +47,7 @@ const leerSesion = cache(async (): Promise<Sesion> => {
 
   const { data: perfil, error: errorPerfil } = await supabase
     .from("perfiles")
-    .select("user_id, org_id, nombre, rol, dni")
+    .select("user_id, org_id, nombre, rol, dni, superadmin, vista_cliente_id")
     .eq("user_id", claims.sub)
     .eq("activo", true)
     .maybeSingle();
@@ -51,9 +55,15 @@ const leerSesion = cache(async (): Promise<Sesion> => {
   // Si la base no respondió, no se sabe si tiene acceso: reintentar, nunca "desactivado".
   if (errorPerfil) throw new Error(SIN_CONEXION);
   if (!perfil || perfil.rol === "consejo") return { hayUsuario: true, perfil: null };
+  const { vista_cliente_id, superadmin, ...resto } = perfil;
   return {
     hayUsuario: true,
-    perfil: { ...perfil, email: typeof claims.email === "string" ? claims.email : "" },
+    perfil: {
+      ...resto,
+      superadmin: superadmin === true,
+      vistaClienteId: superadmin && resto.rol === "socio" ? vista_cliente_id : null,
+      email: typeof claims.email === "string" ? claims.email : "",
+    },
   };
 });
 
@@ -111,4 +121,14 @@ export async function requireStaff(): Promise<Perfil> {
  * roles de gestión los proponen y esperan aprobación. */
 export function aplicaDirecto(rol: Rol): boolean {
   return rol === "lider";
+}
+
+/**
+ * Cómo encontrar el cliente del portal: el vinculado al usuario o, en la vista previa del
+ * superadministrador, el que eligió. Uso: `.eq(...filtroClientePortal(perfil))`.
+ */
+export function filtroClientePortal(
+  perfil: Pick<Perfil, "user_id" | "vistaClienteId">
+): ["id" | "auth_user_id", string] {
+  return perfil.vistaClienteId ? ["id", perfil.vistaClienteId] : ["auth_user_id", perfil.user_id];
 }

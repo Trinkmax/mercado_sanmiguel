@@ -16,41 +16,13 @@ pnpm dev
 
 Abrí http://localhost:3000. Las credenciales de Supabase ya están en `.env.local`.
 
-## Usuarios de demo
+## Usuarios
 
-Contraseña de todos: `SanMiguel2026`
-
-| Email | Rol | Qué ve |
-|---|---|---|
-| `lider@sanmiguel.coop` | Líder de Procesos (Franco) | Aprobaciones, personal, solicitudes ↔ consejo, reportes, configuración; aplica cambios directo |
-| `admin@sanmiguel.coop` | Administración | Cobranza, clientes (propone cambios), caja mayor + rendiciones de portería, cheques, energía, gastos, facturación, solicitudes, circulares. **Sin reportes** |
-| `guardia@sanmiguel.coop` | Jefe de Portería | Cobro a quinteros, canon diario (camiones / ambulantes / quinteros), su caja, ingresos de personal |
-| `porteria@sanmiguel.coop` | Portería | Registro de ingreso de personal con firma digital, solicitudes/informes. No cobra |
-| `tesorera@sanmiguel.coop` | Tesorería | Validación definitiva de cajas, conciliación de transferencias y comprobantes, flujo de fondos, cheques + todo lo de admin |
-| `consejo@sanmiguel.coop` | Consejo Directivo | Reportería y resolución de solicitudes (solo lectura del resto) |
-| `socio@sanmiguel.coop` | Socio (puestero) | Su portal: términos y condiciones, circulares (recepción obligatoria), estado de cuenta, pagos, documentos, solicitudes |
-
-Datos demo cargados: **julio 2026** generado y cobrado en parte (los clientes 1, 2
-y 8 deben; hay una caja del 31/07 cerrada sin validar y un cheque diferido en
-cartera) y **agosto 2026** recién generado, todo pendiente, vence el 30/08.
-
-Datos demo de la fase 2: una rendición de portería del 18/08 esperando que
-administración la integre, un cambio de cliente esperando aprobación del Líder,
-tres solicitudes en distintos estados (una en el Consejo, una asignada a
-Administración, un informe de portería nuevo), una circular obligatoria sin
-confirmar y los términos y condiciones v1 sin aceptar por el socio.
-
-## Recorrido sugerido para la demo con el cliente
-
-1. Entrá como **admin** → Inicio: la cobranza del mes con barras verde/rojo.
-2. **Cobrar** → elegí "Verdulería Don Pedro" → registrá un cobro (probá "Cobrar
-   todo" o la cuota sugerida) → mirá la imputación automática → imprimí el recibo.
-3. **Caja del día** → cerrá la caja → el arqueo te dice cuánto tenés que tener.
-4. Entrá como **tesorera** → validá la caja del 31/07 pendiente → mirá el flujo de caja.
-5. **Energía** → cargá lecturas (solo tipeás la actual) → imprimí la planilla del electricista.
-6. **Reportes** → reporte mensual para la contadora (PDF por impresión).
-7. Entrá como **socio** → acepta los términos, confirma la circular, ve su estado verde/rojo, su saldo a favor si lo tiene, y escribe una solicitud.
-8. **Fase 2** — entrá como **admin** → Caja del día: recibí la rendición de portería e integrala a la caja mayor; Clientes: editá un teléfono → "Enviar a aprobación". Entrá como **Líder de Procesos** → Aprobaciones: aprobá el cambio; Solicitudes: derivá al Consejo / asigná a Administración; Personal: cargá un empleado con horarios. Entrá como **Portería** → registrá un ingreso con firma. **Tesorería** → conciliá una transferencia con su comprobante y validá la caja (arrastra la de portería). **Reportes** → exportá el balance a Excel.
+Se entra con el DNI y la contraseña. Los usuarios los crea el Líder de Procesos
+(equipo) o Administración (socios) desde **Configuración → Usuarios**. El
+superadministrador del sistema (se marca solo desde la base, `perfiles.superadmin`)
+puede ver y operar el sistema con cualquier rol desde el selector "Ver el sistema
+como", incluido el portal de un cliente en vista previa de solo lectura.
 
 ## Arquitectura
 
@@ -71,10 +43,6 @@ confirmar y los términos y condiciones v1 sin aceptar por el socio.
 
 - `SUPABASE_SECRET_KEY` en `.env.local` (solo servidor) para crear accesos de
   socios desde Configuración → Usuarios.
-- `MODO_DEMO` (solo servidor, sin `NEXT_PUBLIC_`): el acceso demo del login (las
-  tarjetas "entrá como…" y la acción `entrarComoDemo`) está **prendido salvo que
-  valga `0`**. Antes de salir a producción con datos reales, cargar `MODO_DEMO=0`
-  en Vercel y cambiarles la contraseña (o quitarles el acceso) a los usuarios demo.
 - Revisar los **supuestos declarados** al final de `PRODUCT.md` con Franco
   (precios reales, regla exacta del descuento, orden de imputación).
 - Cargar los clientes reales y los saldos iniciales de tesorería.

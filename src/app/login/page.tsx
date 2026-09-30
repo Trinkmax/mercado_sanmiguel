@@ -3,12 +3,10 @@ import Image from "next/image";
 import { redirect } from "next/navigation";
 import { LogIn, UserX } from "lucide-react";
 import { destinoTrasEntrar, getPerfil, sesionSinAcceso } from "@/lib/auth";
-import { modoDemoActivo } from "@/lib/demo";
 import { rutaVolverSegura } from "@/lib/volver";
 import { Marca } from "@/components/shared/marca";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { FormLogin } from "./form-login";
-import { AccesoDemo } from "./acceso-demo";
 import logoFull from "../../../public/logo_full.png";
 
 export const metadata: Metadata = { title: "Entrar" };
@@ -73,7 +71,6 @@ export default async function LoginPage({
 
             <FormLogin volver={volver} />
 
-            {modoDemoActivo() ? <AccesoDemo /> : null}
           </div>
         </div>
 

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { requireRol } from "@/lib/auth";
+import { requireRol, filtroClientePortal } from "@/lib/auth";
 import { ok, fallo, type ActionResult } from "@/lib/actions/result";
 import { rutaCircular, TAMANO_MAX_BYTES } from "@/lib/storage";
 import { hoyISO } from "@/lib/format";
@@ -205,11 +205,15 @@ export async function desactivarCircular(input: unknown): Promise<ActionResult> 
  */
 async function registrarRecepcion(circularId: string): Promise<ActionResult> {
   const perfil = await requireRol("socio");
+  // Vista previa del superadministrador: no confirma nada en nombre del cliente.
+  if (perfil.vistaClienteId) {
+    return fallo("Estás viendo el portal como vista previa: no se guarda nada.");
+  }
   const supabase = await createClient();
   const { data: cliente } = await supabase
     .from("clientes")
     .select("id")
-    .eq("auth_user_id", perfil.user_id)
+    .eq(...filtroClientePortal(perfil))
     .maybeSingle();
   if (!cliente)
     return fallo("Tu usuario no está vinculado a un puesto. Consultá en administración.");

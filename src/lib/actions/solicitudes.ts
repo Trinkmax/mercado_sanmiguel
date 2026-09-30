@@ -389,6 +389,8 @@ export async function marcarSolicitudVista(input: unknown): Promise<ActionResult
   const perfil = await requireRol("admin", "guardia", "porteria", "tesoreria", "lider", "socio");
   const parsed = z.object({ solicitudId: z.string().regex(RE_UUID) }).safeParse(input);
   if (!parsed.success) return fallo("No encontramos esa solicitud.");
+  // Vista previa del superadministrador: no marca nada en nombre del cliente.
+  if (perfil.vistaClienteId) return ok({ habiaNovedad: false });
 
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("marcar_solicitud_vista", {

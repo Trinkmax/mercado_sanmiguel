@@ -296,10 +296,11 @@ async function Usuarios(supabase: Supabase, perfil: Perfil, ver: "equipo" | "soc
   // Todos los perfiles que este rol ve (RLS): nombres para "lo quitó …" y DNIs ocupados.
   const { data: perfiles } = await supabase
     .from("perfiles")
-    .select("user_id, nombre, rol, activo, dni, desactivado_en, desactivado_por")
+    .select("user_id, nombre, rol, activo, dni, desactivado_en, desactivado_por, superadmin")
     .eq("org_id", perfil.org_id)
     .neq("rol", "consejo");
-  const todos = perfiles ?? [];
+  // El superadministrador no se gestiona desde acá (la base no lo deja): no se lista.
+  const todos = (perfiles ?? []).filter((p) => !p.superadmin);
   const nombresPorId = Object.fromEntries(todos.map((p) => [p.user_id, p.nombre]));
 
   const avisoClave = claveAdmin ? null : (

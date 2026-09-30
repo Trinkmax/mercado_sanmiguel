@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { requireRol } from "@/lib/auth";
+import { requireRol, filtroClientePortal } from "@/lib/auth";
 import { ok, fallo, type ActionResult } from "@/lib/actions/result";
 import {
   rutaDocumentoCliente,
@@ -56,7 +56,7 @@ export async function subirDocumentoSocio(
   const { data: cliente, error: errorCliente } = await supabase
     .from("clientes")
     .select("id")
-    .eq("auth_user_id", perfil.user_id)
+    .eq(...filtroClientePortal(perfil))
     .maybeSingle();
   if (errorCliente) return fallo(errorCliente);
   if (!cliente)
@@ -167,7 +167,7 @@ export async function crearSolicitudSocio(
   const { data: cliente, error: errorCliente } = await supabase
     .from("clientes")
     .select("id")
-    .eq("auth_user_id", perfil.user_id)
+    .eq(...filtroClientePortal(perfil))
     .maybeSingle();
   if (errorCliente) return fallo(errorCliente);
   if (!cliente)

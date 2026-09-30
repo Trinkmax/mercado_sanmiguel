@@ -10,6 +10,7 @@ import { BarraInferior } from "@/components/shared/barra-inferior";
 import { Principal } from "@/components/shared/principal";
 import { Marca } from "@/components/shared/marca";
 import { SesionViva } from "@/components/shared/sesion-viva";
+import { SelectorVista } from "@/components/shared/selector-vista";
 
 /** Salir: en la barra lateral (azul) o en la hoja del menú del celular (clara). */
 function BotonSalir({ claro = false }: { claro?: boolean }) {
@@ -66,6 +67,11 @@ export default async function PanelLayout({
         <div className="flex-1 overflow-y-auto overscroll-contain p-2.5" style={SOMBRAS_DESPLAZAR}>
           <NavLinks rol={perfil.rol} badges={badges} />
         </div>
+        {perfil.superadmin ? (
+          <div className="border-t border-sidebar-border p-2.5">
+            <SelectorVista rolActual={perfil.rol} variante="barra" />
+          </div>
+        ) : null}
         {/* Quién está y Salir en una sola fila: le deja más alto a la lista. */}
         <div className="flex items-center gap-2 border-t border-sidebar-border py-3 pr-2.5 pl-4">
           <div className="min-w-0 flex-1 text-sm leading-snug">
@@ -94,6 +100,7 @@ export default async function PanelLayout({
           nombre={perfil.nombre}
           rolLabel={rolLabel}
           logout={<BotonSalir claro />}
+          vista={perfil.superadmin ? <SelectorVista rolActual={perfil.rol} /> : undefined}
         />
       </div>
     </div>

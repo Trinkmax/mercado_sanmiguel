@@ -1993,7 +1993,9 @@ export type Database = {
           nombre: string
           org_id: string
           rol: Database["public"]["Enums"]["rol_usuario"]
+          superadmin: boolean
           user_id: string
+          vista_cliente_id: string | null
         }
         Insert: {
           activo?: boolean
@@ -2005,7 +2007,9 @@ export type Database = {
           nombre: string
           org_id: string
           rol: Database["public"]["Enums"]["rol_usuario"]
+          superadmin?: boolean
           user_id: string
+          vista_cliente_id?: string | null
         }
         Update: {
           activo?: boolean
@@ -2017,7 +2021,9 @@ export type Database = {
           nombre?: string
           org_id?: string
           rol?: Database["public"]["Enums"]["rol_usuario"]
+          superadmin?: boolean
           user_id?: string
+          vista_cliente_id?: string | null
         }
         Relationships: [
           {
@@ -2026,6 +2032,20 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "organizaciones"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "perfiles_vista_cliente_id_fkey"
+            columns: ["vista_cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "perfiles_vista_cliente_id_fkey"
+            columns: ["vista_cliente_id"]
+            isOneToOne: false
+            referencedRelation: "v_clientes_segmentos"
+            referencedColumns: ["cliente_id"]
           },
         ]
       }
@@ -2995,7 +3015,25 @@ export type Database = {
         Args: { p_ajuste: string; p_motivo: string }
         Returns: undefined
       }
+      cambiar_vista_superadmin: {
+        Args: {
+          p_cliente?: string
+          p_rol: Database["public"]["Enums"]["rol_usuario"]
+        }
+        Returns: Json
+      }
       cerrar_caja: { Args: { p_caja: string }; Returns: Json }
+      clientes_para_vista: {
+        Args: { p_buscar?: string }
+        Returns: {
+          activo: boolean
+          apodo: string
+          categoria: Database["public"]["Enums"]["categoria_cliente"]
+          codigo: number
+          id: string
+          nombre: string
+        }[]
+      }
       cobranza_diaria: {
         Args: { p_desde: string; p_hasta: string }
         Returns: {

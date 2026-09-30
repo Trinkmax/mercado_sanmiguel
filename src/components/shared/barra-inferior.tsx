@@ -84,12 +84,15 @@ export function BarraInferior({
   nombre,
   rolLabel,
   logout,
+  vista,
 }: {
   rol: Rol;
   badges?: BadgesNav;
   nombre: string;
   rolLabel: string;
   logout: React.ReactNode;
+  /** Selector "Ver el sistema como" (solo el superadministrador). */
+  vista?: React.ReactNode;
 }) {
   const pathname = usePathname();
   const [abierto, setAbierto] = useState(false);
@@ -176,6 +179,7 @@ export function BarraInferior({
               <SheetTitle className="font-display text-base leading-snug font-bold break-words">{nombre}</SheetTitle>
               <SheetDescription className="text-sm">{rolLabel}</SheetDescription>
               <div className="mt-2.5">{logout}</div>
+              {vista ? <div className="mt-3">{vista}</div> : null}
             </div>
             <SheetClose asChild>
               <button

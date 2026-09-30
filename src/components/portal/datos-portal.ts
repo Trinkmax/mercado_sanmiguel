@@ -1,6 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
+import { filtroClientePortal, getPerfil } from "@/lib/auth";
 import {
   clienteEnPublico,
   esperaDescargo,
@@ -29,7 +30,7 @@ export const getClienteSocio = cache(async (userId: string): Promise<ClienteSoci
   const { data: cliente } = await supabase
     .from("clientes")
     .select("id, org_id, nombre, codigo, categoria")
-    .eq("auth_user_id", userId)
+    .eq(...filtroClientePortal({ user_id: userId, vistaClienteId: (await getPerfil())?.vistaClienteId ?? null }))
     .maybeSingle();
   if (!cliente) return null;
   const { data: seg } = await supabase

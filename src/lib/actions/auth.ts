@@ -3,9 +3,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient, hayClaveAdmin } from "@/lib/supabase/admin";
-import { destinoTrasEntrar, getPerfil, rutaInicio } from "@/lib/auth";
+import { destinoTrasEntrar, getPerfil } from "@/lib/auth";
 import { esDniValido, normalizarDni } from "@/lib/format";
-import { modoDemoActivo } from "@/lib/demo";
 
 /** `usuario` vuelve al formulario para no hacerle tipear el DNI de nuevo. */
 export type EstadoLogin = { error: string; usuario?: string } | null;
@@ -103,47 +102,4 @@ export async function cerrarSesion(): Promise<void> {
   const supabase = await createClient();
   await supabase.auth.signOut({ scope: "local" });
   redirect("/login");
-}
-
-/* ------------------------------------------------------------------ */
-/* Acceso rápido de demo: entrar con un toque a cualquier rol.         */
-/* Prendido salvo MODO_DEMO=0 en el servidor (src/lib/demo.ts).        */
-/* El Consejo ya no tiene usuario (F5).                                */
-/* ------------------------------------------------------------------ */
-
-const USUARIOS_DEMO = {
-  lider: "lider@sanmiguel.coop",
-  admin: "admin@sanmiguel.coop",
-  tesoreria: "tesorera@sanmiguel.coop",
-  guardia: "guardia@sanmiguel.coop",
-  porteria: "porteria@sanmiguel.coop",
-  socio: "socio@sanmiguel.coop",
-} as const;
-
-export type RolDemo = keyof typeof USUARIOS_DEMO;
-
-export async function entrarComoDemo(rol: RolDemo): Promise<EstadoLogin> {
-  // No alcanza con esconder las tarjetas: la acción se puede llamar a mano.
-  if (!modoDemoActivo()) {
-    return { error: "El acceso de demo está apagado. Entrá con tu DNI y tu contraseña." };
-  }
-  const email = USUARIOS_DEMO[rol];
-  if (!email) return { error: "Rol de demo desconocido." };
-
-  const supabase = await createClient();
-  await supabase.auth.signOut({ scope: "local" });
-  const { error } = await supabase.auth.signInWithPassword({
-    email,
-    password: "SanMiguel2026",
-  });
-  if (error) {
-    return { error: "No se pudo entrar con el usuario de demo." };
-  }
-
-  const perfil = await getPerfil();
-  if (!perfil) {
-    await supabase.auth.signOut({ scope: "local" });
-    return { error: "Ese usuario de demo está desactivado." };
-  }
-  redirect(rutaInicio(perfil.rol));
 }
