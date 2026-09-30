@@ -31,6 +31,11 @@ export type Espacio = Rect & {
   numero: string | null;
   /** Medio puesto: cuenta 0,5 para la expensa (EXME, o EXPP si es propio). */
   medio: boolean;
+  /** Cuántos puestos cuenta (½, 1, 1½, 2, 2½ o 3; 0036). Sin dato: ½ si es medio, si no 1. */
+  tamano?: number;
+  /** Lo ocupa un inquilino; `duenio` es el nombre del dueño (solo Administración y el Líder). */
+  enAlquiler?: boolean;
+  duenio?: string | null;
   /** Puesto propio de la cooperativa (C3): paga EXPP en vez de EXME. Solo puestos. */
   propio?: boolean;
   /** Puestos que el plano original dibuja juntos (un mismo puestero). */

@@ -45,7 +45,7 @@ export async function cargarPlano(
     conClientes
       ? supabase
           .from("espacios")
-          .select("id, tipo, numero, medio, propio, grupo, nota, cliente_id, x, y, w, h")
+          .select("id, tipo, numero, medio, propio, grupo, nota, cliente_id, x, y, w, h, tamano, en_alquiler, duenio")
           .eq("org_id", perfil.org_id)
       : supabase.rpc("espacios_del_plano"),
     supabase
@@ -64,6 +64,9 @@ export async function cargarPlano(
     grupo: string | null;
     nota?: string | null;
     cliente_id?: string | null;
+    tamano?: number | string | null;
+    en_alquiler?: boolean | null;
+    duenio?: string | null;
     x: number | string;
     y: number | string;
     w: number | string;
@@ -78,6 +81,10 @@ export async function cargarPlano(
       tipo: e.tipo as TipoEspacio,
       numero: e.numero,
       medio: Boolean(e.medio),
+      // El Jefe y Portería no reciben el tamaño (espacios_del_plano): sale de "medio".
+      tamano: e.tamano !== undefined && e.tamano !== null ? Number(e.tamano) : e.medio ? 0.5 : 1,
+      enAlquiler: conClientes ? Boolean(e.en_alquiler) : false,
+      duenio: conClientes ? (e.duenio ?? null) : null,
       propio: Boolean(e.propio),
       grupo: e.grupo,
       nota: conClientes ? (e.nota ?? null) : null,

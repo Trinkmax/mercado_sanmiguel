@@ -491,7 +491,7 @@ function sql() {
   );
   const filasEspacios = espacios.map(
     (e) =>
-      `  ('${ORG}', ${q(e.tipo)}, ${q(e.numero)}, ${e.medio}, ${Boolean(e.propio)}, ${q(e.grupo)}, ${q(e.nota)}, ${num(e.x)}, ${num(e.y)}, ${num(e.w)}, ${num(e.h)})`
+      `  ('${ORG}', ${q(e.tipo)}, ${q(e.numero)}, ${e.medio}, ${e.medio ? 0.5 : 1}, ${Boolean(e.propio)}, ${q(e.grupo)}, ${q(e.nota)}, ${num(e.x)}, ${num(e.y)}, ${num(e.w)}, ${num(e.h)})`
   );
   const cuenta = (tipo) => espacios.filter((e) => e.tipo === tipo).length;
   const puestos = espacios.filter((e) => e.tipo === "puesto");
@@ -529,7 +529,7 @@ delete from public.plano_elementos where org_id = '${ORG}';
 insert into public.plano_elementos (org_id, tipo, etiqueta, capacidad, x, y, w, h, orden) values
 ${filasElementos.join(",\n")};
 
-insert into public.espacios (org_id, tipo, numero, medio, propio, grupo, nota, x, y, w, h) values
+insert into public.espacios (org_id, tipo, numero, medio, tamano, propio, grupo, nota, x, y, w, h) values
 ${filasEspacios.join(",\n")};
 
 commit;`;

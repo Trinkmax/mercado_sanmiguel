@@ -1,11 +1,13 @@
 "use client";
 
 import { Fragment, memo, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { formatFraccion } from "@/lib/format";
 import {
   ALT,
   alturaDe,
   radioTapa,
   REPOSO,
+  tamanoDe,
   type Alturas,
   type Bloque,
   type EstadoBloque,
@@ -2335,6 +2337,15 @@ type TextoPlano = {
 
 const APODO = { k: "apodo", clase: "apodo", grosor: 2.5, opacidad: 0.9, apodo: true } as const;
 
+/** Puesto que cuenta más de uno (1½, 2…): etiqueta chica "×1½" en la esquina de arriba a
+ * la derecha de su tapa (no pisa el número ni el apodo). */
+function etiquetaTamano(e: Espacio, zt: number): TextoPlano | null {
+  const t = tamanoDe(e);
+  if (t <= 1 || e.w < 30 || e.h < 30) return null;
+  const [x, y] = P(e.x + e.w - 10, e.y + 6.5, zt);
+  return { k: `${e.id}:tam`, x, y, t: `×${formatFraccion(t)}`, tam: 9.5, clase: "apodo", grosor: 2.2, opacidad: 0.9 };
+}
+
 /** En una columna (plano girado), el puesto que lleva el apodo debajo de su número:
  * el último (el de abajo) que tenga alto para dos líneas. */
 function anfitrionApodo(b: Bloque): Espacio | null {
@@ -2398,6 +2409,8 @@ function textosColumna(
         grosor: 3,
         opacidad: e.numero === null ? 0.7 : undefined,
       });
+      const tam = etiquetaTamano(e, zt);
+      if (tam) out.push(tam);
     }
   }
   if (anfitrion && apodo) {
@@ -2478,6 +2491,8 @@ function textosBloque(
         grosor: 3,
         opacidad: e.numero === null ? 0.7 : undefined,
       });
+      const tam = etiquetaTamano(e, zt);
+      if (tam) out.push(tam);
     }
   }
   if (apodo) {

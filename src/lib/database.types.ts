@@ -1258,6 +1258,8 @@ export type Database = {
           actualizado_por: string | null
           asignado_en: string | null
           cliente_id: string | null
+          duenio: string | null
+          en_alquiler: boolean
           grupo: string | null
           h: number
           id: string
@@ -1266,6 +1268,7 @@ export type Database = {
           numero: string | null
           org_id: string
           propio: boolean
+          tamano: number
           tipo: string
           w: number
           x: number
@@ -1276,6 +1279,8 @@ export type Database = {
           actualizado_por?: string | null
           asignado_en?: string | null
           cliente_id?: string | null
+          duenio?: string | null
+          en_alquiler?: boolean
           grupo?: string | null
           h: number
           id?: string
@@ -1284,6 +1289,7 @@ export type Database = {
           numero?: string | null
           org_id: string
           propio?: boolean
+          tamano?: number
           tipo: string
           w: number
           x: number
@@ -1294,6 +1300,8 @@ export type Database = {
           actualizado_por?: string | null
           asignado_en?: string | null
           cliente_id?: string | null
+          duenio?: string | null
+          en_alquiler?: boolean
           grupo?: string | null
           h?: number
           id?: string
@@ -1302,6 +1310,7 @@ export type Database = {
           numero?: string | null
           org_id?: string
           propio?: boolean
+          tamano?: number
           tipo?: string
           w?: number
           x?: number
@@ -3081,11 +3090,14 @@ export type Database = {
       }
       editar_espacio: {
         Args: {
+          p_duenio?: string
+          p_en_alquiler?: boolean
           p_espacio: string
           p_medio: boolean
           p_nota: string
           p_numero: string
           p_propio?: boolean
+          p_tamano?: number
         }
         Returns: undefined
       }

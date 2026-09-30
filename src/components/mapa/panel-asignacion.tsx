@@ -6,6 +6,7 @@ import {
   FilePen,
   Flag,
   Hash,
+  KeyRound,
   Loader2,
   Paintbrush,
   TriangleAlert,
@@ -32,6 +33,8 @@ import {
   numeroVisible,
   ocupante,
   palabra,
+  tamanoDe,
+  TAMANOS_PUESTO,
   textoDiferencia,
   unidadesPuestos,
   type Diferencia,
@@ -54,7 +57,17 @@ function nombreCorto(c: ClienteMapa): string {
 }
 
 /** Datos que se guardan del editor de un espacio. */
-export type DatosEspacio = { numero: string | null; medio: boolean; nota: string | null; propio?: boolean };
+export type DatosEspacio = {
+  numero: string | null;
+  medio: boolean;
+  nota: string | null;
+  propio?: boolean;
+  /** Cuántos puestos cuenta (½ a 3). */
+  tamano?: number;
+  enAlquiler?: boolean;
+  /** Dueño del puesto si está en alquiler. */
+  duenio?: string | null;
+};
 
 /** "Facturar 1½ en la carpeta" · "Dejar de facturar en la carpeta". */
 export function textoFacturar(d: Diferencia): string {
@@ -446,12 +459,17 @@ function EditorEspacio({
   pedidoSalir?: boolean;
   onSucio?: (sucio: boolean) => void;
 }) {
-  // Número y nota se tipean y van con "Guardar". Medio puesto y puesto propio se guardan
-  // solos al tocar el switch (C3): se muestran tal cual está el espacio (optimista).
+  // Número, nota y dueño se tipean y van con "Guardar". Tamaño, puesto propio y "en
+  // alquiler" se guardan solos al tocarlos (C3): se muestran tal cual está el espacio.
   const [numero, setNumero] = useState(espacio.numero ?? "");
   const [nota, setNota] = useState(espacio.nota ?? "");
+  const [duenioTexto, setDuenioTexto] = useState(espacio.duenio ?? "");
   const [avisoSinGuardar, setAvisoSinGuardar] = useState(false);
-  const cambio = numero.trim() !== (espacio.numero ?? "") || nota.trim() !== (espacio.nota ?? "");
+  const enAlquiler = Boolean(espacio.enAlquiler);
+  const cambio =
+    numero.trim() !== (espacio.numero ?? "") ||
+    nota.trim() !== (espacio.nota ?? "") ||
+    (enAlquiler && duenioTexto.trim() !== (espacio.duenio ?? ""));
   // El mapa pregunta antes de cerrar el editor por fuera (Escape, el fondo, otro puesto).
   useEffect(() => {
     onSucio?.(cambio);
@@ -460,21 +478,34 @@ function EditorEspacio({
   const mostrarAviso = cambio && (avisoSinGuardar || pedidoSalir);
   const esPuesto = espacio.tipo === "puesto";
   const propio = Boolean(espacio.propio);
+  const tamano = tamanoDe(espacio);
   const titulo =
     espacio.tipo === "bar" ? "Bar" : `${NOMBRE_TIPO[espacio.tipo]} ${numeroVisible(espacio)}`;
 
   function guardarTexto() {
     if (!cambio) return;
     setAvisoSinGuardar(false);
-    onEditar({ numero: numero.trim() || null, medio: esPuesto ? espacio.medio : false, nota: nota.trim() || null });
+    onEditar({
+      numero: numero.trim() || null,
+      medio: esPuesto ? espacio.medio : false,
+      nota: nota.trim() || null,
+      tamano,
+      enAlquiler,
+      duenio: enAlquiler ? duenioTexto.trim() || null : null,
+    });
   }
 
-  /** Switch: guarda ese dato solo, con el número y la nota que ya están guardados. */
-  function guardarSwitch(datos: { medio?: boolean; propio?: boolean }) {
+  /** Tamaño, propio o alquiler: guarda ese dato solo, con lo que ya está guardado. */
+  function guardarSwitch(datos: { tamano?: number; propio?: boolean; enAlquiler?: boolean }) {
+    const t = datos.tamano ?? tamano;
+    const alquiler = datos.enAlquiler ?? enAlquiler;
     onEditar({
       numero: espacio.numero,
-      medio: datos.medio ?? espacio.medio,
+      medio: esPuesto && t === 0.5,
       nota: espacio.nota,
+      tamano: t,
+      enAlquiler: alquiler,
+      duenio: alquiler ? espacio.duenio ?? null : null,
       ...(datos.propio !== undefined ? { propio: datos.propio } : {}),
     });
   }
@@ -505,6 +536,7 @@ function EditorEspacio({
             ) : (
               "Libre."
             )}
+            {enAlquiler ? ` En alquiler${espacio.duenio ? ` · dueño: ${espacio.duenio}` : ""}.` : ""}
           </p>
         </div>
         <Button
@@ -525,7 +557,7 @@ function EditorEspacio({
           aria-label="Cambios sin guardar"
           className="flex flex-col gap-3 rounded-lg border border-parcial/40 bg-parcial-suave px-4 py-3 @md:flex-row @md:items-center"
         >
-          <p className="flex-1 text-sm">Cambiaste el número o la nota y todavía no lo guardaste.</p>
+          <p className="flex-1 text-sm">Cambiaste el número, la nota o el dueño y todavía no lo guardaste.</p>
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" className={cn(BOTON, "bg-card")} onClick={onCerrar}>
               Salir sin guardar
@@ -582,18 +614,32 @@ function EditorEspacio({
 
       {esPuesto ? (
         <div className="space-y-2">
-          <label className="flex min-h-11 cursor-pointer items-center gap-3">
-            <Switch
-              checked={espacio.medio}
-              disabled={guardando}
-              onCheckedChange={(v) => guardarSwitch({ medio: v })}
-              aria-label="Medio puesto"
-            />
-            <span className="text-sm">
-              Medio puesto{" "}
-              <span className="text-muted-foreground">(cuenta ½ en la expensa: EXME, o EXPP si es propio)</span>
-            </span>
-          </label>
+          <div className="space-y-1.5">
+            <p className="text-sm font-medium" id="espacio-tamano">
+              Tamaño{" "}
+              <span className="font-normal text-muted-foreground">
+                · cuántos puestos cuenta en la expensa (EXME, o EXPP si es propio)
+              </span>
+            </p>
+            <div role="group" aria-labelledby="espacio-tamano" className="flex flex-wrap gap-1.5">
+              {TAMANOS_PUESTO.map((t) => (
+                <Button
+                  key={t}
+                  type="button"
+                  variant={t === tamano ? "default" : "outline"}
+                  aria-pressed={t === tamano}
+                  disabled={guardando}
+                  onClick={() => t !== tamano && guardarSwitch({ tamano: t })}
+                  className="h-11 min-w-12 px-3 font-display text-base font-bold tabular"
+                >
+                  {formatFraccion(t)}
+                </Button>
+              ))}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              El plano lo dibuja más ancho o más angosto, con el lugar libre que hay en su fila.
+            </p>
+          </div>
           <label
             className={cn(
               "flex min-h-12 cursor-pointer items-center gap-3 rounded-lg border px-3 py-2",
@@ -612,9 +658,57 @@ function EditorEspacio({
               <span className="text-muted-foreground">· paga EXPP (Expensas Puestos Propios)</span>
             </span>
           </label>
-          <p className="text-xs text-muted-foreground">Los dos interruptores se guardan solos al tocarlos.</p>
         </div>
       ) : null}
+
+      <div className="space-y-2">
+        <label
+          className={cn(
+            "flex min-h-12 cursor-pointer items-center gap-3 rounded-lg border px-3 py-2",
+            enAlquiler ? "border-primary/40 bg-accent/60" : "bg-card"
+          )}
+        >
+          <Switch
+            checked={enAlquiler}
+            disabled={guardando}
+            onCheckedChange={(v) => guardarSwitch({ enAlquiler: v })}
+            aria-label="¿En alquiler?"
+          />
+          <KeyRound className={cn("size-4 shrink-0", enAlquiler ? "text-primary" : "text-muted-foreground")} strokeWidth={2} />
+          <span className="text-sm">
+            <span className="font-medium">¿En alquiler?</span>{" "}
+            <span className="text-muted-foreground">· {enAlquiler ? "sí: lo ocupa un inquilino" : "no"}</span>
+          </span>
+        </label>
+        {enAlquiler ? (
+          <form
+            className="flex flex-col gap-2 @md:flex-row @md:items-end"
+            onSubmit={(ev) => {
+              ev.preventDefault();
+              guardarTexto();
+            }}
+          >
+            <div className="min-w-0 flex-1 space-y-1.5">
+              <Label htmlFor="espacio-duenio">Dueño del {NOMBRE_TIPO[espacio.tipo].toLowerCase()}</Label>
+              <Input
+                id="espacio-duenio"
+                value={duenioTexto}
+                maxLength={80}
+                placeholder="Nombre y apellido del dueño"
+                autoComplete="off"
+                onChange={(e) => setDuenioTexto(e.target.value)}
+                className="h-11 text-[15px] md:text-[15px]"
+              />
+            </div>
+            <Button type="submit" className={BOTON} disabled={!cambio || guardando}>
+              Guardar
+            </Button>
+          </form>
+        ) : null}
+        <p className="text-xs text-muted-foreground">
+          {esPuesto ? "El tamaño y los interruptores" : "El interruptor"} se guardan solos al tocarlos.
+        </p>
+      </div>
 
       <div className="space-y-2 border-t pt-4">
         <p className="text-sm font-medium">

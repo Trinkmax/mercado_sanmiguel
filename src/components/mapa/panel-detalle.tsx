@@ -6,6 +6,7 @@ import {
   ArrowRight,
   Flag,
   HandCoins,
+  KeyRound,
   Link2,
   MousePointerClick,
   Pencil,
@@ -259,6 +260,25 @@ export function PanelDetalle({
             ) : facturaLugares || sinLugar.length === 0 ? (
               <p className="text-sm text-muted-foreground">Todavía no tiene puestos asignados en el plano.</p>
             ) : null}
+            {vista !== "porteria"
+              ? suyos
+                  .filter((e) => e.enAlquiler)
+                  .map((e) => (
+                    <p key={e.id} className="flex items-start gap-1.5 text-sm text-muted-foreground">
+                      <KeyRound className="mt-0.5 size-4 shrink-0 text-primary" strokeWidth={2} />
+                      <span>
+                        Alquila {conArticulo(e)}
+                        {e.duenio ? (
+                          <>
+                            {" "}· dueño: <span className="font-medium text-foreground">{e.duenio}</span>
+                          </>
+                        ) : (
+                          " · falta cargar el dueño"
+                        )}
+                      </span>
+                    </p>
+                  ))
+              : null}
             {sinLugar.length > 0 ? (
               <p className="text-sm text-muted-foreground">
                 {suyos.length > 0 || esQuintero ? "También factura " : "Factura "}
@@ -389,6 +409,12 @@ export function PanelDetalle({
             {huerfano ? <Sello estado="inactivo" texto="Ocupado" /> : <Sello estado="libre" texto="Libre" />}
             {espacio.propio ? <Sello estado="propio" /> : null}
             {espacio.medio ? <span className="text-xs text-muted-foreground">Medio puesto</span> : null}
+            {espacio.enAlquiler ? (
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                <KeyRound className="size-3.5 text-primary" strokeWidth={2} />
+                En alquiler{espacio.duenio ? ` · dueño: ${espacio.duenio}` : ""}
+              </span>
+            ) : null}
           </div>
           <p className="font-display text-lg font-bold">{titulo}</p>
           <p className="text-sm text-muted-foreground">

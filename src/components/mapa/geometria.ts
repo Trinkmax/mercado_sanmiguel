@@ -236,15 +236,28 @@ export function radioTapa(b: Pick<Bloque, "tipo" | "rect">): number {
   return Math.min(4, b.rect.w / 5);
 }
 
-/** Unidades de puesto: un medio puesto cuenta 0,5. */
+/** Cuántos puestos cuenta un espacio para la expensa: su tamaño (½ a 3, 0036) o, si no
+ * vino, ½ si es medio puesto. Lo que no es puesto cuenta 1. */
+export function tamanoDe(e: Pick<Espacio, "tipo" | "medio"> & { tamano?: number | null }): number {
+  if (e.tipo !== "puesto") return 1;
+  return e.tamano ?? (e.medio ? 0.5 : 1);
+}
+
+/** Tamaños que se pueden cargar en un puesto. */
+export const TAMANOS_PUESTO = [0.5, 1, 1.5, 2, 2.5, 3] as const;
+
+/** Unidades de puesto: un medio puesto cuenta 0,5; uno y medio, 1,5. */
 export function unidades(espacios: Espacio[]): number {
-  return espacios.reduce((acc, e) => acc + (e.tipo === "puesto" ? (e.medio ? 0.5 : 1) : 0), 0);
+  return espacios.reduce((acc, e) => acc + (e.tipo === "puesto" ? tamanoDe(e) : 0), 0);
 }
 
 /** Unidades de puesto comunes (EXME) o propios de la cooperativa (EXPP). */
-export function unidadesPuestos(espacios: Pick<Espacio, "tipo" | "medio" | "propio">[], propio: boolean): number {
+export function unidadesPuestos(
+  espacios: (Pick<Espacio, "tipo" | "medio" | "propio"> & { tamano?: number | null })[],
+  propio: boolean
+): number {
   return espacios.reduce(
-    (acc, e) => acc + (e.tipo === "puesto" && Boolean(e.propio) === propio ? (e.medio ? 0.5 : 1) : 0),
+    (acc, e) => acc + (e.tipo === "puesto" && Boolean(e.propio) === propio ? tamanoDe(e) : 0),
     0
   );
 }
@@ -297,11 +310,14 @@ export function ocupante(tipo: TipoEspacio): string {
   return tipo === "quinta" ? "quintero" : tipo === "cochera" ? "cliente" : "puestero";
 }
 
-/** "58", "34½", "?" — el número tal como se lee en el plano. */
-export function numeroVisible(e: Pick<Espacio, "numero" | "medio" | "tipo">): string {
+/** "58", "34½", "34 (1½)", "?" — el número tal como se lee en el plano (con el tamaño si
+ * el puesto cuenta más de uno). */
+export function numeroVisible(e: Pick<Espacio, "numero" | "medio" | "tipo"> & { tamano?: number | null }): string {
   if (e.tipo === "bar") return e.numero ?? "Bar";
   const n = e.numero ?? "?";
-  return e.medio ? `${n}½` : n;
+  const t = tamanoDe(e);
+  if (t === 0.5) return `${n}½`;
+  return t === 1 ? n : `${n} (${formatFraccion(t)})`;
 }
 
 /** Orden natural de números de puesto ("2" < "10" < "Bar"). */
@@ -323,10 +339,12 @@ export function etiquetaEspacio(e: {
   numero: string | null;
   medio: boolean;
   propio?: boolean | null;
+  tamano?: number | null;
 }): string {
   if (e.tipo === "bar") return "Bar";
   const nombre = esTipoEspacio(e.tipo) ? NOMBRE_TIPO[e.tipo] : e.tipo;
-  const numero = `${e.numero ?? "?"}${e.medio && e.tipo === "puesto" ? "½" : ""}`;
+  const t = e.tipo === "puesto" ? (e.tamano ?? (e.medio ? 0.5 : 1)) : 1;
+  const numero = `${e.numero ?? "?"}${t === 0.5 ? "½" : t === 1 ? "" : ` (${formatFraccion(t)})`}`;
   return e.tipo === "puesto" && e.propio ? `Puesto propio ${numero}` : `${nombre} ${numero}`;
 }
 

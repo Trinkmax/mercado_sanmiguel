@@ -33,6 +33,14 @@ const editarSchema = z.object({
   nota: z.string().trim().max(60, "La nota puede tener hasta 60 caracteres.").nullable(),
   /** C3: puesto propio de la cooperativa (paga EXPP). Sin el campo, no se toca. */
   propio: z.boolean().optional(),
+  /** Cuántos puestos cuenta (0036): ½, 1, 1½, 2, 2½ o 3. Sin el campo, lo dice "medio". */
+  tamano: z
+    .number()
+    .refine((t) => [0.5, 1, 1.5, 2, 2.5, 3].includes(t), "El tamaño puede ser ½, 1, 1½, 2, 2½ o 3 puestos.")
+    .optional(),
+  /** En alquiler y el nombre del dueño. Sin el campo, no se toca. */
+  enAlquiler: z.boolean().optional(),
+  duenio: z.string().trim().max(80, "El nombre del dueño puede tener hasta 80 letras.").nullable().optional(),
 });
 
 /**
@@ -77,6 +85,10 @@ export async function editarEspacio(input: unknown): Promise<ActionResult<void>>
     p_medio: parsed.data.medio,
     p_nota: parsed.data.nota ?? "",
     ...(parsed.data.propio === undefined ? {} : { p_propio: parsed.data.propio }),
+    ...(parsed.data.tamano === undefined ? {} : { p_tamano: parsed.data.tamano }),
+    ...(parsed.data.enAlquiler === undefined
+      ? {}
+      : { p_en_alquiler: parsed.data.enAlquiler, p_duenio: parsed.data.duenio ?? "" }),
   });
   if (error) return fallo(error);
 

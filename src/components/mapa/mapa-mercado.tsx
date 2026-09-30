@@ -26,6 +26,7 @@ import {
   NOMBRE_TIPO,
   nombreTipo,
   REPOSO,
+  tamanoDe,
   unidadesPuestos,
   unir,
   vecinosEnFila,
@@ -85,16 +86,36 @@ type Modo = "ver" | "asignar";
 
 type Cambio =
   | { tipo: "asignar"; ids: string[]; clienteId: string | null }
-  | { tipo: "editar"; id: string; numero: string | null; medio: boolean; nota: string | null; propio?: boolean };
+  | {
+      tipo: "editar";
+      id: string;
+      numero: string | null;
+      medio: boolean;
+      nota: string | null;
+      propio?: boolean;
+      tamano?: number;
+      enAlquiler?: boolean;
+      duenio?: string | null;
+    };
 
 function aplicarCambio(actual: Espacio[], c: Cambio): Espacio[] {
   if (c.tipo === "asignar") {
     const ids = new Set(c.ids);
     return actual.map((e) => (ids.has(e.id) ? { ...e, clienteId: c.clienteId } : e));
   }
+  // El ancho nuevo de un puesto que cambió de tamaño lo calcula la base: llega al recargar.
   return actual.map((e) =>
     e.id === c.id
-      ? { ...e, numero: c.numero, medio: c.medio, nota: c.nota, propio: c.propio ?? e.propio }
+      ? {
+          ...e,
+          numero: c.numero,
+          medio: c.medio,
+          nota: c.nota,
+          propio: c.propio ?? e.propio,
+          tamano: c.tamano ?? e.tamano,
+          enAlquiler: c.enAlquiler ?? e.enAlquiler,
+          duenio: c.enAlquiler === false ? null : c.duenio !== undefined ? c.duenio : e.duenio,
+        }
       : e
   );
 }
@@ -461,7 +482,7 @@ export function MapaMercado({
     const lugares: Partial<Record<TipoEspacio, { total: number; ocupados: number }>> = {};
     for (const e of plano) {
       if (e.tipo === "puesto") {
-        const u = e.medio ? 0.5 : 1;
+        const u = tamanoDe(e);
         totalPuestos += u;
         if (e.propio) propios += u;
         const est = estadoDe(e.clienteId);
@@ -792,7 +813,30 @@ export function MapaMercado({
       cambiarPlano({ tipo: "editar", id: e.id, ...datos });
       const res = await llamarAccion(() => editarEspacio({ id: e.id, ...datos }));
       if (!res.ok) toast.error(res.error, { id: `espacio-${e.id}` });
-      else if (datos.propio !== undefined) {
+      else if (datos.tamano !== undefined && datos.tamano !== tamanoDe(e)) {
+        const n = datos.numero ?? e.numero ?? "?";
+        const t = datos.tamano;
+        const duenio = e.clienteId ? clientePorId.get(e.clienteId) ?? null : null;
+        toast.success(
+          t === 0.5 ? `Listo: el ${n} quedó como medio puesto` : t === 1 ? `Listo: el ${n} es un puesto entero` : `Listo: el ${n} cuenta ${formatFraccion(t)} puestos`,
+          {
+            description: duenio
+              ? `Si ${duenio.apodo ?? duenio.nombre} factura otra cantidad, aparece en “Para revisar” para ajustar la carpeta.`
+              : "El plano lo dibuja de ese ancho si hay lugar en la fila.",
+            id: `espacio-${e.id}`,
+          }
+        );
+      } else if (datos.enAlquiler !== undefined && (datos.enAlquiler !== Boolean(e.enAlquiler) || (datos.duenio ?? null) !== (e.duenio ?? null))) {
+        const n = datos.numero ?? e.numero ?? "?";
+        toast.success(
+          datos.enAlquiler
+            ? datos.duenio
+              ? `Listo: el ${n} está en alquiler · dueño: ${datos.duenio}`
+              : `Listo: el ${n} quedó en alquiler. Cargá el nombre del dueño.`
+            : `Listo: el ${n} ya no figura en alquiler`,
+          { id: `espacio-${e.id}` }
+        );
+      } else if (datos.propio !== undefined) {
         const n = datos.numero ?? e.numero ?? "?";
         // Si está ocupado, la carpeta de quien lo ocupa tiene que acompañar (EXME ↔ EXPP):
         // el ajuste aparece en "Para revisar" con su botón "Facturar … en la carpeta".
@@ -958,7 +1002,8 @@ export function MapaMercado({
             <p className="text-xs text-muted-foreground">
               {e.clienteId ? "Ocupado" : "Libre"}
               {e.propio ? " · puesto propio de la cooperativa" : ""}
-              {e.medio ? " · medio puesto" : ""}
+              {e.medio ? " · medio puesto" : tamanoDe(e) > 1 ? ` · ${formatFraccion(tamanoDe(e))} puestos` : ""}
+              {e.enAlquiler ? ` · en alquiler${e.duenio ? ` (dueño: ${e.duenio})` : ""}` : ""}
               {e.nota ? ` · ${e.nota}` : ""}
             </p>
           </>
@@ -973,6 +1018,11 @@ export function MapaMercado({
             {cli.apodo ? ` · “${cli.apodo}”` : ""}
             {e.propio && b.espacios.length > 1 ? " · con puesto propio" : ""}
           </p>
+          {e.enAlquiler ? (
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {nombreEspacio(e)} en alquiler{e.duenio ? ` · dueño: ${e.duenio}` : ""}
+            </p>
+          ) : null}
           <div className="mt-2 flex items-center justify-between gap-3">
             <Sello estado={sello.estado} texto={sello.texto} />
             <Money
