@@ -156,6 +156,8 @@ export function FormCliente({
   const [cantidades, setCantidades] = useState<Record<string, number>>(() =>
     categoriaDefault === "quintero" ? cantidadesQuintero(conceptos) : {}
   );
+  // Porcentaje del precio por concepto (sin cargar = 100 %).
+  const [porcentajes, setPorcentajes] = useState<Record<string, number>>({});
   const [codigoAbierto, setCodigoAbierto] = useState(false);
   const [codigo, setCodigo] = useState<string>(String(cliente?.codigo ?? codigoSugerido ?? ""));
   const [notasAbiertas, setNotasAbiertas] = useState(Boolean(cliente?.notas));
@@ -177,7 +179,12 @@ export function FormCliente({
   const { total: totalMes } = totalMensual(
     conceptosVisibles
       .filter((c) => (cantidades[c.id] ?? 0) > 0)
-      .map((c) => ({ cantidad: cantidades[c.id], precio: c.precio, descuentoPp: c.descuentoPp }))
+      .map((c) => ({
+        cantidad: cantidades[c.id],
+        precio: c.precio,
+        descuentoPp: c.descuentoPp,
+        porcentaje: porcentajes[c.id] ?? 100,
+      }))
   );
 
   function cambiarCampo<K extends keyof Campos>(campo: K, valor: string) {
@@ -191,6 +198,7 @@ export function FormCliente({
     setError(null);
     if (!esAlta) return;
     // Cada categoría arranca con lo suyo: la quinta ya marcada, o nada.
+    setPorcentajes({});
     if (nueva === "quintero") {
       setCantidades(cantidadesQuintero(conceptos));
       setCuotasMes(cuotasQuintero);
@@ -262,7 +270,11 @@ export function FormCliente({
       const conceptosElegidos = esAmbulante
         ? []
         : conceptosVisibles
-            .map((c) => ({ concepto_id: c.id, cantidad: normalizarCantidad(cantidades[c.id] ?? 0) }))
+            .map((c) => ({
+              concepto_id: c.id,
+              cantidad: normalizarCantidad(cantidades[c.id] ?? 0),
+              porcentaje: porcentajes[c.id] ?? 100,
+            }))
             .filter((c) => c.cantidad > 0);
 
       const res = await llamarAccion(() => crearCliente({
@@ -609,6 +621,10 @@ export function FormCliente({
           cantidades={cantidades}
           onCambiar={(conceptoId, cantidad) =>
             setCantidades((prev) => ({ ...prev, [conceptoId]: cantidad }))
+          }
+          porcentajes={porcentajes}
+          onCambiarPorcentaje={(conceptoId, porcentaje) =>
+            setPorcentajes((prev) => ({ ...prev, [conceptoId]: porcentaje }))
           }
         />
       ) : null}

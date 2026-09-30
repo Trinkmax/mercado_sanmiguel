@@ -1,5 +1,5 @@
 import { ArrowRight } from "lucide-react";
-import { formatFraccion, OPCIONES_CUOTAS_MES } from "@/lib/format";
+import { formatFraccion, OPCIONES_CUOTAS_MES, formatPorcentaje } from "@/lib/format";
 import {
   LABEL_CATEGORIA,
   LABEL_SEGMENTO,
@@ -34,6 +34,7 @@ const LABEL_CAMPO: Record<string, string> = {
   motivo: "Motivo",
   activo: "Activo",
   cantidad: "Cantidad",
+  porcentaje: "Paga el",
   precio: "Precio",
   orden_imputacion: "Orden de imputación",
   descuento_pronto_pago: "Beneficio por pago en término %",
@@ -93,6 +94,7 @@ const ORDEN_CAMPOS = [
   "descuento_pronto_pago",
   "orden_imputacion",
   "cantidad",
+  "porcentaje",
   "activo",
 ];
 
@@ -130,6 +132,8 @@ export function ValorCampo({
       return <span className="tabular">{Number(valor)} %</span>;
     case "cantidad":
       return <span className="tabular font-medium">{formatFraccion(Number(valor))}</span>;
+    case "porcentaje":
+      return <span className="tabular font-medium">{formatPorcentaje(Number(valor))} del precio</span>;
     case "cuotas_mes": {
       const opcion = OPCIONES_CUOTAS_MES.find((o) => o.valor === Number(valor));
       return (
@@ -274,7 +278,7 @@ function ListaAlta({
     )
   );
   const conceptos = Array.isArray(datos.conceptos)
-    ? (datos.conceptos as { concepto_id?: string; cantidad?: number | string }[])
+    ? (datos.conceptos as { concepto_id?: string; cantidad?: number | string; porcentaje?: number | string }[])
     : [];
 
   return (
@@ -305,6 +309,7 @@ function ListaAlta({
                   </span>
                   <span className="tabular font-medium">
                     × {formatFraccion(Number(c.cantidad ?? 1))}
+                    {Number(c.porcentaje ?? 100) !== 100 ? ` al ${formatPorcentaje(Number(c.porcentaje))}` : ""}
                   </span>
                 </li>
               );
@@ -377,6 +382,7 @@ export function DiffCambio({
           <span className="font-medium">{cambio.concepto?.nombre ?? "Concepto"}</span>
           <span className="tabular font-medium">
             × {formatFraccion(Number(datos.cantidad ?? 1))}
+            {Number(datos.porcentaje ?? 100) !== 100 ? ` al ${formatPorcentaje(Number(datos.porcentaje))}` : ""}
           </span>
           {cambio.cliente ? (
             <span className="text-muted-foreground">

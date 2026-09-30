@@ -12,6 +12,7 @@ import {
   hoyISO,
   OPCIONES_CUOTAS_MES,
   PASO_CANTIDAD,
+  formatPorcentaje,
 } from "@/lib/format";
 import {
   categoriasDeRol,
@@ -246,12 +247,23 @@ const schemaCantidad = z.coerce
     "La cantidad va de cuarto en cuarto (¼ · ½ · ¾ · 1...)"
   );
 
+/** Porcentaje del precio que paga el cliente (1 a 100, hasta 2 decimales; acepta "70,5"). */
+const schemaPorcentaje = z.preprocess(
+  (v) => (typeof v === "string" ? v.replace(",", ".").trim() : v),
+  z.coerce
+    .number({ error: "Poné el porcentaje (de 1 a 100)" })
+    .min(1, "El porcentaje va de 1 a 100")
+    .max(100, "El porcentaje va de 1 a 100")
+    .refine((v) => Math.round(v * 100) === v * 100, "El porcentaje admite hasta 2 decimales")
+);
+
 /** Conceptos que se cargan junto con el alta (cantidad 0 = no se manda). */
 const schemaConceptosAlta = z
   .array(
     z.object({
       concepto_id: z.string().min(1, "Falta el concepto"),
       cantidad: schemaCantidad,
+      porcentaje: schemaPorcentaje.optional(),
     })
   )
   .max(30, "Son demasiados conceptos")
@@ -304,6 +316,9 @@ export async function crearCliente(
   const cantidadPorConcepto = new Map(
     esAmbulante ? [] : (conceptosAlta ?? []).map((c) => [c.concepto_id, c.cantidad])
   );
+  const porcentajePorConcepto = new Map(
+    esAmbulante ? [] : (conceptosAlta ?? []).map((c) => [c.concepto_id, c.porcentaje ?? 100])
+  );
   const conceptoIds = [...cantidadPorConcepto.keys()];
   if (conceptoIds.length > 0) {
     const { data: propios, error: errorConceptos } = await supabase
@@ -340,10 +355,14 @@ export async function crearCliente(
     categoria,
     es_socio: esAmbulante ? false : (datos.es_socio ?? false),
     ...(esAmbulante ? {} : datos.cuotas_mes !== undefined ? { cuotas_mes: datos.cuotas_mes } : {}),
-    conceptos: conceptoIds.map((concepto_id) => ({
-      concepto_id,
-      cantidad: cantidadPorConcepto.get(concepto_id) ?? 1,
-    })),
+    conceptos: conceptoIds.map((concepto_id) => {
+      const porcentaje = porcentajePorConcepto.get(concepto_id) ?? 100;
+      return {
+        concepto_id,
+        cantidad: cantidadPorConcepto.get(concepto_id) ?? 1,
+        ...(porcentaje !== 100 ? { porcentaje } : {}),
+      };
+    }),
     ...(ref ? { ref } : {}),
   });
   const resumen = (n: number) =>
@@ -717,6 +736,7 @@ export async function agregarConceptoCliente(
       clienteId: z.string().min(1),
       conceptoId: z.string().min(1, "Elegí el concepto que va a pagar"),
       cantidad: schemaCantidad,
+      porcentaje: schemaPorcentaje.optional(),
     })
     .safeParse(input);
   if (!parsed.success) return fallo(parsed.error.issues[0].message);
@@ -742,8 +762,15 @@ export async function agregarConceptoCliente(
       cliente_id: parsed.data.clienteId,
       concepto_id: parsed.data.conceptoId,
       cantidad: parsed.data.cantidad,
+      ...(parsed.data.porcentaje !== undefined && parsed.data.porcentaje !== 100
+        ? { porcentaje: parsed.data.porcentaje }
+        : {}),
     },
-    resumen: `Agregar ${concepto.nombre} × ${formatFraccion(parsed.data.cantidad)} a ${cliente.nombre}`,
+    resumen: `Agregar ${concepto.nombre} × ${formatFraccion(parsed.data.cantidad)}${
+      parsed.data.porcentaje !== undefined && parsed.data.porcentaje !== 100
+        ? ` al ${formatPorcentaje(parsed.data.porcentaje)}`
+        : ""
+    } a ${cliente.nombre}`,
     clienteId: parsed.data.clienteId,
   });
   if (!res.ok) return res;
@@ -762,6 +789,7 @@ export async function editarConceptoCliente(
       id: z.string().min(1),
       clienteId: z.string().min(1),
       cantidad: schemaCantidad.optional(),
+      porcentaje: schemaPorcentaje.optional(),
       activo: z.boolean().optional(),
     })
     .safeParse(input);
@@ -769,6 +797,7 @@ export async function editarConceptoCliente(
 
   const cambios: Record<string, Json> = {};
   if (parsed.data.cantidad !== undefined) cambios.cantidad = parsed.data.cantidad;
+  if (parsed.data.porcentaje !== undefined) cambios.porcentaje = parsed.data.porcentaje;
   if (parsed.data.activo !== undefined) cambios.activo = parsed.data.activo;
   if (Object.keys(cambios).length === 0)
     return fallo("No hay cambios para guardar.");
@@ -778,7 +807,7 @@ export async function editarConceptoCliente(
   if (!cliente.ok) return fallo(cliente.error);
   const { data: item } = await supabase
     .from("cliente_conceptos")
-    .select("id, cliente_id, cantidad, activo, conceptos(nombre, tipo, segmento)")
+    .select("id, cliente_id, cantidad, porcentaje, activo, conceptos(nombre, tipo, segmento)")
     .eq("id", parsed.data.id)
     .eq("org_id", perfil.org_id)
     .maybeSingle();
@@ -798,13 +827,25 @@ export async function editarConceptoCliente(
   // Resumen humano según qué se toca.
   let resumen: string;
   let accion: Accion = "modificacion";
-  if (parsed.data.activo === false && parsed.data.cantidad === undefined) {
+  const tocaMonto = parsed.data.cantidad !== undefined || parsed.data.porcentaje !== undefined;
+  if (parsed.data.activo === false && !tocaMonto) {
     accion = "baja";
     resumen = `Dejar de facturar ${concepto} a ${cliente.nombre}`;
-  } else if (parsed.data.activo === true && parsed.data.cantidad === undefined) {
+  } else if (parsed.data.activo === true && !tocaMonto) {
     resumen = `Volver a facturar ${concepto} a ${cliente.nombre}`;
   } else {
-    resumen = `Cambiar ${concepto} de ${cliente.nombre}: ${formatFraccion(item.cantidad)} → ${formatFraccion(parsed.data.cantidad ?? item.cantidad)}`;
+    // "× 4 al 100 %" → "× 4 al 70 %": se muestra solo lo que cambia.
+    const antes: string[] = [];
+    const despues: string[] = [];
+    if (parsed.data.cantidad !== undefined && parsed.data.cantidad !== Number(item.cantidad)) {
+      antes.push(`× ${formatFraccion(item.cantidad)}`);
+      despues.push(`× ${formatFraccion(parsed.data.cantidad)}`);
+    }
+    if (parsed.data.porcentaje !== undefined && parsed.data.porcentaje !== Number(item.porcentaje)) {
+      antes.push(`al ${formatPorcentaje(item.porcentaje)}`);
+      despues.push(`al ${formatPorcentaje(parsed.data.porcentaje)}`);
+    }
+    resumen = `Cambiar ${concepto} de ${cliente.nombre}: ${antes.join(" ") || "sin cambios"} → ${despues.join(" ") || "sin cambios"}`;
     if (parsed.data.activo === false) resumen += " y dejar de facturarlo";
   }
 

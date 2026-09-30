@@ -818,6 +818,7 @@ export type Database = {
           id: string
           notas: string | null
           org_id: string
+          porcentaje: number
         }
         Insert: {
           activo?: boolean
@@ -827,6 +828,7 @@ export type Database = {
           id?: string
           notas?: string | null
           org_id: string
+          porcentaje?: number
         }
         Update: {
           activo?: boolean
@@ -836,6 +838,7 @@ export type Database = {
           id?: string
           notas?: string | null
           org_id?: string
+          porcentaje?: number
         }
         Relationships: [
           {

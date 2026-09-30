@@ -8,6 +8,7 @@ import {
   formatFecha,
   formatFechaHora,
   labelPeriodo,
+  montoConcepto,
   periodoActual,
   sumarMeses,
 } from "@/lib/format";
@@ -62,7 +63,7 @@ export default async function FacturacionPage() {
     supabase
       .from("cliente_conceptos")
       .select(
-        "cantidad, cliente_id, conceptos!inner(codigo, nombre, precio, orden_imputacion), clientes!inner(activo)"
+        "cantidad, porcentaje, cliente_id, conceptos!inner(codigo, nombre, precio, orden_imputacion), clientes!inner(activo)"
       )
       .eq("org_id", perfil.org_id)
       .eq("activo", true)
@@ -89,7 +90,7 @@ export default async function FacturacionPage() {
       .eq("clientes.activo", true),
     supabase
       .from("cliente_conceptos")
-      .select("cliente_id, cantidad, activo, conceptos!inner(codigo)")
+      .select("cliente_id, cantidad, porcentaje, activo, conceptos!inner(codigo)")
       .eq("org_id", perfil.org_id)
       .eq("conceptos.codigo", "ABEN"),
   ]);
@@ -114,11 +115,15 @@ export default async function FacturacionPage() {
   const diaVenc = Math.min(configRes.data?.dia_vencimiento ?? 30, ultimoDia);
   const vencimientoProximo = `${dProximo.getFullYear()}-${String(dProximo.getMonth() + 1).padStart(2, "0")}-${String(diaVenc).padStart(2, "0")}`;
 
-  // Preview del estimado: cantidad × precio actual, agrupado por concepto.
+  // Preview del estimado: cantidad × precio actual × porcentaje, agrupado por concepto.
   const porConcepto = new Map<string, FilaPreview>();
   let cargosEstimados = 0;
   for (const fila of previewRes.data ?? []) {
-    const subtotal = Number(fila.cantidad) * Number(fila.conceptos.precio);
+    const subtotal = montoConcepto(
+      Number(fila.cantidad),
+      Number(fila.conceptos.precio),
+      Number(fila.porcentaje ?? 100)
+    );
     if (subtotal <= 0) continue;
     cargosEstimados += 1;
     const item = porConcepto.get(fila.conceptos.codigo) ?? {
@@ -151,8 +156,9 @@ export default async function FacturacionPage() {
       const fila = filaAben.get(clienteId);
       if (fila && !fila.activo) continue; // exento
       const cantidad = fila ? Number(fila.cantidad) : 1;
+      const porcentaje = fila ? Number(fila.porcentaje ?? 100) : 100;
       item.clientes.add(clienteId);
-      item.subtotal += cantidad * Number(aben.precio);
+      item.subtotal += montoConcepto(cantidad, Number(aben.precio), porcentaje);
     }
     if (item.clientes.size > 0) {
       abonosEstimados = item.clientes.size;

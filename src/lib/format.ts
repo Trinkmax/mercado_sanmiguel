@@ -168,6 +168,17 @@ export function formatFraccion(cantidad: number | string | null | undefined): st
   return `${entero}${frac}`;
 }
 
+/** Porcentaje de un concepto del cliente: "70 %", "33,33 %" (100 = entero). */
+export function formatPorcentaje(porcentaje: number | string | null | undefined): string {
+  const n = Number(porcentaje ?? 100);
+  return `${n.toLocaleString("es-AR", { maximumFractionDigits: 2 })} %`;
+}
+
+/** Monto mensual de un concepto: cantidad × precio × porcentaje (redondeado a centavos). */
+export function montoConcepto(cantidad: number, precio: number, porcentaje = 100): number {
+  return Math.round(cantidad * precio * porcentaje) / 100;
+}
+
 /** Redondea al cuarto más cercano (mínimo 0). */
 export function redondearCuarto(n: number): number {
   return Math.max(0, Math.round(n * 4) / 4);

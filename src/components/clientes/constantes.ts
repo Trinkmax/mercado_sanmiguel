@@ -172,12 +172,13 @@ export function conceptoAsignablePorRol(
  * facturación. Centavos enteros para no arrastrar errores de coma flotante.
  */
 export function totalMensual(
-  items: { cantidad: number; precio: number; descuentoPp: number }[]
+  items: { cantidad: number; precio: number; descuentoPp: number; porcentaje?: number }[]
 ): { total: number; conBeneficio: number } {
   let total = 0;
   let conBeneficio = 0;
   for (const i of items) {
-    const cents = Math.round(Number(i.cantidad) * Number(i.precio) * 100);
+    // Mismo cálculo que la generación: cantidad × precio × porcentaje, a centavos.
+    const cents = Math.round(Number(i.cantidad) * Number(i.precio) * Number(i.porcentaje ?? 100));
     total += cents;
     conBeneficio += Math.round((cents * (100 - Number(i.descuentoPp || 0))) / 100);
   }

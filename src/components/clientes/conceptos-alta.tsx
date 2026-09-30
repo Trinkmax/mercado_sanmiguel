@@ -3,6 +3,7 @@
 import { Codigo } from "@/components/shared/codigo";
 import { Money } from "@/components/shared/money";
 import { StepperCantidad } from "@/components/clientes/stepper-cantidad";
+import { CampoPorcentaje } from "@/components/clientes/campo-porcentaje";
 import {
   AYUDA_CONCEPTO,
   GRUPOS_CONCEPTO,
@@ -10,6 +11,7 @@ import {
   totalMensual,
 } from "@/components/clientes/constantes";
 import { cn } from "@/lib/utils";
+import { montoConcepto } from "@/lib/format";
 
 export type ConceptoRecurrente = {
   id: string;
@@ -26,20 +28,31 @@ export { normalizarCantidad } from "@/components/clientes/stepper-cantidad";
 /**
  * "¿Qué paga cada mes?" del alta: los conceptos que el rol puede asignar, agrupados
  * (Expensas · Espacios · Quinta · Otros), con su precio, una línea de ayuda y el total del
- * mes en vivo. Cantidad de cuarto en cuarto; 0 = no lo paga.
+ * mes en vivo. Cantidad de cuarto en cuarto; 0 = no lo paga. Lo elegido puede pagarse
+ * por un porcentaje del precio (70 % de la expensa, por ejemplo).
  */
 export function ConceptosAlta({
   conceptos,
   cantidades,
   onCambiar,
+  porcentajes = {},
+  onCambiarPorcentaje,
 }: {
   conceptos: ConceptoRecurrente[];
   cantidades: Record<string, number>;
   onCambiar: (conceptoId: string, cantidad: number) => void;
+  /** Porcentaje del precio por concepto (sin cargar = 100). */
+  porcentajes?: Record<string, number>;
+  onCambiarPorcentaje?: (conceptoId: string, porcentaje: number) => void;
 }) {
   const elegidos = conceptos
     .filter((c) => (cantidades[c.id] ?? 0) > 0)
-    .map((c) => ({ cantidad: cantidades[c.id], precio: c.precio, descuentoPp: c.descuentoPp }));
+    .map((c) => ({
+      cantidad: cantidades[c.id],
+      precio: c.precio,
+      descuentoPp: c.descuentoPp,
+      porcentaje: porcentajes[c.id] ?? 100,
+    }));
   const { total, conBeneficio } = totalMensual(elegidos);
   const grupos = GRUPOS_CONCEPTO.map((g) => ({
     ...g,
@@ -51,7 +64,8 @@ export function ConceptosAlta({
       <div>
         <p className="text-base font-medium">¿Qué paga cada mes?</p>
         <p className="text-sm text-muted-foreground">
-          Dejá en 0 lo que no paga. Se aceptan cuartos: ¼ · ½ · ¾ · 1 · 1¼…
+          Dejá en 0 lo que no paga. Se aceptan cuartos: ¼ · ½ · ¾ · 1 · 1¼… Si paga una parte
+          del precio, poné el porcentaje (por ejemplo 70 %).
         </p>
       </div>
 
@@ -65,6 +79,7 @@ export function ConceptosAlta({
             ) : null}
             {g.conceptos.map((c) => {
               const cantidad = cantidades[c.id] ?? 0;
+              const porcentaje = porcentajes[c.id] ?? 100;
               const paga = cantidad > 0;
               const ayuda = AYUDA_CONCEPTO[c.codigo];
               return (
@@ -81,9 +96,9 @@ export function ConceptosAlta({
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    {paga && cantidad !== 1 ? (
+                    {paga && (cantidad !== 1 || porcentaje !== 100) ? (
                       <Money
-                        monto={Math.round(cantidad * c.precio * 100) / 100}
+                        monto={montoConcepto(cantidad, c.precio, porcentaje)}
                         className="text-sm font-semibold"
                       />
                     ) : null}
@@ -93,6 +108,14 @@ export function ConceptosAlta({
                       onCambiar={(n) => onCambiar(c.id, n)}
                       className="shrink-0"
                     />
+                    {paga && onCambiarPorcentaje ? (
+                      <CampoPorcentaje
+                        valor={porcentaje}
+                        nombre={c.nombre}
+                        onCambiar={(p) => onCambiarPorcentaje(c.id, p)}
+                        className="shrink-0"
+                      />
+                    ) : null}
                   </div>
                 </div>
               );

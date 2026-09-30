@@ -10,7 +10,14 @@ import {
   editarConceptoCliente,
   editarCuotasMes,
 } from "@/lib/actions/clientes";
-import { CUOTAS_TODOS_LOS_DIAS, formatARS, formatFraccion, PASO_CANTIDAD } from "@/lib/format";
+import {
+  CUOTAS_TODOS_LOS_DIAS,
+  formatARS,
+  formatFraccion,
+  formatPorcentaje,
+  montoConcepto,
+  PASO_CANTIDAD,
+} from "@/lib/format";
 import { LABEL_CATEGORIA, type CategoriaCliente } from "@/lib/segmentos";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -23,6 +30,7 @@ import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
 import { EmptyState } from "@/components/shared/empty-state";
 import { StepperCantidad } from "@/components/clientes/stepper-cantidad";
+import { CampoPorcentaje } from "@/components/clientes/campo-porcentaje";
 import { CuotasMesPicker, textoVistaPrevia } from "@/components/clientes/cuotas-mes";
 import {
   AYUDA_CONCEPTO,
@@ -40,6 +48,8 @@ import { llamarAccion } from "@/lib/llamar-accion";
 export type ItemConcepto = {
   id: string;
   cantidad: number;
+  /** Porcentaje del precio que paga (100 = entero). */
+  porcentaje: number;
   activo: boolean;
   codigo: string;
   nombre: string;
@@ -57,6 +67,7 @@ export type AltaPendiente = {
   nombre: string;
   precio: number;
   cantidad: number;
+  porcentaje: number;
 };
 
 export type ConceptoDisponible = {
@@ -145,7 +156,7 @@ export function ConceptosCliente({
               <div className="divide-y rounded-lg border">
                 {prendidos.map((item) => (
                   <FilaConcepto
-                    key={`${item.id}-${item.cantidad}-${item.activo}`}
+                    key={`${item.id}-${item.cantidad}-${item.porcentaje}-${item.activo}`}
                     item={item}
                     clienteId={clienteId}
                     directo={directo}
@@ -204,7 +215,7 @@ export function ConceptosCliente({
                     ) : null}
                     {g.items.map((item) => (
                       <FilaConcepto
-                        key={`${item.id}-${item.cantidad}-${item.activo}-${item.pendiente ? 1 : 0}`}
+                        key={`${item.id}-${item.cantidad}-${item.porcentaje}-${item.activo}-${item.pendiente ? 1 : 0}`}
                         item={item}
                         clienteId={clienteId}
                         directo={directo}
@@ -224,8 +235,9 @@ export function ConceptosCliente({
                       <div className="min-w-0 flex-1">
                         <p className="font-medium break-words">{a.nombre}</p>
                         <p className="text-sm text-muted-foreground">
-                          Pedido: {formatFraccion(a.cantidad)} ·{" "}
-                          <Money monto={Math.round(a.cantidad * a.precio * 100) / 100} /> por mes. Se suma cuando
+                          Pedido: {formatFraccion(a.cantidad)}
+                          {a.porcentaje !== 100 ? ` al ${formatPorcentaje(a.porcentaje)}` : ""} ·{" "}
+                          <Money monto={montoConcepto(a.cantidad, a.precio, a.porcentaje)} /> por mes. Se suma cuando
                           lo apruebe el Líder de Procesos.
                         </p>
                       </div>
@@ -279,6 +291,7 @@ function AgregarConcepto({
   const [pendiente, startTransition] = useTransition();
   const [elegido, setElegido] = useState<string | null>(null);
   const [cantidad, setCantidad] = useState(1);
+  const [porcentaje, setPorcentaje] = useState(100);
   const concepto = disponibles.find((c) => c.id === elegido) ?? null;
 
   if (disponibles.length === 0) return null;
@@ -290,13 +303,18 @@ function AgregarConcepto({
         clienteId,
         conceptoId: concepto.id,
         cantidad,
+        porcentaje,
       }));
       if (!res.ok) {
         toast.error(res.error);
         return;
       }
       if (res.data.estado === "aplicado") {
-        toast.success(`Agregado: ${concepto.nombre} × ${formatFraccion(cantidad)}`);
+        toast.success(
+          `Agregado: ${concepto.nombre} × ${formatFraccion(cantidad)}${
+            porcentaje !== 100 ? ` al ${formatPorcentaje(porcentaje)}` : ""
+          }`
+        );
       } else {
         toast.success(TOAST_ENVIADO_APROBACION, {
           description: `${concepto.nombre} se suma a la carpeta cuando lo apruebe.`,
@@ -304,6 +322,7 @@ function AgregarConcepto({
       }
       setElegido(null);
       setCantidad(1);
+      setPorcentaje(100);
       router.refresh();
     });
   }
@@ -326,6 +345,7 @@ function AgregarConcepto({
               onClick={() => {
                 setElegido(activo ? null : c.id);
                 setCantidad(1);
+                setPorcentaje(100);
               }}
               className={cn(
                 "flex min-h-12 items-center gap-2 rounded-lg border px-3 py-2 text-left text-sm transition-colors",
@@ -359,13 +379,25 @@ function AgregarConcepto({
               onCambiar={setCantidad}
             />
           </div>
+          <div className="space-y-1">
+            <Label htmlFor="porcentaje-nuevo" className="text-sm text-muted-foreground">
+              ¿Qué % paga?
+            </Label>
+            <CampoPorcentaje
+              id="porcentaje-nuevo"
+              valor={porcentaje}
+              nombre={concepto.nombre}
+              onCambiar={setPorcentaje}
+            />
+          </div>
           <p className="min-w-40 flex-1 pb-2.5 text-sm text-muted-foreground">
             {AYUDA_CONCEPTO[concepto.codigo] ?? concepto.nombre} ·{" "}
             <Money
-              monto={Math.round(cantidad * concepto.precio * 100) / 100}
+              monto={montoConcepto(cantidad, concepto.precio, porcentaje)}
               className="font-semibold text-foreground"
             />{" "}
             por mes
+            {porcentaje !== 100 ? ` (el ${formatPorcentaje(porcentaje)} del precio)` : ""}
           </p>
           <Button
             size="lg"
@@ -528,8 +560,11 @@ function FilaConcepto({
   const router = useRouter();
   const [pendiente, startTransition] = useTransition();
   const [cantidad, setCantidad] = useState(item.cantidad);
+  const [porcentaje, setPorcentaje] = useState(item.porcentaje);
   const [activo, setActivo] = useState(item.activo);
-  const sucio = cantidad !== item.cantidad;
+  const cambioCantidad = cantidad !== item.cantidad;
+  const cambioPorcentaje = porcentaje !== item.porcentaje;
+  const sucio = cambioCantidad || cambioPorcentaje;
   const ayuda = AYUDA_CONCEPTO[item.codigo];
   // Ya hay un cambio de esta fila esperando al Líder: no se manda otro encima.
   const esperando = Boolean(item.pendiente) && !directo;
@@ -537,18 +572,28 @@ function FilaConcepto({
   function guardarCantidad() {
     if (!sucio) return;
     startTransition(async () => {
-      const res = await llamarAccion(() => editarConceptoCliente({ id: item.id, clienteId, cantidad }));
+      const res = await llamarAccion(() =>
+        editarConceptoCliente({
+          id: item.id,
+          clienteId,
+          ...(cambioCantidad ? { cantidad } : {}),
+          ...(cambioPorcentaje ? { porcentaje } : {}),
+        })
+      );
       if (!res.ok) {
         toast.error(res.error);
         return;
       }
+      const texto = (c: number, p: number) =>
+        `${formatFraccion(c)}${p !== 100 ? ` al ${formatPorcentaje(p)}` : ""}`;
       if (res.data.estado === "aplicado") {
-        toast.success(`${item.nombre}: ahora paga ${formatFraccion(cantidad)}`);
+        toast.success(`${item.nombre}: ahora paga ${texto(cantidad, porcentaje)}`);
       } else {
         toast.success(TOAST_ENVIADO_APROBACION, {
-          description: `${item.nombre} sigue en ${formatFraccion(item.cantidad)} hasta que lo apruebe.`,
+          description: `${item.nombre} sigue en ${texto(item.cantidad, item.porcentaje)} hasta que lo apruebe.`,
         });
         setCantidad(item.cantidad);
+        setPorcentaje(item.porcentaje);
       }
       router.refresh();
     });
@@ -590,12 +635,14 @@ function FilaConcepto({
           </p>
           <p className="text-sm text-muted-foreground">
             <Money monto={item.precio} /> c/u
-            {cantidad !== 1 ? (
+            {cantidad !== 1 || porcentaje !== 100 ? (
               <>
                 {" "}
-                · {formatFraccion(cantidad)} ={" "}
+                · {cantidad !== 1 ? formatFraccion(cantidad) : null}
+                {cantidad !== 1 && porcentaje !== 100 ? " × " : null}
+                {porcentaje !== 100 ? `el ${formatPorcentaje(porcentaje)}` : null} ={" "}
                 <Money
-                  monto={Math.round(cantidad * item.precio * 100) / 100}
+                  monto={montoConcepto(cantidad, item.precio, porcentaje)}
                   className="font-semibold text-foreground"
                 />
               </>
@@ -620,6 +667,13 @@ function FilaConcepto({
           disabled={!activo || pendiente || esperando}
           onCambiar={setCantidad}
         />
+        <CampoPorcentaje
+          id={`porcentaje-${item.id}`}
+          valor={porcentaje}
+          nombre={item.nombre}
+          disabled={!activo || pendiente || esperando}
+          onCambiar={setPorcentaje}
+        />
         {sucio ? (
           <div className="flex items-center gap-1">
             <Button className="h-11 px-3 font-semibold" onClick={guardarCantidad} disabled={pendiente}>
@@ -636,9 +690,12 @@ function FilaConcepto({
               variant="ghost"
               size="icon"
               className="size-11"
-              onClick={() => setCantidad(item.cantidad)}
+              onClick={() => {
+                setCantidad(item.cantidad);
+                setPorcentaje(item.porcentaje);
+              }}
               disabled={pendiente}
-              aria-label={`Deshacer el cambio de cantidad de ${item.nombre}`}
+              aria-label={`Deshacer el cambio de ${item.nombre}`}
             >
               <Undo2 className="size-4" />
             </Button>

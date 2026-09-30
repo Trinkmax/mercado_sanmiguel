@@ -340,7 +340,7 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
     supabase
       .from("cliente_conceptos")
       .select(
-        "id, cantidad, activo, concepto_id, conceptos(codigo, nombre, tipo, precio, descuento_pronto_pago, segmento)"
+        "id, cantidad, porcentaje, activo, concepto_id, conceptos(codigo, nombre, tipo, precio, descuento_pronto_pago, segmento)"
       )
       .eq("cliente_id", id),
     supabase
@@ -431,14 +431,23 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
 
   // "Qué paga": lo que ya pidió y espera al Líder no se puede volver a mandar (ni duplicar
   // pedidos en Aprobaciones): altas pendientes por concepto y filas con un cambio pendiente.
-  const conceptoPendiente = new Map<string, number>();
+  const conceptoPendiente = new Map<string, { cantidad: number; porcentaje: number }>();
   const itemsConCambio = new Set<string>();
   let cuotasPedidas: number | null = null;
   for (const c of cambiosRaw) {
-    const datos = (c.datos ?? {}) as { concepto_id?: string; cantidad?: number | string; cuotas_mes?: number | string };
+    const datos = (c.datos ?? {}) as {
+      concepto_id?: string;
+      cantidad?: number | string;
+      porcentaje?: number | string;
+      cuotas_mes?: number | string;
+    };
     if (c.entidad === "cliente_concepto") {
       if (c.entidad_id) itemsConCambio.add(c.entidad_id);
-      else if (datos.concepto_id) conceptoPendiente.set(datos.concepto_id, Number(datos.cantidad ?? 1) || 1);
+      else if (datos.concepto_id)
+        conceptoPendiente.set(datos.concepto_id, {
+          cantidad: Number(datos.cantidad ?? 1) || 1,
+          porcentaje: Number(datos.porcentaje ?? 100) || 100,
+        });
     } else if (c.entidad === "cliente" && datos.cuotas_mes !== undefined && cuotasPedidas === null) {
       cuotasPedidas = Number(datos.cuotas_mes) || null;
     }
@@ -450,6 +459,7 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
     .map((i) => ({
       id: i.id,
       cantidad: Number(i.cantidad),
+      porcentaje: Number(i.porcentaje ?? 100),
       activo: i.activo,
       codigo: i.conceptos?.codigo ?? "?",
       nombre: i.conceptos?.nombre ?? "Concepto",
@@ -468,7 +478,8 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
       codigo: c.codigo,
       nombre: c.nombre,
       precio: Number(c.precio),
-      cantidad: conceptoPendiente.get(c.id) ?? 1,
+      cantidad: conceptoPendiente.get(c.id)?.cantidad ?? 1,
+      porcentaje: conceptoPendiente.get(c.id)?.porcentaje ?? 100,
     }));
   const disponibles = catalogo
     .filter(
