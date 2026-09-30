@@ -26,13 +26,28 @@ const CUENTAS: { medio: "efectivo" | "transferencia"; moneda: Moneda; titulo: st
   { medio: "transferencia", moneda: "USD", titulo: "Dólares en el banco" },
 ];
 
+/** El día en que arranca la mayoría de los saldos ya cargados (a igual cantidad, el más viejo). */
+function diaDeInicio(saldos: SaldoInicial[]): string | null {
+  const cuenta = new Map<string, number>();
+  for (const s of saldos) cuenta.set(s.fecha, (cuenta.get(s.fecha) ?? 0) + 1);
+  let mejor: string | null = null;
+  for (const [fecha, n] of cuenta) {
+    const m = mejor === null ? 0 : cuenta.get(mejor) ?? 0;
+    if (mejor === null || n > m || (n === m && fecha < mejor)) mejor = fecha;
+  }
+  return mejor;
+}
+
 /**
  * Los 4 saldos iniciales (pesos/dólares × efectivo/banco). Los que faltan se
- * muestran abiertos para cargar; los cargados, compactos con "Corregir".
+ * muestran abiertos para cargar (proponiendo el mismo día que los ya cargados);
+ * los cargados, compactos con "Corregir".
  */
 export function SaldosIniciales({ saldos }: { saldos: SaldoInicial[] }) {
+  const fechaSugerida = diaDeInicio(saldos);
   return (
-    <div className="grid gap-4 md:grid-cols-2">
+    // items-start: una tarjeta cargada no se estira hasta el alto del formulario de al lado.
+    <div className="grid gap-4 md:grid-cols-2 md:items-start">
       {CUENTAS.map((c) => {
         const s = saldos.find((x) => x.medio === c.medio && x.moneda === c.moneda) ?? null;
         return (
@@ -54,7 +69,7 @@ export function SaldosIniciales({ saldos }: { saldos: SaldoInicial[] }) {
                   </p>
                 ) : null}
                 <Collapsible>
-                  <CollapsibleTrigger className="group flex min-h-11 items-center gap-1.5 text-base font-medium text-primary">
+                  <CollapsibleTrigger className="group flex min-h-11 items-center gap-1.5 text-base font-medium text-primary pointer-coarse:min-h-[44px]">
                     <ChevronDown
                       className="size-4 transition-transform group-data-[state=open]:rotate-180"
                       strokeWidth={2}
@@ -73,7 +88,14 @@ export function SaldosIniciales({ saldos }: { saldos: SaldoInicial[] }) {
                 </Collapsible>
               </div>
             ) : (
-              <SaldoInicialForm medio={c.medio} moneda={c.moneda} monto={null} fecha={null} notas={null} />
+              <SaldoInicialForm
+                medio={c.medio}
+                moneda={c.moneda}
+                monto={null}
+                fecha={null}
+                notas={null}
+                fechaSugerida={fechaSugerida}
+              />
             )}
           </section>
         );

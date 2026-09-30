@@ -90,13 +90,29 @@ export default async function CobranzaPage({ searchParams }: { searchParams: Sp 
   const recibosHoy = new Set<string>();
   const quinterosHoy = new Set<string>();
   const ambulantesHoy = new Set<string>();
+  // Caja de portería ya recibida en la caja de Administración: el "Juntaste hoy" de Inicio y de
+  // Caja la suma; "Hoy cobraste" no (son tus cobros), y la fila lo aclara para que no parezca
+  // que falta plata. Misma cuenta que calcular_arqueo (efectivo + transferencia rendidos).
+  let porteriaRecibida = 0;
   if (cajaRes.data) {
-    const { data: pagosHoy } = await supabase
-      .from("pagos")
-      .select("lote_id, monto, cliente_id, clientes(categoria)")
-      .eq("caja_id", cajaRes.data.id)
-      .eq("recibido_por", perfil.user_id)
-      .eq("anulado", false);
+    const [{ data: pagosHoy }, { data: rendidas }] = await Promise.all([
+      supabase
+        .from("pagos")
+        .select("lote_id, monto, cliente_id, clientes(categoria)")
+        .eq("caja_id", cajaRes.data.id)
+        .eq("recibido_por", perfil.user_id)
+        .eq("anulado", false),
+      esJefe
+        ? Promise.resolve({ data: null })
+        : supabase
+            .from("cajas")
+            .select("total_efectivo, total_transferencia")
+            .eq("caja_destino_id", cajaRes.data.id)
+            .in("estado", ["integrada", "validada"]),
+    ]);
+    for (const r of rendidas ?? []) {
+      porteriaRecibida += Number(r.total_efectivo ?? 0) + Number(r.total_transferencia ?? 0);
+    }
     for (const p of pagosHoy ?? []) {
       hoyTotal += Number(p.monto);
       recibosHoy.add(p.lote_id);
@@ -217,20 +233,37 @@ export default async function CobranzaPage({ searchParams }: { searchParams: Sp 
       <AvisoCajaCerrada caja={cajaHoy} rol={perfil.rol} className="-mt-4" />
 
       {esJefe || hoyTotal > 0 ? (
-        <div className="-mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-lg border bg-card px-4 py-3">
-          {hoyTotal > 0 ? (
-            <>
-              <span className="text-muted-foreground">Hoy cobraste</span>
-              <Money monto={hoyTotal} className="text-xl font-bold" />
-              <span className="text-sm text-muted-foreground">
-                {esJefe
-                  ? `· ${ambulantesHoy.size} ${ambulantesHoy.size === 1 ? "ambulante" : "ambulantes"} · ${quinterosHoy.size} ${quinterosHoy.size === 1 ? "quintero" : "quinteros"}`
-                  : `· ${recibosHoy.size} ${recibosHoy.size === 1 ? "recibo" : "recibos"}`}
+        <div className="-mt-4 space-y-1 rounded-lg border bg-card px-4 py-3">
+          <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            {hoyTotal > 0 ? (
+              <>
+                <span className="text-muted-foreground">Hoy cobraste</span>
+                <Money monto={hoyTotal} className="text-xl font-bold" />
+                <span className="text-sm text-muted-foreground">
+                  {esJefe
+                    ? `· ${ambulantesHoy.size} ${ambulantesHoy.size === 1 ? "ambulante" : "ambulantes"} · ${quinterosHoy.size} ${quinterosHoy.size === 1 ? "quintero" : "quinteros"}`
+                    : `· ${recibosHoy.size} ${recibosHoy.size === 1 ? "recibo" : "recibos"}`}
+                </span>
+              </>
+            ) : (
+              <span className="text-muted-foreground">Hoy todavía no cobraste nada.</span>
+            )}
+          </p>
+          {porteriaRecibida > 0.009 ? (
+            <p className="flex flex-wrap items-center gap-x-3 text-sm text-muted-foreground">
+              <span>
+                No incluye la caja de portería recibida (
+                <Money monto={porteriaRecibida} className="font-semibold text-foreground" />
+                ).
               </span>
-            </>
-          ) : (
-            <span className="text-muted-foreground">Hoy todavía no cobraste nada.</span>
-          )}
+              <Link
+                href="/caja"
+                className="inline-flex items-center font-medium text-primary underline-offset-4 hover:underline pointer-coarse:min-h-[44px]"
+              >
+                Ver la caja del día
+              </Link>
+            </p>
+          ) : null}
         </div>
       ) : null}
 

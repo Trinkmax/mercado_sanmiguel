@@ -300,7 +300,7 @@ function DesactivarMedidor({
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader className="pr-8">
+        <DialogHeader>
           <DialogTitle className="text-lg font-semibold break-words">
             ¿Desactivar el medidor {medidor.numero}?
           </DialogTitle>

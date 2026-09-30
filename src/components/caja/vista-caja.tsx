@@ -3,7 +3,6 @@ import { CajaRegistradora } from "@/components/shared/iconos";
 import type { Rol } from "@/lib/auth";
 import { formatFecha, hoyISO } from "@/lib/format";
 import { EmptyState } from "@/components/shared/empty-state";
-import { Sello } from "@/components/shared/sello";
 import { CanonDelDia } from "@/components/porteria/canon-del-dia";
 import { ValidarCajaDialog } from "@/components/tesoreria/validar-caja-dialog";
 import { BotonAbrirCaja } from "@/components/caja/abrir-caja";
@@ -48,16 +47,12 @@ export function VistaCaja({
   const porteria = tipo === "guardia";
   const permisos = permisosCaja(rol, tipo, caja, hoyISO());
 
+  // Sin sello acá: el estado ya lo dice la pestaña y, con la caja cerrada, el sello grande del
+  // arqueo (tres "CERRADA" seguidos no suman nada).
   const encabezado = conEncabezado ? (
     <div className="flex flex-wrap items-center justify-between gap-3">
       <h2 className="font-display text-lg font-bold tracking-tight">{TITULO_TIPO[tipo]}</h2>
-      {caja ? (
-        <span className="inline-flex flex-wrap items-center gap-2">
-          {caja.reapertura_solicitada_en ? <Sello estado="reapertura_pedida" /> : null}
-          <Sello estado={caja.estado} />
-          <BotonImprimirCaja cajaId={caja.id} abierta={caja.estado === "abierta"} />
-        </span>
-      ) : null}
+      {caja ? <BotonImprimirCaja cajaId={caja.id} abierta={caja.estado === "abierta"} /> : null}
     </div>
   ) : null;
 

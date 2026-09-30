@@ -134,15 +134,17 @@ export function ListaLectores({
 }
 
 function Lista({ items }: { items: Lector[] }) {
+  // @container: lo que decide es el ancho de la lista, no el de la pantalla (en escritorio
+  // chico las dos listas van lado a lado y cada una es tan angosta como en el celular).
   return (
-    <ul className="divide-y overflow-hidden rounded-xl border bg-card">
+    <ul className="@container divide-y overflow-hidden rounded-xl border bg-card">
       {items.map((l) => (
         <li key={l.cliente_id}>
           <Link
             href={`/clientes/${l.cliente_id}`}
-            className="flex min-h-14 items-center gap-3 px-4 py-2.5 transition-colors hover:bg-accent"
+            className="flex min-h-14 items-start gap-3 px-4 py-2.5 transition-colors hover:bg-accent @md:items-center"
           >
-            <span className="w-10 shrink-0 text-right font-display text-base font-bold tabular">
+            <span className="w-10 shrink-0 text-right font-display text-base leading-snug font-bold tabular">
               {l.codigo}
             </span>
             {/* El nombre completo, en los renglones que haga falta (cortado no se sabía quién era). */}
@@ -151,21 +153,32 @@ function Lista({ items }: { items: Lector[] }) {
               {l.apodo ? (
                 <span className="block text-sm break-words text-muted-foreground">{l.apodo}</span>
               ) : null}
-            </span>
-            {l.vio_en ? (
-              <span className="shrink-0 text-right">
-                <Sello estado="la_vio" />
-                <span className="mt-0.5 block text-xs tabular text-muted-foreground">
-                  {formatFechaHora(l.vio_en)}
-                </span>
+              {/* Lista angosta: el estado va debajo del nombre, así el nombre usa todo el ancho
+                  (con el sello al costado un nombre largo ocupaba 4 renglones). */}
+              <span className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 @md:hidden">
+                <EstadoLector lector={l} />
               </span>
-            ) : (
-              <Sello estado={l.tiene_portal ? "no_la_vio" : "sin_portal"} className="shrink-0" />
-            )}
+            </span>
+            <span className="hidden shrink-0 text-right @md:block">
+              <EstadoLector lector={l} enColumna />
+            </span>
           </Link>
         </li>
       ))}
     </ul>
+  );
+}
+
+/** "La vio" con fecha y hora, "Todavía no" o "Sin portal". */
+function EstadoLector({ lector, enColumna = false }: { lector: Lector; enColumna?: boolean }) {
+  if (!lector.vio_en) return <Sello estado={lector.tiene_portal ? "no_la_vio" : "sin_portal"} />;
+  return (
+    <>
+      <Sello estado="la_vio" />
+      <span className={cn("text-xs text-muted-foreground tabular", enColumna && "mt-0.5 block")}>
+        {formatFechaHora(lector.vio_en)}
+      </span>
+    </>
   );
 }
 

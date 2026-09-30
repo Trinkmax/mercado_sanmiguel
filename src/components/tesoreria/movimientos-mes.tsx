@@ -90,10 +90,11 @@ export function MovimientosMes({
                   />
                   <span className={cn("min-w-0 text-base break-words", m.anulado && "text-muted-foreground line-through")}>
                     {descripcion}
+                    {/* En el mismo renglón que la descripción: suelto no se entendía. */}
+                    {esComisionDeDeposito ? (
+                      <span className="text-sm text-muted-foreground"> · por el depósito</span>
+                    ) : null}
                   </span>
-                  {esComisionDeDeposito ? (
-                    <span className="text-sm text-muted-foreground">(del depósito)</span>
-                  ) : null}
                 </div>
                 {m.anulado ? (
                   <p className="text-sm break-words text-parcial">
@@ -133,7 +134,7 @@ export function MovimientosMes({
                   <Link
                     href={hrefFiltroCheque("todos", m.vueltoDeCheque)}
                     aria-label={`Corregir en Cheques: es el vuelto del cheque N° ${m.vueltoDeCheque}`}
-                    className="inline-flex min-h-11 items-center gap-1.5 rounded-md px-2 text-sm leading-tight font-medium text-primary underline-offset-4 hover:underline xl:justify-end xl:text-right"
+                    className="inline-flex min-h-11 items-center gap-1.5 rounded-md px-2 text-sm leading-tight font-medium text-primary underline-offset-4 hover:underline pointer-coarse:min-h-[44px] xl:justify-end xl:text-right"
                   >
                     <Banknote className="size-4 shrink-0 xl:hidden" strokeWidth={2} />
                     Corregir en Cheques

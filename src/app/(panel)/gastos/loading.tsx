@@ -8,6 +8,8 @@ function FilaSkeleton() {
       <Skeleton className="hidden h-4 w-20 xl:block" />
       <div className="space-y-2">
         <Skeleton className="h-5 w-56 max-w-full" />
+        {/* Celular: el monto va debajo del nombre. */}
+        <Skeleton className="h-6 w-28 md:hidden" />
         <div className="flex items-center gap-2">
           <Skeleton className="h-6 w-12 rounded-md" />
           <Skeleton className="h-4 w-40" />
@@ -40,7 +42,7 @@ export default function LoadingGastos() {
         </div>
       </div>
 
-      {/* Mes + resumen (Por pagar · Pagado · Vencen esta semana) */}
+      {/* Mes + resumen (Por pagar · Pagado · Vencen en los próximos 7 días) */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-2">
           <Skeleton className="size-11 rounded-md" />

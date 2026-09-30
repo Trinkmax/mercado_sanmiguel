@@ -377,11 +377,14 @@ export default async function FacturacionPage() {
                 </TableBody>
               </Table>
 
-              {/* Estimado ≠ cobrado + lo que falta: la diferencia son los beneficios. */}
+              {/* Estimado ≠ cobrado + lo que falta: la diferencia son los beneficios. Y el de
+                  Reportes suma el bono camioneros, que acá no va porque no se factura. */}
               <p className="mt-4 border-t pt-4 text-sm text-muted-foreground">
-                Estimado es todo lo facturado en el mes, sin descontar los beneficios por pagar en
-                término: por eso da más que lo cobrado más lo que falta cobrar.
-                {veReportes ? " El detalle, en cada reporte." : null}
+                Estimado es todo lo facturado en el mes, sin descontar los beneficios (los otorgados
+                y los de quienes todavía están en término): por eso da más que lo cobrado más lo que
+                falta cobrar (lo ves en
+                Inicio{veReportes ? " y en cada reporte" : ""}). No incluye el bono camioneros, que se
+                cobra en portería y no se factura.
               </p>
             </>
           )}

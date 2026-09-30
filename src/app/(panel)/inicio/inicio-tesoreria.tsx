@@ -5,6 +5,7 @@ import { CajaRegistradora } from "@/components/shared/iconos";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Money } from "@/components/shared/money";
 import { ChartCobranzaDiaria } from "@/components/charts/chart-cobranza-diaria";
+import { beneficioEnTerminoDe } from "@/components/reportes/fila-ingreso";
 import { cajasParaValidar, contar, resumenDelMes, serieUltimos14, type Supabase } from "./datos";
 import { BarraConcepto, BarraEstimado, TarjetaAviso, type Aviso } from "./bloques";
 
@@ -60,16 +61,26 @@ export async function InicioTesoreria({ perfil, supabase }: { perfil: Perfil; su
           .eq("conciliado", false)
       ),
     ]);
+  // En Tesorería → Conciliar van en dos listas (cobros y bono camioneros): el aviso dice cuántas
+  // de cada una, así los números de las dos pantallas cuadran.
   const transferencias = transferenciasCobros + transferenciasBono;
+  const detalleTransferencias =
+    transferenciasCobros > 0 && transferenciasBono > 0
+      ? `${transferenciasCobros} de ${transferenciasCobros === 1 ? "un cliente" : "clientes"} y ${transferenciasBono} del bono camioneros. `
+      : transferenciasBono > 0
+        ? "Del bono camioneros. "
+        : "";
 
   // El bono camioneros (BC) no tiene "estimado": se cobra en el momento. Va aparte.
+  // Estimado = cobrado + beneficios otorgados + beneficio en término + falta cobrar (lo que se
+  // debe hoy): los mismos cuatro nombres y cifras que Reportes, sin una segunda "deuda".
   const conceptos = resumen.filter((f) => f.codigo !== "BC");
   const bono = resumen.find((f) => f.codigo === "BC");
   const estimado = conceptos.reduce((a, f) => a + f.estimado, 0);
   const cobrado = conceptos.reduce((a, f) => a + f.cobrado, 0);
-  const beneficios = conceptos.reduce((a, f) => a + f.descuentos, 0);
-  const falta = Math.max(estimado - cobrado - beneficios, 0);
-  const debenHoy = conceptos.reduce((a, f) => a + f.pendiente, 0);
+  const otorgados = conceptos.reduce((a, f) => a + f.descuentos, 0);
+  const enTermino = conceptos.reduce((a, f) => a + beneficioEnTerminoDe(f), 0);
+  const falta = conceptos.reduce((a, f) => a + f.pendiente, 0);
   const pct = estimado > 0 ? Math.round((cobrado / estimado) * 100) : 0;
 
   const avisos: Aviso[] = [
@@ -92,7 +103,7 @@ export async function InicioTesoreria({ perfil, supabase }: { perfil: Perfil; su
       n: transferencias,
       singular: "transferencia sin conciliar",
       plural: "transferencias sin conciliar",
-      descripcion: "Cotejalas con el banco y marcalas conciliadas.",
+      descripcion: `${detalleTransferencias}Cotejalas con el banco y marcalas conciliadas.`,
       href: "/tesoreria?tab=conciliar",
       cta: "Conciliar",
       icono: Landmark,
@@ -152,25 +163,23 @@ export async function InicioTesoreria({ perfil, supabase }: { perfil: Perfil; su
               </div>
               <BarraEstimado
                 cobrado={cobrado}
-                beneficios={beneficios}
+                otorgados={otorgados}
+                enTermino={enTermino}
                 falta={falta}
-                etiqueta={`Cobrado ${formatARS(cobrado)} de ${formatARS(estimado)}`}
+                etiqueta={`Cobrado ${formatARS(cobrado)} de ${formatARS(estimado)}; falta cobrar ${formatARS(falta)}`}
               />
-              {Math.abs(debenHoy - falta) > 1 ? (
+              {enTermino > 0.5 ? (
                 <p className="text-sm text-muted-foreground">
-                  Hoy se deben <Money monto={debenHoy} className="font-semibold text-foreground" />{" "}
-                  (los que todavía pagan en término conservan el beneficio).
+                  El beneficio en término es el de quienes todavía no pagaron, pero están a tiempo:
+                  si pagan después del vencimiento, lo pierden y pasa a lo que falta cobrar.
                 </p>
               ) : null}
 
+              {/* Cada concepto contra su estimado, igual que en Reportes: cobrado + beneficios
+                  otorgados + beneficio en término + faltan = estimado. */}
               <div className="divide-y border-t">
                 {conceptos.map((fila) => (
-                  <BarraConcepto
-                    key={fila.codigo}
-                    fila={fila}
-                    objetivo={fila.estimado}
-                    faltaTexto={Math.max(fila.estimado - fila.cobrado - fila.descuentos, 0)}
-                  />
+                  <BarraConcepto key={fila.codigo} fila={fila} />
                 ))}
               </div>
             </>
@@ -196,7 +205,7 @@ export async function InicioTesoreria({ perfil, supabase }: { perfil: Perfil; su
         ))}
         {avisos.length === 0 ? (
           <Card>
-            <CardContent className="pt-6 text-sm text-muted-foreground">
+            <CardContent className="text-sm text-muted-foreground">
               Nada espera tu control por ahora: no hay cajas para validar, transferencias sin
               conciliar ni cheques para depositar.
             </CardContent>

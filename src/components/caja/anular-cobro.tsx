@@ -109,7 +109,7 @@ export function BotonAnularCobro({
         </Button>
       </DialogTrigger>
       <DialogContent className="max-h-[92dvh] gap-5 overflow-y-auto p-6 sm:max-w-md">
-        <DialogHeader className="pr-8">
+        <DialogHeader>
           <DialogTitle className="text-xl">Anular el recibo N° {numero}</DialogTitle>
           <DialogDescription className="text-base">
             Se anula el recibo completo N° {numero} ({medios}) por {formatARS(total)}. Se revierte lo imputado

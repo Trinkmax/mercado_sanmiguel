@@ -370,9 +370,15 @@ export function FormNovedad({
             ) : null}
           </div>
           <div className="flex w-full max-w-sm flex-col gap-2">
-            <Button size="lg" className="h-12 text-base font-semibold" onClick={() => reiniciar(true)}>
+            <Button
+              size="lg"
+              className="h-auto min-h-12 py-2 text-base font-semibold whitespace-normal"
+              onClick={() => reiniciar(true)}
+            >
               <ClipboardList className="size-5" strokeWidth={2} />
-              {uno ? `Cargar otra para ${uno.nombre}` : "Cargar otra para los mismos"}
+              <span className="min-w-0 break-words">
+                {uno ? `Cargar otra para ${uno.nombre}` : "Cargar otra para los mismos"}
+              </span>
             </Button>
             <Button variant="outline" className="h-12 text-base" onClick={() => reiniciar(false)}>
               <UserPlus className="size-5" strokeWidth={2} />

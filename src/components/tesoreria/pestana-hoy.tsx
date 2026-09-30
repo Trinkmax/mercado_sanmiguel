@@ -3,13 +3,14 @@ import { AlertTriangle, ArrowRight } from "lucide-react";
 import type { Rol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatARS, formatCuit, formatFecha } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Codigo } from "@/components/shared/codigo";
 import { Money } from "@/components/shared/money";
 import { AccionesGasto } from "@/components/gastos/acciones-gasto";
 import { cargarCajasElegibles } from "@/components/gastos/datos";
 import { etiquetaGasto } from "@/components/gastos/tipos";
-import { FlujoFondos } from "@/components/tesoreria/flujo-fondos";
+import { FlujoFondos, type SinSaldoInicial } from "@/components/tesoreria/flujo-fondos";
 import { AccionesRapidas } from "@/components/tesoreria/nuevo-movimiento";
 import { CajasParaValidar } from "@/components/tesoreria/cajas-para-validar";
 import { SaldosIniciales, type SaldoInicial } from "@/components/tesoreria/saldos-iniciales";
@@ -120,6 +121,12 @@ export async function PestanaHoy({
   const totalGastos = gastos.reduce((acc, g) => acc + Number(g.monto), 0);
   const GASTOS_VISIBLES = 30;
   const cajasAdmin = cajas.filter((c) => c.tipo === "administracion").length;
+  const falta = (medio: "efectivo" | "transferencia", moneda: "ARS" | "USD") =>
+    !saldos.some((x) => x.medio === medio && x.moneda === moneda);
+  const sinSaldo: SinSaldoInicial = {
+    ARS: { efectivo: falta("efectivo", "ARS"), banco: falta("transferencia", "ARS") },
+    USD: { efectivo: falta("efectivo", "USD"), banco: falta("transferencia", "USD") },
+  };
 
   return (
     <div className="space-y-10">
@@ -129,7 +136,7 @@ export async function PestanaHoy({
           No se pudo calcular la plata de hoy: {error}. Actualizá la página.
         </p>
       ) : (
-        <FlujoFondos flujo={flujo} />
+        <FlujoFondos flujo={flujo} sinSaldo={sinSaldo} />
       )}
 
       <Bloque titulo="Registrar un movimiento" detalle="Depósitos, extracciones y lo que cobra o descuenta el banco.">
@@ -169,10 +176,13 @@ export async function PestanaHoy({
         {listos.length > 0 ? (
           <ul className="divide-y overflow-hidden rounded-xl border bg-card">
             {listos.slice(0, 5).map((c) => (
-              <li key={c.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
+              <li
+                key={c.id}
+                className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1 px-4 py-2.5"
+              >
                 <div className="min-w-0">
                   <p className="text-base font-semibold tabular">Cheque N° {c.numero}</p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm break-words text-muted-foreground">
                     {[c.puesto, c.recibido_de, c.cuit ? `CUIT ${formatCuit(c.cuit)}` : null]
                       .filter(Boolean)
                       .join(" · ")}
@@ -211,23 +221,31 @@ export async function PestanaHoy({
           <ul className="divide-y overflow-hidden rounded-xl border bg-card">
             {gastos.slice(0, GASTOS_VISIBLES).map((g) => {
               const etiqueta = etiquetaGasto(g.descripcion, g.rubro?.nombre);
+              // Rubro con su nombre (el código solo no se entiende), salvo que ya sea el título.
+              const rubro = g.descripcion?.trim() && g.rubro?.nombre ? g.rubro.nombre : null;
               const vencido = (g.vencimiento ?? "") < hoy;
               return (
+                // Monto y "Pagar" siempre en la misma columna (a la derecha desde 640 px;
+                // abajo en el celular), aunque el título ocupe dos renglones.
                 <li
                   key={g.id}
-                  className={`flex flex-wrap items-center justify-between gap-3 px-4 py-3 ${vencido ? "bg-pendiente-suave/50" : ""}`}
+                  className={cn(
+                    "grid gap-x-4 gap-y-2 px-4 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center",
+                    vencido && "bg-pendiente-suave/50"
+                  )}
                 >
                   <div className="min-w-0 space-y-0.5">
-                    <p className="flex flex-wrap items-center gap-2 text-base font-semibold break-words">
-                      {g.rubro ? <Codigo codigo={g.rubro.codigo} /> : null}
-                      {etiqueta}
-                    </p>
-                    <p className={vencido ? "text-sm font-semibold text-pendiente" : "text-sm text-muted-foreground"}>
-                      {vencido ? "Venció" : g.vencimiento === hoy ? "Vence hoy" : "Vence"}{" "}
-                      {formatFecha(g.vencimiento).slice(0, 5)}
+                    <p className="text-base font-semibold break-words">{etiqueta}</p>
+                    <p className="text-sm break-words">
+                      {g.rubro ? <Codigo codigo={g.rubro.codigo} className="mr-1.5 align-middle" /> : null}
+                      {rubro ? <span className="text-muted-foreground">{rubro} · </span> : null}
+                      <span className={vencido ? "font-semibold text-pendiente" : "text-muted-foreground"}>
+                        {vencido ? "Venció" : g.vencimiento === hoy ? "Vence hoy" : "Vence"}{" "}
+                        {formatFecha(g.vencimiento).slice(0, 5)}
+                      </span>
                     </p>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center justify-between gap-3 sm:justify-end">
                     <Money monto={g.monto} className={vencido ? "text-lg font-bold text-pendiente" : "text-lg font-bold"} />
                     <AccionesGasto
                       gasto={{

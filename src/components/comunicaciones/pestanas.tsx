@@ -45,7 +45,7 @@ export function PestanasComunicaciones({
             aria-current={esActiva ? "page" : undefined}
             href={p.valor === "circulares" ? "/comunicaciones" : `/comunicaciones?tab=${p.valor}`}
             className={cn(
-              "flex min-h-12 min-w-0 items-center gap-2 rounded-md border px-3 py-1.5 text-sm leading-tight font-medium transition-colors sm:shrink-0 sm:px-4 sm:whitespace-nowrap",
+              "relative flex min-h-12 min-w-0 items-center gap-2 rounded-md border px-3 py-1.5 text-sm leading-tight font-medium transition-colors sm:shrink-0 sm:px-4 sm:whitespace-nowrap",
               p.valor === "terminos" && "sm:ml-auto",
               esActiva
                 ? "border-primary bg-primary text-primary-foreground"
@@ -53,11 +53,14 @@ export function PestanasComunicaciones({
             )}
           >
             <Icono className="size-4 shrink-0" strokeWidth={2} />
-            <span className="min-w-0 break-words">{p.label}</span>
+            <span className="min-w-0 hyphens-auto break-words">{p.label}</span>
             {badge > 0 ? (
               <span
                 className={cn(
-                  "ml-auto inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-xs font-bold tabular sm:ml-0",
+                  "inline-flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full px-1.5 text-xs font-bold tabular",
+                  // Celular: en la esquina, siempre en rojo. Al lado del nombre le sacaba ancho y
+                  // "Apercibimientos" se partía a la mitad de la palabra.
+                  "max-sm:absolute max-sm:-top-2 max-sm:-right-1.5 max-sm:bg-pendiente max-sm:text-primary-foreground max-sm:ring-2 max-sm:ring-background",
                   esActiva ? "bg-card text-pendiente" : "bg-pendiente text-primary-foreground"
                 )}
                 aria-label={`${badge} ${badge === 1 ? "espera" : "esperan"} tu respuesta`}

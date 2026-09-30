@@ -8,13 +8,14 @@ export default function LoadingComunicaciones() {
         <Skeleton className="h-5 w-[30rem] max-w-full" />
       </div>
 
-      {/* Pestañas: Circulares · Notificaciones · Apercibimientos · Sanciones · Términos */}
-      <div className="flex gap-2 overflow-hidden">
-        <Skeleton className="h-11 w-32 shrink-0 rounded-md" />
-        <Skeleton className="h-11 w-40 shrink-0 rounded-md" />
-        <Skeleton className="h-11 w-44 shrink-0 rounded-md" />
-        <Skeleton className="h-11 w-32 shrink-0 rounded-md" />
-        <Skeleton className="ml-auto h-11 w-28 shrink-0 rounded-md max-sm:hidden" />
+      {/* Pestañas: Circulares · Notificaciones · Apercibimientos · Sanciones · Términos
+          (en el celular, dos columnas, igual que la barra de verdad) */}
+      <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+        <Skeleton className="h-12 rounded-md sm:w-32" />
+        <Skeleton className="h-12 rounded-md sm:w-40" />
+        <Skeleton className="h-12 rounded-md sm:w-44" />
+        <Skeleton className="h-12 rounded-md sm:w-32" />
+        <Skeleton className="h-12 rounded-md sm:ml-auto sm:w-28" />
       </div>
 
       {/* Qué es la pestaña + botones (debajo de la barra) */}

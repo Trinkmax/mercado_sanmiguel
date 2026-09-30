@@ -176,10 +176,16 @@ function FilaEmpleado({
             </div>
           )}
           <div className="flex flex-wrap gap-2 pt-2">
-            <Button asChild variant="outline" size="lg" className="h-12 px-4 text-base">
+            {/* Con un nombre largo el texto salta de renglón (sin esto el botón se salía de la fila). */}
+            <Button
+              asChild
+              variant="outline"
+              size="lg"
+              className="h-auto min-h-12 max-w-full shrink px-4 py-2 text-left text-base whitespace-normal"
+            >
               <Link href={`/novedades/nueva?empleado=${f.empleado_id}`}>
                 <Plus className="size-5" strokeWidth={2.2} />
-                Cargar novedad para {f.nombre}
+                <span className="min-w-0 break-words">Cargar novedad para {f.nombre}</span>
               </Link>
             </Button>
             {esLider ? (

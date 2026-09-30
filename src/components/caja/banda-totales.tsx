@@ -125,12 +125,16 @@ export function BandaTotales({
       aria-label="Lo juntado en la caja"
       className="overflow-hidden rounded-lg border-2 border-foreground/70 bg-card"
     >
-      <p className="font-display flex items-center justify-between gap-3 border-b border-dashed border-foreground/30 px-4 py-2 text-xs tracking-widest text-muted-foreground uppercase sm:px-6">
-        <span>{esHoy ? "Juntado hoy — en vivo" : `Juntado el ${formatFecha(fecha)} — caja abierta`}</span>
-        <span className="font-sans normal-case tracking-normal">
-          Total <Money monto={a.juntado} className="font-semibold text-foreground" />
-        </span>
-      </p>
+      {/* El total del día con su propio tamaño: no es lo más chico de la banda. Si no entra al
+          lado del rótulo (celular, fecha de otro día), baja de renglón entero. */}
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 border-b border-dashed border-foreground/30 px-4 py-2 sm:px-6">
+        <p className="font-display text-xs tracking-widest text-muted-foreground uppercase">
+          {esHoy ? "Juntado hoy — en vivo" : `Juntado el ${formatFecha(fecha)} — caja abierta`}
+        </p>
+        <p className="text-sm whitespace-nowrap text-muted-foreground">
+          Total <Money monto={a.juntado} className="text-base font-bold text-foreground" />
+        </p>
+      </div>
 
       {/* En celular el efectivo (el número grande) va solo en su renglón: en media columna no
           entraba y se cortaba. */}

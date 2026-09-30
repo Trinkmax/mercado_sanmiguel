@@ -136,13 +136,17 @@ function nombreEspacio(e: Espacio): string {
   return etiquetaEspacio(e);
 }
 
-/** Nombre para el globo corto: el apodo, o la razón social hasta ~24 letras cortada
- * entre palabras ("Distribuidora Frutihortícola…"). */
-function nombreCorto(nombre: string): string {
-  const MAX = 24;
-  if (nombre.length <= MAX) return nombre;
-  const corte = nombre.lastIndexOf(" ", MAX);
-  return `${nombre.slice(0, corte > 8 ? corte : MAX).trimEnd()}…`;
+/** Razón social larga cortada entre palabras, hasta `max` letras y sin terminar en
+ * "de", "y"…: "Distribuidora Frutihortícola…" (28), no "Distribuidora…". El nombre
+ * entero está en la tarjeta y en el panel de asignar. */
+function nombreCorto(nombre: string, max = 28): string {
+  if (nombre.length <= max) return nombre;
+  const corte = nombre.lastIndexOf(" ", max);
+  const recorte = nombre
+    .slice(0, corte > 8 ? corte : max)
+    .trimEnd()
+    .replace(/\s+(de|del|la|las|los|el|y|e)$/i, "");
+  return `${recorte}…`;
 }
 
 /** "Puesto 52", "Puestos 50 · 48 · 46", "3 espacios". */
@@ -1001,8 +1005,10 @@ export function MapaMercado({
                   <span className="hidden sm:inline">Asignar puestos</span>
                 </Button>
               ) : (
-                <Button type="button" className="min-h-11 px-4 text-sm font-semibold" onClick={salirAsignar}>
-                  <Check className="size-4" strokeWidth={2.2} />
+                // En el celular sin el tilde: así "Buscá puestero o puesto" entra entero
+                // también a 360 px (con el tilde quedaba "Buscá puestero o pu").
+                <Button type="button" className="min-h-11 px-4 text-sm font-semibold max-sm:px-3.5" onClick={salirAsignar}>
+                  <Check className="size-4 max-sm:hidden" strokeWidth={2.2} />
                   Listo
                 </Button>
               )
@@ -1083,12 +1089,14 @@ export function MapaMercado({
         >
           {modo === "asignar" ? (
             <div className="pointer-events-none absolute top-3 right-3 left-3 flex justify-center">
-              {/* Sin apodo va la razón social entera: hasta dos renglones, no "Asignando a Distrib…". */}
+              {/* Hasta dos renglones. Sin apodo, la razón social va cortada entre palabras
+                  (hasta 40 letras): así "tocá sus puestos" entra siempre, también a 360 px.
+                  El nombre entero está en el panel de abajo. */}
               <p className="flex max-w-full items-center gap-2 rounded-2xl bg-primary px-3.5 py-2 text-sm leading-snug font-medium text-primary-foreground shadow-md">
                 <Paintbrush className="size-4 shrink-0" strokeWidth={2} />
                 <span className="line-clamp-2 min-w-0 break-words">
                   {cliPincel
-                    ? `Asignando a ${cliPincel.apodo ?? cliPincel.nombre}: tocá sus puestos`
+                    ? `Asignando a ${cliPincel.apodo ?? nombreCorto(cliPincel.nombre, 40)}: tocá sus puestos`
                     : "Elegí un puestero o tocá un puesto"}
                 </span>
               </p>

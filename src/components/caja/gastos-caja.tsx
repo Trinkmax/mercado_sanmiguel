@@ -54,15 +54,15 @@ export function GastosCaja({ gastos, pagarHref }: { gastos: GastoCaja[]; pagarHr
               {g.rubro ? <Codigo codigo={g.rubro.codigo} className="mt-0.5" /> : null}
               {/* La descripción completa (qué se compró), en los renglones que haga falta. */}
               <div className="min-w-0 flex-1 space-y-0.5">
-                <p className="font-medium break-words">{g.descripcion}</p>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-base leading-snug font-medium break-words">{g.descripcion}</p>
+                <p className="text-sm text-muted-foreground">
                   {[g.pagadoPorNombre ? `Pagó ${g.pagadoPorNombre}` : null, g.pagadoEn ? formatFechaHora(g.pagadoEn) : null]
                     .filter(Boolean)
                     .join(" · ")}
                 </p>
                 {g.despuesDelCierre ? <Sello estado="despues_cierre" /> : null}
               </div>
-              <Money monto={g.monto} className="shrink-0 pt-px font-semibold" />
+              <Money monto={g.monto} className="shrink-0 pt-px text-base font-semibold" />
             </li>
           ))}
         </ul>

@@ -190,10 +190,8 @@ export function BuscadorClientes({
                       de abajo. Desde tablet: la deuda a la derecha. Nada se corta con "…". */}
                   <span className="min-w-0 flex-1 sm:flex sm:items-center sm:gap-4">
                     <span className="block min-w-0 flex-1 space-y-1">
-                      <span
-                        title={c.nombre}
-                        className="line-clamp-2 text-base leading-snug font-medium break-words"
-                      >
+                      {/* Sin tope de renglones: con 70 letras en 360 px son tres, y a dos se cortaba con "…". */}
+                      <span title={c.nombre} className="block text-base leading-snug font-medium break-words">
                         {c.nombre}
                       </span>
                       <DetalleFila c={c} hoy={hoy} />

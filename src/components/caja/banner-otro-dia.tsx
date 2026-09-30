@@ -25,9 +25,13 @@ export function BannerOtroDia({
   if (!esHoy) {
     return (
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-accent-foreground/20 bg-accent px-4 py-3">
-        <p className="flex items-center gap-2 text-base">
-          <CalendarClock className="size-5 shrink-0" strokeWidth={2} />
-          Estás viendo la caja del <strong>{formatFecha(fecha)}</strong>.
+        {/* El texto va en un solo <span>: suelto dentro del flex, el gap separaba "del", la fecha
+            y el punto ("28/09/2026 ."). */}
+        <p className="flex items-start gap-2 text-base">
+          <CalendarClock className="mt-0.5 size-5 shrink-0" strokeWidth={2} />
+          <span>
+            Estás viendo la caja del <strong className="whitespace-nowrap">{formatFecha(fecha)}</strong>.
+          </span>
         </p>
         <Button asChild variant="outline" className="h-11 bg-card px-4 text-sm font-semibold">
           <Link href={tipo ? `/caja?tipo=${tipo}` : "/caja"}>
@@ -43,11 +47,13 @@ export function BannerOtroDia({
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-parcial bg-parcial-suave px-4 py-3">
-      <p className="flex items-center gap-2 text-base">
-        <CalendarClock className="size-5 shrink-0 text-parcial" strokeWidth={2} />
-        {tipo === "guardia" ? "La caja de portería" : "La caja"} del{" "}
-        <strong>{formatFecha(cajaAbiertaOtroDia.fecha)}</strong>{" "}
-        {cajaAbiertaOtroDia.reaperturas > 0 ? "está reabierta" : "quedó abierta"}: corregila y cerrala.
+      <p className="flex items-start gap-2 text-base">
+        <CalendarClock className="mt-0.5 size-5 shrink-0 text-parcial" strokeWidth={2} />
+        <span>
+          {tipo === "guardia" ? "La caja de portería" : "La caja"} del{" "}
+          <strong className="whitespace-nowrap">{formatFecha(cajaAbiertaOtroDia.fecha)}</strong>{" "}
+          {cajaAbiertaOtroDia.reaperturas > 0 ? "está reabierta" : "quedó abierta"}: corregila y cerrala.
+        </span>
       </p>
       <Button asChild className="h-11 px-4 text-sm font-semibold">
         <Link href={`/caja?fecha=${cajaAbiertaOtroDia.fecha}${sufijo}`}>

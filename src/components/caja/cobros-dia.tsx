@@ -114,9 +114,10 @@ export function CobrosDia({
                     <div className="min-w-0 flex-1 sm:flex sm:items-start sm:gap-4">
                       <div className="min-w-0 flex-1 space-y-1">
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                          {/* El nombre es lo primero que se busca: un paso más grande que "Carpeta 903". */}
                           <span
                             className={cn(
-                              "min-w-0 font-semibold break-words",
+                              "min-w-0 text-base leading-snug font-semibold break-words",
                               r.anulado && "text-muted-foreground line-through"
                             )}
                           >

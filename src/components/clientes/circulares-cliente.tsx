@@ -42,35 +42,39 @@ export async function CircularesCliente({ clienteId }: { clienteId: string }) {
           <ul className="-mx-2 divide-y">
             {suyas.map((c) => {
               const fecha = vio.get(c.id);
+              const sello = <Sello estado={fecha ? "la_vio" : cliente?.tiene_portal ? "no_la_vio" : "sin_portal"} />;
+              const cuando = fecha ? (
+                <span className="text-sm whitespace-nowrap text-muted-foreground tabular">{formatFechaHora(fecha)}</span>
+              ) : null;
               return (
                 <li key={c.id}>
+                  {/* Celular: el título a todo el ancho (sin cortarlo) y "La vio" abajo; desde
+                      tablet, el sello a la derecha. */}
                   <Link
                     href={`/comunicaciones/${c.id}`}
-                    className="flex min-h-14 items-center gap-3 rounded-md px-2 py-2.5 transition-colors hover:bg-accent"
+                    className="flex min-h-14 items-start gap-3 rounded-md px-2 py-2.5 transition-colors hover:bg-accent sm:items-center"
                   >
                     <span className="w-8 shrink-0 text-right font-display text-base font-bold tabular">
                       {c.numero}
                     </span>
-                    <span className="min-w-0 flex-1">
-                      <span title={c.titulo} className="line-clamp-2 font-medium break-words">
+                    <span className="min-w-0 flex-1 space-y-0.5">
+                      <span title={c.titulo} className="block text-base leading-snug font-medium break-words">
                         {c.titulo}
                       </span>
-                      <span className="text-xs tabular text-muted-foreground">
+                      <span className="block text-sm tabular text-muted-foreground">
                         {formatFecha(c.fecha)} · {c.obligatoria ? "Obligatoria" : "Informativa"}
                         {!c.activa ? " · Desactivada" : ""}
                       </span>
-                    </span>
-                    {fecha ? (
-                      <span className="shrink-0 text-right">
-                        <Sello estado="la_vio" />
-                        <span className="mt-0.5 block text-xs tabular text-muted-foreground">
-                          {formatFechaHora(fecha)}
-                        </span>
+                      <span className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-1 sm:hidden">
+                        {sello}
+                        {cuando}
                       </span>
-                    ) : (
-                      <Sello estado={cliente?.tiene_portal ? "no_la_vio" : "sin_portal"} className="shrink-0" />
-                    )}
-                    <ChevronRight className="size-4 shrink-0 text-muted-foreground max-sm:hidden" strokeWidth={2} />
+                    </span>
+                    <span className="hidden shrink-0 flex-col items-end gap-0.5 sm:flex">
+                      {sello}
+                      {cuando}
+                    </span>
+                    <ChevronRight className="size-4 shrink-0 self-center text-muted-foreground max-sm:hidden" strokeWidth={2} />
                   </Link>
                 </li>
               );

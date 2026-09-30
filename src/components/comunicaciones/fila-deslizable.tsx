@@ -60,7 +60,8 @@ export function FilaDeslizable({
       <div
         ref={ref}
         className={cn(
-          "relative flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:flex-wrap sm:overflow-visible sm:px-0 [&::-webkit-scrollbar]:hidden",
+          // py-1: el anillo de la opción elegida no se corta arriba (overflow-x-auto recorta también en vertical).
+          "relative flex gap-2 overflow-x-auto px-4 py-1 [scrollbar-width:none] sm:flex-wrap sm:overflow-visible sm:px-0 sm:pt-0 [&::-webkit-scrollbar]:hidden",
           className
         )}
         {...props}
@@ -73,7 +74,7 @@ export function FilaDeslizable({
           tabIndex={-1}
           aria-hidden
           onClick={() => correr(-1)}
-          className="absolute inset-y-0 left-0 flex w-12 items-center justify-start bg-linear-to-r from-background via-background/90 to-transparent pb-1 pl-1.5 sm:hidden"
+          className="absolute inset-y-0 left-0 flex w-12 items-center justify-start bg-linear-to-r from-background via-background/90 to-transparent py-1 pl-1.5 sm:hidden"
         >
           <span className="flex size-8 items-center justify-center rounded-full border bg-card text-foreground shadow-sm">
             <ChevronLeft className="size-5" strokeWidth={2.2} />
@@ -86,7 +87,7 @@ export function FilaDeslizable({
           tabIndex={-1}
           aria-hidden
           onClick={() => correr(1)}
-          className="absolute inset-y-0 right-0 flex w-12 items-center justify-end bg-linear-to-l from-background via-background/90 to-transparent pr-1.5 pb-1 sm:hidden"
+          className="absolute inset-y-0 right-0 flex w-12 items-center justify-end bg-linear-to-l from-background via-background/90 to-transparent py-1 pr-1.5 sm:hidden"
         >
           <span className="flex size-8 items-center justify-center rounded-full border bg-card text-foreground shadow-sm">
             <ChevronRight className="size-5" strokeWidth={2.2} />

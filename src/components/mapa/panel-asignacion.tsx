@@ -784,10 +784,12 @@ function FilaRevision({
           {facturar.pendiente ? (
             <Sello estado="pendiente_aprobacion" />
           ) : (
+            // Puede bajar de renglón: a 360 px "Dejar de facturarlo en la carpeta" y su
+            // código no entran en uno y el código quedaba cortado por el borde.
             <Button
               type="button"
               variant="ghost"
-              className="min-h-10 flex-1 justify-start px-2 text-sm font-medium text-primary"
+              className="h-auto min-h-10 flex-1 justify-start px-2 py-1.5 text-left text-sm leading-snug font-medium whitespace-normal text-primary"
               onClick={facturar.onClick}
               disabled={facturar.enviando}
             >

@@ -76,14 +76,17 @@ export function ConciliacionCanon({ filas }: { filas: FilaCanon[] }) {
       <div className="overflow-hidden rounded-xl border bg-card">
         {conCasilleros ? (
           <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b bg-muted/40 px-4 py-3">
-            <label className="inline-flex min-h-11 cursor-pointer items-center gap-3 text-sm font-medium">
-              <Checkbox
-                checked={todas}
-                onCheckedChange={(v) => setSeleccion(v === true ? new Set(filas.map((f) => f.id)) : new Set())}
-                aria-label="Seleccionar todos los cobros de bono camioneros"
-                className="size-5"
-                disabled={pendiente}
-              />
+            <label className="inline-flex min-h-11 cursor-pointer items-center gap-4 text-sm font-medium pointer-coarse:min-h-[44px]">
+              {/* Mismo lugar que el casillero de cada fila. */}
+              <span className="inline-flex size-11 shrink-0 items-center justify-center pointer-coarse:size-[44px]">
+                <Checkbox
+                  checked={todas}
+                  onCheckedChange={(v) => setSeleccion(v === true ? new Set(filas.map((f) => f.id)) : new Set())}
+                  aria-label="Seleccionar todos los cobros de bono camioneros"
+                  className="size-6 [&_svg]:size-4"
+                  disabled={pendiente}
+                />
+              </span>
               {seleccionadas.length === 0
                 ? "Seleccioná los que ya viste en el banco"
                 : `${seleccionadas.length} ${seleccionadas.length === 1 ? "seleccionado" : "seleccionados"} · ${formatARS(totalSeleccion)}`}
@@ -106,22 +109,29 @@ export function ConciliacionCanon({ filas }: { filas: FilaCanon[] }) {
           {filas.map((f) => {
             const marcada = seleccion.has(f.id);
             return (
+              // Monto y "Conciliar" siempre en la misma columna (a la derecha desde 640 px).
               <li
                 key={f.id}
-                className={cn("flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3", marcada && "bg-accent/50")}
+                className={cn(
+                  "grid items-center gap-x-4 gap-y-2 px-4 py-3",
+                  conCasilleros
+                    ? "grid-cols-[auto_minmax(0,1fr)] sm:grid-cols-[auto_minmax(0,1fr)_auto]"
+                    : "grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto]",
+                  marcada && "bg-accent/50"
+                )}
               >
                 {conCasilleros ? (
-                  <label className="inline-flex size-11 shrink-0 cursor-pointer items-center justify-center">
+                  <label className="inline-flex size-11 shrink-0 cursor-pointer items-center justify-center self-start pointer-coarse:size-[44px] sm:self-center">
                     <Checkbox
                       checked={marcada}
                       onCheckedChange={(v) => alternar(f.id, v === true)}
                       aria-label={`Seleccionar bono N° ${f.numero}`}
-                      className="size-5"
+                      className="size-6 [&_svg]:size-4"
                       disabled={pendiente}
                     />
                   </label>
                 ) : null}
-                <div className="min-w-0 flex-1 basis-48 space-y-0.5">
+                <div className="min-w-0 space-y-0.5">
                   <p className="text-base font-medium break-words">
                     <span className="tabular">N° {f.numero}</span> · {f.detalle}
                   </p>
@@ -131,7 +141,12 @@ export function ConciliacionCanon({ filas }: { filas: FilaCanon[] }) {
                     {f.cobro ? ` · Cobró ${f.cobro}` : ""}
                   </p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div
+                  className={cn(
+                    "flex items-center justify-between gap-3 sm:justify-end",
+                    conCasilleros && "col-start-2 sm:col-start-auto"
+                  )}
+                >
                   <Money monto={f.monto} className="text-base font-semibold" />
                   <Button
                     variant="outline"

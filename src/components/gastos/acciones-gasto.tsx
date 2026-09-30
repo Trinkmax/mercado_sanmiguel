@@ -198,7 +198,7 @@ export function AccionesGasto({
       {/* Pagar */}
       <Dialog open={dialogo === "pagar"} onOpenChange={(o) => !o && !pendiente && setDialogo(null)}>
         <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-lg">
-          <DialogHeader className="pr-8">
+          <DialogHeader>
             <DialogTitle className="text-lg">Pagar {gasto.etiqueta}</DialogTitle>
             <DialogDescription className="text-base">
               <Money monto={gasto.monto} className="text-2xl font-bold text-foreground" />
@@ -216,10 +216,19 @@ export function AccionesGasto({
             idBase={`pagar-${gasto.id}`}
           />
           {error ? <AlertaError error={error} titulo="No se pudo pagar" /> : null}
+          {/* Una salida clara además de la X, como en Anular y Deshacer. */}
           <DialogFooter>
             <Button
+              variant="outline"
+              className="h-auto min-h-12 px-5 text-base"
+              disabled={pendiente}
+              onClick={() => setDialogo(null)}
+            >
+              No, volver
+            </Button>
+            <Button
               size="lg"
-              className="h-auto min-h-13 w-full py-2.5 text-base leading-snug font-semibold whitespace-normal"
+              className="h-auto min-h-13 w-full py-2.5 text-base leading-snug font-semibold whitespace-normal sm:w-auto sm:flex-1"
               disabled={pendiente || !puedePagar}
               onClick={pagar}
             >
@@ -233,7 +242,7 @@ export function AccionesGasto({
       {/* Anular */}
       <Dialog open={dialogo === "anular"} onOpenChange={(o) => !o && !pendiente && setDialogo(null)}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader className="pr-8">
+          <DialogHeader>
             <DialogTitle className="text-lg">¿Anular {gasto.etiqueta}?</DialogTitle>
             <DialogDescription className="text-base">
               {formatARS(gasto.monto)}. Queda anotado como anulado y no suma en el mes.
@@ -255,7 +264,7 @@ export function AccionesGasto({
       {/* Deshacer pago */}
       <Dialog open={dialogo === "deshacer"} onOpenChange={(o) => !o && !pendiente && setDialogo(null)}>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader className="pr-8">
+          <DialogHeader>
             <DialogTitle className="text-lg">¿Deshacer el pago de {gasto.etiqueta}?</DialogTitle>
             <DialogDescription className="text-base">
               {formatARS(gasto.monto)} vuelve a Por pagar. Si salió de una caja, su arqueo se

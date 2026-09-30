@@ -221,7 +221,12 @@ export function PanelDetalle({
               <Sello estado={sello.estado} texto={sello.texto} />
               <span className="text-xs text-muted-foreground tabular">Carpeta N° {cliente.codigo}</span>
             </div>
-            <p className="font-display text-lg leading-snug font-bold break-words">{cliente.nombre}</p>
+            <p className="font-display text-lg leading-snug font-bold break-words">
+              {/* La X llega hasta el primer renglón del nombre: ese renglón (solo ese)
+                  corta antes, sin gastar alto en el celular. */}
+              <span aria-hidden className="float-right h-3 w-10 @2xl:hidden" />
+              {cliente.nombre}
+            </p>
             {cliente.apodo ? (
               <p className="text-sm break-words text-muted-foreground">Le dicen “{cliente.apodo}”</p>
             ) : null}

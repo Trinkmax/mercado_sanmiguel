@@ -27,9 +27,17 @@ function primero(v: string | string[] | undefined): string | undefined {
 
 /** Sello chico dentro de la pestaña: de un vistazo se ve cuál necesita atención. */
 function EstadoPestania({ datos }: { datos: DatosCaja }) {
-  if (!datos.caja) return <span className="text-xs font-normal text-muted-foreground">sin abrir</span>;
+  if (!datos.caja) return <span className="text-sm font-normal text-muted-foreground">sin abrir</span>;
   return <Sello estado={datos.caja.reapertura_solicitada_en ? "reapertura_pedida" : datos.caja.estado} />;
 }
+
+/**
+ * Pestaña de cada caja. En celular el sello va debajo del nombre (uno al lado del otro no
+ * entraban en media pantalla y la fila se salía por los dos costados); desde tablet, al lado.
+ * h-auto pisa la altura en % de la base: sin eso el self-stretch no las empareja.
+ */
+const PESTANIA =
+  "h-auto min-h-11 min-w-0 flex-1 flex-col gap-1 self-stretch px-2 py-1.5 text-center text-base whitespace-normal sm:flex-none sm:flex-row sm:gap-2 sm:px-6";
 
 /**
  * /caja                    → la caja de hoy.
@@ -92,11 +100,11 @@ export default async function CajaPage({
         />
         <Tabs key={`${fecha}-${tipoPedido}`} defaultValue={tipoPedido} className="gap-6">
           <TabsList className="h-auto! w-full p-1 sm:w-fit">
-            <TabsTrigger value="administracion" className="min-h-11 flex-1 gap-2 px-4 text-base sm:flex-none sm:px-6">
+            <TabsTrigger value="administracion" className={PESTANIA}>
               Administración
               <EstadoPestania datos={administracion} />
             </TabsTrigger>
-            <TabsTrigger value="guardia" className="min-h-11 flex-1 gap-2 px-4 text-base sm:flex-none sm:px-6">
+            <TabsTrigger value="guardia" className={PESTANIA}>
               Caja de portería
               <EstadoPestania datos={guardia} />
             </TabsTrigger>

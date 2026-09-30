@@ -11,8 +11,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -99,12 +101,12 @@ export function PrecioConcepto({
   return (
     <div className={cn("flex items-center gap-2 rounded-lg border bg-card py-2 pr-2 pl-4", className)}>
       <div>
-        <p className="text-xs font-medium text-muted-foreground">{t.etiqueta}</p>
+        <p className="text-sm font-medium text-muted-foreground">{t.etiqueta}</p>
         <p className="text-2xl leading-tight font-bold tabular">{formatARS(precio)}</p>
         {propuesto !== null ? (
           <div className="mt-1 flex flex-wrap items-center gap-1.5">
             <Sello estado="pendiente_aprobacion" />
-            <span className="text-xs text-muted-foreground">
+            <span className="text-sm text-muted-foreground">
               Propuesto: <strong className="text-foreground tabular">{formatARS(propuesto)}</strong>
             </span>
           </div>
@@ -166,7 +168,15 @@ export function PrecioConcepto({
                 </p>
               ) : null}
             </div>
-            <Button size="lg" className="h-12 w-full text-base font-semibold" onClick={guardar} disabled={pendiente}>
+          </div>
+          {/* Su propia salida, además de la X: Cancelar deja el precio como estaba. */}
+          <DialogFooter>
+            <DialogClose asChild>
+              <Button variant="outline" className="h-12 px-5 text-base" disabled={pendiente}>
+                Cancelar
+              </Button>
+            </DialogClose>
+            <Button className="h-12 px-5 text-base font-semibold" onClick={guardar} disabled={pendiente}>
               {aplicaDirecto ? null : <Send className="size-5" strokeWidth={2} />}
               {pendiente
                 ? aplicaDirecto
@@ -176,7 +186,7 @@ export function PrecioConcepto({
                   ? "Guardar precio"
                   : "Enviar a aprobación"}
             </Button>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

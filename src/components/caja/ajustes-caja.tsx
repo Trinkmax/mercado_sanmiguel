@@ -98,7 +98,7 @@ function BotonBorrarAjuste({ ajuste }: { ajuste: AjusteCaja }) {
         </Button>
       </DialogTrigger>
       <DialogContent className="max-h-[92dvh] gap-5 overflow-y-auto p-6 sm:max-w-md">
-        <DialogHeader className="pr-8">
+        <DialogHeader>
           <DialogTitle className="text-xl">Borrar el ajuste</DialogTitle>
           <DialogDescription className="text-base">
             {ajuste.monto < 0 ? "Faltante" : "Sobrante"} de {formatARS(Math.abs(ajuste.monto))}{" "}

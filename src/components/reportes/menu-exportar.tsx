@@ -70,7 +70,7 @@ export function MenuExportar({ rol, periodo }: { rol: Rol; periodo: string }) {
         className="max-h-(--radix-popover-content-available-height) w-[min(58rem,calc(100vw-2rem))] gap-0 p-0 lg:w-[min(58rem,calc(100vw-17rem))]"
       >
         <div className="shrink-0 border-b px-4 py-3">
-          <p className="font-display text-sm font-bold">
+          <p className="font-display text-base font-bold">
             Planillas de Excel{" "}
             <span className="font-sans font-normal text-muted-foreground">
               ({disponibles.length})
@@ -97,7 +97,7 @@ export function MenuExportar({ rol, periodo }: { rol: Rol; periodo: string }) {
                   return (
                     <div key={d} className="break-inside-avoid">
                       {i === 0 ? (
-                        <p className="px-2.5 pt-2 pb-1 text-xs font-semibold tracking-wide text-muted-foreground">
+                        <p className="px-2.5 pt-2 pb-1 text-sm font-semibold text-muted-foreground">
                           {LABEL_GRUPO_DATASET[grupo]}
                         </p>
                       ) : null}
@@ -109,12 +109,12 @@ export function MenuExportar({ rol, periodo }: { rol: Rol; periodo: string }) {
                         className="flex min-h-11 items-start gap-3 rounded-md px-2.5 py-2 text-left outline-none hover:bg-muted focus-visible:bg-muted"
                       >
                         <FileSpreadsheet
-                          className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                          className="mt-0.5 size-5 shrink-0 text-muted-foreground"
                           strokeWidth={1.8}
                         />
                         <span className="min-w-0">
-                          <span className="block text-sm font-medium">{def.label}</span>
-                          <span className="block text-xs/relaxed break-words text-muted-foreground">
+                          <span className="block text-base leading-snug font-medium">{def.label}</span>
+                          <span className="block text-sm/relaxed break-words text-muted-foreground">
                             {def.descripcion}
                           </span>
                         </span>

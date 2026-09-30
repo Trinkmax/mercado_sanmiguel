@@ -31,7 +31,9 @@ import { Spinner } from "@/components/ui/spinner";
 import {
   DESCRIPCION_TIPO,
   LABEL_TIPO_MOVIMIENTO,
+  PIE_DIALOGO_FIJO,
   efectoMovimiento,
+  enfocarDialogo,
   type Cuenta,
   type TipoMovimiento,
 } from "@/components/tesoreria/tipos";
@@ -225,7 +227,8 @@ export function AccionesRapidas({
   return (
     <>
       {variante === "tiles" ? (
-        <div className="flex flex-wrap gap-2" role="group" aria-label="Registrar un movimiento">
+        // Grilla pareja (2 o 3 por renglón): ningún botón queda solo en el último renglón.
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-3" role="group" aria-label="Registrar un movimiento">
           {ACCIONES.map((a) => {
             const Icono = a.icono;
             return (
@@ -233,7 +236,7 @@ export function AccionesRapidas({
                 key={a.valor}
                 variant="outline"
                 onClick={() => abrir(a.valor)}
-                className="h-12 gap-2 bg-card px-4 text-base font-medium"
+                className="h-auto min-h-12 w-full justify-start gap-2 bg-card px-3 py-2 text-left text-base leading-snug font-medium whitespace-normal sm:px-4"
               >
                 <Icono className="size-5 text-primary" strokeWidth={1.9} />
                 {a.titulo}
@@ -249,8 +252,8 @@ export function AccionesRapidas({
       )}
 
       <Dialog open={abierto} onOpenChange={(v) => !pendiente && setAbierto(v)}>
-        <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-lg">
-          <DialogHeader className="pr-8">
+        <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-lg" onOpenAutoFocus={enfocarDialogo}>
+          <DialogHeader>
             <DialogTitle className="text-lg">
               {accion ? ACCIONES.find((a) => a.valor === accion)?.titulo : "¿Qué pasó?"}
             </DialogTitle>
@@ -472,7 +475,7 @@ export function AccionesRapidas({
                   setAccion(null);
                   setError(null);
                 }}
-                className="min-h-11 text-sm font-medium text-primary hover:underline"
+                className="min-h-11 text-sm font-medium text-primary hover:underline pointer-coarse:min-h-[44px]"
               >
                 Elegir otro movimiento
               </button>
@@ -482,7 +485,7 @@ export function AccionesRapidas({
           {error ? <AlertaError error={error} titulo="No se pudo registrar" /> : null}
 
           {accion ? (
-            <DialogFooter>
+            <DialogFooter className={PIE_DIALOGO_FIJO}>
               <Button
                 size="lg"
                 className="h-auto min-h-13 w-full py-2.5 text-base leading-snug font-semibold whitespace-normal"

@@ -25,7 +25,8 @@ export function SelectorMes({ mes }: { mes: string }) {
       onValueChange={(v) => router.replace(`/tesoreria?tab=movimientos&mes=${v}`, { scroll: false })}
     >
       <SelectTrigger className="h-11 min-w-48 px-3 text-base" aria-label="Elegí el mes">
-        <SelectValue />
+        {/* Con el texto puesto: se ve desde que llega la página, sin esperar al JavaScript. */}
+        <SelectValue>{labelPeriodo(mes)}</SelectValue>
       </SelectTrigger>
       <SelectContent>
         {opciones.map((p) => (

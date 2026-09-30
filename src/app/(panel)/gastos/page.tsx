@@ -3,10 +3,12 @@ import { ChevronDown, Receipt, X } from "lucide-react";
 import { requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import {
+  TZ_AR,
   formatARS,
   hoyISO,
   labelPeriodo,
   periodoActual,
+  redondear2,
   sumarMeses,
 } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -24,6 +26,7 @@ import { DialogNuevoGasto } from "@/components/gastos/dialog-nuevo-gasto";
 import { TraerFijos, type FijoParaTraer } from "@/components/gastos/traer-fijos";
 import { FilaGasto, type GastoFila } from "@/components/gastos/fila-gasto";
 import { FiltroTipo, type FiltroTipoGasto } from "@/components/gastos/filtro-tipo";
+import { GrupoPlegable } from "@/components/gastos/grupo-plegable";
 import { cargarCajasElegibles } from "@/components/gastos/datos";
 import {
   delDia,
@@ -37,51 +40,32 @@ export const metadata = { title: "Gastos" };
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const COLUMNAS_GASTO =
-  "id, descripcion, tipo, monto, estado, vencimiento, periodo, fecha_pago, medio_pago, pagado_desde, pagado_por, factura_path, comprobante_validado, notas, origen_id, pago_revertido_por, pago_revertido_en, pago_revertido_motivo, rubro:rubros_gasto(codigo, nombre), caja:cajas(fecha)";
+  "id, descripcion, tipo, monto, estado, vencimiento, periodo, fecha_pago, medio_pago, pagado_desde, pagado_por, pagado_en, factura_path, comprobante_validado, notas, origen_id, pago_revertido_por, pago_revertido_en, pago_revertido_motivo, rubro:rubros_gasto(codigo, nombre), caja:cajas(fecha)";
+
+/** "YYYY-MM-DD" (Argentina) de un momento: ¿el pago se registró hoy? */
+const diaAR = new Intl.DateTimeFormat("en-CA", {
+  timeZone: TZ_AR,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
 
 function GrupoGastos({
   titulo,
   detalle,
   children,
-  plegable,
 }: {
   titulo: string;
   detalle: React.ReactNode;
   children: React.ReactNode;
-  /** Grupo que se puede cerrar (con el total a la vista) para que la página no sea eterna. */
-  plegable?: { abierto: boolean; textoVer: string };
 }) {
-  const lista = <ul className="divide-y overflow-hidden rounded-xl border bg-card">{children}</ul>;
-  if (!plegable) {
-    return (
-      <section className="space-y-3" aria-label={titulo}>
-        <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-          <h2 className="font-display text-lg font-bold tracking-tight">{titulo}</h2>
-          <p className="text-sm text-muted-foreground">{detalle}</p>
-        </div>
-        {lista}
-      </section>
-    );
-  }
   return (
-    <section aria-label={titulo}>
-      <Collapsible defaultOpen={plegable.abierto} className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-          <div className="flex min-w-0 flex-wrap items-baseline gap-x-4 gap-y-1">
-            <h2 className="font-display text-lg font-bold tracking-tight">{titulo}</h2>
-            <p className="text-sm text-muted-foreground">{detalle}</p>
-          </div>
-          <CollapsibleTrigger className="group inline-flex min-h-11 shrink-0 items-center gap-2 rounded-md border bg-card px-4 text-base font-medium outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/30">
-            <span className="group-data-[state=open]:hidden">{plegable.textoVer}</span>
-            <span className="hidden group-data-[state=open]:inline">Ocultar</span>
-            <ChevronDown
-              className="size-4 transition-transform group-data-[state=open]:rotate-180"
-              strokeWidth={2}
-            />
-          </CollapsibleTrigger>
-        </div>
-        <CollapsibleContent>{lista}</CollapsibleContent>
-      </Collapsible>
+    <section className="space-y-3" aria-label={titulo}>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <h2 className="font-display text-lg font-bold tracking-tight">{titulo}</h2>
+        <p className="text-sm text-muted-foreground">{detalle}</p>
+      </div>
+      <ul className="divide-y overflow-hidden rounded-xl border bg-card">{children}</ul>
     </section>
   );
 }
@@ -108,7 +92,7 @@ export default async function GastosPage({
   const verCheques = perfil.rol === "tesoreria" || perfil.rol === "lider";
 
   const supabase = await createClient();
-  const [gastosRes, rubrosRes, anterioresRes, usoRes, cajas, impagosRes] = await Promise.all([
+  const [gastosRes, rubrosRes, anterioresRes, usoRes, cajas, impagosRes, pagadosHoyAntRes] = await Promise.all([
     supabase.from("gastos").select(COLUMNAS_GASTO).eq("periodo", periodo),
     supabase.from("rubros_gasto").select("id, codigo, nombre").eq("activo", true).order("nombre"),
     supabase
@@ -135,17 +119,36 @@ export default async function GastosPage({
           .order("vencimiento", { ascending: true, nullsFirst: false })
           .limit(300)
       : null,
+    // Los de meses anteriores que se pagaron hoy siguen en su lugar hasta mañana: el
+    // paso siguiente a pagar es adjuntar la factura, y así no desaparecen de la página.
+    esMesActual
+      ? supabase
+          .from("gastos")
+          .select(COLUMNAS_GASTO)
+          .eq("estado", "pagado")
+          .lt("periodo", periodo)
+          .gte("pagado_en", `${hoy}T00:00:00-03:00`)
+          .limit(100)
+      : null,
   ]);
 
   const gastos = gastosRes.data ?? [];
-  const impagosAnteriores = impagosRes?.data ?? [];
+  // Impagos de meses anteriores y los que se pagaron hoy, en el orden de la lista (mes y
+  // vencimiento): el que se acaba de pagar no cambia de lugar.
+  const deMesesAnteriores = [...(impagosRes?.data ?? []), ...(pagadosHoyAntRes?.data ?? [])].sort(
+    (a, b) =>
+      a.periodo.localeCompare(b.periodo) ||
+      (a.vencimiento ?? "9999-12-31").localeCompare(b.vencimiento ?? "9999-12-31")
+  );
   const rubros = rubrosRes.data ?? [];
 
-  // Cheques que pagaron gastos del mes ("Cheque N° 123 a Frutas del Sur").
-  const idsConCheque = gastos.filter((g) => g.pagado_desde === "cheque").map((g) => g.id);
+  // Cheques que pagaron gastos de la lista ("Cheque N° 123 a Frutas del Sur").
+  const idsConCheque = [...gastos, ...deMesesAnteriores]
+    .filter((g) => g.pagado_desde === "cheque")
+    .map((g) => g.id);
   const usuarios = [
     ...new Set(
-      [...gastos, ...impagosAnteriores]
+      [...gastos, ...deMesesAnteriores]
         .flatMap((g) => [g.pagado_por, g.pago_revertido_por])
         .filter((x): x is string => Boolean(x))
     ),
@@ -167,7 +170,7 @@ export default async function GastosPage({
 
   // Facturas: link firmado (1 h).
   const urls = new Map<string, string>();
-  const paths = [...gastos, ...impagosAnteriores]
+  const paths = [...gastos, ...deMesesAnteriores]
     .map((g) => g.factura_path)
     .filter((p): p is string => Boolean(p));
   if (paths.length > 0) {
@@ -186,6 +189,7 @@ export default async function GastosPage({
     estado: g.estado,
     vencimiento: g.vencimiento,
     fechaPago: g.fecha_pago,
+    pagadoEn: g.pagado_en,
     medioPago: g.medio_pago,
     pagadoDesde: g.pagado_desde,
     cajaFecha: g.caja?.fecha ?? null,
@@ -206,7 +210,10 @@ export default async function GastosPage({
     mes: conMes ? labelPeriodo(g.periodo) : null,
   });
   const filas: GastoFila[] = gastos.map((g) => aFila(g));
-  const anteriores: GastoFila[] = impagosAnteriores.map((g) => aFila(g, true));
+  const filasAnteriores: GastoFila[] = deMesesAnteriores.map((g) => aFila(g, true));
+  // Solo los impagos cuentan en los totales y en "vencen en los próximos 7 días".
+  const anteriores = filasAnteriores.filter((g) => g.estado === "pendiente");
+  const pagadosHoyAnteriores = filasAnteriores.length - anteriores.length;
 
   // Fijos del mes anterior que todavía no se trajeron (E3).
   const yaTraidos = new Set(
@@ -244,11 +251,20 @@ export default async function GastosPage({
     .sort((a, b) => (b.fechaPago ?? "").localeCompare(a.fechaPago ?? ""));
   const anulados = visibles.filter((g) => g.estado === "anulado");
   const pagadosSinFactura = pagados.filter((g) => !g.facturaPath).length;
+  // Lo pagado hoy (el último arriba) queda a la vista aunque Pagados esté cerrado: el
+  // paso siguiente a pagar es adjuntar la factura. El resto se pliega.
+  const esDeHoy = (g: GastoFila) => g.pagadoEn !== null && diaAR.format(new Date(g.pagadoEn)) === hoy;
+  const pagadosHoy = pagados
+    .filter(esDeHoy)
+    .sort((a, b) => (b.pagadoEn ?? "").localeCompare(a.pagadoEn ?? ""));
+  const pagadosAntes = pagados.filter((g) => !esDeHoy(g));
 
-  const suma = (l: GastoFila[]) => l.reduce((acc, g) => acc + g.monto, 0);
+  // Redondeado al centavo (sin el ruido de la coma flotante): el total es la suma exacta
+  // de las filas, y con formatARS lleva centavos solo si alguna fila los tiene.
+  const suma = (l: GastoFila[]) => redondear2(l.reduce((acc, g) => acc + g.monto, 0));
   const pendientesMes = filas.filter((g) => g.estado === "pendiente");
   const vencidos = pendientesMes.filter((g) => g.vencimiento && g.vencimiento < hoy);
-  // "Vencen esta semana" solo tiene sentido si los próximos 7 días caen en el mes que se
+  // "Vencen en los próximos 7 días" solo tiene sentido si esos días caen en el mes que se
   // mira: el actual (con sus impagos de antes) o el que viene si empieza en estos días.
   // En un mes que ya pasó diría "Ninguno" aunque todo esté vencido.
   const mostrarSemana = esMesActual || (periodo > periodoActual() && diasEntre(hoy, periodo) <= 7);
@@ -272,6 +288,30 @@ export default async function GastosPage({
     preferirCaja,
     cajaPreseleccionadaId: cajaPreseleccionada?.id ?? null,
   };
+  const filaGasto = (g: GastoFila) => <FilaGasto key={g.id} g={g} {...filaProps} />;
+  const detallePagados = (
+    <>
+      {pagados.length} · <Money monto={suma(pagados)} className="font-semibold text-foreground" />
+      {pagadosSinFactura > 0 ? (
+        <span className="font-medium text-pendiente"> · {pagadosSinFactura} sin factura</span>
+      ) : null}
+    </>
+  );
+  const textoPagadosHoyAnt =
+    pagadosHoyAnteriores === 1 ? "1 pago anotado hoy" : `${pagadosHoyAnteriores} pagos anotados hoy`;
+  const detalleAnteriores =
+    pagadosHoyAnteriores === 0 ? (
+      <>
+        {anteriores.length} · <Money monto={totalAnteriores} className="font-semibold text-pendiente" />
+      </>
+    ) : anteriores.length === 0 ? (
+      textoPagadosHoyAnt
+    ) : (
+      <>
+        {anteriores.length} sin pagar ·{" "}
+        <Money monto={totalAnteriores} className="font-semibold text-pendiente" /> · {textoPagadosHoyAnt}
+      </>
+    );
 
   return (
     <div className="space-y-8">
@@ -356,7 +396,8 @@ export default async function GastosPage({
             </div>
             {mostrarSemana ? (
               <div className="grow border-t border-l px-4 py-3 sm:px-5">
-                <dt className="text-sm text-muted-foreground">Vencen esta semana</dt>
+                {/* Como en Tesorería: de hoy (incluido) a 7 días. */}
+                <dt className="text-sm text-muted-foreground">Vencen en los próximos 7 días</dt>
                 <dd className="text-lg font-semibold tabular">
                   {semana.length === 0 ? "Ninguno" : `${semana.length} · ${formatARS(suma(semana))}`}
                 </dd>
@@ -366,18 +407,12 @@ export default async function GastosPage({
         </div>
       </div>
 
-      {anteriores.length > 0 ? (
+      {filasAnteriores.length > 0 ? (
         <GrupoGastos
-          titulo="De meses anteriores, sin pagar"
-          detalle={
-            <>
-              {anteriores.length} · <Money monto={totalAnteriores} className="font-semibold text-pendiente" />
-            </>
-          }
+          titulo={pagadosHoyAnteriores > 0 ? "De meses anteriores" : "De meses anteriores, sin pagar"}
+          detalle={detalleAnteriores}
         >
-          {anteriores.map((g) => (
-            <FilaGasto key={g.id} g={g} {...filaProps} />
-          ))}
+          {filasAnteriores.map(filaGasto)}
         </GrupoGastos>
       ) : null}
 
@@ -432,30 +467,45 @@ export default async function GastosPage({
             </p>
           )}
 
-          {pagados.length > 0 ? (
-            // Cerrado mientras haya algo por pagar: lo que se hace acá es pagar. El total y
-            // los que no tienen factura quedan a la vista en el título.
-            <GrupoGastos
-              key={`pagados-${periodo}-${filtro}-${porPagar.length === 0}`}
-              titulo="Pagados"
-              detalle={
-                <>
-                  {pagados.length} · <Money monto={suma(pagados)} className="font-semibold text-foreground" />
-                  {pagadosSinFactura > 0 ? (
-                    <span className="font-medium text-pendiente"> · {pagadosSinFactura} sin factura</span>
-                  ) : null}
-                </>
-              }
-              plegable={{
-                abierto: porPagar.length === 0,
-                textoVer: pagados.length === 1 ? "Ver el pagado" : `Ver los ${pagados.length} pagados`,
-              }}
-            >
-              {pagados.map((g) => (
-                <FilaGasto key={g.id} g={g} {...filaProps} />
-              ))}
+          {pagados.length === 0 ? null : pagadosAntes.length === 0 ? (
+            // Todo lo pagado es de hoy: no hay nada que plegar.
+            <GrupoGastos titulo="Pagados" detalle={detallePagados}>
+              {pagadosHoy.map(filaGasto)}
             </GrupoGastos>
-          ) : null}
+          ) : (
+            // Cerrado mientras haya algo por pagar: lo que se hace acá es pagar. Se abre
+            // solo cuando ya no queda nada, y no se vuelve a cerrar solo.
+            <GrupoPlegable
+              key={`pagados-${periodo}-${filtro}`}
+              titulo="Pagados"
+              detalle={detallePagados}
+              abrir={porPagar.length === 0}
+              textoVer={
+                pagadosHoy.length > 0
+                  ? pagadosAntes.length === 1
+                    ? "Ver el otro pagado"
+                    : `Ver los otros ${pagadosAntes.length} pagados`
+                  : pagadosAntes.length === 1
+                    ? "Ver el pagado"
+                    : `Ver los ${pagadosAntes.length} pagados`
+              }
+              // Abierto, el botón queda entre los de hoy y el resto: dice qué hay debajo.
+              textoOcultar={
+                pagadosHoy.length > 0
+                  ? pagadosAntes.length === 1
+                    ? "Ocultar el de otro día"
+                    : "Ocultar los de otros días"
+                  : "Ocultar"
+              }
+              aLaVista={
+                pagadosHoy.length > 0
+                  ? { rotulo: "Pagos anotados hoy", filas: pagadosHoy.map(filaGasto) }
+                  : null
+              }
+            >
+              {pagadosAntes.map(filaGasto)}
+            </GrupoPlegable>
+          )}
 
           {anulados.length > 0 ? (
             <Collapsible>

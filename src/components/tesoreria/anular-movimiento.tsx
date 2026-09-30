@@ -20,6 +20,7 @@ import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { AlertaError } from "@/components/cobranza/alerta-error";
+import { PIE_DIALOGO_FIJO, enfocarDialogo } from "@/components/tesoreria/tipos";
 import { llamarAccion } from "@/lib/llamar-accion";
 
 const MOTIVOS = ["Se cargó dos veces", "El monto estaba mal", "Era de otra cuenta", "No pasó"];
@@ -91,8 +92,8 @@ export function AnularMovimiento({
           Anular
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader className="pr-8">
+      <DialogContent className="sm:max-w-md" onOpenAutoFocus={enfocarDialogo}>
+        <DialogHeader>
           <DialogTitle className="text-lg">¿Anular este movimiento?</DialogTitle>
           <DialogDescription className="text-base break-words">
             {descripcion} · {formatMoneda(Math.abs(monto), moneda)}.
@@ -128,7 +129,7 @@ export function AnularMovimiento({
                 }}
                 aria-pressed={motivo === m}
                 className={cn(
-                  "min-h-11 rounded-full border px-4 text-sm font-medium",
+                  "min-h-11 rounded-full border px-4 text-sm font-medium pointer-coarse:min-h-[44px]",
                   motivo === m ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:bg-accent"
                 )}
               >
@@ -149,7 +150,7 @@ export function AnularMovimiento({
           />
         </div>
         {error ? <AlertaError error={error} titulo="No se pudo anular" /> : null}
-        <DialogFooter className="gap-2">
+        <DialogFooter className={PIE_DIALOGO_FIJO}>
           <Button
             variant="outline"
             className="h-12 px-5 text-base"

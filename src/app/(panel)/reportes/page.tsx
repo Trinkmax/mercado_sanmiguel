@@ -150,7 +150,7 @@ export default async function ReportesPage({
   );
   // Dos cifras con dos nombres, igual en todo el sistema: "Beneficios otorgados" (los
   // descuentos ya hechos a quienes pagaron en término, como en la impresión y el Excel) y
-  // "Beneficio en término" (el de quienes todavía no pagaron y no vencieron). Con los dos,
+  // "Beneficio en término" (el de quienes todavía no pagaron, pero están a tiempo). Con los dos,
   // estimado = cobrado + otorgados + en término + falta cobrar.
   const beneficioEnTermino = ingresos.reduce((acc, f) => acc + beneficioEnTerminoDe(f), 0);
   const hayEnTermino = beneficioEnTermino > 0.5;
@@ -287,8 +287,8 @@ export default async function ReportesPage({
               {hayEnTermino ? (
                 <p className="mt-3 text-sm text-muted-foreground">
                   Estimado = cobrado + beneficios otorgados + beneficio en término + falta cobrar.
-                  El beneficio en término es de quienes todavía no pagaron y no vencieron: si
-                  pagan después del vencimiento, pasa a “Falta cobrar”.
+                  El beneficio en término es el de quienes todavía no pagaron, pero están a
+                  tiempo: si pagan después del vencimiento, pasa a “Falta cobrar”.
                 </p>
               ) : null}
             </>

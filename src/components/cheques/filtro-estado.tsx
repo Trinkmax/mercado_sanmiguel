@@ -51,7 +51,7 @@ export function FiltroEstado({
             aria-current={esActivo ? "page" : undefined}
             scroll={false}
             className={cn(
-              "inline-flex min-h-11 items-center gap-2 rounded-full border px-4 text-sm font-medium transition-colors",
+              "inline-flex min-h-11 items-center gap-2 rounded-full border px-4 text-sm font-medium transition-colors pointer-coarse:min-h-[44px]",
               esActivo
                 ? "border-primary bg-primary text-primary-foreground"
                 : atencion

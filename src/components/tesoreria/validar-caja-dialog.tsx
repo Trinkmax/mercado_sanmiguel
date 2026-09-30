@@ -28,6 +28,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
 import type { Arqueo } from "@/components/caja/arqueo-tipos";
+import { PIE_DIALOGO_FIJO, enfocarDialogo } from "@/components/tesoreria/tipos";
 import { llamarAccion } from "@/lib/llamar-accion";
 
 type CajaValidar = {
@@ -142,7 +143,7 @@ export function ValidarCajaDialog({
 
   const textoBoton =
     !pideConteo
-      ? "Validar la caja de portería"
+      ? "Validar solo la caja de portería"
       : diferencia === null
         ? "Poné cuánto contaste"
         : diferencia === 0
@@ -165,19 +166,35 @@ export function ValidarCajaDialog({
       }}
     >
       <DialogTrigger asChild>
-        <Button size="lg" className="h-12 px-6 text-base font-semibold">
-          <Stamp className="size-5" strokeWidth={2} />
-          Contar y validar
-        </Button>
+        {pideConteo ? (
+          <Button size="lg" className="h-12 px-6 text-base font-semibold">
+            <Stamp className="size-5" strokeWidth={2} />
+            Contar y validar
+          </Button>
+        ) : (
+          // Portería ya recibida: se valida sola con la caja de administración. Validarla
+          // aparte es opcional, así que no va como botón principal ni dice "Contar".
+          <Button size="lg" variant="outline" className="h-12 px-6 text-base">
+            <Stamp className="size-5" strokeWidth={2} />
+            Validar solo esta caja
+          </Button>
+        )}
       </DialogTrigger>
-      <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-lg">
+      {/* Con conteo, el foco va directo al campo del monto; sin conteo, al diálogo. */}
+      <DialogContent
+        className="max-h-[92svh] overflow-y-auto sm:max-w-lg"
+        onOpenAutoFocus={pideConteo ? undefined : enfocarDialogo}
+      >
         <DialogHeader>
           <DialogTitle className="text-lg">
-            Contar y validar la caja del {dia}
+            {pideConteo
+              ? `Contar y validar la caja del ${dia}`
+              : `Validar la caja de portería del ${dia}`}
           </DialogTitle>
           <DialogDescription className="text-sm">
-            {esPorteria ? "Caja de portería" : "Administración"} · Validar es el cierre
-            definitivo: después ya no se reabre.
+            {pideConteo
+              ? `${esPorteria ? "Caja de portería" : "Administración"} · Validar es el cierre definitivo: después ya no se reabre.`
+              : "Ya la recibió Administración: su efectivo se cuenta en la caja de administración."}
           </DialogDescription>
         </DialogHeader>
 
@@ -228,7 +245,12 @@ export function ValidarCajaDialog({
                   }
                 />
               ) : null}
-              <Linea signo="=" label="Tiene que haber en efectivo" monto={tieneQueHaber} fuerte />
+              <Linea
+                signo="="
+                label={pideConteo ? "Tiene que haber en efectivo" : "Pasó a la caja de administración"}
+                monto={tieneQueHaber}
+                fuerte
+              />
               {Number(arqueo.transferencia ?? 0) !== 0 || Number(arqueo.cheques ?? 0) !== 0 ? (
                 <p className="pb-2.5 text-sm text-muted-foreground">
                   Además: en el banco {formatARS(arqueo.transferencia ?? 0)} · cheques por cobrar{" "}
@@ -254,24 +276,27 @@ export function ValidarCajaDialog({
                   }}
                   className="h-14 text-2xl font-bold tabular"
                 />
-                <div className="flex min-h-8 flex-wrap items-center gap-2" aria-live="polite">
+                {/* Lo escrito, con puntos de miles: así se nota un cero de más o de menos. */}
+                <div className="flex min-h-8 flex-wrap items-center gap-x-3 gap-y-1" aria-live="polite">
                   {contadoNum === null ? (
                     <span className="text-sm text-muted-foreground">
                       Contá los billetes y poné el total: la diferencia aparece acá.
                     </span>
-                  ) : diferencia === 0 ? (
-                    <>
-                      <Sello estado="pagado" texto="Coincide" />
-                      <span className="text-sm text-muted-foreground tabular">{formatARS(contadoNum)}</span>
-                    </>
-                  ) : diferencia !== null && diferencia < 0 ? (
-                    <span className="text-lg font-bold text-pendiente tabular">
-                      Faltan {formatARS(-diferencia)}
-                    </span>
                   ) : (
-                    <span className="text-lg font-bold text-parcial tabular">
-                      Sobran {formatARS(diferencia ?? 0)}
-                    </span>
+                    <>
+                      <span className="text-base font-semibold tabular">Contaste {formatARS(contadoNum)}</span>
+                      {diferencia === 0 ? (
+                        <Sello estado="pagado" texto="Coincide" />
+                      ) : diferencia !== null && diferencia < 0 ? (
+                        <span className="text-lg font-bold text-pendiente tabular">
+                          Faltan {formatARS(-diferencia)}
+                        </span>
+                      ) : (
+                        <span className="text-lg font-bold text-parcial tabular">
+                          Sobran {formatARS(diferencia ?? 0)}
+                        </span>
+                      )}
+                    </>
                   )}
                 </div>
                 {diferencia !== null && diferencia !== 0 ? (
@@ -281,13 +306,14 @@ export function ValidarCajaDialog({
                 ) : null}
               </div>
             ) : (
-              <p className="rounded-lg bg-accent px-4 py-3 text-sm text-accent-foreground">
-                Esta caja ya entró en la de administración: su efectivo se cuenta ahí.
+              <p className="rounded-lg bg-accent px-4 py-3 text-base text-accent-foreground">
+                No hace falta validarla aparte: se valida sola cuando valides la caja de
+                administración. Si la validás ahora, ya no se reabre.
               </p>
             )}
 
             <Collapsible>
-              <CollapsibleTrigger className="group flex min-h-11 items-center gap-1.5 text-base font-medium text-primary">
+              <CollapsibleTrigger className="group flex min-h-11 items-center gap-1.5 text-base font-medium text-primary pointer-coarse:min-h-[44px]">
                 <ChevronDown
                   className="size-4 transition-transform group-data-[state=open]:rotate-180"
                   strokeWidth={2}
@@ -317,11 +343,12 @@ export function ValidarCajaDialog({
           </p>
         ) : null}
 
-        <DialogFooter>
+        <DialogFooter className={PIE_DIALOGO_FIJO}>
           <Button
             size="lg"
+            variant={pideConteo ? "default" : "outline"}
             className={cn(
-              "h-13 w-full text-base font-semibold",
+              "h-auto min-h-13 w-full py-2.5 text-base leading-snug font-semibold whitespace-normal",
               diferencia !== null && diferencia < 0 && "bg-pendiente hover:bg-pendiente/85"
             )}
             disabled={pendiente || bloqueo !== null || (pideConteo && contadoNum === null)}

@@ -13,12 +13,21 @@ function normalizar(t: string): string {
   return t.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
 }
 
+/** Cuántos gastos se ven a la vez: sin scroll propio dentro del diálogo (el diálogo ya se desplaza). */
+const VISIBLES = 6;
+
+/**
+ * Nombre del rubro, si el gasto lo trae ("[SEGUV] Seguros Varios"): el código solo no se
+ * entiende. GastoPendiente todavía no lo tiene; cuando lo sume, aparece solo.
+ */
+type ConRubro = { rubroNombre?: string | null };
+
 /** Gastos pendientes ordenados para un cheque: primero los que nombran al proveedor, después por monto parecido. */
 export function ordenarParaCheque(
   gastos: GastoPendiente[],
   proveedor: string,
   montoCheque: number
-): (GastoPendiente & { sugerido: boolean })[] {
+): (GastoPendiente & ConRubro & { sugerido: boolean })[] {
   const palabras = normalizar(proveedor)
     .split(/\s+/)
     .filter((p) => p.length >= 3);
@@ -38,6 +47,7 @@ export function ordenarParaCheque(
       id: g.id,
       etiqueta: g.etiqueta,
       rubroCodigo: g.rubroCodigo,
+      rubroNombre: (g as GastoPendiente & ConRubro).rubroNombre ?? null,
       monto: g.monto,
       vencimiento: g.vencimiento,
       periodo: g.periodo,
@@ -47,7 +57,8 @@ export function ordenarParaCheque(
 
 /**
  * Lista corta de gastos pendientes para elegir cuál pagó el cheque (con búsqueda).
- * Muestra el monto de cada uno para compararlo con el del cheque.
+ * Muestra el monto de cada uno para compararlo con el del cheque, y dice en qué
+ * orden van (los más parecidos al cheque primero).
  */
 export function ElegirGasto({
   gastos,
@@ -56,6 +67,7 @@ export function ElegirGasto({
   valor,
   onCambiar,
   idBase,
+  hoy,
 }: {
   gastos: GastoPendiente[];
   proveedor: string;
@@ -63,14 +75,26 @@ export function ElegirGasto({
   valor: string | null;
   onCambiar: (id: string | null) => void;
   idBase: string;
+  /** "YYYY-MM-DD" de negocio: los ya vencidos dicen "Venció". */
+  hoy: string;
 }) {
   const [busqueda, setBusqueda] = useState("");
   const q = normalizar(busqueda);
-  const lista = useMemo(() => {
+  const { lista, sinResultados } = useMemo(() => {
     const ordenados = ordenarParaCheque(gastos, proveedor, montoCheque);
-    const filtrados = q ? ordenados.filter((g) => normalizar(g.etiqueta).includes(q)) : ordenados;
-    return filtrados.slice(0, 8);
-  }, [gastos, proveedor, montoCheque, q]);
+    const filtrados = q
+      ? ordenados.filter(
+          (g) => normalizar(g.etiqueta).includes(q) || normalizar(g.rubroNombre ?? "").includes(q)
+        )
+      : ordenados;
+    const visibles = filtrados.slice(0, VISIBLES);
+    // El elegido no desaparece de la vista al cambiar el proveedor o la búsqueda.
+    const elegido = valor ? ordenados.find((g) => g.id === valor) : undefined;
+    return {
+      lista: elegido && !visibles.some((g) => g.id === elegido.id) ? [elegido, ...visibles] : visibles,
+      sinResultados: filtrados.length === 0,
+    };
+  }, [gastos, proveedor, montoCheque, q, valor]);
 
   if (gastos.length === 0) {
     return (
@@ -82,7 +106,11 @@ export function ElegirGasto({
 
   return (
     <div className="space-y-2">
-      {gastos.length > 8 ? (
+      <p className="text-sm text-muted-foreground">
+        Primero los que nombran al proveedor o tienen un monto parecido al del cheque.
+        {gastos.length > VISIBLES ? " Si no está, buscalo." : ""}
+      </p>
+      {gastos.length > VISIBLES ? (
         <div className="relative">
           <Search
             className="pointer-events-none absolute top-1/2 left-3 size-5 -translate-y-1/2 text-muted-foreground"
@@ -98,9 +126,11 @@ export function ElegirGasto({
           />
         </div>
       ) : null}
-      <ul className="max-h-72 divide-y overflow-y-auto rounded-xl border" aria-label="Gastos pendientes">
+      <ul className="divide-y overflow-hidden rounded-xl border" aria-label="Gastos pendientes">
         {lista.map((g) => {
           const activo = g.id === valor;
+          const vencido = g.vencimiento !== null && g.vencimiento < hoy;
+          const rubro = g.rubroNombre && g.rubroNombre !== g.etiqueta ? g.rubroNombre : null;
           return (
             <li key={g.id}>
               <button
@@ -114,12 +144,22 @@ export function ElegirGasto({
               >
                 <span className="flex min-w-0 items-center gap-2">
                   {activo ? <Check className="size-5 shrink-0" strokeWidth={2.2} /> : null}
-                  {g.rubroCodigo ? <Codigo codigo={g.rubroCodigo} /> : null}
                   <span className="min-w-0">
                     <span className="block text-base font-medium break-words">{g.etiqueta}</span>
-                    <span className={cn("block text-sm", activo ? "text-primary-foreground/80" : "text-muted-foreground")}>
-                      {g.vencimiento ? `Vence ${formatFecha(g.vencimiento).slice(0, 5)}` : "Sin vencimiento"}
-                      {g.sugerido ? " · sugerido" : ""}
+                    <span
+                      className={cn(
+                        "block text-sm break-words",
+                        activo ? "text-primary-foreground/80" : "text-muted-foreground"
+                      )}
+                    >
+                      {g.rubroCodigo ? <Codigo codigo={g.rubroCodigo} className="mr-1.5 align-middle" /> : null}
+                      {rubro ? `${rubro} · ` : ""}
+                      <span className={cn(vencido && !activo && "font-semibold text-pendiente")}>
+                        {g.vencimiento
+                          ? `${vencido ? "Venció" : g.vencimiento === hoy ? "Vence hoy" : "Vence"} ${formatFecha(g.vencimiento).slice(0, 5)}`
+                          : "Sin vencimiento"}
+                      </span>
+                      {g.sugerido ? " · parecido al cheque" : ""}
                     </span>
                   </span>
                 </span>
@@ -128,7 +168,7 @@ export function ElegirGasto({
             </li>
           );
         })}
-        {lista.length === 0 ? (
+        {sinResultados ? (
           <li className="px-3 py-3 text-sm text-muted-foreground">No encontramos un gasto con eso.</li>
         ) : null}
       </ul>

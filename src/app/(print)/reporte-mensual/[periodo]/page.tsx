@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { BotonImprimir } from "@/components/shared/boton-imprimir";
 import { Marca } from "@/components/shared/marca";
 import { Money } from "@/components/shared/money";
+import { beneficioEnTerminoDe } from "@/components/reportes/fila-ingreso";
 
 export const metadata = { title: "Reporte mensual" };
 
@@ -45,6 +46,9 @@ export default async function ReporteMensualPage({
     }),
     { estimado: 0, cobrado: 0, descuentos: 0, pendiente: 0 }
   );
+  // Beneficio en término: el de quienes todavía no pagaron, pero están a tiempo (solo en el mes en
+  // curso). No va en ninguna columna; se aclara debajo para que la fila del total cierre.
+  const enTermino = ingresos.reduce((acc, f) => acc + beneficioEnTerminoDe(f), 0);
   const totGastos = gastos.reduce(
     (acc, g) => ({
       pagado: acc.pagado + Number(g.pagado),
@@ -86,7 +90,7 @@ export default async function ReporteMensualPage({
                   <th className={cn(th, "pr-3")}>Concepto</th>
                   <th className={cn(th, "pl-3 text-right")}>Estimado</th>
                   <th className={cn(th, "pl-3 text-right")}>Cobrado</th>
-                  <th className={cn(th, "pl-3 text-right")}>Beneficios</th>
+                  <th className={cn(th, "pl-3 text-right")}>Beneficios otorgados</th>
                   <th className={cn(th, "pl-3 text-right")}>Pendiente</th>
                 </tr>
               </thead>
@@ -140,6 +144,14 @@ export default async function ReporteMensualPage({
                 </tr>
               </tfoot>
             </table>
+            {enTermino > 0.5 ? (
+              <p className="text-sm text-muted-foreground">
+                Además, <Money monto={enTermino} className="font-medium text-foreground" /> de
+                beneficio en término: el de quienes todavía no pagaron, pero están a tiempo (si
+                pagan tarde, pasa a pendiente). Estimado = cobrado + beneficios otorgados + beneficio en
+                término + pendiente.
+              </p>
+            ) : null}
           </section>
 
           {/* Gastos por rubro */}

@@ -278,7 +278,7 @@ export default async function CierreCajaPage({ params, searchParams }: Props) {
                 <thead>
                   <tr className="border-b text-left text-muted-foreground">
                     <th className={SOLO_ANCHO}>Hora</th>
-                    <th>Recibo</th>
+                    <th className={SOLO_ANCHO}>Recibo</th>
                     <th>Cliente</th>
                     <th className={SOLO_ANCHO}>Medio</th>
                     <th className="text-right">Monto</th>
@@ -296,19 +296,15 @@ export default async function CierreCajaPage({ params, searchParams }: Props) {
                           <td className={`${SOLO_ANCHO} whitespace-nowrap tabular`}>
                             {i === 0 ? formatSoloHora(r.fecha) : ""}
                           </td>
-                          <td className="whitespace-nowrap tabular">
-                            {i === 0 ? (
-                              <>
-                                N° {r.numero}
-                                <span className={SOLO_CELULAR}>{formatSoloHora(r.fecha)}</span>
-                              </>
-                            ) : (
-                              ""
-                            )}
-                          </td>
+                          <td className={`${SOLO_ANCHO} whitespace-nowrap tabular`}>{i === 0 ? `N° ${r.numero}` : ""}</td>
+                          {/* Celular: solo Cliente y Monto; el N° de recibo, la hora y el medio bajan
+                              acá (con una columna más, el nombre quedaba en ~110 px). */}
                           <td className="break-words">
                             {i === 0 ? `${r.cliente?.nombre ?? "—"}${r.cliente ? ` (${r.cliente.codigo})` : ""}` : ""}
-                            <span className={SOLO_CELULAR}>{medio}</span>
+                            <span className={SOLO_CELULAR}>
+                              {i === 0 ? `Recibo N° ${r.numero} · ${formatSoloHora(r.fecha)} · ` : ""}
+                              {medio}
+                            </span>
                           </td>
                           <td className={SOLO_ANCHO}>{medio}</td>
                           <td className="text-right whitespace-nowrap tabular">{formatARS(l.monto)}</td>
@@ -317,22 +313,22 @@ export default async function CierreCajaPage({ params, searchParams }: Props) {
                     })
                   )}
                 </tbody>
-                <tfoot>
-                  <tr className="border-t-2 border-foreground">
-                    <td colSpan={5} className="pt-2! text-right">
-                      <span className="whitespace-nowrap">Efectivo {formatARS(porMedio.efectivo)}</span> ·{" "}
-                      <span className="whitespace-nowrap">Transferencia {formatARS(porMedio.transferencia)}</span>
-                      {!porteria ? (
-                        <>
-                          {" · "}
-                          <span className="whitespace-nowrap">Cheques {formatARS(porMedio.cheque)}</span>
-                        </>
-                      ) : null}
-                    </td>
-                  </tr>
-                </tfoot>
               </table>
             )}
+            {/* Total por medio fuera de la tabla: un tfoot con colSpan fijo no sirve cuando en el
+                celular hay columnas escondidas. */}
+            {datos.recibos.length > 0 ? (
+              <p className="border-t-2 border-foreground pt-2 text-right text-sm">
+                <span className="whitespace-nowrap">Efectivo {formatARS(porMedio.efectivo)}</span> ·{" "}
+                <span className="whitespace-nowrap">Transferencia {formatARS(porMedio.transferencia)}</span>
+                {!porteria ? (
+                  <>
+                    {" · "}
+                    <span className="whitespace-nowrap">Cheques {formatARS(porMedio.cheque)}</span>
+                  </>
+                ) : null}
+              </p>
+            ) : null}
             {anulados.length > 0 ? (
               <ul className="space-y-0.5 text-xs text-muted-foreground">
                 {anulados.map((r) => (

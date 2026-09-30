@@ -12,8 +12,8 @@ export default function TesoreriaLoading() {
         <Skeleton className="h-11 w-44 rounded-md" />
       </div>
 
-      {/* Pestañas */}
-      <Skeleton className="h-13 w-[34rem] max-w-full rounded-xl" />
+      {/* Pestañas: de a dos en el celular, en fila desde 640 px */}
+      <Skeleton className="h-[6.4rem] w-full rounded-xl sm:h-13 sm:w-[34rem] sm:max-w-full" />
 
       {/* Plata de la cooperativa: banda + Pesos · Dólares · Cheques */}
       <div className="overflow-hidden rounded-xl border bg-card">
@@ -46,9 +46,9 @@ export default function TesoreriaLoading() {
       {/* Acciones rápidas */}
       <div className="space-y-3">
         <Skeleton className="h-6 w-56" />
-        <div className="flex flex-wrap gap-2">
-          {[64, 52, 48, 28, 28, 28].map((w, i) => (
-            <Skeleton key={i} className="h-12 rounded-md" style={{ width: `${w * 4}px` }} />
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-12 w-full rounded-md" />
           ))}
         </div>
       </div>
@@ -58,7 +58,10 @@ export default function TesoreriaLoading() {
         <Skeleton className="h-6 w-64" />
         <div className="divide-y rounded-xl border bg-card">
           {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="grid gap-4 px-5 py-4 md:grid-cols-[minmax(12rem,1fr)_minmax(0,2fr)_auto] md:items-center">
+            <div
+              key={i}
+              className="grid gap-4 px-4 py-4 sm:px-5 md:grid-cols-[14rem_minmax(0,1fr)] md:items-center xl:grid-cols-[16rem_minmax(0,1fr)_auto]"
+            >
               <div className="space-y-2">
                 <Skeleton className="h-5 w-44" />
                 <Skeleton className="h-6 w-36" />
@@ -67,7 +70,7 @@ export default function TesoreriaLoading() {
                 <Skeleton className="h-6 w-64" />
                 <Skeleton className="h-4 w-80 max-w-full" />
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 md:col-span-2 md:justify-end xl:col-span-1">
                 <Skeleton className="size-11 rounded-md" />
                 <Skeleton className="h-11 w-40 rounded-md" />
               </div>

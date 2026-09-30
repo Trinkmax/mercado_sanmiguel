@@ -23,6 +23,7 @@ import {
 import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
 import { ChartCobranzaDiaria } from "@/components/charts/chart-cobranza-diaria";
+import { beneficioEnTerminoDe } from "@/components/reportes/fila-ingreso";
 import {
   cajaDeHoy,
   cajasParaValidar,
@@ -161,10 +162,13 @@ export async function InicioGestion({ perfil, supabase }: { perfil: Perfil; supa
   const bono = resumen.find((f) => f.codigo === "BC");
   const totalCobrado = conceptos.reduce((a, f) => a + f.cobrado, 0);
   const totalPendiente = conceptos.reduce((a, f) => a + f.pendiente, 0);
-  // Estimado = cobrado + por cobrar + beneficios por pagar en término (los ya otorgados y los
-  // de quienes todavía están en término). Sin esta línea, el total no cuadraba con Facturación.
+  // Estimado = cobrado + por cobrar + beneficios, con los mismos dos nombres que Tesorería y
+  // Reportes: "otorgados" (ya descontados) y "en término" (de quienes todavía no pagaron, pero
+  // están a tiempo). Sin esta línea, el total no cuadraba con Facturación.
   const totalEstimado = conceptos.reduce((a, f) => a + f.estimado, 0);
-  const totalBeneficios = Math.max(totalEstimado - totalCobrado - totalPendiente, 0);
+  const totalOtorgados = conceptos.reduce((a, f) => a + f.descuentos, 0);
+  const totalEnTermino = conceptos.reduce((a, f) => a + beneficioEnTerminoDe(f), 0);
+  const totalBeneficios = totalOtorgados + totalEnTermino;
   const sinPorteria = rol === "admin" && resumen.some((f) => f.codigo !== "BC" && deOtraCaja.has(f.codigo));
 
   // ---------- Avisos (solo los que tienen algo) ----------
@@ -360,25 +364,22 @@ export async function InicioGestion({ perfil, supabase }: { perfil: Perfil; supa
               </div>
             ) : (
               <>
+                {/* Cada concepto contra su estimado, igual que en Tesorería y Reportes:
+                    cobrado + beneficios otorgados + beneficio en término + faltan = estimado. */}
                 <div className="divide-y">
                   {conceptos.map((fila) => (
-                    <BarraConcepto
-                      key={fila.codigo}
-                      fila={fila}
-                      objetivo={fila.cobrado + fila.pendiente}
-                      faltaTexto={fila.pendiente}
-                    />
+                    <BarraConcepto key={fila.codigo} fila={fila} />
                   ))}
                 </div>
                 <div className="mt-4 space-y-2 border-t pt-4">
                   <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                     <p className="text-sm text-muted-foreground">Total del mes</p>
-                    <p className="text-lg tabular">
+                    {/* Dos tramos que bajan enteros, sin separador que pueda quedar colgando. */}
+                    <p className="flex flex-wrap gap-x-4 text-lg tabular">
                       <span className="whitespace-nowrap">
                         <Money monto={totalCobrado} className="font-bold text-pagado" />{" "}
                         <span className="text-muted-foreground">cobrado</span>
-                      </span>{" "}
-                      <span className="text-muted-foreground">·</span>{" "}
+                      </span>
                       <span className="whitespace-nowrap">
                         <Money monto={totalPendiente} className="font-bold text-pendiente" />{" "}
                         <span className="text-muted-foreground">por cobrar</span>
@@ -390,8 +391,20 @@ export async function InicioGestion({ perfil, supabase }: { perfil: Perfil; supa
                       Estimado del mes
                       {sinPorteria ? " (sin quintas ni ambulantes)" : ""}:{" "}
                       <Money monto={totalEstimado} className="font-semibold text-foreground" />. La
-                      diferencia, <Money monto={totalBeneficios} className="font-semibold text-foreground" />,
-                      son beneficios por pagar en término.
+                      diferencia, <Money monto={totalBeneficios} className="font-semibold text-foreground" />,{" "}
+                      {totalOtorgados > 0.5 && totalEnTermino > 0.5 ? (
+                        <>
+                          son beneficios:{" "}
+                          <Money monto={totalOtorgados} className="font-semibold text-foreground" /> ya
+                          otorgados y{" "}
+                          <Money monto={totalEnTermino} className="font-semibold text-foreground" /> de
+                          quienes todavía están en término.
+                        </>
+                      ) : totalOtorgados > 0.5 ? (
+                        "son beneficios ya otorgados a quienes pagaron en término."
+                      ) : (
+                        "es el beneficio de quienes todavía están en término (si pagan tarde, lo pierden)."
+                      )}
                     </p>
                   ) : null}
                 </div>

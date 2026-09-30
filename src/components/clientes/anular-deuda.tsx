@@ -90,7 +90,7 @@ export function AnularDeuda({
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader className="pr-8">
+        <DialogHeader>
           <DialogTitle className="text-lg font-semibold">¿Anular esta deuda de {formatARS(monto)}?</DialogTitle>
           <DialogDescription className="text-base break-words">
             {descripcion}. Deja de sumar en su cuenta y queda anotado quién la anuló y por qué. No se

@@ -140,7 +140,15 @@ export function FilaGasto({
           </span>
         </p>
         {g.mes ? (
-          <p className="text-sm font-medium text-pendiente">Gasto de {g.mes.toLowerCase()}</p>
+          // En rojo mientras está sin pagar; pagado hoy, solo recuerda de qué mes es.
+          <p
+            className={cn(
+              "text-sm font-medium",
+              g.estado === "pendiente" ? "text-pendiente" : "text-muted-foreground"
+            )}
+          >
+            Gasto de {g.mes.toLowerCase()}
+          </p>
         ) : null}
         {g.notas ? <p className="line-clamp-2 text-sm break-words text-muted-foreground">{g.notas}</p> : null}
         {g.estado === "pagado" ? (

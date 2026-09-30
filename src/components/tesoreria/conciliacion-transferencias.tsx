@@ -8,14 +8,6 @@ import { formatARS, formatFechaHora } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Spinner } from "@/components/ui/spinner";
 import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
@@ -39,8 +31,8 @@ export type FilaTransferencia = {
 function Comprobante({ fila }: { fila: FilaTransferencia }) {
   if (!fila.comprobanteUrl) {
     return (
-      <span className="inline-flex items-center gap-1.5 text-sm font-medium text-parcial">
-        <ImageOff className="size-4" strokeWidth={2} />
+      <span className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-parcial">
+        <ImageOff className="size-4 shrink-0" strokeWidth={2} />
         Sin comprobante
       </span>
     );
@@ -50,7 +42,7 @@ function Comprobante({ fila }: { fila: FilaTransferencia }) {
       href={fila.comprobanteUrl}
       target="_blank"
       rel="noopener noreferrer"
-      className="group inline-flex min-h-11 items-center gap-2.5 font-medium text-primary hover:underline"
+      className="group inline-flex min-h-11 items-center gap-2.5 font-medium text-primary hover:underline pointer-coarse:min-h-[44px]"
     >
       {fila.comprobanteEsImagen ? (
         // Firmada por 1 h en el server; no pasa por next/image (dominio de storage).
@@ -72,9 +64,13 @@ function Comprobante({ fila }: { fila: FilaTransferencia }) {
 }
 
 /**
- * Tabla de transferencias sin conciliar. Tesorería marca cada una cuando la
- * ve acreditada en el resumen del banco (de a una, o varias con los casilleros).
- * Tesorería y el Líder de Procesos concilian (§1.3).
+ * Transferencias sin conciliar. Tesorería marca cada una cuando la ve acreditada en
+ * el resumen del banco (de a una, o varias con los casilleros). Tesorería y el Líder
+ * de Procesos concilian (§1.3).
+ *
+ * Es una lista y no una tabla: con nombres largos la tabla se salía de su caja y el
+ * botón "Conciliar" quedaba escondido a la derecha. Cada fila tiene columnas de ancho
+ * fijo desde 1024 px (todo alineado); más angosto, el comprobante y el monto van abajo.
  */
 export function ConciliacionTransferencias({
   filas,
@@ -129,19 +125,28 @@ export function ConciliacionTransferencias({
   }
 
   const mostrarCasilleros = puedeOperar && filas.length > 1;
+  // Con casillero: una columna más, fija, a la izquierda (el resto de la fila se corre igual en todas).
+  const columnas = mostrarCasilleros
+    ? "grid-cols-[auto_minmax(0,1fr)] lg:grid-cols-[auto_minmax(0,1fr)_12rem_17rem]"
+    : "grid-cols-1 lg:grid-cols-[minmax(0,1fr)_12rem_17rem]";
+  // Lo que va abajo en celular y tablet empieza bajo el texto, no bajo el casillero.
+  const bajoElTexto = mostrarCasilleros ? "col-start-2 lg:col-start-auto" : "";
 
   return (
     <div className="overflow-hidden rounded-xl border bg-card">
       {mostrarCasilleros ? (
         <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 border-b bg-muted/40 px-4 py-3">
-          <label className="inline-flex min-h-11 cursor-pointer items-center gap-3 text-sm font-medium">
-            <Checkbox
-              checked={todasSeleccionadas}
-              onCheckedChange={(v) => alternarTodas(v === true)}
-              aria-label="Seleccionar todas las transferencias"
-              className="size-5"
-              disabled={pendiente}
-            />
+          <label className="inline-flex min-h-11 cursor-pointer items-center gap-4 text-sm font-medium pointer-coarse:min-h-[44px]">
+            {/* Mismo lugar que el casillero de cada fila. */}
+            <span className="inline-flex size-11 shrink-0 items-center justify-center pointer-coarse:size-[44px]">
+              <Checkbox
+                checked={todasSeleccionadas}
+                onCheckedChange={(v) => alternarTodas(v === true)}
+                aria-label="Seleccionar todas las transferencias"
+                className="size-6 [&_svg]:size-4"
+                disabled={pendiente}
+              />
+            </span>
             {seleccionadas.length === 0
               ? "Seleccioná las que ya viste en el banco"
               : seleccionadas.length === 1
@@ -149,7 +154,7 @@ export function ConciliacionTransferencias({
                 : `${seleccionadas.length} seleccionadas · ${formatARS(totalSeleccion)}`}
           </label>
           <Button
-            className="h-11 px-5 text-base font-semibold"
+            className="h-auto min-h-11 px-5 py-2 text-base font-semibold whitespace-normal"
             disabled={pendiente || seleccionadas.length === 0}
             onClick={() => conciliar(seleccionadas.map((f) => f.id))}
           >
@@ -158,104 +163,83 @@ export function ConciliacionTransferencias({
             ) : (
               <CheckCheck className="size-5" strokeWidth={2} />
             )}
-            Conciliar todas las seleccionadas
+            Conciliar las seleccionadas
             {seleccionadas.length > 0 ? ` (${seleccionadas.length})` : ""}
           </Button>
         </div>
       ) : null}
 
-      <Table className="text-sm">
-        <TableHeader>
-          <TableRow className="hover:bg-transparent">
-            {mostrarCasilleros ? (
-              <TableHead className="w-12 pl-4">
-                <span className="sr-only">Seleccionar</span>
-              </TableHead>
-            ) : null}
-            <TableHead className={cn(!mostrarCasilleros && "pl-4")}>Fecha y hora</TableHead>
-            <TableHead>Recibo</TableHead>
-            <TableHead>Cliente</TableHead>
-            <TableHead>Titular de la cuenta</TableHead>
-            <TableHead>Comprobante</TableHead>
-            <TableHead className="text-right">Monto</TableHead>
-            <TableHead className="pr-4 text-right">
-              {puedeOperar ? "Acción" : "Estado"}
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {filas.map((f) => {
-            const marcada = seleccion.has(f.id);
-            const estaEnCurso = enCurso.includes(f.id);
-            return (
-              <TableRow
-                key={f.id}
-                data-state={marcada ? "selected" : undefined}
-                className={cn(marcada && "bg-accent/50")}
+      <ul className="divide-y" aria-label="Transferencias sin conciliar">
+        {filas.map((f) => {
+          const marcada = seleccion.has(f.id);
+          const estaEnCurso = enCurso.includes(f.id);
+          return (
+            <li
+              key={f.id}
+              className={cn(
+                "grid items-center gap-x-4 gap-y-2 px-4 py-3",
+                columnas,
+                marcada && "bg-accent/50"
+              )}
+            >
+              {mostrarCasilleros ? (
+                <label className="inline-flex size-11 cursor-pointer items-center justify-center self-start pointer-coarse:size-[44px] lg:self-center">
+                  <Checkbox
+                    checked={marcada}
+                    onCheckedChange={(v) => alternar(f.id, v === true)}
+                    aria-label={`Seleccionar recibo N° ${f.numero}`}
+                    className="size-6 [&_svg]:size-4"
+                    disabled={pendiente}
+                  />
+                </label>
+              ) : null}
+
+              <div className="min-w-0 space-y-0.5">
+                <p className="text-base font-medium break-words">{f.clienteNombre}</p>
+                <p className="text-sm text-muted-foreground tabular">
+                  {f.clienteCodigo !== null ? `Carpeta N° ${f.clienteCodigo} · ` : ""}
+                  Recibo N° {f.numero} · {formatFechaHora(f.fecha)}
+                </p>
+                <p className="text-sm break-words">
+                  <span className="text-muted-foreground">Titular: </span>
+                  {f.titular ? f.titular : <span className="text-muted-foreground">sin dato</span>}
+                </p>
+              </div>
+
+              <div className={cn("min-w-0", bajoElTexto)}>
+                <Comprobante fila={f} />
+              </div>
+
+              <div
+                className={cn(
+                  "flex flex-wrap items-center justify-between gap-x-3 gap-y-2 lg:justify-end",
+                  bajoElTexto
+                )}
               >
-                {mostrarCasilleros ? (
-                  <TableCell className="pl-4">
-                    <label className="inline-flex size-11 cursor-pointer items-center justify-center">
-                      <Checkbox
-                        checked={marcada}
-                        onCheckedChange={(v) => alternar(f.id, v === true)}
-                        aria-label={`Seleccionar recibo N° ${f.numero}`}
-                        className="size-5"
-                        disabled={pendiente}
-                      />
-                    </label>
-                  </TableCell>
-                ) : null}
-                <TableCell className={cn("tabular", !mostrarCasilleros && "pl-4")}>
-                  {formatFechaHora(f.fecha)}
-                </TableCell>
-                <TableCell className="tabular font-medium">N° {f.numero}</TableCell>
-                <TableCell>
-                  <p className="font-medium">{f.clienteNombre}</p>
-                  {f.clienteCodigo !== null ? (
-                    <p className="text-xs text-muted-foreground tabular">
-                      Carpeta N° {f.clienteCodigo}
-                    </p>
-                  ) : null}
-                </TableCell>
-                <TableCell>
-                  {f.titular ? (
-                    f.titular
-                  ) : (
-                    <span className="text-muted-foreground">Sin titular</span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <Comprobante fila={f} />
-                </TableCell>
-                <TableCell className="text-right">
-                  <Money monto={f.monto} className="font-semibold" />
-                </TableCell>
-                <TableCell className="pr-4 text-right">
-                  {puedeOperar ? (
-                    <Button
-                      variant="outline"
-                      className="h-11 px-4 text-sm font-semibold"
-                      disabled={pendiente}
-                      onClick={() => conciliar([f.id])}
-                      aria-label={`Conciliar recibo N° ${f.numero}`}
-                    >
-                      {estaEnCurso && enCurso.length === 1 ? (
-                        <Spinner className="size-4" />
-                      ) : (
-                        <Check className="size-4" strokeWidth={2.2} />
-                      )}
-                      Conciliar
-                    </Button>
-                  ) : (
-                    <Sello estado="sin_conciliar" />
-                  )}
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+                <Money monto={f.monto} className="text-base font-semibold" />
+                {puedeOperar ? (
+                  <Button
+                    variant="outline"
+                    className="h-11 px-4 text-sm font-semibold"
+                    disabled={pendiente}
+                    onClick={() => conciliar([f.id])}
+                    aria-label={`Conciliar recibo N° ${f.numero}`}
+                  >
+                    {estaEnCurso && enCurso.length === 1 ? (
+                      <Spinner className="size-4" />
+                    ) : (
+                      <Check className="size-4" strokeWidth={2.2} />
+                    )}
+                    Conciliar
+                  </Button>
+                ) : (
+                  <Sello estado="sin_conciliar" />
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

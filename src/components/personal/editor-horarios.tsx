@@ -284,7 +284,7 @@ export function EditorHorarios({
 /**
  * "08:00", "830", "8.30" o "14" → "08:00" / "08:30" / "14:00". null si no es una hora válida.
  * Con dos puntos (o punto) separa horas y minutos; sin separador, los dos últimos números son
- * los minutos cuando hay 3 o 4.
+ * los minutos cuando hay 3 o 4 (salvo "083", que es "0830" a medio escribir).
  */
 function leerHora(texto: string): string | null {
   const t = texto.trim().replace(/[.,h ]/gi, ":");
@@ -301,6 +301,11 @@ function leerHora(texto: string): string | null {
     if (t.length <= 2) {
       h = Number(t);
       m = 0;
+    } else if (t.length === 3 && Number(t.slice(1)) > 59) {
+      // "083" o "184": está a mitad de escribir "0830" o "1845". Se lee 08:30 / 18:40 en vez
+      // de marcar el campo en rojo mientras tipea.
+      h = Number(t.slice(0, 2));
+      m = Number(t.slice(2)) * 10;
     } else {
       h = Number(t.slice(0, -2));
       m = Number(t.slice(-2));
@@ -339,7 +344,8 @@ function CampoHora({
       type="text"
       inputMode="numeric"
       autoComplete="off"
-      placeholder="08:00"
+      // "--:--" como el campo de hora del navegador: un "08:00" en gris parecía una hora ya cargada.
+      placeholder="--:--"
       maxLength={5}
       value={texto}
       aria-label={ariaLabel}

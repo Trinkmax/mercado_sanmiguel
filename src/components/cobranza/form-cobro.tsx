@@ -804,7 +804,7 @@ export function FormCobro({
       {/* Plata de más: se confirma antes de dejarla a favor (mismo lote al reintentar). */}
       <Dialog open={confirmarSaldo} onOpenChange={setConfirmarSaldo}>
         <DialogContent className="max-h-[92dvh] gap-5 overflow-y-auto p-6 sm:max-w-md">
-          <DialogHeader className="pr-8">
+          <DialogHeader>
             <DialogTitle className="text-xl">
               Sobran {formatARS(sobrante)}: ¿los dejamos como saldo a favor de {clienteNombre}?
             </DialogTitle>

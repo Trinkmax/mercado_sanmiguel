@@ -18,6 +18,9 @@ const UMBRAL_ARRASTRE = 6;
 const ZOOM_MAXIMO = 7;
 /** Enfocar a alguien acerca como mucho esto (se sigue viendo el contexto). */
 const ZOOM_ENFOQUE = 2.6;
+/** Margen mínimo (unidades del plano) al enfocar con el dedo; arriba, lugar para lo que flota. */
+const MARGEN_TACTIL = 24;
+const MARGEN_TACTIL_ARRIBA = 80;
 /** Desde esta proporción (pantalla más ancha que el plano, en proporción) se
  * arranca llenando el ancho. Con el plano girado un celular parado queda en
  * ~1,5 (lienzo de 390×620) y con pantalla completa en ~1,3: con 1,6, como en
@@ -302,13 +305,22 @@ export function useVista(limites: Rect, insetInferior = 0) {
       const margen = 140;
       // Se encuadra en la parte visible (arriba del panel flotante, si hay).
       const alto = Math.max(t.h - insetRef.current, t.h * 0.35);
-      // Con el dedo, enfocar nunca aleja más allá de la escala con la que abre el plano.
+      // Con el dedo, enfocar no aleja más allá de la escala con la que abre el plano
+      // (K_TACTIL): el margen de contexto se achica antes que los puestos. Solo aleja más
+      // si el área misma no entra (alguien con puestos en las dos puntas del predio).
+      // Arriba queda más lugar: ahí flotan el cartel "Asignando a…" y la pastilla.
+      const kArea = Math.min(
+        t.w / (r.w + MARGEN_TACTIL * 2),
+        alto / (r.h + MARGEN_TACTIL + MARGEN_TACTIL_ARRIBA)
+      );
       const k = acotar(
         Math.min(t.w / (r.w + margen * 2), alto / (r.h + margen * 2)),
-        kFit,
+        Math.max(kFit, Math.min(kTactilRef.current, kArea)),
         Math.max(kFit * ZOOM_ENFOQUE, kTactilRef.current)
       );
-      animarA({ cx: r.x + r.w / 2, cy: r.y + r.h / 2 + (t.h - alto) / (2 * k), k });
+      // Lo enfocado baja un poco para que el margen de arriba sea el más grande.
+      const corrimiento = (MARGEN_TACTIL_ARRIBA - MARGEN_TACTIL) / 2;
+      animarA({ cx: r.x + r.w / 2, cy: r.y + r.h / 2 + (t.h - alto) / (2 * k) - corrimiento, k });
     },
     [animarA]
   );

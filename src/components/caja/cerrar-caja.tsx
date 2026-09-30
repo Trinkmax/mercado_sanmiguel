@@ -141,7 +141,7 @@ export function BotonCerrarCaja({
         <DialogContent className="max-h-[92dvh] gap-5 overflow-y-auto p-6 sm:max-w-lg">
           {exito ? (
             <>
-              <DialogHeader className="pr-8">
+              <DialogHeader>
                 <DialogTitle className="text-xl">
                   {rinde ? "Caja de portería rendida" : "Caja cerrada"}
                 </DialogTitle>
@@ -196,7 +196,7 @@ export function BotonCerrarCaja({
             </>
           ) : (
             <>
-              <DialogHeader className="pr-8">
+              <DialogHeader>
                 <DialogTitle className="text-xl">
                   {rinde ? "Rendir la caja a Administración" : forzado ? "Cerrar la caja que quedó abierta" : "Cerrar la caja"}
                 </DialogTitle>

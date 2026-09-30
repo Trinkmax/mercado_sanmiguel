@@ -26,6 +26,8 @@ export type CajaPendiente = {
   rendidoAmbulantes: number;
   rendidoCanon: number;
   destinoFecha: string | null;
+  /** La caja de administración que la recibió sigue abierta (por eso no está en la lista). */
+  destinoAbierta: boolean;
   reaperturaMotivo: string | null;
   pideReapertura: boolean;
 };
@@ -58,11 +60,13 @@ export function CajasParaValidar({ cajas }: { cajas: CajaPendiente[] }) {
         const hrefCaja = `/caja?fecha=${c.fecha}&tipo=${c.tipo}`;
         const rendido = c.rendidoEfectivo + c.rendidoTransferencia;
         return (
+          // Primera columna de ancho fijo: "Tiene que haber…" empieza en el mismo lugar en
+          // todas las filas (el sello "En caja mayor" ya no la corre).
           <li
             key={c.id}
-            className="grid gap-4 px-4 py-4 md:grid-cols-[minmax(12rem,1fr)_minmax(0,2fr)_auto] md:items-center sm:px-5"
+            className="grid gap-4 px-4 py-4 sm:px-5 md:grid-cols-[14rem_minmax(0,1fr)] md:items-center xl:grid-cols-[16rem_minmax(0,1fr)_auto]"
           >
-            <div className="space-y-1">
+            <div className="min-w-0 space-y-1">
               <p className="text-base font-semibold">{capitalizar(formatFechaLarga(c.fecha))}</p>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-sm text-muted-foreground">
@@ -72,14 +76,14 @@ export function CajasParaValidar({ cajas }: { cajas: CajaPendiente[] }) {
                 {c.pideReapertura ? <Sello estado="reapertura_pedida" /> : null}
               </div>
               {c.cerradaPor ? (
-                <p className="text-sm text-muted-foreground">La cerró {c.cerradaPor}</p>
+                <p className="text-sm break-words text-muted-foreground">La cerró {c.cerradaPor}</p>
               ) : null}
               {c.pideReapertura && c.reaperturaMotivo ? (
-                <p className="text-sm text-parcial">«{c.reaperturaMotivo}»</p>
+                <p className="text-sm break-words text-parcial">«{c.reaperturaMotivo}»</p>
               ) : null}
             </div>
 
-            <div className="space-y-1.5">
+            <div className="min-w-0 space-y-1.5">
               <p className="text-base">
                 Tiene que haber <Money monto={c.efectivo} className="text-xl font-bold" /> en efectivo
               </p>
@@ -107,12 +111,15 @@ export function CajasParaValidar({ cajas }: { cajas: CajaPendiente[] }) {
               ) : integrada ? (
                 <p className="text-sm text-muted-foreground">
                   Ya está en la caja de administración
-                  {c.destinoFecha ? ` del ${formatFecha(c.destinoFecha).slice(0, 5)}` : ""}: se valida con esa.
+                  {c.destinoFecha ? ` del ${formatFecha(c.destinoFecha).slice(0, 5)}` : ""}
+                  {c.destinoAbierta
+                    ? ", que sigue abierta: se valida con esa cuando la cierren."
+                    : ": se valida con esa."}
                 </p>
               ) : null}
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 md:justify-end">
+            <div className="flex flex-wrap items-center gap-2 md:col-span-2 md:justify-end xl:col-span-1">
               <Button asChild variant="outline" size="icon" className="size-11" aria-label="Imprimir el cierre">
                 <Link href={`/cierre-caja/${c.id}`}>
                   <Printer className="size-5" strokeWidth={1.9} />

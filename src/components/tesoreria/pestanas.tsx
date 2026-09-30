@@ -12,7 +12,11 @@ const LABEL: Record<PestanaTesoreria, string> = {
   saldos: "Saldos iniciales",
 };
 
-/** Pestañas por link (`?tab=`): un camino por pantalla y el lugar sobrevive a recargar. */
+/**
+ * Pestañas por link (`?tab=`): un camino por pantalla y el lugar sobrevive a recargar.
+ * En el celular van de a dos por renglón (sin tira con scroll de costado: las cuatro
+ * se ven siempre, con su contador); desde 640 px, en una sola fila.
+ */
 export function PestanasTesoreria({
   activa,
   pendientes,
@@ -22,26 +26,27 @@ export function PestanasTesoreria({
   pendientes: Partial<Record<PestanaTesoreria, number>>;
 }) {
   return (
-    <nav aria-label="Secciones de Tesorería" className="-mx-1 overflow-x-auto px-1 pb-1">
-      <ul className="flex w-max gap-1 rounded-xl border bg-muted/60 p-1">
+    <nav aria-label="Secciones de Tesorería">
+      <ul className="grid grid-cols-2 gap-1 rounded-xl border bg-muted/60 p-1 sm:flex sm:w-fit sm:max-w-full sm:flex-wrap">
         {PESTANAS_TESORERIA.map((p) => {
           const esActiva = p === activa;
           const n = pendientes[p] ?? 0;
           return (
-            <li key={p}>
+            <li key={p} className="min-w-0">
               <Link
                 href={p === "hoy" ? "/tesoreria" : `/tesoreria?tab=${p}`}
                 aria-current={esActiva ? "page" : undefined}
                 scroll={false}
                 className={cn(
-                  "inline-flex min-h-11 items-center gap-2 rounded-lg px-4 text-base font-medium transition-colors",
+                  "flex h-full min-h-11 items-center justify-center gap-2 rounded-lg px-3 text-center text-base leading-tight font-medium transition-colors pointer-coarse:min-h-[44px] sm:px-4",
                   esActiva ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
                 )}
               >
                 {LABEL[p]}
                 {n > 0 ? (
-                  <span className="rounded-full bg-parcial-suave px-2 text-xs font-bold text-parcial tabular">
+                  <span className="shrink-0 rounded-full bg-parcial-suave px-2 text-xs font-bold text-parcial tabular">
                     {n}
+                    <span className="sr-only"> {n === 1 ? "pendiente" : "pendientes"}</span>
                   </span>
                 ) : null}
               </Link>

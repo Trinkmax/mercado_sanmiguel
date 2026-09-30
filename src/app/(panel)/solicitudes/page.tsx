@@ -139,7 +139,7 @@ export default async function SolicitudesPage({
                   )}
                 >
                   {/* El "N°" va en el número de la solicitud (antes estaba en la carpeta del socio). */}
-                  <span className="flex w-12 shrink-0 items-baseline justify-end gap-0.5 font-display text-lg leading-snug font-bold tabular">
+                  <span className="flex min-w-12 shrink-0 items-baseline justify-end gap-0.5 font-display text-lg leading-snug font-bold tabular">
                     <span className="font-sans text-xs font-medium text-muted-foreground">N°</span>
                     {s.numero}
                   </span>

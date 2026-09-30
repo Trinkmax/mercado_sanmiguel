@@ -288,36 +288,45 @@ export default async function ReciboPage({
             <p className="text-sm text-muted-foreground">Nota: {recibo.notas}</p>
           ) : null}
 
-          {/* Detalle: a qué se aplicó, agrupado por cargo */}
+          {/* Detalle: a qué se aplicó, agrupado por cargo. En un celular la columna Período se
+              esconde y el mes baja bajo la descripción: con las tres columnas, al detalle le
+              quedaban ~50 px (una palabra por renglón). En tablet y en el papel, las tres. */}
           {recibo.imputaciones.length > 0 || recibo.saldo_favor > 0.009 ? (
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b text-left text-muted-foreground">
                   <th className="py-2 pr-3 font-medium">Detalle</th>
-                  <th className="py-2 pr-3 font-medium">Período</th>
+                  <th className="hidden py-2 pr-3 font-medium sm:table-cell print:table-cell">Período</th>
                   <th className="py-2 text-right font-medium">Monto</th>
                 </tr>
               </thead>
               <tbody>
                 {recibo.imputaciones.map((imp) => (
                   <tr key={imp.cargo_id} className="border-b border-dashed">
-                    <td className="py-2 pr-3 break-words">
+                    <td className="py-2 pr-3 align-top break-words">
                       <DescripcionCargo texto={imp.descripcion} />
+                      <span className="block text-muted-foreground sm:hidden print:hidden">
+                        {labelPeriodo(imp.periodo)}
+                      </span>
                       {Number(imp.beneficio) > 0.009 ? (
                         <span className="block text-xs text-muted-foreground">
                           Con beneficio por pago en término de <Money monto={imp.beneficio} />
                         </span>
                       ) : null}
                     </td>
-                    <td className="py-2 pr-3 whitespace-nowrap">{labelPeriodo(imp.periodo)}</td>
-                    <td className="py-2 text-right whitespace-nowrap tabular">
+                    <td className="hidden py-2 pr-3 align-top whitespace-nowrap sm:table-cell print:table-cell">
+                      {labelPeriodo(imp.periodo)}
+                    </td>
+                    <td className="py-2 text-right align-top whitespace-nowrap tabular">
                       <Money monto={imp.monto} />
                     </td>
                   </tr>
                 ))}
                 {recibo.saldo_favor > 0.009 ? (
                   <tr className="border-b border-dashed">
-                    <td className="py-2" colSpan={2}>
+                    {/* Sin colSpan: en celular la columna Período no está, y una celda que la
+                        abarcara correría el monto fuera de su columna. */}
+                    <td className="py-2 pr-3 align-top break-words">
                       Saldo a favor{" "}
                       <span className="text-muted-foreground">(se aplica a lo próximo que deba)</span>
                       {aplicadoDespues.length > 0 ? (
@@ -332,7 +341,8 @@ export default async function ReciboPage({
                         </span>
                       ) : null}
                     </td>
-                    <td className="py-2 text-right tabular">
+                    <td className="hidden sm:table-cell print:table-cell" />
+                    <td className="py-2 text-right align-top whitespace-nowrap tabular">
                       <Money monto={recibo.saldo_favor} />
                     </td>
                   </tr>

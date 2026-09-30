@@ -45,14 +45,14 @@ export default function LoadingEnergia() {
 
       {/* Progreso + lecturas (tarjetas en celular y tablet, filas en escritorio) */}
       <Card>
-        <CardContent className="space-y-5 pt-6">
+        <CardContent className="space-y-5">
           <div className="space-y-2">
             <Skeleton className="h-5 w-56" />
             <Skeleton className="h-3 w-full rounded-full" />
           </div>
           <div className="@container">
             <Skeleton className="mb-3 hidden h-10 w-full @5xl:block" />
-            <div className="grid gap-3 @xl:grid-cols-2 @5xl:grid-cols-1">
+            <div className="grid gap-3 @2xl:grid-cols-2 @5xl:grid-cols-1">
               {Array.from({ length: 6 }).map((_, i) => (
                 <Skeleton key={i} className="h-56 w-full rounded-lg @5xl:h-20" />
               ))}

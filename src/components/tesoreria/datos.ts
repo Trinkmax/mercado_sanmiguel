@@ -88,11 +88,11 @@ export async function cargarCajasPendientes(supabase: Supabase): Promise<CajaPen
       ? supabase.from("perfiles").select("user_id, nombre").in("user_id", usuarios)
       : Promise.resolve({ data: [] as { user_id: string; nombre: string }[] }),
     destinos.length
-      ? supabase.from("cajas").select("id, fecha").in("id", destinos)
-      : Promise.resolve({ data: [] as { id: string; fecha: string }[] }),
+      ? supabase.from("cajas").select("id, fecha, estado").in("id", destinos)
+      : Promise.resolve({ data: [] as { id: string; fecha: string; estado: string }[] }),
   ]);
   const nombre = new Map((perfilesRes.data ?? []).map((p) => [p.user_id, p.nombre]));
-  const fechaDestino = new Map((destinosRes.data ?? []).map((d) => [d.id, d.fecha]));
+  const destino = new Map((destinosRes.data ?? []).map((d) => [d.id, d]));
 
   return cajas.map((c) => ({
     id: c.id,
@@ -113,7 +113,8 @@ export async function cargarCajasPendientes(supabase: Supabase): Promise<CajaPen
     rendidoQuintas: n(c.total_rendido_quintas),
     rendidoAmbulantes: n(c.total_rendido_ambulantes),
     rendidoCanon: n(c.total_rendido_canon),
-    destinoFecha: c.caja_destino_id ? fechaDestino.get(c.caja_destino_id) ?? null : null,
+    destinoFecha: c.caja_destino_id ? destino.get(c.caja_destino_id)?.fecha ?? null : null,
+    destinoAbierta: c.caja_destino_id ? destino.get(c.caja_destino_id)?.estado === "abierta" : false,
     reaperturaMotivo: c.reapertura_motivo,
     pideReapertura: Boolean(c.reapertura_solicitada_en),
   }));

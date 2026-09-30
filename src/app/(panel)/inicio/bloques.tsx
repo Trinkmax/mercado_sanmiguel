@@ -6,52 +6,40 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Codigo } from "@/components/shared/codigo";
 import { Money } from "@/components/shared/money";
+import {
+  BarraIngreso,
+  GRIS_BENEFICIO,
+  MontosIngreso,
+  MuestraBeneficio,
+  RAYADO_EN_TERMINO,
+} from "@/components/reportes/fila-ingreso";
 import type { ResumenConcepto } from "./datos";
 
 /**
- * Barra verde (cobrado) sobre pista roja suave (lo que falta), por concepto.
- * `objetivo` = contra qué se mide: lo que se tendría que cobrar (estimado) o
- * cobrado + lo que se debe hoy.
+ * Un concepto contra su estimado (el mismo de Facturación y Reportes), con la misma barra y
+ * los mismos nombres que Reportes: verde lo cobrado, gris los beneficios otorgados, rayado el
+ * beneficio en término y la pista roja lo que falta. Debajo, "$ cobrado de $ estimado" (bajo
+ * el verde), cada beneficio con su monto y "Faltan $X" a la derecha (bajo el rojo): la cuenta
+ * cierra en el renglón (cobrado + otorgados + en término + faltan = estimado).
  */
-export function BarraConcepto({
-  fila,
-  objetivo,
-  faltaTexto,
-}: {
-  fila: ResumenConcepto;
-  objetivo: number;
-  /** Lo que se muestra en rojo debajo ("faltan $X"). */
-  faltaTexto: number;
-}) {
-  const cobrado = Number(fila.cobrado);
-  const pct = objetivo > 0 ? Math.min((cobrado / objetivo) * 100, 100) : 100;
-  const completo = faltaTexto <= 0.009;
+export function BarraConcepto({ fila }: { fila: ResumenConcepto }) {
   return (
-    // Celular: código + nombre entero arriba, la barra y abajo los montos (con el "faltan").
-    // Desde sm: los montos en su columna, alineados a la derecha.
-    <div className="grid grid-cols-[auto_minmax(0,1fr)] items-center gap-x-4 gap-y-1.5 py-3 sm:grid-cols-[5rem_minmax(0,1fr)_12rem]">
-      <Codigo codigo={fila.codigo} />
-      <div className="min-w-0">
+    // Todos los anchos: código a la izquierda; el nombre entero, la barra a lo ancho y
+    // debajo los montos. Si no entran en un renglón, cada uno baja entero.
+    <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-4 py-3 sm:grid-cols-[5rem_minmax(0,1fr)]">
+      <Codigo codigo={fila.codigo} className="mt-0.5" />
+      <div className="min-w-0 space-y-1.5">
         <p className="text-sm font-medium break-words">{fila.nombre}</p>
-        <div
-          className="mt-1.5 h-3 overflow-hidden rounded-full bg-pendiente-suave"
-          role="progressbar"
-          aria-valuenow={Math.round(pct)}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-label={`${fila.nombre}: cobrado ${formatARS(cobrado)} de ${formatARS(objetivo)}`}
-        >
-          <div className="h-full rounded-full bg-pagado transition-[width]" style={{ width: `${pct}%` }} />
-        </div>
-      </div>
-      <div className="col-start-2 flex flex-wrap items-baseline justify-between gap-x-3 text-sm text-muted-foreground tabular sm:col-start-3 sm:block sm:text-right">
-        <p>
-          <span className="font-semibold whitespace-nowrap text-pagado">{formatARS(cobrado)}</span>{" "}
-          <span className="whitespace-nowrap">de {formatARS(objetivo)}</span>
-        </p>
-        {completo ? null : (
-          <p className="ml-auto whitespace-nowrap text-pendiente">faltan {formatARS(faltaTexto)}</p>
-        )}
+        <BarraIngreso fila={fila} />
+        <MontosIngreso
+          fila={fila}
+          antes={
+            <span>
+              <span className="font-semibold whitespace-nowrap text-pagado">{formatARS(Number(fila.cobrado))}</span>{" "}
+              <span className="whitespace-nowrap">de {formatARS(Number(fila.estimado))}</span>
+            </span>
+          }
+        />
       </div>
     </div>
   );
@@ -71,14 +59,16 @@ export type Aviso = {
   tono: "parcial" | "pendiente";
 };
 
+// El título (text-base) siempre un paso arriba de su descripción (text-sm). El Card ya trae
+// su relleno arriba y abajo: el contenido no suma otro.
 export function TarjetaAviso({ aviso }: { aviso: Aviso }) {
   const Icono = aviso.icono;
   const titulo = aviso.n === 1 ? aviso.singular : aviso.plural;
   if (aviso.tono === "pendiente") {
     return (
       <Card>
-        <CardContent className="pt-6">
-          <p className="font-semibold">
+        <CardContent>
+          <p className="text-base leading-snug font-semibold">
             <span className="text-pendiente tabular">{aviso.n}</span> {titulo}
           </p>
           <p className="mt-1 text-sm text-muted-foreground">{aviso.descripcion}</p>
@@ -92,12 +82,12 @@ export function TarjetaAviso({ aviso }: { aviso: Aviso }) {
   return (
     <Card className="border-parcial bg-parcial-suave">
       {/* Si no entra al lado (columna angosta, celular), el botón baja: nunca aprieta el texto. */}
-      <CardContent className="flex flex-wrap items-center justify-between gap-3 pt-6">
+      <CardContent className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-40 flex-1">
-          <p className="font-semibold">
+          <p className="text-base leading-snug font-semibold">
             <span className="tabular">{aviso.n}</span> {titulo}
           </p>
-          <p className="text-sm text-muted-foreground">{aviso.descripcion}</p>
+          <p className="mt-1 text-sm text-muted-foreground">{aviso.descripcion}</p>
         </div>
         <Button asChild className="min-h-11 shrink-0 text-base">
           <Link href={aviso.href}>
@@ -190,49 +180,87 @@ export function DesgloseCajaPorteria({
 }
 
 /**
- * Barra de tres tramos contra un total: cobrado (verde) · beneficios (gris) ·
- * falta (rojo suave). Con leyenda debajo.
+ * El estimado del mes en cuatro tramos, con los mismos nombres que Reportes, la impresión y
+ * el Excel: cobrado (verde) · beneficios otorgados (gris) · beneficio en término (gris
+ * rayado) · falta cobrar (rojo suave, lo que se debe hoy). Los cuatro suman el estimado.
  */
 export function BarraEstimado({
   cobrado,
-  beneficios,
+  otorgados,
+  enTermino,
   falta,
   etiqueta,
 }: {
   cobrado: number;
-  beneficios: number;
+  /** Beneficios ya descontados a quienes pagaron en término. */
+  otorgados: number;
+  /** Beneficio de quienes todavía no pagaron y siguen en término (si pagan tarde, pasa a falta). */
+  enTermino: number;
+  /** Lo que se debe hoy. */
   falta: number;
   etiqueta: string;
 }) {
-  const total = Math.max(cobrado + beneficios + falta, 0.01);
+  const total = Math.max(cobrado + otorgados + enTermino + falta, 0.01);
   const pc = (cobrado / total) * 100;
-  const pb = (beneficios / total) * 100;
+  const po = (otorgados / total) * 100;
+  const pt = (enTermino / total) * 100;
+  const tramos: { clave: string; label: string; monto: number; muestra: React.ReactNode; fuerte?: string }[] = [
+    {
+      clave: "cobrado",
+      label: "Cobrado",
+      monto: cobrado,
+      muestra: <span className="size-3 rounded-full bg-pagado" />,
+      fuerte: "text-pagado",
+    },
+    {
+      clave: "otorgados",
+      label: "Beneficios otorgados",
+      monto: otorgados,
+      muestra: <MuestraBeneficio tipo="otorgados" className="size-3" />,
+    },
+    {
+      clave: "en-termino",
+      label: "Beneficio en término",
+      monto: enTermino,
+      muestra: <MuestraBeneficio tipo="en-termino" className="size-3" />,
+    },
+    {
+      clave: "falta",
+      label: "Falta cobrar",
+      monto: falta,
+      muestra: <span className="size-3 rounded-full bg-pendiente-suave ring-1 ring-pendiente/40" />,
+      fuerte: "text-pendiente",
+    },
+  ];
   return (
-    <div className="space-y-2.5">
+    <div className="space-y-3">
       <div
         className="flex h-4 overflow-hidden rounded-full bg-pendiente-suave"
         role="img"
         aria-label={etiqueta}
       >
         <div className="h-full bg-pagado" style={{ width: `${pc}%` }} />
-        {pb > 0 ? <div className="h-full bg-muted-foreground/30" style={{ width: `${pb}%` }} /> : null}
+        {po > 0 ? <div className={cn("h-full", GRIS_BENEFICIO)} style={{ width: `${po}%` }} /> : null}
+        {pt > 0 ? <div className="h-full bg-muted" style={{ width: `${pt}%`, ...RAYADO_EN_TERMINO }} /> : null}
       </div>
-      <ul className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
-        <li className="flex items-center gap-2">
-          <span aria-hidden className="size-3 rounded-full bg-pagado" />
-          Cobrado <Money monto={cobrado} className="font-semibold" />
-        </li>
-        {beneficios > 0 ? (
-          <li className="flex items-center gap-2">
-            <span aria-hidden className="size-3 rounded-full bg-muted-foreground/30" />
-            Beneficios por pagar en término <Money monto={beneficios} className="font-semibold" />
-          </li>
-        ) : null}
-        <li className="flex items-center gap-2">
-          <span aria-hidden className="size-3 rounded-full bg-pendiente-suave ring-1 ring-pendiente/40" />
-          Falta <Money monto={falta} className="font-semibold text-pendiente" />
-        </li>
-      </ul>
+      {/* Cada tramo: su muestra de color y su nombre arriba, el monto debajo (nunca se parte). */}
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:flex sm:flex-wrap sm:gap-x-8">
+        {tramos
+          .filter((t) => t.clave === "cobrado" || t.clave === "falta" || t.monto > 0.5)
+          .map((t) => (
+            <div key={t.clave} className="min-w-0">
+              <dt className="flex items-center gap-2 text-sm text-muted-foreground">
+                <span aria-hidden className="flex shrink-0">
+                  {t.muestra}
+                </span>
+                {t.label}
+              </dt>
+              <dd>
+                <Money monto={t.monto} className={cn("text-base font-semibold", t.fuerte)} />
+              </dd>
+            </div>
+          ))}
+      </dl>
     </div>
   );
 }

@@ -101,7 +101,7 @@ export function BajaCliente({
           </Button>
         </DialogTrigger>
         <DialogContent className="sm:max-w-md">
-          <DialogHeader className="pr-8">
+          <DialogHeader>
             <DialogTitle className="break-words">¿Reactivar a {nombre}?</DialogTitle>
             <DialogDescription>
               Vuelve a la lista de clientes activos y a la facturación mensual
@@ -159,7 +159,7 @@ export function BajaCliente({
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader className="pr-8">
+        <DialogHeader>
           <DialogTitle className="break-words">Dar de baja a {nombre}</DialogTitle>
           <DialogDescription>
             Deja de facturarse desde el próximo mes y sale de la lista de

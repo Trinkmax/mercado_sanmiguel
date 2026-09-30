@@ -111,7 +111,7 @@ export function DeudaAnterior({
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
-        <DialogHeader className="pr-8">
+        <DialogHeader>
           <DialogTitle>Registrar deuda anterior</DialogTitle>
           <DialogDescription>
             Deuda de antes de usar el sistema (Reconocimiento de Deuda). Queda

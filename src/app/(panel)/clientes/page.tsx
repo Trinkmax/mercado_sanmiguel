@@ -48,7 +48,10 @@ function hrefListado(p: { q?: string; seg?: string | null; estado?: string | nul
 const FILA_CHIPS =
   "-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0 [&::-webkit-scrollbar]:hidden";
 
-/** Chip de filtro: link de 44 px con su conteo; en 0 se atenúa (sigue tocable para salir). */
+/**
+ * Chip de filtro: link con su conteo; en 0 se atenúa (sigue tocable para salir). h-11 con la
+ * raíz en 15 px da 41 px: en pantallas táctiles sube a 44 px.
+ */
 function ChipFiltro({
   href,
   label,
@@ -66,7 +69,7 @@ function ChipFiltro({
       scroll={false}
       aria-current={activo ? "true" : undefined}
       className={cn(
-        "inline-flex h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-medium whitespace-nowrap transition-colors",
+        "inline-flex h-11 shrink-0 items-center gap-2 rounded-full border px-4 text-sm font-medium whitespace-nowrap transition-colors pointer-coarse:min-h-[44px]",
         activo
           ? "border-primary bg-primary text-primary-foreground"
           : cantidad === 0
@@ -407,7 +410,7 @@ export default async function ClientesPage({ searchParams }: Props) {
                         <p
                           title={c.nombre}
                           className={cn(
-                            "line-clamp-2 min-w-0 text-base leading-snug font-medium break-words",
+                            "min-w-0 text-base leading-snug font-medium break-words",
                             !c.activo && "text-muted-foreground"
                           )}
                         >
@@ -436,7 +439,7 @@ export default async function ClientesPage({ searchParams }: Props) {
                           )}
                         />
                       ) : tieneSaldo ? (
-                        <span className="text-xs text-pagado">
+                        <span className="text-sm whitespace-nowrap text-pagado">
                           a favor <Money monto={c.saldoFavor} className="font-semibold" />
                         </span>
                       ) : null}

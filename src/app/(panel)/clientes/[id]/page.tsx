@@ -530,6 +530,14 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
   const facturaPuestos = items.some(
     (i) => i.activo && ["EXME", "EXPP", "EXPL", "EXPE"].includes(i.conceptos?.codigo ?? "")
   );
+  // Cocheras (EXPC) y galpones (EXPG) no se marcan en el plano, pero la línea "dónde está" los
+  // nombra igual: si no, dice menos que su carpeta y que la lista de Clientes.
+  const facturado = (codigo: string) =>
+    items
+      .filter((i) => i.activo && i.conceptos?.codigo === codigo)
+      .reduce((acc, i) => acc + Number(i.cantidad), 0);
+  const sinLugar = { cocheras: facturado("EXPC"), galpones: facturado("EXPG") };
+  const quinteroActivo = categoria === "quintero" && cliente.activo;
   // "Puestos 58 · 60" (o "Puesto 58 · Local 3"): se liberan al darlo de baja o pasarlo a ambulante.
   const lugaresAviso: { tipo: TipoEspacio; numero: string | null; medio: boolean; propio: boolean }[] = esJefe
     ? (lugaresJefeRes.data ?? []).filter((e): e is typeof e & { tipo: TipoEspacio } =>
@@ -612,12 +620,17 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
               lugaresTexto={lugaresTexto}
             />
           </PageHeader>
-          {!esJefe ? (
+          {/* El Jefe no lee el plano con puesteros, pero sí ve a sus quinteros en la zona de
+              quinteros del mapa de Portería (lo enfoca con ?cliente=). Dado de baja: el mapa no lo
+              carga y sus conceptos siguen activos pero ya no se facturan, así que no se nombran. */}
+          {!esJefe || quinteroActivo ? (
             <EnElPlano
               clienteId={cliente.id}
               espacios={espaciosPlano}
               facturaPuestos={facturaPuestos && cliente.activo}
               puedeUbicar={perfil.rol === "admin" || perfil.rol === "lider"}
+              quintero={quinteroActivo}
+              sinLugar={cliente.activo ? sinLugar : undefined}
             />
           ) : null}
         </div>

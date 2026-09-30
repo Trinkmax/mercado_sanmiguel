@@ -234,7 +234,7 @@ export function CargaRapida({
 
   return (
     <Card>
-      <CardContent className="space-y-5 pt-6">
+      <CardContent className="space-y-5">
         {/* Progreso del período */}
         <div className="space-y-2">
           <div className="flex items-baseline justify-between gap-3">
@@ -262,8 +262,9 @@ export function CargaRapida({
         </div>
 
         {/* Una sola lista para todos los anchos (los inputs tienen una ref por medidor):
-            en celular y tablet cada medidor es una tarjeta (dos por fila si entran); desde
-            64rem de ancho útil, filas alineadas como una tabla. Nada queda fuera de pantalla. */}
+            en celular y tablet cada medidor es una tarjeta (dos por fila desde 42rem de ancho
+            útil: más angostas no entran Guardar + la X ni un importe de 9 cifras); desde 64rem,
+            filas alineadas como una tabla. Nada queda fuera de pantalla. */}
         <div className="@container">
           <div
             aria-hidden
@@ -280,7 +281,7 @@ export function CargaRapida({
             <span className="text-right">Importe</span>
             <span />
           </div>
-          <ul className="grid gap-3 @xl:grid-cols-2 @5xl:grid-cols-1 @5xl:gap-0">
+          <ul className="grid gap-3 @2xl:grid-cols-2 @5xl:grid-cols-1 @5xl:gap-0">
             {filas.map((fila) => {
               const est = estado[fila.id];
               if (!est) return null;

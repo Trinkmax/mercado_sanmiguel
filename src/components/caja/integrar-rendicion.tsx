@@ -171,7 +171,7 @@ export function BotonIntegrarRendicion({
         }}
       >
         <DialogContent className="max-h-[92dvh] gap-5 overflow-y-auto p-6 sm:max-w-md">
-          <DialogHeader className="pr-8">
+          <DialogHeader>
             <DialogTitle className="text-xl">Recibir la caja de portería del {formatFecha(r.fecha)}</DialogTitle>
             <DialogDescription className="text-base">
               Contá el efectivo que te entrega el Jefe de Portería y confirmá. Entra en tu caja de hoy y
@@ -304,7 +304,7 @@ export function ExitoRecepcion({ recibida, onCerrar }: { recibida: Recibida | nu
       <DialogContent className="max-h-[92dvh] gap-5 overflow-y-auto p-6 sm:max-w-md">
         {recibida && r ? (
           <>
-            <DialogHeader className="pr-8">
+            <DialogHeader>
               <DialogTitle className="text-xl">Caja de portería recibida</DialogTitle>
               <DialogDescription className="text-base">
                 La caja del {formatFecha(recibida.fecha)} ya está dentro de tu caja de hoy.

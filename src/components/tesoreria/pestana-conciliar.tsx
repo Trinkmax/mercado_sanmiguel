@@ -41,6 +41,26 @@ function comoSePago(g: { pagado_desde: string | null; medio_pago: string | null;
   return `Tesorería · ${g.medio_pago ? LABEL_MEDIO_GASTO[g.medio_pago] ?? g.medio_pago : ""}`;
 }
 
+/**
+ * "[SEGUV] Seguros Varios · " al comienzo del renglón de detalle: el código solo no se
+ * entiende. Si el gasto no tiene descripción, el título ya es el nombre del rubro.
+ */
+function Rubro({
+  rubro,
+  conDescripcion,
+}: {
+  rubro: { codigo: string; nombre: string } | null;
+  conDescripcion: boolean;
+}) {
+  if (!rubro) return null;
+  return (
+    <>
+      <Codigo codigo={rubro.codigo} className="mr-1.5 align-middle" />
+      {conDescripcion ? `${rubro.nombre} · ` : null}
+    </>
+  );
+}
+
 /** "Camión grande × 2" · "Bono camioneros". */
 function detalleCanon(c: { tarifa_nombre: string | null; cantidad: number; tipo: string }): string {
   const nombre = c.tarifa_nombre ?? (c.tipo === "camion" ? "Bono camioneros" : "Ingreso de transporte");
@@ -167,17 +187,20 @@ export async function PestanaConciliar({ puedeOperar }: { puedeOperar: boolean }
             <h3 className="text-base font-semibold">Últimas conciliadas</h3>
             <ul className="divide-y overflow-hidden rounded-xl border bg-card">
               {conciliadas.map((t) => (
-                <li key={t.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
+                <li
+                  key={t.id}
+                  className="grid gap-x-4 gap-y-2 px-4 py-2.5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                >
                   <div className="min-w-0 text-sm">
-                    <p className="font-medium">
+                    <p className="font-medium break-words">
                       Recibo N° {t.numero} · {t.cliente?.nombre ?? "—"}
                     </p>
-                    <p className="text-muted-foreground">
+                    <p className="break-words text-muted-foreground">
                       {formatFechaHora(t.conciliado_en)} · {(t.conciliado_por && nombres.get(t.conciliado_por)) || "—"}
                       {t.titular_transferencia ? ` · Titular: ${t.titular_transferencia}` : ""}
                     </p>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-3 sm:justify-end">
                     <Money monto={t.monto} className="font-semibold" />
                     <Sello estado="conciliado" />
                     {puedeOperar ? <BotonDesconciliar id={t.id} numero={t.numero} /> : null}
@@ -218,7 +241,10 @@ export async function PestanaConciliar({ puedeOperar }: { puedeOperar: boolean }
             <h3 className="text-base font-semibold">Últimos conciliados</h3>
             <ul className="divide-y overflow-hidden rounded-xl border bg-card">
               {canonConciliados.map((c) => (
-                <li key={c.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5">
+                <li
+                  key={c.id}
+                  className="grid gap-x-4 gap-y-2 px-4 py-2.5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                >
                   <div className="min-w-0 text-sm">
                     <p className="font-medium break-words">
                       Bono N° {c.numero} · {detalleCanon(c)}
@@ -227,7 +253,7 @@ export async function PestanaConciliar({ puedeOperar }: { puedeOperar: boolean }
                       {formatFechaHora(c.conciliado_en)} · {(c.conciliado_por && nombres.get(c.conciliado_por)) || "—"}
                     </p>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-3 sm:justify-end">
                     <Money monto={c.monto} className="font-semibold" />
                     <Sello estado="conciliado" texto="Conciliado" />
                     {puedeOperar ? <BotonDesconciliarCanon id={c.id} numero={c.numero} /> : null}
@@ -242,7 +268,13 @@ export async function PestanaConciliar({ puedeOperar }: { puedeOperar: boolean }
       <section className="space-y-4" aria-label="Facturas de gastos pagados">
         <Titulo
           titulo="Facturas de gastos pagados"
-          descripcion="Revisá la factura de cada gasto pagado y dale el OK."
+          descripcion={
+            conFactura.length > 0
+              ? "Revisá la factura de cada gasto pagado y validala."
+              : sinFactura.length > 0
+                ? "Todavía no hay facturas para revisar: a estos gastos les falta la factura."
+                : "Cuando se adjunte la factura de un gasto pagado, la validás acá."
+          }
         />
         {gastos.length === 0 ? (
           <EmptyState
@@ -258,24 +290,25 @@ export async function PestanaConciliar({ puedeOperar }: { puedeOperar: boolean }
               const etiqueta = etiquetaGasto(g.descripcion, g.rubro?.nombre);
               const url = g.factura_path ? urls.get(g.factura_path) : undefined;
               return (
-                <li key={g.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+                <li
+                  key={g.id}
+                  className="grid gap-x-4 gap-y-2 px-4 py-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
+                >
                   <div className="min-w-0 space-y-0.5">
-                    <p className="flex flex-wrap items-center gap-2 text-base font-medium">
-                      {g.rubro ? <Codigo codigo={g.rubro.codigo} /> : null}
-                      {etiqueta}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-base font-medium break-words">{etiqueta}</p>
+                    <p className="text-sm break-words text-muted-foreground">
+                      <Rubro rubro={g.rubro} conDescripcion={Boolean(g.descripcion?.trim())} />
                       {comoSePago(g)} · pagado el {formatFecha(g.fecha_pago).slice(0, 5)}
                     </p>
                   </div>
-                  <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-3 md:justify-end">
                     <Money monto={g.monto} className="text-base font-semibold" />
                     {url ? (
                       <a
                         href={url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex min-h-11 items-center gap-1.5 font-medium text-primary hover:underline"
+                        className="inline-flex min-h-11 items-center gap-1.5 font-medium text-primary hover:underline pointer-coarse:min-h-[44px]"
                       >
                         <FileCheck2 className="size-4" strokeWidth={2} />
                         Ver factura
@@ -310,11 +343,17 @@ export async function PestanaConciliar({ puedeOperar }: { puedeOperar: boolean }
             </div>
             <ul className="divide-y border-t bg-card">
               {sinFactura.map((g) => (
-                <li key={g.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 text-sm">
-                  <span className="flex flex-wrap items-center gap-2">
-                    {g.rubro ? <Codigo codigo={g.rubro.codigo} /> : null}
-                    <span className="font-medium">{etiquetaGasto(g.descripcion, g.rubro?.nombre)}</span>
-                    <span className="text-muted-foreground">· {comoSePago(g)}</span>
+                // El monto siempre a la derecha, aunque la descripción ocupe dos renglones.
+                <li
+                  key={g.id}
+                  className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-1 px-4 py-2.5 text-sm"
+                >
+                  <span className="min-w-0 space-y-0.5">
+                    <span className="block font-medium break-words">{etiquetaGasto(g.descripcion, g.rubro?.nombre)}</span>
+                    <span className="block break-words text-muted-foreground">
+                      <Rubro rubro={g.rubro} conDescripcion={Boolean(g.descripcion?.trim())} />
+                      {comoSePago(g)}
+                    </span>
                   </span>
                   <Money monto={g.monto} className="font-semibold" />
                 </li>

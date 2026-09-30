@@ -41,6 +41,7 @@ import {
 import { ElegirDiferencia, ElegirGasto, montosDistintos } from "@/components/cheques/elegir-gasto";
 import { useDatosCheques } from "@/components/cheques/datos-cheques";
 import { AlertaError } from "@/components/cobranza/alerta-error";
+import { PIE_DIALOGO_FIJO, enfocarDialogo } from "@/components/tesoreria/tipos";
 import { llamarAccion } from "@/lib/llamar-accion";
 
 export type ChequeAcciones = {
@@ -187,7 +188,7 @@ function ElegirMotivo({
             onClick={() => onCambiar(m)}
             aria-pressed={valor === m}
             className={cn(
-              "min-h-11 rounded-full border px-4 text-left text-sm font-medium",
+              "min-h-11 rounded-full border px-4 text-left text-sm font-medium pointer-coarse:min-h-[44px]",
               valor === m ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:bg-accent"
             )}
           >
@@ -277,6 +278,7 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
   const gastoElegido = gastoId ? gastos.find((g) => g.id === gastoId) ?? null : null;
   const faltaDiferencia =
     gastoElegido !== null && montosDistintos(cheque.monto, gastoElegido.monto) && diferencia === null;
+  const faltaProveedor = proveedor.trim().length < 2;
   const cerrar = (o: boolean) => !o && !pendiente && setDialogo(null);
   const errorVisible = error ? <AlertaError error={error} titulo="No se pudo guardar" /> : null;
   const motivoListo = motivo.trim().length >= 3;
@@ -289,7 +291,9 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
 
   return (
     <>
-      <div className="flex flex-wrap gap-2 md:justify-end">
+      {/* Desde 1024 px los botones van uno abajo del otro, del mismo ancho, en una columna
+          fija de la fila: quedan en el mismo lugar en todos los cheques. */}
+      <div className="flex flex-wrap gap-2 md:justify-end lg:flex-col lg:flex-nowrap lg:items-stretch lg:justify-start">
         {cheque.estado === "en_cartera" ? (
           <>
             {esDiferido ? (
@@ -297,7 +301,7 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <span tabIndex={0} className="inline-flex rounded-md">
-                      <Button className="h-11 px-4 text-base font-semibold" disabled>
+                      <Button className="h-11 px-4 text-base font-semibold lg:w-full" disabled>
                         <CalendarClock className="size-4" strokeWidth={2} />
                         Depositar
                       </Button>
@@ -367,8 +371,8 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
 
       {/* Depositar */}
       <Dialog open={dialogo === "depositar"} onOpenChange={cerrar}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader className="pr-8">
+        <DialogContent className="sm:max-w-md" onOpenAutoFocus={enfocarDialogo}>
+          <DialogHeader>
             <DialogTitle className="text-lg">Depositar el {nombre}</DialogTitle>
             <DialogDescription className="text-base">
               {formatARS(cheque.monto)}
@@ -386,7 +390,7 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
             />
           </div>
           {errorVisible}
-          <DialogFooter>
+          <DialogFooter className={PIE_DIALOGO_FIJO}>
             <Button
               size="lg"
               className={CTA_LARGO}
@@ -404,8 +408,8 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
 
       {/* Acreditar */}
       <Dialog open={dialogo === "acreditar"} onOpenChange={cerrar}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader className="pr-8">
+        <DialogContent className="sm:max-w-md" onOpenAutoFocus={enfocarDialogo}>
+          <DialogHeader>
             <DialogTitle className="text-lg">¿Se acreditó el {nombre}?</DialogTitle>
             <DialogDescription className="text-base">
               {formatARS(cheque.monto)} ya están en el banco: suman al saldo del banco.
@@ -422,7 +426,7 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
             />
           </div>
           {errorVisible}
-          <DialogFooter>
+          <DialogFooter className={PIE_DIALOGO_FIJO}>
             <Button
               size="lg"
               className={CTA_LARGO}
@@ -440,8 +444,8 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
 
       {/* Deshacer depósito */}
       <Dialog open={dialogo === "deshacer_deposito"} onOpenChange={cerrar}>
-        <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-md">
-          <DialogHeader className="pr-8">
+        <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-md" onOpenAutoFocus={enfocarDialogo}>
+          <DialogHeader>
             <DialogTitle className="text-lg">¿Volver el {nombre} a Por cobrar?</DialogTitle>
             <DialogDescription className="text-base">
               {formatARS(cheque.monto)}. Se borra la fecha del depósito y queda anotado con tu nombre.
@@ -458,7 +462,7 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
             }}
           />
           {errorVisible}
-          <DialogFooter className="gap-2">
+          <DialogFooter className={PIE_DIALOGO_FIJO}>
             <Button variant="outline" className="h-12 px-5 text-base" disabled={pendiente} onClick={() => setDialogo(null)}>
               No, volver
             </Button>
@@ -481,8 +485,8 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
 
       {/* Deshacer acreditación */}
       <Dialog open={dialogo === "deshacer_acreditacion"} onOpenChange={cerrar}>
-        <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-md">
-          <DialogHeader className="pr-8">
+        <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-md" onOpenAutoFocus={enfocarDialogo}>
+          <DialogHeader>
             <DialogTitle className="text-lg">¿El {nombre} todavía no se acreditó?</DialogTitle>
             <DialogDescription className="text-base">
               Vuelve a Depositados y el saldo del banco baja {formatARS(cheque.monto)}. Queda anotado con
@@ -500,7 +504,7 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
             }}
           />
           {errorVisible}
-          <DialogFooter className="gap-2">
+          <DialogFooter className={PIE_DIALOGO_FIJO}>
             <Button variant="outline" className="h-12 px-5 text-base" disabled={pendiente} onClick={() => setDialogo(null)}>
               No, volver
             </Button>
@@ -523,13 +527,12 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
 
       {/* Deshacer la entrega a un proveedor (o el gasto que pagó) */}
       <Dialog open={dialogo === "deshacer_entrega"} onOpenChange={cerrar}>
-        <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-lg">
-          <DialogHeader className="pr-8">
+        <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-lg" onOpenAutoFocus={enfocarDialogo}>
+          <DialogHeader>
             <DialogTitle className="text-lg">Deshacer: {nombre}</DialogTitle>
             <DialogDescription className="text-base break-words">
-              {formatARS(cheque.monto)} · entregado a {cheque.proveedor ?? "un proveedor"}
-              {cheque.gastoEtiqueta ? ` · pagó ${cheque.gastoEtiqueta}` : ""}. El cobro del cliente no
-              se toca.
+              {formatARS(cheque.monto)} · entregado a {cheque.proveedor ?? "un proveedor"}.
+              {cheque.gastoEtiqueta ? ` Pagó: ${cheque.gastoEtiqueta}.` : ""}
             </DialogDescription>
           </DialogHeader>
           <fieldset className="space-y-2">
@@ -552,7 +555,7 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
                 <span className="block text-base font-semibold">Volvió a la cartera</span>
                 <span className="block text-sm text-muted-foreground">
                   El proveedor lo devolvió sano o no se lo diste: vuelve a Por cobrar
-                  {cheque.gastoEtiqueta ? ` y ${cheque.gastoEtiqueta} vuelve a Por pagar` : ""}.
+                  {cheque.gastoId ? " y el gasto, a Por pagar" : ""}.
                 </span>
               </span>
             </button>
@@ -574,7 +577,7 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
                 <span className="min-w-0">
                   <span className="block text-base font-semibold">El gasto estaba mal</span>
                   <span className="block text-sm text-muted-foreground">
-                    {cheque.gastoEtiqueta ?? "El gasto"} vuelve a Por pagar y elegís el gasto correcto.
+                    El gasto vuelve a Por pagar y elegís el correcto.
                   </span>
                 </span>
               </button>
@@ -588,11 +591,13 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
           ) : null}
           {cheque.gastoDiferencia === "dividido" ? (
             <p className="rounded-lg bg-muted/60 px-4 py-3 text-sm break-words">
-              {cheque.gastoEtiqueta ?? "El gasto"} vuelve a su monto completo y se anula el «Resto» que
-              quedó por pagar (si ya lo pagaste, queda como está).
+              El gasto vuelve a su monto completo y se anula el «Resto» que quedó por pagar (si ya lo
+              pagaste, queda como está).
             </p>
           ) : null}
-          <p className="text-sm text-muted-foreground">Si el banco lo rebotó, usá Rechazar.</p>
+          <p className="text-sm text-muted-foreground">
+            El cobro del cliente no se toca. Si el banco lo rebotó, usá Rechazar.
+          </p>
           <ElegirMotivo
             id={`motivo-ent-${cheque.id}`}
             pregunta="¿Por qué lo deshacés?"
@@ -604,7 +609,7 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
             }}
           />
           {errorVisible}
-          <DialogFooter className="gap-2">
+          <DialogFooter className={PIE_DIALOGO_FIJO}>
             <Button variant="outline" className="h-12 px-5 text-base" disabled={pendiente} onClick={() => setDialogo(null)}>
               No, volver
             </Button>
@@ -641,7 +646,7 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
       {/* Entregar a proveedor */}
       <Dialog open={dialogo === "entregar"} onOpenChange={cerrar}>
         <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-lg">
-          <DialogHeader className="pr-8">
+          <DialogHeader>
             <DialogTitle className="text-lg">Entregar el {nombre} a un proveedor</DialogTitle>
             <DialogDescription className="text-base">
               {formatARS(cheque.monto)}. Sale de la cartera (sin tocar ninguna caja).
@@ -668,7 +673,7 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
                       key={p}
                       type="button"
                       onClick={() => setProveedor(p)}
-                      className="min-h-11 max-w-full rounded-full border bg-card px-4 text-left text-sm font-medium break-words hover:bg-accent"
+                      className="min-h-11 max-w-full rounded-full border bg-card px-4 text-left text-sm font-medium break-words hover:bg-accent pointer-coarse:min-h-[44px]"
                     >
                       {p}
                     </button>
@@ -700,6 +705,7 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
                 valor={gastoId}
                 onCambiar={elegirGasto}
                 idBase={`ent-gasto-${cheque.id}`}
+                hoy={hoy}
               />
               {gastoElegido ? (
                 <ElegirDiferencia
@@ -713,11 +719,11 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
             </div>
           </div>
           {errorVisible}
-          <DialogFooter>
+          <DialogFooter className={PIE_DIALOGO_FIJO}>
             <Button
               size="lg"
               className={CTA_LARGO}
-              disabled={pendiente || proveedor.trim().length < 2 || !fecha || fecha > hoy || faltaDiferencia}
+              disabled={pendiente || faltaProveedor || !fecha || fecha > hoy || faltaDiferencia}
               onClick={() =>
                 ejecutar(
                   () =>
@@ -736,11 +742,13 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
               }
             >
               {pendiente ? <Spinner className="size-5" /> : <HandCoins className="size-5" strokeWidth={2} />}
-              {faltaDiferencia
-                ? "Elegí qué pasó con la diferencia"
-                : gastoElegido
-                  ? `Entregar y pagar ${gastoElegido.etiqueta}`
-                  : `Entregar a ${proveedor.trim() || "…"}`}
+              {faltaProveedor
+                ? "Poné a qué proveedor se lo diste"
+                : faltaDiferencia
+                  ? "Elegí qué pasó con la diferencia"
+                  : gastoElegido
+                    ? `Entregar y pagar ${gastoElegido.etiqueta}`
+                    : `Entregar a ${proveedor.trim()}`}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -748,8 +756,8 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
 
       {/* ¿Qué gasto pagó? */}
       <Dialog open={dialogo === "vincular"} onOpenChange={cerrar}>
-        <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-lg">
-          <DialogHeader className="pr-8">
+        <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-lg" onOpenAutoFocus={enfocarDialogo}>
+          <DialogHeader>
             <DialogTitle className="text-lg">¿Qué gasto pagó el {nombre}?</DialogTitle>
             <DialogDescription className="text-base break-words">
               Se lo dieron a {cheque.proveedor ?? "un proveedor"}
@@ -763,6 +771,7 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
             valor={gastoId}
             onCambiar={elegirGasto}
             idBase={`vin-${cheque.id}`}
+            hoy={hoy}
           />
           {gastoElegido ? (
             <ElegirDiferencia
@@ -774,7 +783,7 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
             />
           ) : null}
           {errorVisible}
-          <DialogFooter>
+          <DialogFooter className={PIE_DIALOGO_FIJO}>
             <Button
               size="lg"
               className={CTA_LARGO}
@@ -807,8 +816,8 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
 
       {/* Rechazar */}
       <Dialog open={dialogo === "rechazar"} onOpenChange={cerrar}>
-        <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-md">
-          <DialogHeader className="pr-8">
+        <DialogContent className="max-h-[92svh] overflow-y-auto sm:max-w-md" onOpenAutoFocus={enfocarDialogo}>
+          <DialogHeader>
             <DialogTitle className="text-lg">¿El {nombre} rebotó?</DialogTitle>
             <DialogDescription className="text-base">
               {formatARS(cheque.monto)}. El cobro que respaldaba se anula y la deuda del cliente vuelve a
@@ -836,8 +845,8 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
           ) : null}
           {cheque.gastoDiferencia === "dividido" ? (
             <p className="rounded-lg bg-muted/60 px-4 py-3 text-sm break-words">
-              {cheque.gastoEtiqueta ?? "El gasto"} vuelve a su monto completo y se anula el «Resto» que
-              quedó por pagar (si ya lo pagaste, queda como está).
+              El gasto vuelve a su monto completo y se anula el «Resto» que quedó por pagar (si ya lo
+              pagaste, queda como está).
             </p>
           ) : null}
           <ElegirMotivo
@@ -851,7 +860,7 @@ export function AccionesCheque({ cheque, hoy }: { cheque: ChequeAcciones; hoy: s
             }}
           />
           {errorVisible}
-          <DialogFooter className="gap-2">
+          <DialogFooter className={PIE_DIALOGO_FIJO}>
             <Button variant="outline" className="h-12 px-5 text-base" disabled={pendiente} onClick={() => setDialogo(null)}>
               No, volver
             </Button>

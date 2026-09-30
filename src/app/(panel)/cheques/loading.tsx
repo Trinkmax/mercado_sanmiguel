@@ -35,7 +35,7 @@ export default function LoadingCheques() {
           {Array.from({ length: 5 }).map((_, i) => (
             <div
               key={i}
-              className="grid gap-3 px-4 py-4 lg:grid-cols-[minmax(10rem,1fr)_minmax(0,1.6fr)_auto] lg:items-center lg:gap-6"
+              className="grid gap-3 px-4 py-4 lg:grid-cols-[12.5rem_minmax(0,1fr)_15rem] lg:items-center lg:gap-6"
             >
               <div className="space-y-2">
                 <Skeleton className="h-7 w-28" />
@@ -47,9 +47,9 @@ export default function LoadingCheques() {
                 <Skeleton className="h-4 w-80 max-w-full" />
                 <Skeleton className="h-7 w-28 rounded-md" />
               </div>
-              <div className="flex gap-2 lg:justify-end">
-                <Skeleton className="h-11 w-28 rounded-md" />
-                <Skeleton className="h-11 w-44 rounded-md" />
+              <div className="flex gap-2 md:justify-end lg:flex-col">
+                <Skeleton className="h-11 w-28 rounded-md lg:w-full" />
+                <Skeleton className="h-11 w-44 rounded-md lg:w-full" />
               </div>
             </div>
           ))}

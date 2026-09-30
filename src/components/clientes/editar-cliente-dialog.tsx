@@ -45,7 +45,7 @@ export function EditarClienteDialog({
         </Button>
       </DialogTrigger>
       <DialogContent className="max-h-[90svh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader className="pr-8">
+        <DialogHeader>
           <DialogTitle>Editar datos del {que}</DialogTitle>
           <DialogDescription>
             {aplicaDirectoRol(rol)

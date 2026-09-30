@@ -95,7 +95,7 @@ export function BotonPedirReapertura({
         </Button>
       </DialogTrigger>
       <DialogContent className="max-h-[92dvh] gap-5 overflow-y-auto p-6 sm:max-w-md">
-        <DialogHeader className="pr-8">
+        <DialogHeader>
           <DialogTitle className="text-xl">Pedir la reapertura de la caja</DialogTitle>
           <DialogDescription className="text-base">
             {destino === "tesorería" ? "Tesorería" : "Administración"} va a ver

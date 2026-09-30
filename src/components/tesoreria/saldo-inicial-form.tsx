@@ -40,6 +40,7 @@ export function SaldoInicialForm({
   monto,
   fecha,
   notas,
+  fechaSugerida = null,
   alGuardar,
 }: {
   medio: "efectivo" | "transferencia";
@@ -47,10 +48,15 @@ export function SaldoInicialForm({
   monto: number | null;
   fecha: string | null;
   notas: string | null;
+  /** Día en que arrancan los otros saldos: se propone ese (y no hoy) para una cuenta nueva. */
+  fechaSugerida?: string | null;
   alGuardar?: () => void;
 }) {
   const [montoStr, setMontoStr] = useState(textoInicial(monto));
-  const [fechaStr, setFechaStr] = useState(fecha ?? hoyISO());
+  // Hasta que se elija un día se propone el de los otros saldos (o hoy); si mientras tanto
+  // se guarda otro saldo, la propuesta se actualiza sola.
+  const [fechaElegida, setFechaElegida] = useState<string | null>(fecha);
+  const fechaStr = fechaElegida ?? fechaSugerida ?? hoyISO();
   const [notasStr, setNotasStr] = useState(notas ?? "");
   const [motivo, setMotivo] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -63,6 +69,9 @@ export function SaldoInicialForm({
   const cambiaPlata =
     esCorreccion && (Math.abs(montoNumero - (monto ?? 0)) >= 0.005 || fechaStr !== fecha);
   const faltaMotivo = cambiaPlata && motivo.trim().length < 3;
+  // Corregir sin haber cambiado nada no guarda nada: el botón no se ofrece.
+  const sinCambios = esCorreccion && !cambiaPlata && notasStr.trim() === (notas ?? "").trim();
+  const otroDia = !esCorreccion && fechaSugerida !== null && fechaStr !== "" && fechaStr !== fechaSugerida;
 
   function guardar() {
     setError(null);
@@ -124,14 +133,24 @@ export function SaldoInicialForm({
           max={hoyISO()}
           value={fechaStr}
           onChange={(e) => {
-            setFechaStr(e.target.value);
+            setFechaElegida(e.target.value);
             setError(null);
           }}
           className="h-12 w-fit text-base"
         />
-        <p className="text-sm text-muted-foreground">
-          Desde ese día el sistema suma y resta todo lo que entra y sale.
-        </p>
+        {otroDia ? (
+          <p className="text-sm font-medium text-parcial">
+            Ojo: los otros saldos arrancan el {formatFecha(fechaSugerida)}. Si esta cuenta arranca
+            otro día, está bien.
+          </p>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            {!esCorreccion && fechaSugerida
+              ? "Es el mismo día que los otros saldos. "
+              : ""}
+            Desde ese día el sistema suma y resta todo lo que entra y sale.
+          </p>
+        )}
       </div>
 
       <div className="space-y-2">
@@ -167,7 +186,7 @@ export function SaldoInicialForm({
                 onClick={() => setMotivo(m)}
                 aria-pressed={motivo === m}
                 className={cn(
-                  "min-h-11 rounded-full border px-4 text-sm font-medium",
+                  "min-h-11 rounded-full border px-4 text-sm font-medium pointer-coarse:min-h-[44px]",
                   motivo === m ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:bg-accent"
                 )}
               >
@@ -190,11 +209,15 @@ export function SaldoInicialForm({
 
       <Button
         onClick={guardar}
-        disabled={pendiente || montoStr === "" || fechaStr === "" || faltaMotivo}
+        disabled={pendiente || montoStr === "" || fechaStr === "" || faltaMotivo || sinCambios}
         className="h-auto min-h-12 w-full px-6 py-2.5 text-base leading-snug font-semibold whitespace-normal"
       >
         {pendiente ? <Spinner className="size-5" /> : null}
-        {cambiaPlata ? `Corregir ${nombre.toLowerCase()}` : `Guardar ${nombre.toLowerCase()}`}
+        {sinCambios
+          ? "Cambiá el monto, el día o la nota"
+          : cambiaPlata
+            ? `Corregir ${nombre.toLowerCase()}`
+            : `Guardar ${nombre.toLowerCase()}`}
       </Button>
     </div>
   );

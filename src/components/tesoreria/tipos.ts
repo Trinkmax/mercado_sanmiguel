@@ -91,6 +91,22 @@ export const DESCRIPCION_TIPO: Record<TipoMovimiento, string> = {
 
 export const LABEL_CUENTA: Record<Cuenta, string> = { efectivo: "Efectivo", banco: "Banco" };
 
+/**
+ * Pie de los diálogos largos (Tesorería y Cheques): queda pegado abajo mientras se
+ * desplaza el contenido, así el botón principal siempre se ve aunque la ventana sea
+ * baja. DialogContent tiene p-4: los márgenes negativos lo llevan hasta los bordes.
+ */
+export const PIE_DIALOGO_FIJO = "sticky bottom-0 z-10 -mx-4 -mb-4 border-t bg-popover px-4 pt-3 pb-4";
+
+/**
+ * `onOpenAutoFocus` de un diálogo: el foco va al diálogo y no al primer botón. Si no,
+ * el primer motivo o gasto de la lista aparece con el anillo de foco y parece elegido.
+ */
+export function enfocarDialogo(e: Event) {
+  e.preventDefault();
+  if (e.currentTarget instanceof HTMLElement) e.currentTarget.focus();
+}
+
 export type Movimiento = {
   id: string;
   fecha: string;

@@ -121,6 +121,9 @@ export function SelectorOrigen({
   const caja = valor.origen === "caja" ? valor.caja : null;
   const efectivoAntes = caja?.efectivo ?? null;
   const efectivoDespues = efectivoAntes === null ? null : efectivoAntes - monto;
+  // Si no alcanza, va solo el aviso rojo (que ya dice si la caja está cerrada), no los dos.
+  const noAlcanza =
+    caja !== null && caja.estado !== "nueva" && efectivoDespues !== null && efectivoDespues < 0;
 
   return (
     <div className="space-y-5">
@@ -219,7 +222,7 @@ export function SelectorOrigen({
                   hasta que entren cobros.
                 </p>
               ) : null}
-              {caja.estado === "cerrada" ? (
+              {caja.estado === "cerrada" && !noAlcanza ? (
                 <p className="flex gap-2 rounded-lg bg-parcial-suave px-4 py-3 text-sm font-medium text-parcial">
                   <AlertTriangle className="mt-0.5 size-4 shrink-0" strokeWidth={2} />
                   <span>
@@ -231,12 +234,13 @@ export function SelectorOrigen({
                   </span>
                 </p>
               ) : null}
-              {efectivoDespues !== null && efectivoDespues < 0 && caja.estado !== "nueva" ? (
+              {noAlcanza ? (
                 <p className="flex gap-2 rounded-lg bg-pendiente-suave px-4 py-3 text-sm font-medium text-pendiente">
                   <AlertTriangle className="mt-0.5 size-4 shrink-0" strokeWidth={2} />
                   <span>
-                    La caja tiene {formatARS(efectivoAntes ?? 0)} en efectivo: no alcanza para
-                    este gasto. Elegí otro día o pagalo desde Tesorería.
+                    {caja.estado === "cerrada" ? "Esa caja ya se cerró y tiene" : "La caja tiene"}{" "}
+                    {formatARS(efectivoAntes ?? 0)} en efectivo: no alcanza para este gasto. Elegí
+                    otro día o pagalo desde Tesorería.
                   </span>
                 </p>
               ) : null}

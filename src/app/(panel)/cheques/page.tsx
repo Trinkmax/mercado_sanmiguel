@@ -237,8 +237,8 @@ export default async function ChequesPage({
             <Input
               name="q"
               defaultValue={q}
-              placeholder="Buscá por N° de cheque, puesto o nombre"
-              aria-label="Buscar cheque"
+              placeholder="Número, puesto o nombre"
+              aria-label="Buscar cheque por número, puesto o nombre"
               className="h-12 pl-10 text-base"
             />
           </div>
@@ -271,6 +271,10 @@ export default async function ChequesPage({
                 ? etiquetaGasto(c.gasto.descripcion, c.gasto.rubro?.nombre)
                 : null;
               const recibidoDe = c.recibido_de ?? c.titular ?? c.cliente?.nombre ?? "—";
+              // Si lo trajo otra persona, se dice de parte de qué cliente (y su carpeta):
+              // la carpeta es del cliente, no de quien entregó el cheque.
+              const deOtraPersona =
+                c.cliente !== null && normalizar(recibidoDe) !== normalizar(c.cliente.nombre);
               const diferencia = textoDiferencia(
                 c.gasto_diferencia,
                 Number(c.monto),
@@ -278,15 +282,17 @@ export default async function ChequesPage({
                 c.proveedor
               );
               return (
+                // Columnas de ancho fijo desde 1024 px: el texto y los botones empiezan en el
+                // mismo lugar en todas las filas (antes cada fila calculaba las suyas).
                 <li
                   key={c.id}
                   className={cn(
-                    "grid gap-3 px-4 py-4 lg:grid-cols-[minmax(10rem,1fr)_minmax(0,1.6fr)_auto] lg:items-center lg:gap-6",
+                    "grid gap-3 px-4 py-4 lg:grid-cols-[12.5rem_minmax(0,1fr)_15rem] lg:items-center lg:gap-6",
                     esSinGasto(c) && "bg-accent/40"
                   )}
                 >
                   <div className="flex items-start justify-between gap-3 lg:block">
-                    <div>
+                    <div className="min-w-0">
                       <p className="font-display text-xl font-bold tracking-tight tabular">N° {c.numero}</p>
                       {c.puesto ? (
                         <span className="mt-1 inline-flex rounded-md bg-muted px-2 py-0.5 text-sm font-medium">
@@ -300,13 +306,20 @@ export default async function ChequesPage({
                   </div>
 
                   <div className="min-w-0 space-y-1 text-sm">
-                    <p className="text-base">
+                    <p className="text-base break-words">
                       <span className="text-muted-foreground">Lo entregó </span>
                       <span className="font-medium">{recibidoDe}</span>
-                      {c.cliente ? (
+                      {c.cliente && !deOtraPersona ? (
                         <span className="text-muted-foreground tabular"> · Carpeta N° {c.cliente.codigo}</span>
                       ) : null}
                     </p>
+                    {c.cliente && deOtraPersona ? (
+                      <p className="break-words">
+                        <span className="text-muted-foreground">De parte de </span>
+                        <span className="font-medium">{c.cliente.nombre}</span>
+                        <span className="text-muted-foreground tabular"> · Carpeta N° {c.cliente.codigo}</span>
+                      </p>
+                    ) : null}
                     <p className="text-muted-foreground tabular">
                       {c.cuit ? `CUIT ${formatCuit(c.cuit)} · ` : ""}
                       Recibido {formatFecha(c.fecha_recibido).slice(0, 5)} ·{" "}
