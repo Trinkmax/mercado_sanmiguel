@@ -66,7 +66,7 @@ type Props = {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** Los lugares del plano que se asignan a un cliente. */
-const TIPOS_LUGAR: string[] = ["puesto", "bar", "local", "contenedor", "galpon", "cochera", "quinta"];
+const TIPOS_LUGAR: string[] = ["puesto", "bar", "local", "contenedor", "galpon", "invernadero", "cochera", "quinta"];
 
 /** Estado que se muestra en el sello de un cargo: vencido si pasó la fecha. */
 function estadoCargo(cargo: { estado: string; vencimiento: string }, hoy: string): string {

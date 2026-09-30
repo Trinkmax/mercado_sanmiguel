@@ -1,6 +1,6 @@
 -- ============================================================
 -- Plano real del Mercado San Miguel — generado por supabase/plano/generar.mjs
--- 72 puestos (5 medios, 0 propios), 1 bar, 5 locales,
+-- 73 puestos (7 medios, 0 propios), 1 bar, 5 locales,
 -- 14 contéiners, 10 subgalpones, 74 cocheras y 68 quintas.
 -- Carga INICIAL: borra el plano de la organización antes de insertarlo. Correr una sola
 -- vez, con el rol postgres. Si el plano ya está en uso (puestos asignados o marcados
@@ -41,9 +41,7 @@ insert into public.plano_elementos (org_id, tipo, etiqueta, capacidad, x, y, w, 
   ('a0000000-0000-4000-8000-000000000001', 'recinto', 'Contéiners', null, 1680, 40, 170, 150, 8),
   ('a0000000-0000-4000-8000-000000000001', 'rotulo', 'Contéiners', null, 955, 786, 430, 20, 9),
   ('a0000000-0000-4000-8000-000000000001', 'galpon', 'Galpón', null, 1880, 40, 170, 420, 10),
-  ('a0000000-0000-4000-8000-000000000001', 'rotulo', 'Locales', null, 1605, 720, 80, 20, 11),
-  ('a0000000-0000-4000-8000-000000000001', 'invernadero', 'Invernadero 82', null, 1706, 580, 86, 260, 12),
-  ('a0000000-0000-4000-8000-000000000001', 'invernadero', 'Invernadero', null, 1822, 580, 86, 260, 13);
+  ('a0000000-0000-4000-8000-000000000001', 'rotulo', 'Locales', null, 1605, 720, 80, 20, 11);
 
 insert into public.espacios (org_id, tipo, numero, medio, tamano, propio, grupo, nota, x, y, w, h) values
   ('a0000000-0000-4000-8000-000000000001', 'puesto', '58', false, 1, false, 'g58', null, 56, 264, 44, 52),
@@ -81,9 +79,9 @@ insert into public.espacios (org_id, tipo, numero, medio, tamano, propio, grupo,
   ('a0000000-0000-4000-8000-000000000001', 'puesto', null, false, 1, false, null, null, 176, 358, 44, 52),
   ('a0000000-0000-4000-8000-000000000001', 'puesto', '62', false, 1, false, null, null, 224, 358, 44, 52),
   ('a0000000-0000-4000-8000-000000000001', 'puesto', '64', false, 1, false, null, null, 272, 358, 44, 52),
-  ('a0000000-0000-4000-8000-000000000001', 'puesto', '68', false, 1, false, null, null, 320, 358, 44, 52),
-  ('a0000000-0000-4000-8000-000000000001', 'puesto', '72', false, 1, false, null, null, 368, 358, 44, 52),
+  ('a0000000-0000-4000-8000-000000000001', 'puesto', '68', false, 1, false, null, null, 320, 358, 92, 52),
   ('a0000000-0000-4000-8000-000000000001', 'puesto', '66', false, 1, false, null, null, 320, 414, 92, 40),
+  ('a0000000-0000-4000-8000-000000000001', 'puesto', '74', false, 1, false, null, 'Cámara de frío', 128, 414, 44, 24),
   ('a0000000-0000-4000-8000-000000000001', 'puesto', '71', false, 1, false, null, null, 1172, 358, 44, 52),
   ('a0000000-0000-4000-8000-000000000001', 'puesto', '63', false, 1, false, 'g63', null, 1220, 358, 44, 52),
   ('a0000000-0000-4000-8000-000000000001', 'puesto', '63', false, 1, false, 'g63', null, 1268, 358, 44, 52),
@@ -91,7 +89,8 @@ insert into public.espacios (org_id, tipo, numero, medio, tamano, propio, grupo,
   ('a0000000-0000-4000-8000-000000000001', 'puesto', '59', false, 1, false, null, null, 1364, 358, 44, 52),
   ('a0000000-0000-4000-8000-000000000001', 'puesto', '5', true, 0.5, false, null, null, 1412, 358, 20, 52),
   ('a0000000-0000-4000-8000-000000000001', 'puesto', '69', false, 1, false, null, null, 1268, 414, 44, 40),
-  ('a0000000-0000-4000-8000-000000000001', 'puesto', '57', false, 1, false, null, null, 56, 496, 44, 52),
+  ('a0000000-0000-4000-8000-000000000001', 'puesto', '57', true, 0.5, false, null, null, 56, 496, 20, 52),
+  ('a0000000-0000-4000-8000-000000000001', 'puesto', '70', true, 0.5, false, null, null, 80, 496, 20, 52),
   ('a0000000-0000-4000-8000-000000000001', 'puesto', '55', false, 1, false, null, null, 104, 496, 44, 52),
   ('a0000000-0000-4000-8000-000000000001', 'puesto', '53', false, 1, false, null, null, 152, 496, 44, 52),
   ('a0000000-0000-4000-8000-000000000001', 'puesto', '51', false, 1, false, null, null, 200, 496, 44, 52),
@@ -289,6 +288,7 @@ insert into public.espacios (org_id, tipo, numero, medio, tamano, propio, grupo,
   ('a0000000-0000-4000-8000-000000000001', 'local', '94', false, 1, false, null, 'Luc.', 1614, 568, 62, 46),
   ('a0000000-0000-4000-8000-000000000001', 'local', '80', false, 1, false, null, null, 1614, 617, 62, 46),
   ('a0000000-0000-4000-8000-000000000001', 'local', '75', false, 1, false, null, null, 1614, 666, 62, 46),
+  ('a0000000-0000-4000-8000-000000000001', 'invernadero', '82', false, 1, false, null, null, 1706, 580, 172, 260),
   ('a0000000-0000-4000-8000-000000000001', 'contenedor', '3', false, 1, false, null, null, 1707, 866, 84, 34);
 
 commit;

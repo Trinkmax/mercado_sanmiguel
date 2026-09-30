@@ -14,7 +14,7 @@ import type { ElementoPlano, Espacio, TipoElemento, TipoEspacio } from "./tipos"
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
-const TIPOS_ESPACIO: TipoEspacio[] = ["puesto", "bar", "local", "contenedor", "cochera", "galpon", "quinta"];
+const TIPOS_ESPACIO: TipoEspacio[] = ["puesto", "bar", "local", "contenedor", "cochera", "galpon", "quinta", "invernadero"];
 const TIPOS_ELEMENTO: TipoElemento[] = [
   "nave",
   "pasillo",

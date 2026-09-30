@@ -2151,6 +2151,115 @@ function cuerpoGalpon(b: Bloque, mat: Material, H: number, pintado: boolean, lib
   );
 }
 
+/**
+ * Invernadero asignable (0039): una o varias naves de vidrio pegadas (una cada ~86 u a lo
+ * ancho), con plantas adentro. El estado de cobro va en la base, el borde del vidrio y la
+ * puerta (a rayas si debe); libre, base de tierra y un lote punteado alrededor. Las naves
+ * corren a lo largo del lado más largo (en el plano girado, acostadas).
+ */
+function cuerpoInvernadero(b: Bloque, mat: Material, H: number, pintado: boolean, libre: boolean) {
+  const { x, y, w, h } = b.rect;
+  const M = MAT[mat];
+  const acostado = w > h;
+  const corto = acostado ? h : w;
+  const n = Math.max(1, Math.round(corto / 86));
+  const ancho = corto / n;
+  const N = 18;
+  const borde = pintado ? M.faldonBorde : "oklch(0.76 0.05 190)";
+  const puerta = pintado ? M.faldon[0] : "oklch(0.84 0.04 190)";
+  const tira = (ps: Pt[], m = "M") => ps.map((p, i) => `${i === 0 ? m : "L"}${pt(p)}`).join("");
+  const naves: ReactNode[] = [];
+  for (let i = 0; i < n; i++) {
+    if (!acostado) {
+      // Nave parada: la bóveda cruza de oeste a este; costillas cada 26 u a lo largo.
+      const x0 = x + i * ancho;
+      const cx = x0 + ancho / 2;
+      const arcoEn = (yy: number, inverso: boolean) => {
+        const pts: Pt[] = [];
+        for (let j = 0; j <= N; j++) {
+          const t = inverso ? 1 - j / N : j / N;
+          const px = x0 + t * ancho;
+          const u = (px - cx) / (ancho / 2);
+          pts.push(P(px, yy, H * Math.sqrt(Math.max(0, 1 - u * u))));
+        }
+        return pts;
+      };
+      let costillas = "";
+      for (let yy = y + 26; yy < y + h - 4; yy += 26) costillas += tira(arcoEn(yy, false));
+      const rx = cx - K * H;
+      naves.push(
+        <Fragment key={i}>
+          <path d={`${tira(arcoEn(y, false)) + tira(arcoEn(y + h, true), "L")}Z`} fill="url(#mapa-vidrio)" stroke={borde} strokeWidth={pintado ? 1.4 : 1} />
+          {costillas ? <path d={costillas} fill="none" stroke="#fff" strokeOpacity={0.95} strokeWidth={1.3} /> : null}
+          <path d={`M${f(rx - 5)} ${y - H + 3}V${y + h - H - 3}`} stroke="#fff" strokeWidth={2.4} strokeOpacity={0.95} strokeLinecap="round" />
+          <path d={`${tira(arcoEn(y + h, false))}Z`} fill="#fff" fillOpacity={0.5} stroke={borde} strokeWidth={1.1} />
+          <path
+            d={poly([P(cx - 8, y + h, 0), P(cx + 8, y + h, 0), P(cx + 8, y + h, 17), P(cx - 8, y + h, 17)])}
+            fill={puerta}
+            fillOpacity={pintado ? 1 : 0.7}
+            stroke={borde}
+            strokeWidth={0.8}
+          />
+          {mat === "debe" ? (
+            <path d={poly([P(cx - 8, y + h, 0), P(cx + 8, y + h, 0), P(cx + 8, y + h, 17), P(cx - 8, y + h, 17)])} fill="url(#mapa-rayas-debe)" />
+          ) : null}
+        </Fragment>
+      );
+    } else {
+      // Nave acostada (plano girado): la bóveda cruza de norte a sur; frente al este.
+      const y0 = y + i * ancho;
+      const cy = y0 + ancho / 2;
+      const arcoEn = (xx: number) => {
+        const pts: Pt[] = [];
+        for (let j = 0; j <= 24; j++) {
+          const yy = y0 + (ancho * j) / 24;
+          const u = (yy - cy) / (ancho / 2);
+          pts.push(P(xx, yy, H * Math.sqrt(Math.max(0, 1 - u * u))));
+        }
+        return pts;
+      };
+      const oeste = arcoEn(x);
+      const este = arcoEn(x + w);
+      const iTop = oeste.reduce((m, p, k) => (p[1] < oeste[m][1] ? k : m), 0);
+      const lineas = (ps: Pt[]) => ps.map((p) => `L${pt(p)}`).join("");
+      const silueta =
+        `M${pt(oeste[iTop])}L${pt(este[iTop])}${lineas(este.slice(0, iTop).reverse())}` +
+        `L${pt(P(x + w, y0 + ancho, 0))}${lineas(oeste.slice(iTop + 1).reverse())}Z`;
+      let costillas = "";
+      for (let xx = x + 26; xx < x + w - 4; xx += 26) costillas += tira(arcoEn(xx).slice(iTop));
+      const frente = poly([P(x + w, cy - 8, 0), P(x + w, cy + 8, 0), P(x + w, cy + 8, 17), P(x + w, cy - 8, 17)]);
+      naves.push(
+        <Fragment key={i}>
+          <path d={silueta} fill="url(#mapa-vidrio-acostado)" stroke={borde} strokeWidth={pintado ? 1.4 : 1} />
+          {costillas ? <path d={costillas} fill="none" stroke="#fff" strokeOpacity={0.95} strokeWidth={1.3} /> : null}
+          <path d={`M${f(x - K * H + 3)} ${f(cy - H - 5)}H${f(x + w - K * H - 3)}`} stroke="#fff" strokeWidth={2.4} strokeOpacity={0.95} strokeLinecap="round" />
+          <path d={`${tira(este)}Z`} fill="#fff" fillOpacity={0.5} stroke={borde} strokeWidth={1.1} />
+          <path d={frente} fill={puerta} fillOpacity={pintado ? 1 : 0.7} stroke={borde} strokeWidth={0.8} />
+          {mat === "debe" ? <path d={frente} fill="url(#mapa-rayas-debe)" /> : null}
+        </Fragment>
+      );
+    }
+  }
+  return (
+    <>
+      {libre ? (
+        <rect x={x - 3} y={y - 3} width={w + 6} height={h + 6} rx={5} fill="none" stroke={M.lote} strokeDasharray="3 3" />
+      ) : null}
+      <rect x={x} y={y} width={w} height={h} rx={3} fill={pintado ? `url(#mapa-faldon-${mat})` : "oklch(0.86 0.035 80)"} />
+      {mat === "debe" ? <rect x={x} y={y} width={w} height={h} rx={3} fill="url(#mapa-rayas-debe)" opacity={0.5} /> : null}
+      <rect
+        x={x + 4}
+        y={y + 4}
+        width={w - 8}
+        height={h - 8}
+        fill={`url(#mapa-plantas${acostado ? "-girado" : ""})`}
+        opacity={pintado ? 0.85 : 1}
+      />
+      {naves}
+    </>
+  );
+}
+
 // ---------- Cocheras y quintas: el vehículo estacionado ----------
 
 /** Huella de un vehículo: a lo largo del lado más largo de su lugar, con la trompa
@@ -2318,6 +2427,7 @@ const Cuerpo = memo(function Cuerpo({
   if (bloque.tipo === "galpon") return cuerpoGalpon(bloque, material, alto, pintado, libre);
   if (bloque.tipo === "cochera") return cuerpoCochera(bloque, material, alto, libre);
   if (bloque.tipo === "quinta") return cuerpoQuinta(bloque, material, alto, libre);
+  if (bloque.tipo === "invernadero") return cuerpoInvernadero(bloque, material, alto, pintado, libre);
   return cuerpoPuesto(bloque, material, alto, pintado, libre, detalle, conApodo);
 });
 
@@ -2453,6 +2563,17 @@ function textosBloque(
       grosor: 1.8,
       espaciado: -0.2,
     });
+    return out;
+  }
+  if (b.tipo === "invernadero") {
+    // Número sobre la bóveda y, con zoom, quién lo tiene (o la nota) debajo.
+    const [cx, cy] = P(x + w / 2, y + h * 0.42, zt);
+    out.push({ k: e0.id, x: cx, y: cy, t: e0.numero ?? "?", tam: 22, clase: "num", grosor: 3 });
+    if (detalle && etiqueta !== null && !atenuado) {
+      const a = apodoAjustado(etiqueta, Math.min(w, h) - 12);
+      const [ax, ay] = P(x + w / 2, y + h * 0.42 + 20, zt);
+      out.push({ ...APODO, x: ax, y: ay, t: a.t, tam: a.tam });
+    }
     return out;
   }
   if (b.tipo === "contenedor") {

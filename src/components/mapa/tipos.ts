@@ -7,7 +7,7 @@ export type EstadoCobro = "al_dia" | "debe" | "vencido";
 
 /** Espacio físico que se asigna a un cliente (tabla `espacios`). Cochera (EXPC),
  * subgalpón (EXPG) y quinta de la playa (EXPQ) se asignan uno por uno (0032). */
-export type TipoEspacio = "puesto" | "bar" | "local" | "contenedor" | "cochera" | "galpon" | "quinta";
+export type TipoEspacio = "puesto" | "bar" | "local" | "contenedor" | "cochera" | "galpon" | "quinta" | "invernadero";
 
 /** Lo fijo del predio (tabla `plano_elementos`). */
 export type TipoElemento =

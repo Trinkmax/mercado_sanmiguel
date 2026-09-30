@@ -195,6 +195,7 @@ const ALTO_TIPO: Record<TipoEspacio, number> = {
   galpon: ALT.galpon,
   cochera: ALT.auto,
   quinta: ALT.camion,
+  invernadero: ALT.invernadero,
 };
 
 /** Cochera o quinta sin vehículo: es el lugar pintado en el piso, no un lote levantado
@@ -211,10 +212,12 @@ export function alturaDe(
   i: { hover: boolean; foco: boolean }
 ): Alturas {
   const libre = e.estado === "libre";
-  const hTipo = esPiso(b.tipo, e.estado) ? ALT.piso : libre ? ALT.libre : ALTO_TIPO[b.tipo];
+  // El invernadero es un edificio: libre o atenuado conserva su bóveda (cambia el color).
+  const edificio = b.tipo === "invernadero";
+  const hTipo = edificio ? ALTO_TIPO[b.tipo] : esPiso(b.tipo, e.estado) ? ALT.piso : libre ? ALT.libre : ALTO_TIPO[b.tipo];
   let z0 = 0;
   let zTop: number = hTipo;
-  if (e.atenuado) zTop = Math.min(ALT.atenuado, hTipo); // el atenuado manda (lo pintado en el piso no sube)
+  if (e.atenuado && !edificio) zTop = Math.min(ALT.atenuado, hTipo); // el atenuado manda (lo pintado en el piso no sube)
   else if (e.marca === "seleccion") {
     z0 = ALT.despegue; // flota
     zTop = z0 + hTipo;
@@ -231,7 +234,7 @@ export function alturaDe(
 /** Radio de las esquinas de la tapa. */
 export function radioTapa(b: Pick<Bloque, "tipo" | "rect">): number {
   if (b.tipo === "contenedor") return 1.5;
-  if (b.tipo === "local" || b.tipo === "galpon") return 3;
+  if (b.tipo === "local" || b.tipo === "galpon" || b.tipo === "invernadero") return 3;
   if (b.tipo === "quinta") return 2;
   return Math.min(4, b.rect.w / 5);
 }
@@ -270,6 +273,7 @@ export const NOMBRE_TIPO: Record<TipoEspacio, string> = {
   galpon: "Galpón",
   cochera: "Cochera",
   quinta: "Quinta",
+  invernadero: "Invernadero",
 };
 
 const NOMBRE_TIPO_PLURAL: Record<TipoEspacio, string> = {
@@ -280,10 +284,11 @@ const NOMBRE_TIPO_PLURAL: Record<TipoEspacio, string> = {
   galpon: "Galpones",
   cochera: "Cocheras",
   quinta: "Quintas",
+  invernadero: "Invernaderos",
 };
 
 /** El orden en que se nombran los lugares de un cliente. */
-const ORDEN_TIPOS: TipoEspacio[] = ["puesto", "bar", "local", "contenedor", "galpon", "cochera", "quinta"];
+const ORDEN_TIPOS: TipoEspacio[] = ["puesto", "bar", "local", "contenedor", "galpon", "invernadero", "cochera", "quinta"];
 
 function esTipoEspacio(t: string): t is TipoEspacio {
   return (ORDEN_TIPOS as string[]).includes(t);
@@ -305,9 +310,9 @@ export function conArticulo(e: Pick<Espacio, "tipo" | "numero" | "medio">): stri
   return `${esFemenino(e.tipo) ? "la" : "el"} ${NOMBRE_TIPO[e.tipo].toLowerCase()} ${numeroVisible(e)}`;
 }
 
-/** Quién ocupa un lugar: el quintero (quinta), el cliente (cochera) o el puestero. */
+/** Quién ocupa un lugar: el quintero (quinta), el cliente (cochera, invernadero) o el puestero. */
 export function ocupante(tipo: TipoEspacio): string {
-  return tipo === "quinta" ? "quintero" : tipo === "cochera" ? "cliente" : "puestero";
+  return tipo === "quinta" ? "quintero" : tipo === "cochera" || tipo === "invernadero" ? "cliente" : "puestero";
 }
 
 /** "58", "34½", "34 (1½)", "?" — el número tal como se lee en el plano (con el tamaño si

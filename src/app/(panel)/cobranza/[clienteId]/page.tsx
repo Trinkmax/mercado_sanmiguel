@@ -51,6 +51,7 @@ function etiquetaEspacio(e: { tipo: string; numero: string | null; medio: boolea
   if (e.tipo === "local") return `Local ${n}`;
   if (e.tipo === "contenedor") return `Contéiner ${n}`;
   if (e.tipo === "galpon") return `Galpón ${n}`;
+  if (e.tipo === "invernadero") return `Invernadero ${n}`;
   if (e.tipo === "cochera") return `Cochera ${n}`;
   if (e.tipo === "quinta") return `Quinta ${n}`;
   return `Bar ${n}`.trim();

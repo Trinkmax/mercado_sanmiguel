@@ -34,7 +34,7 @@ const MAX_RESULTADOS = 8;
 function leerEspacio(q: string): { tipo: TipoEspacio | null; numero: string } | null {
   const t = normalizar(q).replace(/\s+/g, " ").trim();
   if (t === "bar") return { tipo: "bar", numero: "" };
-  const m = t.match(/^(puesto|p|local|l|cochera|coch|conteiner|contenedor|cont|c|galpon|g|quinta|q)?\s*(\d{1,3})$/);
+  const m = t.match(/^(puesto|p|local|l|cochera|coch|conteiner|contenedor|cont|c|galpon|g|quinta|q|invernadero|inv|i)?\s*(\d{1,3})$/);
   if (!m) return null;
   const pref = m[1] ?? "";
   const tipo: TipoEspacio | null = pref.startsWith("l")
@@ -47,6 +47,8 @@ function leerEspacio(q: string): { tipo: TipoEspacio | null; numero: string } | 
           ? "galpon"
           : pref.startsWith("q")
             ? "quinta"
+            : pref.startsWith("i")
+              ? "invernadero"
             : pref.startsWith("p")
               ? "puesto"
               : null;

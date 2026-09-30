@@ -464,6 +464,8 @@ export function MapaMercado({
     )
       .filter(([, n]) => n > 0)
       .map(([tipo, n]) => cantidad(n, tipo));
+    const invernaderos = suyos.filter((e) => e.tipo === "invernadero").length;
+    if (invernaderos > 0) partes.push(`${invernaderos} ${invernaderos > 1 ? "invernaderos" : "invernadero"}`);
     const quien = cli.apodo ?? cli.nombre;
     return {
       texto: `${quien} · ${partes.join(" + ")} · ${ESTADO_PASTILLA[cli.estado]}`,
@@ -509,6 +511,7 @@ export function MapaMercado({
       ...deLugar("local"),
       ...deLugar("contenedor"),
       ...deLugar("galpon"),
+      ...deLugar("invernadero"),
       ...(lugares.cochera
         ? deLugar("cochera")
         : capacidadCocheras > 0

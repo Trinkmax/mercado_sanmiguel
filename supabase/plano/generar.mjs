@@ -18,7 +18,10 @@
 //     el número del PUESTO de quien lo tiene ("el puesto 9 tiene 2 galpones ahí"), por
 //     eso el 9 se repite. El de arriba se leyó "68".
 //   · Locales 86 · 87 · 94 · 80 · 75 (de norte a sur), el invernadero 82 al lado y el
-//     contéiner 3 suelto debajo. Siguen los dos invernaderos y el recinto de 3 contéiners.
+//     contéiner 3 suelto debajo. Sigue el recinto de 3 contéiners.
+//   · (0039) El 57 es medio puesto y al lado va el 70 (la otra mitad). El 68 y el 72 son
+//     un solo puesto, el 68, del ancho del 66. Debajo del 76, la cámara de frío (74). El
+//     invernadero es uno solo (dos naves pegadas) y se asigna: es un espacio.
 //   · Los 10 contéiners bajo las 18 cocheras van en una sola hilera, del 1 al 10
 //     empezando por la derecha.
 //   · Playa de quintas = las dos zonas de quinteros: dos hileras con una calle en el
@@ -128,7 +131,8 @@ fila(
 );
 
 // ---------- Isla central ----------
-// Oeste: Bar · 76 (Quiniela) · ? · 62 · 64 · 68 · 72, con el 66 debajo de 68-72.
+// Oeste: Bar · 76 (Quiniela) · ? · 62 · 64 · 68 (ancho, como el 66 que tiene debajo).
+// Debajo del 76, la cámara de frío (74).
 const finIslaOeste = fila(
   [
     { n: null, tipo: "bar", ancho: A },
@@ -136,8 +140,7 @@ const finIslaOeste = fila(
     { n: null }, // "?" en el dibujo
     { n: "62" },
     { n: "64" },
-    { n: "68" },
-    { n: "72" },
+    { n: "68", ancho: 2 * S + G },
   ],
   OESTE_X,
   ISLA_Y,
@@ -155,6 +158,18 @@ const finIslaOeste = fila(
     y: ISLA_ABAJO_Y,
     w: 2 * S + G,
     h: ISLA_ABAJO,
+  });
+  const p76 = espacios.find((e) => e.numero === "76");
+  espacios.push({
+    tipo: "puesto",
+    numero: "74",
+    medio: false,
+    grupo: null,
+    nota: "Cámara de frío",
+    x: p76.x,
+    y: ISLA_ABAJO_Y,
+    w: S,
+    h: 24,
   });
 }
 const QUINTEROS_GAP = 24;
@@ -216,9 +231,10 @@ elementos.push({
 });
 
 // ---------- Fila sur (impares) ----------
-// Oeste: 57 · 55 · … · 37 · 35-33 · 31
+// Oeste: 57/2 · 70/2 · 55 · … · 37 · 35-33 · 31
 fila(
-  [57, 55, 53, 51, 49, 47, 45, 43, 41, 39, 37].map((n) => ({ n: String(n) }))
+  [{ n: "57", medio: true }, { n: "70", medio: true }]
+    .concat([55, 53, 51, 49, 47, 45, 43, 41, 39, 37].map((n) => ({ n: String(n) })))
     .concat(g("g35", 35, 33), [{ n: "31" }]),
   OESTE_X,
   FILA_S_Y
@@ -463,16 +479,25 @@ elementos.push({
   h: 20,
 });
 
-// ---------- Invernaderos ----------
-// El 82 al lado de los locales (a la altura del 94), el otro a su derecha y el
-// contéiner 3, solo, debajo del 82.
+// ---------- Invernadero ----------
+// Uno solo, el 82 (dos naves pegadas), al lado de los locales a la altura del 94; se
+// asigna como cualquier lugar. El contéiner 3, solo, debajo.
 const INV_W = 86;
 const INV_H = 260;
 const invY = 580;
 const inv1X = DERECHA_X + LOCAL_W + 30;
-const inv2X = inv1X + INV_W + 30;
-elementos.push({ tipo: "invernadero", etiqueta: "Invernadero 82", x: inv1X, y: invY, w: INV_W, h: INV_H });
-elementos.push({ tipo: "invernadero", etiqueta: "Invernadero", x: inv2X, y: invY, w: INV_W, h: INV_H });
+espacios.push({
+  tipo: "invernadero",
+  numero: "82",
+  medio: false,
+  propio: false,
+  grupo: null,
+  nota: null,
+  x: inv1X,
+  y: invY,
+  w: 2 * INV_W,
+  h: INV_H,
+});
 contenedor(3, inv1X + 1, invY + INV_H + 26, CONT_L, 34);
 
 // ---------- SQL ----------
