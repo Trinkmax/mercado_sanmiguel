@@ -247,13 +247,14 @@ const schemaCantidad = z.coerce
     "La cantidad va de cuarto en cuarto (¼ · ½ · ¾ · 1...)"
   );
 
-/** Porcentaje del precio que paga el cliente (1 a 100, hasta 2 decimales; acepta "70,5"). */
+/** Porcentaje del precio que paga el cliente (1 a 1000, hasta 2 decimales; acepta "70,5").
+ * Más de 100 = más que un concepto entero (125 = una y cuarto; 400 = cuatro galpones). */
 const schemaPorcentaje = z.preprocess(
   (v) => (typeof v === "string" ? v.replace(",", ".").trim() : v),
   z.coerce
-    .number({ error: "Poné el porcentaje (de 1 a 100)" })
-    .min(1, "El porcentaje va de 1 a 100")
-    .max(100, "El porcentaje va de 1 a 100")
+    .number({ error: "Poné el porcentaje (de 1 a 1000)" })
+    .min(1, "El porcentaje va de 1 a 1000")
+    .max(1000, "El porcentaje va de 1 a 1000")
     .refine((v) => Math.round(v * 100) === v * 100, "El porcentaje admite hasta 2 decimales")
 );
 

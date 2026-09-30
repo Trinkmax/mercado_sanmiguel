@@ -11,15 +11,19 @@ function parsear(texto: string): number {
   return Number(limpio);
 }
 
-/** Deja el porcentaje entre 1 y 100 con hasta 2 decimales (vacío o inválido = 100). */
+/** Tope del porcentaje (igual que la base, 0035): 1000 % = diez veces el precio. */
+export const PORCENTAJE_MAXIMO = 1000;
+
+/** Deja el porcentaje entre 1 y 1000 con hasta 2 decimales (vacío o inválido = 100). */
 export function normalizarPorcentaje(n: number): number {
   if (Number.isNaN(n)) return 100;
-  return Math.min(100, Math.max(1, Math.round(n * 100) / 100));
+  return Math.min(PORCENTAJE_MAXIMO, Math.max(1, Math.round(n * 100) / 100));
 }
 
 /**
- * Qué porcentaje del precio paga el cliente por un concepto (100 = entero; 70 = el 70 %).
- * Se escribe el número (acepta coma) y al salir del campo se acomoda entre 1 y 100.
+ * Qué porcentaje del precio paga el cliente por un concepto (100 = entero; 70 = el 70 %;
+ * 150 = uno y medio; 400 = cuatro veces). Se escribe el número (acepta coma) y al salir
+ * del campo se acomoda entre 1 y 1000.
  */
 export function CampoPorcentaje({
   id,
@@ -48,7 +52,7 @@ export function CampoPorcentaje({
   }
 
   return (
-    <div className={cn("relative w-[6.5rem]", className)}>
+    <div className={cn("relative w-[7rem]", className)}>
       <Input
         id={id}
         inputMode="decimal"
@@ -58,11 +62,11 @@ export function CampoPorcentaje({
         aria-label={`Porcentaje que paga de ${nombre}`}
         onFocus={(e) => e.currentTarget.select()}
         onChange={(e) => {
-          const t = e.target.value.replace(/[^0-9,.]/g, "").slice(0, 6);
+          const t = e.target.value.replace(/[^0-9,.]/g, "").slice(0, 7);
           setTexto(t);
           const n = parsear(t);
           // Mientras escribe, si ya es un número válido se refleja (el monto se actualiza).
-          if (!Number.isNaN(n) && n >= 1 && n <= 100) onCambiar(Math.round(n * 100) / 100);
+          if (!Number.isNaN(n) && n >= 1 && n <= PORCENTAJE_MAXIMO) onCambiar(Math.round(n * 100) / 100);
         }}
         onBlur={confirmar}
         onKeyDown={(e) => {
