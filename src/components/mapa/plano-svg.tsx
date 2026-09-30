@@ -2647,7 +2647,19 @@ export const CapaBloques = memo(function CapaBloques({
     }
     return m;
   }, [orden, estilos, resaltado, foco]);
-  const sombras = useMemo(() => sombrasBloques(orden, alturas), [orden, alturas]);
+  // Las sombras no siguen al hover: son un par de trazos que cubren todo el plano y
+  // cambiarlos obligaba a redibujarlo entero con cada puesto que pasaba el mouse. El
+  // bloque igual despega (4 u) y lleva su contorno; selección y foco sí mueven la sombra.
+  const alturasSombra = useMemo(() => {
+    const m = new Map<string, Alturas>();
+    for (const b of orden) {
+      const estilo = estilos.get(b.clave);
+      if (!estilo) continue;
+      m.set(b.clave, alturaDe(b, estilo, { hover: false, foco: foco !== null && b.espacios.some((e) => e.id === foco) }));
+    }
+    return m;
+  }, [orden, estilos, foco]);
+  const sombras = useMemo(() => sombrasBloques(orden, alturasSombra), [orden, alturasSombra]);
 
   return (
     <g>

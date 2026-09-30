@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { Minus, Plus, Scan } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -117,7 +117,9 @@ export function LienzoPlano({
   );
   const {
     contRef,
+    svgRef,
     viewBox,
+    estiloSvg,
     escala,
     fueArrastre,
     rectContenedor,
@@ -137,7 +139,9 @@ export function LienzoPlano({
   /** Espacio con foco de teclado: su bloque despega y lleva anillo doble. */
   const [foco, setFoco] = useState<string | null>(null);
   const [medir, setMedir] = useState<MedirTexto | null>(null);
-  const detalle = (escala ?? 0) >= ESCALA_DETALLE;
+  // El paso a detalle (apodos, faldones, mercadería) vuelve a dibujar cientos de piezas:
+  // va diferido, así el plano nítido a la escala nueva sale primero y no se traba.
+  const detalle = useDeferredValue((escala ?? 0) >= ESCALA_DETALLE);
   const resaltado = hover?.bloque.clave ?? null;
   // Con quintas numeradas (0032), las zonas de quinteros son la playa de quintas.
   const conPlaya = useMemo(() => bloques.some((b) => b.tipo === "quinta"), [bloques]);
@@ -300,9 +304,13 @@ export function LienzoPlano({
       className="relative min-h-0 flex-1 overflow-hidden bg-background outline-none focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:ring-inset"
     >
       <svg
+        ref={svgRef}
         viewBox={viewBox ?? `${limitesVista.x} ${limitesVista.y} ${limitesVista.w} ${limitesVista.h}`}
         preserveAspectRatio="xMidYMid meet"
-        className="absolute inset-0 size-full touch-none select-none"
+        // Capa propia (will-change): mover y escalar el plano lo compone la placa de video.
+        className={cn("absolute touch-none select-none will-change-transform", !estiloSvg && "inset-0 size-full")}
+        style={estiloSvg}
+        textRendering="geometricPrecision"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}

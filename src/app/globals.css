@@ -234,11 +234,6 @@
   }
 }
 
-/* Plano: mientras se arrastra o pellizca, las sombras del fondo van sin desenfoque. */
-svg[data-arrastrando] .mapa-sombras-fondo {
-  filter: none;
-}
-
 /* Toasts: en tablet/celular (hay barra superior) bajan para no tapar el menú ni "Salir". */
 @media (max-width: 1023px) {
   [data-sonner-toaster][data-y-position="top"] {

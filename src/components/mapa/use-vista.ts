@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Rect } from "./tipos";
 
 /** Cámara del plano: centro (unidades del plano) y escala (px por unidad). */
@@ -32,6 +32,13 @@ const PROPORCION_ALTA = 1.2;
  * celular los puestos quedaban de 18 px con números de 7: había que agrandar con + antes
  * de poder tocar nada. "Ver todo el predio" sigue mostrando el plano entero. */
 const K_TACTIL = 0.8;
+/** Sobrante que se dibuja alrededor de lo visible, en fracción del lado mayor del
+ * lienzo (px de cada lado): al mover o alejar el plano sin volver a dibujarlo, lo que
+ * entra por los bordes ya está pintado. */
+const SOBRANTE = 0.3;
+/** Acercando sin volver a dibujar, la imagen se agranda hasta este factor; más allá se
+ * vuelve a dibujar en el medio del gesto (si no, se vería borrosa). */
+const AGRANDADO_MAXIMO = 1.5;
 
 const acotar = (v: number, min: number, max: number) => Math.min(Math.max(v, min), max);
 
@@ -79,16 +86,36 @@ function reduceMotion(): boolean {
   );
 }
 
+/** px que se dibujan de más a cada lado del lienzo. */
+const sobrante = (t: Tam) => Math.round(Math.max(t.w, t.h) * SOBRANTE);
+
 /**
  * Zoom y desplazamiento del plano: arrastrar para mover, pellizcar (tablet) o
  * ⌘/Ctrl + rueda (y el pellizco del trackpad) para acercar, más botones y
  * teclado. La cámara siempre mantiene el plano a la vista.
+ *
+ * Rendimiento: cambiar el viewBox obliga a volver a maquetar y dibujar todo el plano
+ * (cientos de textos y formas) y eso, cuadro a cuadro, trababa el zoom. Mientras la
+ * cámara se mueve, el <svg> ya dibujado se desliza y escala con una transformación
+ * CSS (la compone la placa de video, sin volver a dibujar); al terminar el movimiento
+ * (o si hace falta en el medio: se agrandó demasiado o asoma algo sin dibujar) se
+ * vuelve a dibujar nítido con la cámara nueva. Se dibuja un sobrante alrededor de lo
+ * visible para que al mover no asomen bordes vacíos.
  */
 export function useVista(limites: Rect, insetInferior = 0) {
   const contRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
   const [tam, setTam] = useState<Tam | null>(null);
+  /** Cámara DIBUJADA (viewBox): cambia al terminar cada movimiento (y, si hace falta,
+   * en el medio). */
   const [cam, setCam] = useState<Camara | null>(null);
+  /** Escala con el plano quieto (zoom semántico: apodos, detalles). No cambia en el medio
+   * de un gesto: redibujar los detalles es lo más pesado y trabaría el movimiento. */
+  const [escalaQuieta, setEscalaQuieta] = useState<number | null>(null);
+  /** Cámara VIVA: la que se ve (en movimiento, la dibujada más la transformación). */
   const camRef = useRef<Camara | null>(null);
+  /** La cámara con la que está dibujado hoy el <svg> en el DOM. */
+  const camDomRef = useRef<Camara | null>(null);
   const tamRef = useRef<Tam | null>(null);
   const limRef = useRef(limites);
   /** px de abajo del lienzo tapados por un panel flotante (la cámara los descuenta). */
@@ -110,16 +137,69 @@ export function useVista(limites: Rect, insetInferior = 0) {
    * del último evento). */
   const moviendo = useRef({ gesto: false, anim: false, rueda: null as number | null });
 
-  // Mientras la cámara se mueve cuadro a cuadro, el <svg> lleva
-  // data-arrastrando (sin estado de React): el CSS apaga el desenfoque de las
-  // sombras del fondo, que si no se volvería a rasterizar en cada cuadro.
-  const marcarMovimiento = useCallback(() => {
-    const svg = contRef.current?.querySelector(":scope > svg");
-    if (!svg) return;
+  const enMovimiento = () => {
     const m = moviendo.current;
-    if (m.gesto || m.anim || m.rueda !== null) svg.setAttribute("data-arrastrando", "");
-    else svg.removeAttribute("data-arrastrando");
+    return m.gesto || m.anim || m.rueda !== null;
+  };
+
+  /** Lleva lo dibujado (camDom) a lo que se ve (cámara viva) con una transformación
+   * CSS: sin maquetar ni dibujar de nuevo. Sin diferencia, sin transformación. */
+  const pintar = useCallback(() => {
+    const svg = svgRef.current;
+    const d = camDomRef.current;
+    const v = camRef.current;
+    const t = tamRef.current;
+    if (!svg || !d || !v || !t) return;
+    const s = v.k / d.k;
+    const tx = (d.cx - t.w / (2 * d.k) - (v.cx - t.w / (2 * v.k))) * v.k;
+    const ty = (d.cy - t.h / (2 * d.k) - (v.cy - t.h / (2 * v.k))) * v.k;
+    const igual = Math.abs(s - 1) < 1e-6 && Math.abs(tx) < 0.01 && Math.abs(ty) < 0.01;
+    svg.style.transform = igual ? "" : `translate(${tx}px, ${ty}px) scale(${s})`;
   }, []);
+
+  /** ¿Lo dibujado (con su sobrante) alcanza para mostrar la cámara viva sin que se vea
+   * borroso ni asome algo sin dibujar? Afuera del predio es fondo liso: no cuenta. */
+  const alcanza = useCallback((v: Camara): boolean => {
+    const d = camDomRef.current;
+    const t = tamRef.current;
+    if (!d || !t) return false;
+    if (v.k / d.k > AGRANDADO_MAXIMO) return false;
+    const m = sobrante(t);
+    const lim = limRef.current;
+    const x0 = Math.max(v.cx - t.w / (2 * v.k), lim.x);
+    const x1 = Math.min(v.cx + t.w / (2 * v.k), lim.x + lim.w);
+    const y0 = Math.max(v.cy - t.h / (2 * v.k), lim.y);
+    const y1 = Math.min(v.cy + t.h / (2 * v.k), lim.y + lim.h);
+    const tol = 1 / d.k;
+    return (
+      x0 >= d.cx - (t.w / 2 + m) / d.k - tol &&
+      x1 <= d.cx + (t.w / 2 + m) / d.k + tol &&
+      y0 >= d.cy - (t.h / 2 + m) / d.k - tol &&
+      y1 <= d.cy + (t.h / 2 + m) / d.k + tol
+    );
+  }, []);
+
+  /** Vuelve a dibujar el plano con la cámara viva (React cambia el viewBox; el efecto de
+   * abajo saca la transformación en el mismo cuadro). */
+  const dibujar = useCallback(() => {
+    const c = camRef.current;
+    if (!c) return;
+    setCam(c);
+    if (!enMovimiento()) setEscalaQuieta(c.k);
+  }, []);
+
+  // El DOM ya tiene el viewBox de `cam`: la transformación pasa a ser la diferencia con
+  // la cámara viva (ninguna, si no se movió mientras tanto). Antes de pintar: el viewBox
+  // nuevo y la transformación nueva salen en el mismo cuadro.
+  useLayoutEffect(() => {
+    camDomRef.current = cam;
+    pintar();
+  }, [cam, tam, pintar]);
+
+  /** Terminó (o cambió) lo que movía la cámara: si ya no se mueve nada, se dibuja nítido. */
+  const marcarMovimiento = useCallback(() => {
+    if (!enMovimiento()) dibujar();
+  }, [dibujar]);
 
   /** Rueda y pellizco del trackpad: no tienen fin explícito, se da por
    * terminado 150 ms después del último evento. */
@@ -171,9 +251,14 @@ export function useVista(limites: Rect, insetInferior = 0) {
       // Un evento raro (sin coordenadas) no puede dejar la cámara en NaN.
       if (!Number.isFinite(n.cx) || !Number.isFinite(n.cy) || !Number.isFinite(n.k)) return;
       camRef.current = n;
-      setCam(n);
+      // En movimiento: solo la transformación (y un redibujo si ya no alcanza lo
+      // dibujado). Quieta (encuadre, cambio de tamaño): se dibuja directo.
+      if (enMovimiento()) {
+        pintar();
+        if (!alcanza(n)) dibujar();
+      } else dibujar();
     },
-    [normalizar]
+    [normalizar, pintar, alcanza, dibujar]
   );
 
   const cortarAnimacion = useCallback(() => {
@@ -563,18 +648,33 @@ export function useVista(limites: Rect, insetInferior = 0) {
   /** Rectángulo del contenedor en pantalla (para ubicar carteles). */
   const rectContenedor = useCallback(() => contRef.current?.getBoundingClientRect() ?? null, []);
 
+  // Lo dibujado abarca el lienzo más el sobrante de cada lado: el <svg> es más grande que
+  // el contenedor (que lo recorta) y la transformación gira alrededor de la esquina del
+  // contenedor.
   let viewBox: string | null = null;
+  let estiloSvg: React.CSSProperties | undefined;
   if (cam && tam) {
-    const w = tam.w / cam.k;
-    const h = tam.h / cam.k;
+    const m = sobrante(tam);
+    const w = (tam.w + 2 * m) / cam.k;
+    const h = (tam.h + 2 * m) / cam.k;
     viewBox = `${cam.cx - w / 2} ${cam.cy - h / 2} ${w} ${h}`;
+    estiloSvg = {
+      left: -m,
+      top: -m,
+      width: tam.w + 2 * m,
+      height: tam.h + 2 * m,
+      transformOrigin: `${m}px ${m}px`,
+    };
   }
 
   return {
     contRef,
+    svgRef,
     viewBox,
-    /** px de pantalla por unidad del plano (para el zoom semántico). */
-    escala: cam?.k ?? null,
+    /** Posición y tamaño del <svg> (con el sobrante); sin medir, ocupa el contenedor. */
+    estiloSvg,
+    /** px de pantalla por unidad del plano con el plano quieto (para el zoom semántico). */
+    escala: escalaQuieta,
     fueArrastre,
     rectContenedor,
     onPointerDown: alBajar,
