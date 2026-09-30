@@ -34,18 +34,17 @@ export function EnElPlano({
   puedeUbicar: boolean;
   /** Quintero: no tiene puesto numerado, pero su ficha está en la zona de quinteros del plano. */
   quintero?: boolean;
-  /** Cocheras y galpones que factura: no se marcan en el plano, pero se nombran igual
-   * (si no, la línea dice menos que su carpeta y que la lista de Clientes). */
+  /** Cocheras y galpones que factura: los que todavía no se ubicaron en el plano se
+   * nombran igual (si no, la línea dice menos que su carpeta y que la lista de Clientes). */
   sinLugar?: { cocheras?: number; galpones?: number };
 }) {
-  const extras = sinLugar ? sinLugarEnPlano(sinLugar) : [];
-  const varias = extras.length > 1 || (sinLugar?.cocheras ?? 0) > 1 || (sinLugar?.galpones ?? 0) > 1;
+  const extras = sinLugar ? sinLugarEnPlano(sinLugar, espacios) : [];
   const nota =
     extras.length > 0 ? (
       <p className="text-sm text-muted-foreground">
         {espacios.length > 0 || quintero ? "También factura " : "Factura "}
         <span className="font-medium text-foreground">{listaConY(extras)}</span>
-        {varias ? " (no se marcan en el plano)." : " (no se marca en el plano)."}
+        {" (todavía sin lugar en el plano)."}
       </p>
     ) : null;
 

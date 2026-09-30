@@ -44,12 +44,16 @@ function beneficioCargo(monto: number, descuentoPct: number): number {
   return Math.max((montoCents - objetivoCents) / 100, 0);
 }
 
-/** "Puesto 34½", "Local 3", "Contéiner 7": el puesto del cheque (mismo texto que la base). */
+/** "Puesto 34½", "Local 3", "Contéiner 7", "Galpón 9": el puesto del cheque (mismo texto
+ * que la base, private.puestos_cliente). */
 function etiquetaEspacio(e: { tipo: string; numero: string | null; medio: boolean }): string {
   const n = e.numero ?? "";
   if (e.tipo === "puesto") return `Puesto ${n}${e.medio ? "½" : ""}`;
   if (e.tipo === "local") return `Local ${n}`;
   if (e.tipo === "contenedor") return `Contéiner ${n}`;
+  if (e.tipo === "galpon") return `Galpón ${n}`;
+  if (e.tipo === "cochera") return `Cochera ${n}`;
+  if (e.tipo === "quinta") return `Quinta ${n}`;
   return `Bar ${n}`.trim();
 }
 

@@ -12,6 +12,21 @@
 // Se respeta el dibujo tal cual, incluso lo que hay que revisar con el
 // mercado: "63 - 63" (repetido), "5 /2" en la isla y "7 - 5" en la fila sur
 // (el 5 aparece dos veces), un puesto con "?" y la falta del 17.
+//
+// Relevamiento del 29/09/2026 (dibujos de Ignacio, migración 0032):
+//   · Galpón: el recinto de 9 contéiners es un galpón con 10 subgalpones. Cada uno lleva
+//     el número del PUESTO de quien lo tiene ("el puesto 9 tiene 2 galpones ahí"), por
+//     eso el 9 se repite. El de arriba se leyó "68".
+//   · Locales 86 · 87 · 94 · 80 · 75 (de norte a sur), el invernadero 82 al lado y el
+//     contéiner 3 suelto debajo. Siguen los dos invernaderos y el recinto de 3 contéiners.
+//   · Los 10 contéiners bajo las 18 cocheras van en una sola hilera, del 1 al 10
+//     empezando por la derecha.
+//   · Playa de quintas = las dos zonas de quinteros: dos hileras con una calle en el
+//     medio; numeración en U (abajo 1–17 | 18–37 de oeste a este, arriba 38–54 | 55–68
+//     de este a oeste).
+//   · Cada cochera se asigna a un cliente (paga su canon): 1–74 de corrido.
+//
+// Importado (`import { plano } from "./generar.mjs"`) devuelve los datos sin imprimir.
 
 const ORG = "a0000000-0000-4000-8000-000000000001";
 
@@ -143,14 +158,15 @@ const finIslaOeste = fila(
   });
 }
 const QUINTEROS_GAP = 24;
-elementos.push({
+const quintasOeste = {
   tipo: "quinteros",
-  etiqueta: "Quinteros",
+  etiqueta: "Playa de quintas",
   x: finIslaOeste + QUINTEROS_GAP,
   y: ISLA_Y,
   w: OESTE_X + OESTE_W - (finIslaOeste + QUINTEROS_GAP),
   h: ISLA_H,
-});
+};
+elementos.push(quintasOeste);
 
 // Este (alineada a la derecha, contra Administración):
 // Quinteros · 71 · 63-63 (69 debajo) · 61 · 59 · 5/2 · Administración
@@ -181,14 +197,15 @@ fila(islaEste, inicioIslaEste, ISLA_Y, ISLA_ARRIBA);
     h: ISLA_ABAJO,
   });
 }
-elementos.push({
+const quintasEste = {
   tipo: "quinteros",
-  etiqueta: "Quinteros",
+  etiqueta: "Playa de quintas",
   x: ESTE_X,
   y: ISLA_Y,
   w: inicioIslaEste - QUINTEROS_GAP - ESTE_X,
   h: ISLA_H,
-});
+};
+elementos.push(quintasEste);
 elementos.push({
   tipo: "administracion",
   etiqueta: "Administración",
@@ -240,7 +257,7 @@ elementos.unshift({
 // ---------- Cocheras ----------
 const COCHERA_H = 50;
 const cocheraNorteY = NAVE.y - 54 - COCHERA_H; // 146
-elementos.push({
+const cocherasNorte = {
   tipo: "cocheras",
   etiqueta: "36 cocheras",
   capacidad: 36,
@@ -248,9 +265,9 @@ elementos.push({
   y: cocheraNorteY,
   w: NAVE_W,
   h: COCHERA_H,
-});
+};
 const cocheraSurY = NAVE.y + NAVE_H + 58; // 620
-elementos.push({
+const cocherasSurOeste = {
   tipo: "cocheras",
   etiqueta: "20 cocheras",
   capacidad: 20,
@@ -258,8 +275,8 @@ elementos.push({
   y: cocheraSurY,
   w: PASILLO_X - PASILLO_GAP - NAVE.x,
   h: COCHERA_H - 2,
-});
-elementos.push({
+};
+const cocherasSurEste = {
   tipo: "cocheras",
   etiqueta: "18 cocheras",
   capacidad: 18,
@@ -267,7 +284,30 @@ elementos.push({
   y: cocheraSurY,
   w: ESTE_W,
   h: COCHERA_H - 2,
-});
+};
+elementos.push(cocherasNorte, cocherasSurOeste, cocherasSurEste);
+
+// Cada cochera es un lugar que se asigna (EXPC: se paga por cochera). Van entre las
+// líneas de la franja, un poco más profundas que anchas (el auto se estaciona de
+// frente), numeradas de corrido: 1–36 arriba, 37–56 abajo al oeste y 57–74 al este.
+let nCochera = 0;
+for (const franja of [cocherasNorte, cocherasSurOeste, cocherasSurEste]) {
+  const paso = franja.w / franja.capacidad;
+  for (let i = 0; i < franja.capacidad; i++) {
+    espacios.push({
+      tipo: "cochera",
+      numero: String(++nCochera),
+      medio: false,
+      propio: false,
+      grupo: null,
+      nota: null,
+      x: franja.x + i * paso + 2,
+      y: franja.y + 2,
+      w: paso - 4,
+      h: franja.h - 4,
+    });
+  }
+}
 
 // Pasillo central: cruza la nave de punta a punta (líneas punteadas del dibujo).
 const pasilloFin = cocheraSurY + COCHERA_H - 2 + 50;
@@ -280,14 +320,44 @@ elementos.push({
   h: pasilloFin - (cocheraNorteY + COCHERA_H),
 });
 
-// ---------- Contenedores ----------
-const C = 46; // diámetro
-const CG = 12;
-let nContenedor = 0;
-const contenedor = (x, y, w = C, h = C) =>
+// ---------- Playa de quintas ----------
+// Las dos zonas de quinteros de la isla: dos hileras por zona con una calle en el
+// medio (la otra calle de la cruz es el pasillo central). Numeración en U: abajo de
+// oeste a este (1–17 | 18–37), arriba de este a oeste (38–54 | 55–68).
+const QUINTA_FONDO = 34;
+const QUINTA_BORDE = 4;
+function hileraQuintas(zona, arriba, numeros) {
+  const paso = (zona.w - 2 * QUINTA_BORDE) / numeros.length;
+  const y = arriba ? zona.y + QUINTA_BORDE : zona.y + zona.h - QUINTA_BORDE - QUINTA_FONDO;
+  numeros.forEach((n, i) =>
+    espacios.push({
+      tipo: "quinta",
+      numero: String(n),
+      medio: false,
+      propio: false,
+      grupo: null,
+      nota: null,
+      x: zona.x + QUINTA_BORDE + i * paso + 1,
+      y,
+      w: paso - 2,
+      h: QUINTA_FONDO,
+    })
+  );
+}
+const desde = (a, b) => Array.from({ length: Math.abs(b - a) + 1 }, (_, i) => (b >= a ? a + i : a - i));
+hileraQuintas(quintasOeste, false, desde(1, 17));
+hileraQuintas(quintasEste, false, desde(18, 37));
+hileraQuintas(quintasEste, true, desde(54, 38));
+hileraQuintas(quintasOeste, true, desde(68, 55));
+
+// ---------- Contéiners ----------
+// Cajas de contéiner (20 pies): 84 × 30 acostadas, 34 × 76 paradas.
+const CONT_L = 84;
+const CONT_A = 30;
+const contenedor = (numero, x, y, w, h) =>
   espacios.push({
     tipo: "contenedor",
-    numero: String(++nContenedor),
+    numero: String(numero),
     medio: false,
     propio: false,
     grupo: null,
@@ -301,101 +371,134 @@ const contenedor = (x, y, w = C, h = C) =>
 const DERECHA_X = NAVE.x + NAVE_W + 70; // columna de locales: 1614
 const RECINTO_X = DERECHA_X + 66; // 1680
 
-// Recinto norte: 3 contenedores
+// Recinto norte: 3 contéiners, uno arriba del otro.
 const recA = { x: RECINTO_X, y: 40, w: 170, h: 150 };
 elementos.push({ tipo: "recinto", etiqueta: "Contéiners", ...recA });
-contenedor(recA.x + 22, recA.y + 16);
-contenedor(recA.x + 96, recA.y + 52);
-contenedor(recA.x + 22, recA.y + 88);
+for (let i = 0; i < 3; i++) contenedor(i + 1, recA.x + 22, recA.y + 24 + i * (CONT_A + 12), CONT_L, CONT_A);
 
-// Recinto este: 1 grande + 8
-const recB = { x: RECINTO_X, y: 232, w: 0, h: 160 };
-const grandeW = 86;
-const grandeH = 52;
-const filasH = 2 * C + CG;
-const filaY0 = recB.y + (recB.h - filasH) / 2;
-contenedor(recB.x + 18, recB.y + (recB.h - grandeH) / 2, grandeW, grandeH);
-const colX0 = recB.x + 18 + grandeW + 20;
-for (let fi = 0; fi < 2; fi++) {
-  for (let co = 0; co < 4; co++) {
-    contenedor(colX0 + co * (C + CG), filaY0 + fi * (C + CG));
-  }
-}
-recB.w = colX0 + 4 * C + 3 * CG + 18 - recB.x;
-elementos.push({ tipo: "recinto", etiqueta: "Contéiners", ...recB });
-
-// 10 contenedores bajo las 18 cocheras
-const diezW = 5 * C + 4 * CG;
-const diezX = ESTE_X + ESTE_W / 2 - diezW / 2;
-const diezY = cocheraSurY + COCHERA_H - 2 + 32;
-for (let fi = 0; fi < 2; fi++) {
-  for (let co = 0; co < 5; co++) {
-    contenedor(diezX + co * (C + CG), diezY + fi * (C + CG));
-  }
-}
+// Una sola hilera de 10 bajo las 18 cocheras, parados, del 1 al 10 desde la derecha.
+const FILA_W = 34;
+const FILA_H = 76;
+const FILA_G = 10;
+const filaAncho = 10 * FILA_W + 9 * FILA_G;
+const filaX = ESTE_X + ESTE_W / 2 - filaAncho / 2;
+const filaY = cocheraSurY + COCHERA_H - 2 + 32;
+for (let i = 0; i < 10; i++) contenedor(10 - i, filaX + i * (FILA_W + FILA_G), filaY, FILA_W, FILA_H);
 elementos.push({
   tipo: "rotulo",
   etiqueta: "Contéiners",
-  x: diezX,
-  y: diezY + 2 * C + CG + 10,
-  w: diezW,
+  x: filaX,
+  y: filaY + FILA_H + 10,
+  w: filaAncho,
   h: 20,
 });
 
-// ---------- Locales (1 abajo, 5 arriba) ----------
-const LOCAL_H = 40;
+// ---------- Galpón (10 subgalpones) ----------
+// Un galpón grande dividido como en el dibujo: arriba uno grande y uno ancho, después
+// cuatro filas de dos. Cada subgalpón lleva el número del puesto de quien lo tiene.
+const galpon = { tipo: "galpon", etiqueta: "Galpón", x: RECINTO_X + 200, y: 40, w: 170, h: 420 };
+elementos.push(galpon);
+{
+  const x0 = galpon.x + 12;
+  const ancho = galpon.w - 24;
+  const medio = (ancho - G) / 2;
+  let y = galpon.y + 14;
+  const filas = [
+    { alto: 96, nums: ["68"] },
+    { alto: 50, nums: ["9"] },
+    { alto: 56, nums: ["9", "29"] },
+    { alto: 56, nums: ["1", "26"] },
+    { alto: 56, nums: ["69", "54"] },
+    { alto: 56, nums: ["63", "33"] },
+  ];
+  for (const f of filas) {
+    f.nums.forEach((n, i) =>
+      espacios.push({
+        tipo: "galpon",
+        numero: n,
+        medio: false,
+        propio: false,
+        grupo: null,
+        nota: `Del puesto ${n}`,
+        x: f.nums.length === 1 ? x0 : x0 + i * (medio + G),
+        y,
+        w: f.nums.length === 1 ? ancho : medio,
+        h: f.alto,
+      })
+    );
+    y += f.alto + G;
+  }
+}
+
+// ---------- Locales (86 arriba, 75 abajo) ----------
+const LOCAL_W = 62;
+const LOCAL_H = 46;
 const localesY0 = 470;
-for (let i = 0; i < 5; i++) {
+[
+  ["86", "Aug."],
+  ["87", "Vill."],
+  ["94", "Luc."],
+  ["80", null],
+  ["75", null],
+].forEach(([n, nota], i) =>
   espacios.push({
     tipo: "local",
-    numero: String(5 - i),
+    numero: n,
     medio: false,
     propio: false,
     grupo: null,
-    nota: null,
+    nota,
     x: DERECHA_X,
-    y: localesY0 + i * (LOCAL_H + 14),
-    w: S,
+    y: localesY0 + i * (LOCAL_H + 3),
+    w: LOCAL_W,
     h: LOCAL_H,
-  });
-}
+  })
+);
 elementos.push({
   tipo: "rotulo",
   etiqueta: "Locales",
-  x: DERECHA_X - 18,
-  y: localesY0 + 5 * (LOCAL_H + 14) + 2,
-  w: S + 36,
+  x: DERECHA_X + LOCAL_W / 2 - 40,
+  y: localesY0 + 5 * LOCAL_H + 4 * 3 + 8,
+  w: 80,
   h: 20,
 });
 
 // ---------- Invernaderos ----------
+// El 82 al lado de los locales (a la altura del 94), el otro a su derecha y el
+// contéiner 3, solo, debajo del 82.
 const INV_W = 86;
 const INV_H = 260;
-const inv1X = RECINTO_X + 94;
+const invY = 580;
+const inv1X = DERECHA_X + LOCAL_W + 30;
 const inv2X = inv1X + INV_W + 30;
-elementos.push({ tipo: "invernadero", etiqueta: "Invernadero", x: inv1X, y: localesY0, w: INV_W, h: INV_H });
-elementos.push({ tipo: "invernadero", etiqueta: "Invernadero", x: inv2X, y: localesY0, w: INV_W, h: INV_H });
-
-// Contenedor grande suelto, entre los invernaderos y abajo
-contenedor(inv1X + INV_W + 15 - grandeW / 2, localesY0 + INV_H + 40, grandeW, grandeH);
+elementos.push({ tipo: "invernadero", etiqueta: "Invernadero 82", x: inv1X, y: invY, w: INV_W, h: INV_H });
+elementos.push({ tipo: "invernadero", etiqueta: "Invernadero", x: inv2X, y: invY, w: INV_W, h: INV_H });
+contenedor(3, inv1X + 1, invY + INV_H + 26, CONT_L, 34);
 
 // ---------- SQL ----------
 const q = (v) => (v === null || v === undefined ? "null" : `'${String(v).replaceAll("'", "''")}'`);
 const num = (v) => Number(v.toFixed(2));
 
-const filasElementos = elementos.map(
-  (e, i) =>
-    `  ('${ORG}', ${q(e.tipo)}, ${q(e.etiqueta)}, ${e.capacidad ?? "null"}, ${num(e.x)}, ${num(e.y)}, ${num(e.w)}, ${num(e.h)}, ${i})`
-);
-const filasEspacios = espacios.map(
-  (e) =>
-    `  ('${ORG}', ${q(e.tipo)}, ${q(e.numero)}, ${e.medio}, ${Boolean(e.propio)}, ${q(e.grupo)}, ${q(e.nota)}, ${num(e.x)}, ${num(e.y)}, ${num(e.w)}, ${num(e.h)})`
-);
+/** El plano (datos) y el SQL de la carga inicial. */
+export function plano() {
+  return { org: ORG, espacios, elementos, q, num };
+}
 
-const puestos = espacios.filter((e) => e.tipo === "puesto");
-console.log(`-- ============================================================
+function sql() {
+  const filasElementos = elementos.map(
+    (e, i) =>
+      `  ('${ORG}', ${q(e.tipo)}, ${q(e.etiqueta)}, ${e.capacidad ?? "null"}, ${num(e.x)}, ${num(e.y)}, ${num(e.w)}, ${num(e.h)}, ${i})`
+  );
+  const filasEspacios = espacios.map(
+    (e) =>
+      `  ('${ORG}', ${q(e.tipo)}, ${q(e.numero)}, ${e.medio}, ${Boolean(e.propio)}, ${q(e.grupo)}, ${q(e.nota)}, ${num(e.x)}, ${num(e.y)}, ${num(e.w)}, ${num(e.h)})`
+  );
+  const cuenta = (tipo) => espacios.filter((e) => e.tipo === tipo).length;
+  const puestos = espacios.filter((e) => e.tipo === "puesto");
+  return `-- ============================================================
 -- Plano real del Mercado San Miguel — generado por supabase/plano/generar.mjs
--- ${puestos.length} puestos (${puestos.filter((p) => p.medio).length} medios, ${puestos.filter((p) => p.propio).length} propios), 1 bar, 5 locales, ${nContenedor} contéiners.
+-- ${puestos.length} puestos (${puestos.filter((p) => p.medio).length} medios, ${puestos.filter((p) => p.propio).length} propios), 1 bar, ${cuenta("local")} locales,
+-- ${cuenta("contenedor")} contéiners, ${cuenta("galpon")} subgalpones, ${cuenta("cochera")} cocheras y ${cuenta("quinta")} quintas.
 -- Carga INICIAL: borra el plano de la organización antes de insertarlo. Correr una sola
 -- vez, con el rol postgres. Si el plano ya está en uso (puestos asignados o marcados
 -- como propios, medidores, solicitudes, canon o registros que apuntan a un lugar) NO
@@ -429,4 +532,7 @@ ${filasElementos.join(",\n")};
 insert into public.espacios (org_id, tipo, numero, medio, propio, grupo, nota, x, y, w, h) values
 ${filasEspacios.join(",\n")};
 
-commit;`);
+commit;`;
+}
+
+if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) console.log(sql());

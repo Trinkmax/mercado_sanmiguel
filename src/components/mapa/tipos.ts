@@ -5,8 +5,9 @@ import type { AvanceMes, CategoriaCliente } from "@/lib/segmentos";
 
 export type EstadoCobro = "al_dia" | "debe" | "vencido";
 
-/** Espacio físico que se asigna a un cliente (tabla `espacios`). */
-export type TipoEspacio = "puesto" | "bar" | "local" | "contenedor";
+/** Espacio físico que se asigna a un cliente (tabla `espacios`). Cochera (EXPC),
+ * subgalpón (EXPG) y quinta de la playa (EXPQ) se asignan uno por uno (0032). */
+export type TipoEspacio = "puesto" | "bar" | "local" | "contenedor" | "cochera" | "galpon" | "quinta";
 
 /** Lo fijo del predio (tabla `plano_elementos`). */
 export type TipoElemento =
@@ -17,7 +18,8 @@ export type TipoElemento =
   | "administracion"
   | "invernadero"
   | "recinto"
-  | "rotulo";
+  | "rotulo"
+  | "galpon";
 
 /** Rectángulo en unidades del plano. */
 export type Rect = { x: number; y: number; w: number; h: number };
@@ -57,7 +59,7 @@ export type Facturado = {
 };
 
 /** Códigos que el plano cruza contra la carpeta ("Facturar en la carpeta"). */
-export type CodigoPlano = "EXME" | "EXPP" | "EXPL" | "EXPE";
+export type CodigoPlano = "EXME" | "EXPP" | "EXPL" | "EXPE" | "EXPC" | "EXPG" | "EXPQ";
 
 /** Fila de cliente_conceptos del cliente para un código del plano. */
 export type ItemCarpeta = { id: string; cantidad: number; activo: boolean };
@@ -74,7 +76,7 @@ export type ClienteMapa = {
   categoria?: CategoriaCliente;
   /** Avance del mes (v_avance_mes del período actual): "2 de 4 · Falta $165.000". */
   mes?: AvanceMes | null;
-  /** Sus filas de cliente_conceptos de EXME/EXPP/EXPL/EXPE (para proponer el ajuste). */
+  /** Sus filas de cliente_conceptos de los códigos del plano (para proponer el ajuste). */
   carpeta?: Partial<Record<CodigoPlano, ItemCarpeta>>;
   /** Hay un cambio de conceptos esperando al Líder. */
   cambioPendiente?: boolean;

@@ -3182,6 +3182,13 @@ export type Database = {
         }
         Returns: Json
       }
+      quintas_del_plano: {
+        Args: never
+        Returns: {
+          cliente_id: string
+          espacio_id: string
+        }[]
+      }
       reabrir_caja: {
         Args: { p_caja: string; p_motivo?: string }
         Returns: undefined

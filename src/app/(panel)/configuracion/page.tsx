@@ -240,9 +240,12 @@ const NOMBRE_TIPO_ESPACIO: Record<string, string> = {
   puesto: "Puesto",
   local: "Local",
   contenedor: "Contéiner",
+  galpon: "Galpón",
+  cochera: "Cochera",
+  quinta: "Quinta",
   bar: "Bar",
 };
-const ORDEN_TIPO_ESPACIO = ["puesto", "local", "contenedor", "bar"];
+const ORDEN_TIPO_ESPACIO = ["puesto", "local", "contenedor", "galpon", "cochera", "quinta", "bar"];
 
 /** "Puesto 58 · 60 · Local 3" para reconocer y buscar al cliente. */
 function lugaresDe(espacios: { tipo: string; numero: string | null; medio: boolean }[]): string | null {

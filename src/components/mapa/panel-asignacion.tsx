@@ -27,7 +27,11 @@ import {
   CODIGO_DIFERENCIA,
   NOMBRE_TIPO,
   objetivoPlano,
+  conArticulo,
+  esFemenino,
   numeroVisible,
+  ocupante,
+  palabra,
   textoDiferencia,
   unidadesPuestos,
   type Diferencia,
@@ -216,6 +220,13 @@ export function PanelAsignacion({
   );
 }
 
+/** "facturado", "facturadas"…: concuerda con lo que se cuenta. */
+function facturados(n: number, tipo: Diferencia["tipo"]): string {
+  const femenino = tipo === "cochera" || tipo === "quinta";
+  const plural = !(n > 0 && n <= 1);
+  return `facturad${femenino ? "a" : "o"}${plural ? "s" : ""}`;
+}
+
 function PincelActivo({
   cliente,
   suyos,
@@ -229,17 +240,23 @@ function PincelActivo({
   onSoltar: () => void;
   onEnfocar: (r: Rect) => void;
 }) {
+  const f = cliente.facturado;
+  const cuenta = (tipo: Espacio["tipo"]) => suyos.filter((e) => e.tipo === tipo).length;
+  // Puestos siempre; el resto (propios, locales, contéiners, galpones, cocheras, quintas),
+  // si los tiene en el plano o los factura: al pintar cocheras se ve "1 de 2 cocheras".
   const filas = (
     [
-      { tipo: "puesto", codigo: "EXME", enPlano: unidadesPuestos(suyos, false), facturado: cliente.facturado.puestos },
-      {
-        tipo: "propio",
-        codigo: "EXPP",
-        enPlano: unidadesPuestos(suyos, true),
-        facturado: cliente.facturado.propios ?? 0,
-      },
+      { tipo: "puesto", enPlano: unidadesPuestos(suyos, false), facturado: f.puestos },
+      { tipo: "propio", enPlano: unidadesPuestos(suyos, true), facturado: f.propios ?? 0 },
+      { tipo: "local", enPlano: cuenta("local") + cuenta("bar"), facturado: f.locales },
+      { tipo: "contenedor", enPlano: cuenta("contenedor"), facturado: f.contenedores },
+      { tipo: "galpon", enPlano: cuenta("galpon"), facturado: f.galpones },
+      { tipo: "cochera", enPlano: cuenta("cochera"), facturado: f.cocheras },
+      { tipo: "quinta", enPlano: cuenta("quinta"), facturado: f.quintas },
     ] as const
-  ).filter((f, i) => i === 0 || f.enPlano > 0 || f.facturado > 0);
+  )
+    .map((fila) => ({ ...fila, codigo: CODIGO_DIFERENCIA[fila.tipo] }))
+    .filter((fila, i) => i === 0 || fila.enPlano > 0 || fila.facturado > 0);
   const completo =
     filas.some((f) => f.facturado > 0) &&
     filas.every((f) => Math.abs(f.enPlano - objetivoPlano(f.facturado, f.tipo)) < 0.001);
@@ -303,10 +320,10 @@ function PincelActivo({
                 <span className="font-display text-base font-bold tabular">{formatFraccion(f.enPlano)}</span>
                 <span className="min-w-0 text-muted-foreground">
                   {f.facturado > 0
-                    ? ` de ${cantidad(f.facturado, f.tipo)} facturados`
-                    : f.tipo === "propio"
-                      ? " puestos propios en el plano · no factura EXPP"
-                      : " puestos en el plano · no factura expensa de puesto"}
+                    ? ` de ${cantidad(f.facturado, f.tipo)} ${facturados(f.facturado, f.tipo)}`
+                    : f.tipo === "puesto"
+                      ? " puestos en el plano · no factura expensa de puesto"
+                      : ` ${palabra(f.enPlano, f.tipo)} en el plano · no factura ${f.codigo}`}
                 </span>
               </div>
               <div className="h-2 overflow-hidden rounded-full bg-muted ring-1 ring-foreground/5">
@@ -346,7 +363,8 @@ function AvisoConfirmacion({
   onCancelar: () => void;
 }) {
   if (!espacio) return null;
-  const nombreEspacio = espacio.tipo === "bar" ? "El bar" : `El ${NOMBRE_TIPO[espacio.tipo].toLowerCase()} ${numeroVisible(espacio)}`;
+  const articulado = conArticulo(espacio);
+  const nombreEspacio = articulado.charAt(0).toUpperCase() + articulado.slice(1);
   return (
     <div
       role="alertdialog"
@@ -599,7 +617,11 @@ function EditorEspacio({
       ) : null}
 
       <div className="space-y-2 border-t pt-4">
-        <p className="text-sm font-medium">{duenio ? "Pasárselo a otro puestero" : "Asignárselo a un puestero"}</p>
+        <p className="text-sm font-medium">
+          {duenio
+            ? `Pasársel${esFemenino(espacio.tipo) ? "a" : "o"} a otro ${ocupante(espacio.tipo)}`
+            : `Asignársel${esFemenino(espacio.tipo) ? "a" : "o"} a un ${ocupante(espacio.tipo)}`}
+        </p>
         {/* Arriba y no al centro: la lista de resultados se abre debajo del campo y
             Liberar tiene que quedar a la altura del campo, no a la mitad de la lista. */}
         <div className="flex flex-col gap-2 @md:flex-row @md:items-start">

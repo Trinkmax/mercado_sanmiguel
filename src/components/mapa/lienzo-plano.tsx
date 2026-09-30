@@ -139,6 +139,8 @@ export function LienzoPlano({
   const [medir, setMedir] = useState<MedirTexto | null>(null);
   const detalle = (escala ?? 0) >= ESCALA_DETALLE;
   const resaltado = hover?.bloque.clave ?? null;
+  // Con quintas numeradas (0032), las zonas de quinteros son la playa de quintas.
+  const conPlaya = useMemo(() => bloques.some((b) => b.tipo === "quinta"), [bloques]);
 
   // La pastilla se mide con la fuente real (Nunito 800) cuando termina de
   // cargar; hasta entonces se estima por cantidad de caracteres.
@@ -315,7 +317,14 @@ export function LienzoPlano({
         onPointerLeave={() => setHover(null)}
       >
         <DefsPlano />
-        <Fondo elementos={elementos} limites={limites} detalle={detalle} arboles={arboles} finFichas={finFichas} />
+        <Fondo
+          elementos={elementos}
+          limites={limites}
+          detalle={detalle}
+          arboles={arboles}
+          finFichas={finFichas}
+          playa={conPlaya}
+        />
         {/* Velo: con selección o filtro, todo el fondo baja de un solo golpe */}
         {atenuar ? (
           <rect

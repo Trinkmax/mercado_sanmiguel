@@ -66,7 +66,7 @@ export function SelectorEspacio({
   /** ids de espacios que se ofrecen como chips (los del cliente). */
   sugeridos?: string[];
   /** Qué se puede elegir (default: todos). */
-  tipos?: ("puesto" | "local" | "bar" | "contenedor")[];
+  tipos?: TipoEspacio[];
   /** "¿Dónde está el medidor?" */
   titulo?: string;
   /** Muestra "Otro lugar (sin plano)" → onCambiar(null). */

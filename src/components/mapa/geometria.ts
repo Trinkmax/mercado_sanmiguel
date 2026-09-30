@@ -1,5 +1,5 @@
 import { formatFraccion } from "@/lib/format";
-import type { ClienteMapa, ElementoPlano, Espacio, EstadoCobro, Rect, TipoEspacio } from "./tipos";
+import type { ClienteMapa, CodigoPlano, ElementoPlano, Espacio, EstadoCobro, Rect, TipoEspacio } from "./tipos";
 
 /** Dos puestos de la misma fila con menos de esto entre sí se tocan. */
 const TOLERANCIA_CONTIGUO = 8;
@@ -108,9 +108,9 @@ export function limitesPlano(elementos: ElementoPlano[], espacios: Espacio[]): R
   if (todo.length === 0) return { x: 0, y: 0, w: 1000, h: 500 };
   const r = unir(todo);
   const m = 28;
-  // El muro norte de la nave y sus cabriadas se levantan sobre la placa: en el plano
-  // girado la nave toca el borde de arriba y hay que dejarles lugar.
-  const naves = elementos.filter((e) => e.tipo === "nave");
+  // El muro norte de la nave (y del galpón) y sus cabriadas se levantan sobre la placa:
+  // en el plano girado la nave toca el borde de arriba y hay que dejarles lugar.
+  const naves = elementos.filter((e) => e.tipo === "nave" || e.tipo === "galpon");
   const tope = Math.min(...naves.map((n) => n.y - (ALT.muroNorte + ALT.cabriada)));
   if (tope < r.y) return { x: r.x - m, y: tope - m, w: r.w + 2 * m, h: r.y + r.h - tope + 2 * m };
   return { x: r.x - m, y: r.y - m, w: r.w + 2 * m, h: r.h + 2 * m };
@@ -130,7 +130,11 @@ export type Marca = "seleccion" | "pincel" | "aviso" | null;
 export const ALT = {
   puesto: 14, // puesto, bar y local ocupados
   libre: 8, // cualquier espacio libre (lote bajo)
-  contenedor: 16, // tambor ocupado
+  contenedor: 16, // caja de contéiner ocupada
+  galpon: 15, // subgalpón ocupado
+  auto: 11, // cochera ocupada: el auto estacionado
+  camion: 12, // quinta ocupada: la camioneta del quintero
+  piso: 0.6, // cochera o quinta libre: el lugar pintado en el piso
   atenuado: 5, // lo que no coincide con la selección o el filtro
   realce: 4, // hover y foco de teclado: el bloque despega 4 u
   despegue: 10, // seleccionado: la base se separa del piso
@@ -172,6 +176,23 @@ export type Alturas = {
 /** Sin hover ni foco de teclado. */
 export const REPOSO = { hover: false, foco: false } as const;
 
+/** Altura de la tapa de cada tipo ocupado. */
+const ALTO_TIPO: Record<TipoEspacio, number> = {
+  puesto: ALT.puesto,
+  bar: ALT.puesto,
+  local: ALT.puesto,
+  contenedor: ALT.contenedor,
+  galpon: ALT.galpon,
+  cochera: ALT.auto,
+  quinta: ALT.camion,
+};
+
+/** Cochera o quinta sin vehículo: es el lugar pintado en el piso, no un lote levantado
+ * (libre, o en el mapa del Jefe, que no sabe si está ocupada). */
+export function esPiso(tipo: TipoEspacio, estado: EstadoBloque): boolean {
+  return (tipo === "cochera" || tipo === "quinta") && (estado === "libre" || estado === "anonimo");
+}
+
 /** La ÚNICA función de altura: la usan el cuerpo, las sombras, las huellas, los
  * anillos, las zonas táctiles y la pastilla. */
 export function alturaDe(
@@ -180,10 +201,10 @@ export function alturaDe(
   i: { hover: boolean; foco: boolean }
 ): Alturas {
   const libre = e.estado === "libre";
-  const hTipo = libre ? ALT.libre : b.tipo === "contenedor" ? ALT.contenedor : ALT.puesto;
+  const hTipo = esPiso(b.tipo, e.estado) ? ALT.piso : libre ? ALT.libre : ALTO_TIPO[b.tipo];
   let z0 = 0;
   let zTop: number = hTipo;
-  if (e.atenuado) zTop = ALT.atenuado; // el atenuado manda
+  if (e.atenuado) zTop = Math.min(ALT.atenuado, hTipo); // el atenuado manda (lo pintado en el piso no sube)
   else if (e.marca === "seleccion") {
     z0 = ALT.despegue; // flota
     zTop = z0 + hTipo;
@@ -197,10 +218,11 @@ export function alturaDe(
   return { z0, zTop, zTexto, material, pintado: !libre && !e.atenuado, libre };
 }
 
-/** Radio de las esquinas de la tapa (el tambor es una elipse). */
+/** Radio de las esquinas de la tapa. */
 export function radioTapa(b: Pick<Bloque, "tipo" | "rect">): number {
-  if (b.tipo === "contenedor") return 0;
-  if (b.tipo === "local") return 3;
+  if (b.tipo === "contenedor") return 1.5;
+  if (b.tipo === "local" || b.tipo === "galpon") return 3;
+  if (b.tipo === "quinta") return 2;
   return Math.min(4, b.rect.w / 5);
 }
 
@@ -222,6 +244,9 @@ export const NOMBRE_TIPO: Record<TipoEspacio, string> = {
   bar: "Bar",
   local: "Local",
   contenedor: "Contéiner",
+  galpon: "Galpón",
+  cochera: "Cochera",
+  quinta: "Quinta",
 };
 
 const NOMBRE_TIPO_PLURAL: Record<TipoEspacio, string> = {
@@ -229,11 +254,37 @@ const NOMBRE_TIPO_PLURAL: Record<TipoEspacio, string> = {
   bar: "Bar",
   local: "Locales",
   contenedor: "Contéiners",
+  galpon: "Galpones",
+  cochera: "Cocheras",
+  quinta: "Quintas",
 };
+
+/** El orden en que se nombran los lugares de un cliente. */
+const ORDEN_TIPOS: TipoEspacio[] = ["puesto", "bar", "local", "contenedor", "galpon", "cochera", "quinta"];
+
+function esTipoEspacio(t: string): t is TipoEspacio {
+  return (ORDEN_TIPOS as string[]).includes(t);
+}
 
 /** Nombre de un tipo de espacio en singular o plural ("Contéiner" / "Contéiners"). */
 export function nombreTipo(tipo: TipoEspacio, plural = false): string {
   return plural ? NOMBRE_TIPO_PLURAL[tipo] : NOMBRE_TIPO[tipo];
+}
+
+/** Cocheras y quintas son femeninas: "la cochera 12", "asignársela". */
+export function esFemenino(tipo: TipoEspacio): boolean {
+  return tipo === "cochera" || tipo === "quinta";
+}
+
+/** "el puesto 58", "la quinta 40", "el bar". */
+export function conArticulo(e: Pick<Espacio, "tipo" | "numero" | "medio">): string {
+  if (e.tipo === "bar") return "el bar";
+  return `${esFemenino(e.tipo) ? "la" : "el"} ${NOMBRE_TIPO[e.tipo].toLowerCase()} ${numeroVisible(e)}`;
+}
+
+/** Quién ocupa un lugar: el quintero (quinta), el cliente (cochera) o el puestero. */
+export function ocupante(tipo: TipoEspacio): string {
+  return tipo === "quinta" ? "quintero" : tipo === "cochera" ? "cliente" : "puestero";
 }
 
 /** "58", "34½", "?" — el número tal como se lee en el plano. */
@@ -253,7 +304,8 @@ export function compararNumero(a: string | null, b: string | null): number {
 
 /**
  * Etiqueta de UN lugar del plano: "Puesto 58", "Puesto 34½", "Puesto propio 12",
- * "Local 3", "Contéiner 7", "Bar". TS puro (server y client): la usan la ficha, las
+ * "Local 3", "Contéiner 7", "Galpón 9", "Cochera 12", "Quinta 40", "Bar". TS puro
+ * (server y client): la usan la ficha, las
  * solicitudes, la energía y las exportaciones (interfaz congelada, FASE3 §6.10).
  */
 export function etiquetaEspacio(e: {
@@ -263,8 +315,7 @@ export function etiquetaEspacio(e: {
   propio?: boolean | null;
 }): string {
   if (e.tipo === "bar") return "Bar";
-  const tipo = (["puesto", "local", "contenedor"] as const).find((t) => t === e.tipo);
-  const nombre = tipo ? NOMBRE_TIPO[tipo] : e.tipo;
+  const nombre = esTipoEspacio(e.tipo) ? NOMBRE_TIPO[e.tipo] : e.tipo;
   const numero = `${e.numero ?? "?"}${e.medio && e.tipo === "puesto" ? "½" : ""}`;
   return e.tipo === "puesto" && e.propio ? `Puesto propio ${numero}` : `${nombre} ${numero}`;
 }
@@ -291,14 +342,17 @@ export function textoEspacios<T extends Pick<Espacio, "tipo" | "numero" | "medio
 }
 
 /**
- * Lo que factura y el plano no marca por cliente: "2 cocheras", "½ galpón". Las
- * cocheras son un cupo del predio y los galpones no están dibujados; sin esto, la
- * tarjeta y el buscador del mapa mostraban menos de lo que dice su carpeta.
+ * Cocheras y galpones que factura y todavía no tienen lugar en el plano: "2 cocheras",
+ * "½ galpón". Desde 0032 cada cochera y cada subgalpón se asigna; hasta que se ubiquen,
+ * la tarjeta y el buscador nombran lo que falta (si no, dirían menos que su carpeta).
  */
-export function sinLugarEnPlano(f: { cocheras?: number; galpones?: number }): string[] {
+export function sinLugarEnPlano(
+  f: { cocheras?: number; galpones?: number },
+  suyos: Pick<Espacio, "tipo">[] = []
+): string[] {
   const partes: string[] = [];
-  const cocheras = f.cocheras ?? 0;
-  const galpones = f.galpones ?? 0;
+  const cocheras = Math.max(0, (f.cocheras ?? 0) - suyos.filter((e) => e.tipo === "cochera").length);
+  const galpones = Math.max(0, (f.galpones ?? 0) - suyos.filter((e) => e.tipo === "galpon").length);
   if (cocheras > 0) partes.push(`${formatFraccion(cocheras)} ${cocheras > 1 ? "cocheras" : "cochera"}`);
   if (galpones > 0) partes.push(`${formatFraccion(galpones)} ${galpones > 1 ? "galpones" : "galpón"}`);
   return partes;
@@ -323,8 +377,7 @@ export function etiquetaEspacios(espacios: Pick<Espacio, "tipo" | "numero" | "me
 export function espaciosPorTipo<T extends Pick<Espacio, "tipo" | "x" | "y">>(
   espacios: T[]
 ): { tipo: TipoEspacio; espacios: T[] }[] {
-  const orden: TipoEspacio[] = ["puesto", "bar", "local", "contenedor"];
-  return orden
+  return ORDEN_TIPOS
     .map((tipo) => ({
       tipo,
       espacios: espacios
@@ -335,24 +388,30 @@ export function espaciosPorTipo<T extends Pick<Espacio, "tipo" | "x" | "y">>(
 }
 
 /** Diferencia entre lo que el plano le asigna a un cliente y lo que factura.
- * puesto = comunes (EXME) · propio = de la cooperativa (EXPP) · local (EXPL) · contenedor (EXPE). */
+ * puesto = comunes (EXME) · propio = de la cooperativa (EXPP) · local (EXPL) ·
+ * contenedor (EXPE) · galpon (EXPG) · cochera (EXPC) · quinta (EXPQ). */
 export type Diferencia = {
-  tipo: "puesto" | "propio" | "local" | "contenedor";
+  tipo: "puesto" | "propio" | "local" | "contenedor" | "galpon" | "cochera" | "quinta";
   enPlano: number;
   facturado: number;
 };
 
 /** Qué código de la carpeta corresponde a cada tipo de diferencia. */
-export const CODIGO_DIFERENCIA: Record<Diferencia["tipo"], "EXME" | "EXPP" | "EXPL" | "EXPE"> = {
+export const CODIGO_DIFERENCIA: Record<Diferencia["tipo"], CodigoPlano> = {
   puesto: "EXME",
   propio: "EXPP",
   local: "EXPL",
   contenedor: "EXPE",
+  galpon: "EXPG",
+  cochera: "EXPC",
+  quinta: "EXPQ",
 };
 
-/** Lo que el plano puede mostrar: puestos enteros o medios; locales y
- * contenedores enteros. Una expensa facturada en cuartos (1¼) se compara
- * contra lo representable más cercano. */
+const TIPOS_DIFERENCIA: Diferencia["tipo"][] = ["puesto", "propio", "local", "contenedor", "galpon", "cochera", "quinta"];
+
+/** Lo que el plano puede mostrar: puestos enteros o medios; el resto, enteros.
+ * Una expensa facturada en cuartos (1¼) se compara contra lo representable más
+ * cercano. */
 export function objetivoPlano(facturado: number, tipo: Diferencia["tipo"]): number {
   return tipo === "puesto" || tipo === "propio" ? Math.round(facturado * 2) / 2 : Math.round(facturado);
 }
@@ -364,14 +423,20 @@ export function diferencias(cliente: ClienteMapa, suyos: Espacio[]): Diferencia[
     // El bar se concesiona como un local.
     local: suyos.filter((e) => e.tipo === "local" || e.tipo === "bar").length,
     contenedor: suyos.filter((e) => e.tipo === "contenedor").length,
+    galpon: suyos.filter((e) => e.tipo === "galpon").length,
+    cochera: suyos.filter((e) => e.tipo === "cochera").length,
+    quinta: suyos.filter((e) => e.tipo === "quinta").length,
   };
   const facturado = {
     puesto: cliente.facturado.puestos,
     propio: cliente.facturado.propios ?? 0,
     local: cliente.facturado.locales,
     contenedor: cliente.facturado.contenedores,
+    galpon: cliente.facturado.galpones,
+    cochera: cliente.facturado.cocheras,
+    quinta: cliente.facturado.quintas,
   };
-  return (["puesto", "propio", "local", "contenedor"] as const)
+  return TIPOS_DIFERENCIA
     .filter((t) => Math.abs(enPlano[t] - objetivoPlano(facturado[t], t)) > 0.001)
     .map((t) => ({ tipo: t, enPlano: enPlano[t], facturado: facturado[t] }));
 }
@@ -381,11 +446,19 @@ const PALABRA: Record<Diferencia["tipo"], [string, string]> = {
   propio: ["puesto propio", "puestos propios"],
   local: ["local", "locales"],
   contenedor: ["contéiner", "contéiners"],
+  galpon: ["galpón", "galpones"],
+  cochera: ["cochera", "cocheras"],
+  quinta: ["quinta", "quintas"],
 };
 
-export function cantidad(n: number, tipo: Diferencia["tipo"]): string {
+/** "cochera" o "cocheras" según cuántas (½ y 1 van en singular). */
+export function palabra(n: number, tipo: Diferencia["tipo"]): string {
   const [uno, varios] = PALABRA[tipo];
-  return `${formatFraccion(n)} ${n > 0 && n <= 1 ? uno : varios}`;
+  return n > 0 && n <= 1 ? uno : varios;
+}
+
+export function cantidad(n: number, tipo: Diferencia["tipo"]): string {
+  return `${formatFraccion(n)} ${palabra(n, tipo)}`;
 }
 
 /** "Factura 3½ puestos y tiene 2 en el plano." · "Tiene 1 puesto propio en el plano y no lo factura." */

@@ -65,6 +65,8 @@ type Props = {
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/** Los lugares del plano que se asignan a un cliente. */
+const TIPOS_LUGAR: string[] = ["puesto", "bar", "local", "contenedor", "galpon", "cochera", "quinta"];
 
 /** Estado que se muestra en el sello de un cargo: vencido si pasó la fecha. */
 function estadoCargo(cargo: { estado: string; vencimiento: string }, hoy: string): string {
@@ -521,17 +523,15 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
     .filter(Boolean)
     .join(" · ");
 
-  // Dónde está en el plano y si factura espacios (EXME, EXPP, EXPL, EXPE).
+  // Dónde está en el plano y si factura lugares (EXME, EXPP, EXPL, EXPE, EXPG, EXPC, EXPQ).
   const espaciosPlano = (espaciosRes.data ?? [])
-    .filter((e): e is typeof e & { tipo: TipoEspacio } =>
-      ["puesto", "bar", "local", "contenedor"].includes(e.tipo)
-    )
+    .filter((e): e is typeof e & { tipo: TipoEspacio } => TIPOS_LUGAR.includes(e.tipo))
     .map((e) => ({ ...e, x: Number(e.x), y: Number(e.y) }));
   const facturaPuestos = items.some(
-    (i) => i.activo && ["EXME", "EXPP", "EXPL", "EXPE"].includes(i.conceptos?.codigo ?? "")
+    (i) => i.activo && ["EXME", "EXPP", "EXPL", "EXPE", "EXPG", "EXPC", "EXPQ"].includes(i.conceptos?.codigo ?? "")
   );
-  // Cocheras (EXPC) y galpones (EXPG) no se marcan en el plano, pero la línea "dónde está" los
-  // nombra igual: si no, dice menos que su carpeta y que la lista de Clientes.
+  // Cocheras (EXPC) y galpones (EXPG) que todavía no se ubicaron en el plano: la línea
+  // "dónde está" los nombra igual (si no, dice menos que su carpeta y que Clientes).
   const facturado = (codigo: string) =>
     items
       .filter((i) => i.activo && i.conceptos?.codigo === codigo)
@@ -540,9 +540,7 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
   const quinteroActivo = categoria === "quintero" && cliente.activo;
   // "Puestos 58 · 60" (o "Puesto 58 · Local 3"): se liberan al darlo de baja o pasarlo a ambulante.
   const lugaresAviso: { tipo: TipoEspacio; numero: string | null; medio: boolean; propio: boolean }[] = esJefe
-    ? (lugaresJefeRes.data ?? []).filter((e): e is typeof e & { tipo: TipoEspacio } =>
-        ["puesto", "bar", "local", "contenedor"].includes(e.tipo)
-      )
+    ? (lugaresJefeRes.data ?? []).filter((e): e is typeof e & { tipo: TipoEspacio } => TIPOS_LUGAR.includes(e.tipo))
     : espaciosPlano;
   const lugaresTexto =
     lugaresAviso.length === 0

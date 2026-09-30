@@ -8,12 +8,12 @@ import { textoAvance } from "@/lib/segmentos";
 import { Input } from "@/components/ui/input";
 import {
   compararNumero,
+  diferencias,
   etiquetaEspacio,
   normalizar,
   numeroVisible,
   sinLugarEnPlano,
   textoEspacios,
-  unidadesPuestos,
 } from "./geometria";
 import type { ClienteMapa, Espacio, TipoEspacio } from "./tipos";
 
@@ -29,20 +29,27 @@ type Fila = {
 
 const MAX_RESULTADOS = 8;
 
-/** "local 3", "l3", "conteiner 7", "contenedor 7", "c 7", "bar", "52" → qué espacio buscar. */
+/** "local 3", "l3", "conteiner 7", "c 7", "cochera 12", "galpón 9", "g 9", "quinta 40",
+ * "q 40", "bar", "52" → qué espacio buscar. */
 function leerEspacio(q: string): { tipo: TipoEspacio | null; numero: string } | null {
   const t = normalizar(q).replace(/\s+/g, " ").trim();
   if (t === "bar") return { tipo: "bar", numero: "" };
-  const m = t.match(/^(puesto|p|local|l|conteiner|contenedor|cont|c)?\s*(\d{1,3})$/);
+  const m = t.match(/^(puesto|p|local|l|cochera|coch|conteiner|contenedor|cont|c|galpon|g|quinta|q)?\s*(\d{1,3})$/);
   if (!m) return null;
   const pref = m[1] ?? "";
   const tipo: TipoEspacio | null = pref.startsWith("l")
     ? "local"
-    : pref.startsWith("c")
-      ? "contenedor"
-      : pref.startsWith("p")
-        ? "puesto"
-        : null;
+    : pref.startsWith("coch")
+      ? "cochera"
+      : pref.startsWith("c")
+        ? "contenedor"
+        : pref.startsWith("g")
+          ? "galpon"
+          : pref.startsWith("q")
+            ? "quinta"
+            : pref.startsWith("p")
+              ? "puesto"
+              : null;
   return { tipo, numero: m[2] };
 }
 
@@ -138,14 +145,9 @@ export function BuscadorMapa({
         String(c.codigo) === q
       );
     });
-    // En modo asignar, primero los que tienen puestos facturados sin ubicar.
-    const faltan = (c: ClienteMapa) => {
-      const suyos = porCliente.get(c.id) ?? [];
-      return (
-        c.facturado.puestos - unidadesPuestos(suyos, false) > 0 ||
-        (c.facturado.propios ?? 0) - unidadesPuestos(suyos, true) > 0
-      );
-    };
+    // En modo asignar, primero los que facturan lugares que todavía no están en el plano
+    // (puestos, locales, contéiners, galpones, cocheras o quintas).
+    const faltan = (c: ClienteMapa) => diferencias(c, porCliente.get(c.id) ?? []).some((d) => d.enPlano < d.facturado);
     const ordenados = soloClientes
       ? [...coinciden].sort((a, b) => Number(faltan(b)) - Number(faltan(a)) || a.codigo - b.codigo)
       : coinciden;
@@ -154,25 +156,31 @@ export function BuscadorMapa({
       const suyos = porCliente.get(c.id) ?? [];
       let detalle: string;
       if (soloClientes) {
-        const comunes = c.facturado.puestos;
-        const propios = c.facturado.propios ?? 0;
-        const factura = [
-          comunes > 0 ? `${formatFraccion(comunes)} EXME` : null,
-          propios > 0 ? `${formatFraccion(propios)} EXPP` : null,
-        ]
-          .filter(Boolean)
+        const f = c.facturado;
+        const factura = (
+          [
+            [f.puestos, "EXME"],
+            [f.propios ?? 0, "EXPP"],
+            [f.locales, "EXPL"],
+            [f.contenedores, "EXPE"],
+            [f.galpones, "EXPG"],
+            [f.cocheras, "EXPC"],
+            [f.quintas, "EXPQ"],
+          ] as const
+        )
+          .filter(([n]) => n > 0)
+          .map(([n, codigo]) => `${formatFraccion(n)} ${codigo}`)
           .join(" + ");
-        const enPlano = unidadesPuestos(suyos, false) + unidadesPuestos(suyos, true);
         detalle = factura
-          ? `Factura ${factura} · en el plano ${formatFraccion(enPlano)}`
+          ? `Factura ${factura} · ${suyos.length > 0 ? `en el plano: ${textoEspacios(suyos)}` : "nada en el plano"}`
           : suyos.length > 0
             ? textoEspacios(suyos)
-            : "Sin expensas de puesto facturadas";
+            : "No factura lugares del plano";
       } else if (anonimo) {
         detalle = c.mes ? `Quintero · ${textoAvance(c.mes)}` : "Quintero";
       } else {
         // Todo lo que tiene, como en Clientes: lo ubicado y lo que no se marca en el plano.
-        const sinLugar = sinLugarEnPlano(c.facturado);
+        const sinLugar = sinLugarEnPlano(c.facturado, suyos);
         detalle =
           suyos.length > 0
             ? [textoEspacios(suyos), ...sinLugar].join(" · ")

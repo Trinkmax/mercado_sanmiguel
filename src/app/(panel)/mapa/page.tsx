@@ -39,7 +39,7 @@ const CONCEPTO_FACTURADO: Record<string, keyof Facturado> = {
   EXPG: "galpones",
 };
 
-const CODIGOS_PLANO: CodigoPlano[] = ["EXME", "EXPP", "EXPL", "EXPE"];
+const CODIGOS_PLANO: CodigoPlano[] = ["EXME", "EXPP", "EXPL", "EXPE", "EXPG", "EXPC", "EXPQ"];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const uno = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
@@ -64,7 +64,7 @@ export default async function MapaPage({ searchParams }: Props) {
   consultaClientes =
     vista === "porteria" ? consultaClientes.eq("categoria", "quintero") : consultaClientes.neq("categoria", "ambulante");
 
-  const [plano, clientesRes, deudaRes, avanceRes, conceptosRes, pendientesRes, avisosRes] = await Promise.all([
+  const [plano, clientesRes, deudaRes, avanceRes, conceptosRes, pendientesRes, avisosRes, quintasRes] = await Promise.all([
     cargarPlano(supabase, perfil, { conClientes: vista === "completa" }),
     consultaClientes,
     supabase.from("v_deuda_clientes").select("cliente_id, deuda, periodo_mas_viejo").eq("org_id", perfil.org_id),
@@ -94,11 +94,19 @@ export default async function MapaPage({ searchParams }: Props) {
           .order("creada_en", { ascending: false })
           .limit(300)
       : Promise.resolve({ data: [] as { id: string; numero: number; asunto: string; estado: string; creada_en: string; espacio_id: string | null }[] }),
+    // El Jefe no lee la tabla espacios: qué quintero está en cada quinta (0032).
+    vista === "porteria"
+      ? supabase.rpc("quintas_del_plano")
+      : Promise.resolve({ data: [] as { espacio_id: string; cliente_id: string }[] }),
   ]);
 
-  // El Jefe no ve "puesto propio" (no es dato suyo y no tiene leyenda): todos iguales.
+  // El Jefe no ve "puesto propio" (no es dato suyo y no tiene leyenda): todos iguales. De
+  // las quintas sí sabe quién está: son de sus quinteros.
+  const quintero = new Map((quintasRes.data ?? []).map((q) => [q.espacio_id, q.cliente_id]));
   const espacios =
-    vista === "porteria" ? plano.espacios.map((e) => ({ ...e, propio: false })) : plano.espacios;
+    vista === "porteria"
+      ? plano.espacios.map((e) => ({ ...e, propio: false, clienteId: quintero.get(e.id) ?? null }))
+      : plano.espacios;
   const elementos = plano.elementos;
 
   const deudaPorCliente = new Map(

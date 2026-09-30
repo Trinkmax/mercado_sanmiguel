@@ -23,6 +23,7 @@ import {
   etiquetaEspacios,
   limitesPlano,
   NOMBRE_TIPO,
+  nombreTipo,
   REPOSO,
   unidadesPuestos,
   unir,
@@ -67,6 +68,7 @@ import type {
   Espacio,
   EstadoCobro,
   Rect,
+  TipoEspacio,
   VistaMapa,
 } from "./tipos";
 import { llamarAccion } from "@/lib/llamar-accion";
@@ -286,9 +288,11 @@ export function MapaMercado({
     },
     [clientePorId]
   );
-  /** Cómo se pinta un espacio: en el mapa del Jefe, todos iguales (sin libre/ocupado). */
+  /** Cómo se pinta un espacio: en el mapa del Jefe, todos iguales (sin libre/ocupado),
+   * salvo las quintas, que son de sus quinteros (quintas_del_plano, 0032). */
   const estadoEspacio = useCallback(
-    (clienteId: string | null): EstadoBloque => (esPorteria ? "anonimo" : estadoDe(clienteId)),
+    (tipo: TipoEspacio, clienteId: string | null): EstadoBloque =>
+      esPorteria && tipo !== "quinta" ? "anonimo" : estadoDe(clienteId),
     [esPorteria, estadoDe]
   );
   /** ¿El rol gestiona a este cliente? (Cobrar, ficha, carpeta). */
@@ -297,11 +301,13 @@ export function MapaMercado({
     [categoriasGestion]
   );
 
-  // Quinteros: fichas repartidas en las zonas verdes (no tienen puesto numerado).
+  // Quinteros: fichas repartidas en las zonas de quinteros, mientras el plano no tenga
+  // quintas numeradas (desde 0032 cada quintero ocupa sus quintas de la playa).
+  const conQuintas = useMemo(() => espacios.some((e) => e.tipo === "quinta"), [espacios]);
   const { fichasBase, restos } = useMemo(() => {
     const quinteros = clientes.filter(esQuintero);
     const zonas = elementos.filter((e) => e.tipo === "quinteros").sort((a, b) => a.x - b.x);
-    if (zonas.length === 0 || quinteros.length === 0) return { fichasBase: [], restos: [] };
+    if (conQuintas || zonas.length === 0 || quinteros.length === 0) return { fichasBase: [], restos: [] };
     const porZona = Math.ceil(quinteros.length / zonas.length);
     const repartos = zonas.map((z, i) =>
       repartirFichas(
@@ -315,7 +321,7 @@ export function MapaMercado({
       fichasBase: repartos.flatMap((r) => r.fichas),
       restos: repartos.flatMap((r) => (r.resto ? [r.resto] : [])),
     };
-  }, [clientes, elementos]);
+  }, [clientes, elementos, conQuintas]);
 
   // Hasta dónde llegan las fichas en cada cantero: debajo, el plano dibuja surcos.
   const finFichas = useMemo(() => {
@@ -341,7 +347,7 @@ export function MapaMercado({
     const m = new Map<string, EstiloBloque>();
     for (const b of bloques) {
       const cli = b.clienteId ? clientePorId.get(b.clienteId) ?? null : null;
-      const estado = estadoEspacio(b.clienteId);
+      const estado = estadoEspacio(b.tipo, b.clienteId);
       let atenuado = false;
       if (filtro === "propio") atenuado = !b.espacios.some((e) => e.propio);
       else if (filtro) atenuado = estado !== filtro;
@@ -428,6 +434,9 @@ export function MapaMercado({
         // El bar se concesiona como un local.
         ["local", suyos.filter((e) => e.tipo === "local" || e.tipo === "bar").length],
         ["contenedor", suyos.filter((e) => e.tipo === "contenedor").length],
+        ["galpon", suyos.filter((e) => e.tipo === "galpon").length],
+        ["cochera", suyos.filter((e) => e.tipo === "cochera").length],
+        ["quinta", suyos.filter((e) => e.tipo === "quinta").length],
       ] as const
     )
       .filter(([, n]) => n > 0)
@@ -446,10 +455,8 @@ export function MapaMercado({
     const puestos: Record<FiltroEstado, number> = { al_dia: 0, debe: 0, vencido: 0, libre: 0 };
     let totalPuestos = 0;
     let propios = 0;
-    let locales = 0;
-    let localesOcupados = 0;
-    let contenedores = 0;
-    let contenedoresOcupados = 0;
+    // Lugares que se cuentan "N de total" (el total, de lo que hay en el plano).
+    const lugares: Partial<Record<TipoEspacio, { total: number; ocupados: number }>> = {};
     for (const e of plano) {
       if (e.tipo === "puesto") {
         const u = e.medio ? 0.5 : 1;
@@ -459,28 +466,32 @@ export function MapaMercado({
         // "ocupado" = a nombre de alguien que no está en el mapa: cuenta como ocupado
         // (total − libres) pero no como "al día".
         if (est !== "ocupado") puestos[est] += u;
-      } else if (e.tipo === "local") {
-        locales++;
-        if (e.clienteId) localesOcupados++;
-      } else if (e.tipo === "contenedor") {
-        contenedores++;
-        if (e.clienteId) contenedoresOcupados++;
+      } else if (e.tipo !== "bar") {
+        const l = (lugares[e.tipo] ??= { total: 0, ocupados: 0 });
+        l.total++;
+        if (e.clienteId) l.ocupados++;
       }
     }
+    const deLugar = (tipo: TipoEspacio) => {
+      const l = lugares[tipo];
+      return l ? [{ label: nombreTipo(tipo, true), valor: deTotal(l.ocupados, l.total) }] : [];
+    };
+    // Planos viejos (sin cocheras ni quintas numeradas): lo facturado contra el cupo.
     const capacidadCocheras = elementos
       .filter((el) => el.tipo === "cocheras")
       .reduce((acc, el) => acc + (el.capacidad ?? 0), 0);
     const cocheras = clientes.reduce((acc, c) => acc + c.facturado.cocheras, 0);
     const quinteros = clientes.filter(esQuintero).length;
-    const galpones = clientes.reduce((acc, c) => acc + c.facturado.galpones, 0);
     const secundarios = [
-      { label: "Locales", valor: deTotal(localesOcupados, locales) },
-      { label: "Contéiners", valor: deTotal(contenedoresOcupados, contenedores) },
-      ...(capacidadCocheras > 0
-        ? [{ label: "Cocheras", valor: `${formatFraccion(cocheras)} de ${formatNumero(capacidadCocheras)}` }]
-        : []),
-      { label: "Quinteros", valor: formatNumero(quinteros) },
-      ...(galpones > 0 ? [{ label: "Galpones", valor: formatFraccion(galpones) }] : []),
+      ...deLugar("local"),
+      ...deLugar("contenedor"),
+      ...deLugar("galpon"),
+      ...(lugares.cochera
+        ? deLugar("cochera")
+        : capacidadCocheras > 0
+          ? [{ label: "Cocheras", valor: `${formatFraccion(cocheras)} de ${formatNumero(capacidadCocheras)}` }]
+          : []),
+      ...(lugares.quinta ? deLugar("quinta") : [{ label: "Quinteros", valor: formatNumero(quinteros) }]),
     ];
     return { puestos, totalPuestos, secundarios, propios };
   }, [plano, elementos, clientes, estadoDe]);
@@ -507,7 +518,8 @@ export function MapaMercado({
     }
     const porNumero = new Map<string, Espacio[]>();
     for (const e of plano) {
-      if (e.tipo === "bar") continue;
+      // Los subgalpones llevan el número del puesto de quien los tiene: se repite a propósito.
+      if (e.tipo === "bar" || e.tipo === "galpon") continue;
       if (e.numero === null) {
         if (e.tipo === "puesto") r.push({ tipo: "sin_numero", espacio: e });
         continue;
@@ -643,8 +655,14 @@ export function MapaMercado({
   const tocarEspacio = useCallback(
     (e: Espacio) => {
       if (esPorteria) {
-        // El Jefe no ve de quién es: tocar un puesto es para avisarle algo al Líder.
         setFiltro(null);
+        // Una quinta de uno de sus quinteros: se muestra el quintero (Cobrar, avance del mes).
+        if (e.tipo === "quinta" && e.clienteId && clientePorId.has(e.clienteId)) {
+          const id = e.clienteId;
+          setSeleccion((s) => (s?.tipo === "cliente" && s.id === id ? null : { tipo: "cliente", id }));
+          return;
+        }
+        // El resto no dice de quién es: tocarlo es para avisarle algo al Líder.
         setSeleccion((s) => (s?.tipo === "espacio" && s.id === e.id ? null : { tipo: "espacio", id: e.id }));
         return;
       }
@@ -675,7 +693,7 @@ export function MapaMercado({
   const describir = useCallback(
     (e: Espacio) => {
       const nombre = nombreEspacio(e);
-      if (esPorteria) return `${nombre}. Tocá para avisarle algo al Líder`;
+      if (esPorteria && e.tipo !== "quinta") return `${nombre}. Tocá para avisarle algo al Líder`;
       if (!e.clienteId) return `${nombre}, libre${e.nota ? ` (${e.nota})` : ""}`;
       const c = clientePorId.get(e.clienteId);
       return c ? `${nombre}, ${c.nombre}, ${TEXTO_ESTADO[c.estado]}` : `${nombre}, ocupado`;
@@ -922,7 +940,7 @@ export function MapaMercado({
   // ---------- Tooltip (mouse) ----------
   const tooltip = useCallback(
     (e: Espacio, b: Bloque) => {
-      if (esPorteria) {
+      if (esPorteria && e.tipo !== "quinta") {
         return (
           <>
             <p className="text-sm font-semibold">{nombreEspacio(e)}</p>

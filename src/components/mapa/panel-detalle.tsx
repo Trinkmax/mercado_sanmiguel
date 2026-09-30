@@ -24,7 +24,9 @@ import {
   espaciosPorTipo,
   etiquetaEspacio,
   listaConY,
+  conArticulo,
   NOMBRE_TIPO,
+  ocupante,
   nombreTipo,
   numeroVisible,
   sinLugarEnPlano,
@@ -101,9 +103,9 @@ function AvanceQuintero({ cliente }: { cliente: ClienteMapa }) {
   );
 }
 
-/** "el puesto 58" · "el bar" · "el contéiner 7" */
+/** "el puesto 58" · "el bar" · "la quinta 40" */
 function nombreConArticulo(e: Espacio): string {
-  return e.tipo === "bar" ? "el bar" : `el ${NOMBRE_TIPO[e.tipo].toLowerCase()} ${numeroVisible(e)}`;
+  return conArticulo(e);
 }
 
 /** Panel de consulta bajo el plano: quién ocupa lo que se tocó. */
@@ -158,11 +160,12 @@ export function PanelDetalle({
     const puedeCobrar = gestiona && destinos.cobro !== null && (!soloQuinteros || esQuintero);
     const quienGestiona =
       cliente.categoria === "puestero" ? "Administración" : cliente.categoria ? "el Jefe de Portería" : null;
-    // Cocheras y galpones se facturan pero no se marcan en el plano: se nombran igual,
-    // así la tarjeta dice lo mismo que su carpeta y que Clientes.
-    const sinLugar = vista === "porteria" ? [] : sinLugarEnPlano(cliente.facturado);
+    // Cocheras y galpones que factura y todavía no se ubicaron en el plano: se nombran
+    // igual, así la tarjeta dice lo mismo que su carpeta y que Clientes.
+    const sinLugar = vista === "porteria" ? [] : sinLugarEnPlano(cliente.facturado, suyos);
     const f = cliente.facturado;
-    const facturaLugares = f.puestos + (f.propios ?? 0) + f.locales + f.contenedores > 0;
+    const facturaLugares =
+      f.puestos + (f.propios ?? 0) + f.locales + f.contenedores + f.galpones + f.cocheras + f.quintas > 0;
 
     // Orden en el celular: la deuda y Cobrar en el primer renglón; lo demás, abajo.
     // Desde @2xl (columna de la derecha) vuelven al orden del DOM.
@@ -244,9 +247,7 @@ export function PanelDetalle({
               <p className="text-sm text-muted-foreground">
                 {suyos.length > 0 || esQuintero ? "También factura " : "Factura "}
                 <span className="font-medium text-foreground">{listaConY(sinLugar)}</span>
-                {sinLugar.length > 1 || f.cocheras > 1 || f.galpones > 1
-                  ? " (no se marcan en el plano)."
-                  : " (no se marca en el plano)."}
+                {" (todavía sin lugar en el plano)."}
               </p>
             ) : null}
             {!gestiona && quienGestiona ? (
@@ -351,8 +352,8 @@ export function PanelDetalle({
             {huerfano
               ? "Figura a nombre de un cliente que ya no está en el mapa (dado de baja o ambulante). Si quedó libre, liberalo."
               : espacio.nota
-                ? `${espacio.nota}. Sin puestero asignado en el sistema.`
-                : "Sin puestero asignado en el sistema."}
+                ? `${espacio.nota}. Sin ${ocupante(espacio.tipo)} asignado en el sistema.`
+                : `Sin ${ocupante(espacio.tipo)} asignado en el sistema.`}
           </p>
         </div>
         {puedeEditar ? (
@@ -365,7 +366,7 @@ export function PanelDetalle({
             ) : !huerfano ? (
               <Button type="button" className={BOTON} onClick={() => onAsignarEspacio(espacio.id)}>
                 <UserPlus className="size-4" strokeWidth={2} />
-                Asignar puestero
+                Asignar {ocupante(espacio.tipo)}
               </Button>
             ) : null}
             {editarPuesto ? (

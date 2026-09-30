@@ -16,7 +16,6 @@ import {
   A_NE,
   A_SO,
   arco,
-  barridoElipse,
   canto,
   caraEste,
   caraSur,
@@ -642,23 +641,21 @@ function cocheras(el: ElementoPlano, norte: boolean, c: Capas) {
       });
     }
   }
-  const etiqueta = el.etiqueta ?? `${n} cocheras`;
-  const ancho = etiqueta.length * 8.3 + 30;
-  const cx = x + w / 2;
-  const cy = y + h / 2;
+  // El cartel va afuera, contra la punta oeste y del lado opuesto a la nave: adentro
+  // están las cocheras, que se asignan una por una (0032).
   c.rotulos.push(
-    <Fragment key={el.id}>
-      <rect
-        x={f(cx - ancho / 2)}
-        y={f(cy - 13.5)}
-        width={f(ancho)}
-        height={27}
-        rx={13.5}
-        fill="#fff"
-        stroke="oklch(0.87 0.01 258)"
-      />
-      <Texto x={cx} y={cy} t={etiqueta} clase="rot7" tam={15} fill={TINTA_ROTULO} />
-    </Fragment>
+    <Texto
+      key={el.id}
+      x={x + 6}
+      y={norte ? y - 14 : y + h + 15}
+      t={el.etiqueta ?? `${n} cocheras`}
+      clase="rot7"
+      tam={14}
+      fill={TINTA_ROTULO}
+      halo="var(--background)"
+      grosorHalo={4}
+      anchor="start"
+    />
   );
 }
 
@@ -723,24 +720,22 @@ function cocherasParadas(el: ElementoPlano, naveAlEste: boolean, c: Capas) {
       ),
     });
   }
-  // El cartel, parado (se lee de abajo hacia arriba, como "Pasillo" en el plano horizontal).
-  const etiqueta = el.etiqueta ?? `${n} cocheras`;
-  const ancho = etiqueta.length * 8.3 + 30;
-  const cx = x + w / 2;
-  const cy = y + h / 2;
+  // El cartel, parado y afuera de la franja (se lee de abajo hacia arriba, como
+  // "Pasillo" en el plano horizontal), del lado opuesto a la nave y contra la punta norte.
   c.rotulos.push(
-    <g key={el.id} transform={`rotate(-90 ${f(cx)} ${f(cy)})`}>
-      <rect
-        x={f(cx - ancho / 2)}
-        y={f(cy - 13.5)}
-        width={f(ancho)}
-        height={27}
-        rx={13.5}
-        fill="#fff"
-        stroke="oklch(0.87 0.01 258)"
-      />
-      <Texto x={cx} y={cy} t={etiqueta} clase="rot7" tam={15} fill={TINTA_ROTULO} />
-    </g>
+    <Texto
+      key={el.id}
+      x={naveAlEste ? x - 15 : x + w + 15}
+      y={y + 6}
+      t={el.etiqueta ?? `${n} cocheras`}
+      clase="rot7"
+      tam={14}
+      fill={TINTA_ROTULO}
+      halo="var(--background)"
+      grosorHalo={4}
+      anchor="end"
+      vertical
+    />
   );
 }
 
@@ -1193,6 +1188,56 @@ function cantero(el: ElementoPlano, finFichas: number | undefined, detalle: bool
   );
 }
 
+/** Playa de quintas (0032): explanada de ripio con cordón y, a lo largo, la calle del
+ * medio de tierra apisonada con su guía. Las quintas (espacios) van encima, en las dos
+ * hileras; el cartel, en la calle, contra la punta oeste (o norte, en el plano girado). */
+function playa(el: ElementoPlano, detalle: boolean, c: Capas) {
+  const { x, y, w, h } = el;
+  const acostada = w >= h;
+  const ancho = 20;
+  const calle = acostada
+    ? { x: x + 3, y: y + h / 2 - ancho / 2, w: w - 6, h: ancho }
+    : { x: x + w / 2 - ancho / 2, y: y + 3, w: ancho, h: h - 6 };
+  const guia = acostada
+    ? `M${x + 14} ${f(y + h / 2)}H${x + w - 14}`
+    : `M${f(x + w / 2)} ${y + 14}V${y + h - 14}`;
+  c.suelos.push(
+    <Fragment key={el.id}>
+      <rect x={x} y={y} width={w} height={h} rx={8} fill="url(#mapa-ripio)" />
+      <rect x={calle.x} y={calle.y} width={calle.w} height={calle.h} rx={4} fill="url(#mapa-tierra)" />
+      <path d={guia} stroke="oklch(0.78 0.05 70)" strokeWidth={1.4} strokeDasharray="7 7" strokeLinecap="round" />
+      <rect
+        x={x + 0.7}
+        y={y + 0.7}
+        width={w - 1.4}
+        height={h - 1.4}
+        rx={7.5}
+        fill="none"
+        stroke="oklch(0.84 0.03 72)"
+        strokeWidth={1.4}
+      />
+    </Fragment>
+  );
+  if (detalle) {
+    // En la mitad norte de la calle: la otra mitad la tapan las camionetas de abajo.
+    c.rotulos.push(
+      <Texto
+        key={el.id}
+        x={acostada ? x + 10 : calle.x + 5}
+        y={acostada ? calle.y + 5 : y + 10}
+        t={el.etiqueta ?? "Playa de quintas"}
+        clase="rot7"
+        tam={8}
+        fill="oklch(0.45 0.05 60)"
+        halo="oklch(0.93 0.028 82)"
+        grosorHalo={2.5}
+        anchor={acostada ? "start" : "end"}
+        vertical={!acostada}
+      />
+    );
+  }
+}
+
 /** Administración: casa a dos aguas (cumbrera este-oeste). Sin alero al oeste,
  * para no invadir el puesto vecino; el azul, solo en la puerta y el isotipo. */
 function administracion(el: ElementoPlano, detalle: boolean, c: Capas) {
@@ -1507,7 +1552,8 @@ export function sembrarArboles(elementos: ElementoPlano[], espacios: Rect[], lim
   ];
   const cajas: Caja[] = [];
   for (const el of elementos) {
-    if (el.tipo === "nave") cajas.push(env(el.x, el.y, el.w, el.h, ALT.muroNorte + ALT.cabriada, 10));
+    if (el.tipo === "nave" || el.tipo === "galpon")
+      cajas.push(env(el.x, el.y, el.w, el.h, ALT.muroNorte + ALT.cabriada, 10));
     else if (el.tipo === "recinto") cajas.push(env(el.x, el.y - 26, el.w, el.h + 26, ALT.cerco, 10));
     else if (el.tipo === "invernadero") cajas.push(env(el.x, el.y, el.w, el.h, ALT.invernadero, 12));
     else if (el.tipo === "rotulo") cajas.push(env(el.x - 20, el.y, el.w + 40, el.h, 0, 8));
@@ -1553,6 +1599,7 @@ export const Fondo = memo(function Fondo({
   detalle,
   arboles,
   finFichas,
+  playa: conPlaya = false,
 }: {
   elementos: ElementoPlano[];
   limites: Rect;
@@ -1562,6 +1609,9 @@ export const Fondo = memo(function Fondo({
   arboles: Arbol[];
   /** Hasta dónde llegan las fichas de cada cantero (id → y): debajo van los surcos. */
   finFichas: Map<string, number>;
+  /** Las zonas de quinteros tienen quintas numeradas (0032): se dibujan como playa,
+   * no como canteros con fichas. */
+  playa?: boolean;
 }) {
   const c: Capas = { suelos: [], sombras: [], objetos: [], rotulos: [] };
   const naves = elementos.filter((el) => el.tipo === "nave");
@@ -1588,10 +1638,30 @@ export const Fondo = memo(function Fondo({
     else pasillo(p, naves.find((n) => cortePasillo(n, p)) ?? null, c);
   }
   for (const n of naves) muros(n, cortes.get(n.id) ?? null, c, cortesAcostados.get(n.id) ?? null);
+  // El galpón es una nave chica (plataforma, muro norte con cabriadas, muros bajos): sus
+  // subgalpones son espacios y van encima, como los puestos.
+  for (const g of elementos) {
+    if (g.tipo !== "galpon") continue;
+    nave(g, null, c);
+    muros(g, null, c);
+    c.rotulos.push(
+      <Texto
+        key={g.id}
+        x={g.x + g.w / 2}
+        y={g.y + g.h + 16}
+        t={g.etiqueta ?? "Galpón"}
+        clase="rot7"
+        tam={16}
+        fill={TINTA_ROTULO}
+        halo="var(--background)"
+        grosorHalo={4}
+      />
+    );
+  }
   elementos
     .filter((el) => el.tipo === "quinteros")
     .sort((a, b) => a.x - b.x)
-    .forEach((el) => cantero(el, finFichas.get(el.id), detalle, c));
+    .forEach((el) => (conPlaya ? playa(el, detalle, c) : cantero(el, finFichas.get(el.id), detalle, c)));
   for (const el of elementos) {
     if (el.tipo === "administracion") administracion(el, detalle, c);
     else if (el.tipo === "invernadero") {
@@ -1678,22 +1748,18 @@ function sombrasBloques(orden: Bloque[], alturas: Map<string, Alturas>): Sombra[
   for (const b of orden) {
     const s = alturas.get(b.clave);
     if (!s) continue;
-    const { x, y, w, h } = b.rect;
     const H = s.zTop;
     // Atenuado: más suave; flotando: sin contacto y la proyectada se despega.
     const o = s.material === "neutro" ? 0.55 : s.z0 > 0 ? 0.7 : 1;
     const d0 = s.z0 * 0.3;
     const e0 = s.z0 * 0.45;
-    if (b.tipo === "contenedor") {
-      const cx = x + w / 2;
-      const cy = y + h / 2;
-      if (!s.z0) aBalde("contacto", 0.16 * o, elPath(cx + 0.06 * H, cy + 0.1 * H, w / 2 + 0.1 * H, h / 2 + 0.1 * H));
-      aBalde("proyectada", 0.09 * o, elPath(cx + 0.18 * H + d0, cy + 0.26 * H + e0, w / 2 + 0.22 * H, h / 2 + 0.22 * H));
-    } else {
-      const r = radioTapa(b);
-      if (!s.z0) aBalde("contacto", 0.16 * o, rrPath(x - 0.5, y + 0.5, w + 0.12 * H + 1, h + 0.2 * H, r + 1));
-      aBalde("proyectada", 0.09 * o, rrPath(x + 0.5 + d0, y + 1.5 + e0, w + 0.34 * H, h + 0.52 * H, r + 3));
-    }
+    // Lo pintado en el piso (cochera o quinta libre) no hace sombra.
+    if (s.zTop - s.z0 <= ALT.piso && !s.z0) continue;
+    // Autos y camionetas: la sombra es la de la carrocería, no la del lugar.
+    const { x: bx, y: by, w: bw, h: bh } = vehiculoDe(b) ?? b.rect;
+    const r = radioTapa(b);
+    if (!s.z0) aBalde("contacto", 0.16 * o, rrPath(bx - 0.5, by + 0.5, bw + 0.12 * H + 1, bh + 0.2 * H, r + 1));
+    aBalde("proyectada", 0.09 * o, rrPath(bx + 0.5 + d0, by + 1.5 + e0, bw + 0.34 * H, bh + 0.52 * H, r + 3));
   }
   return [...baldes]
     .sort(([a], [b]) => (a < b ? 1 : -1))
@@ -1713,16 +1779,6 @@ function Huella({ bloque, marca }: { bloque: Bloque; marca: Exclude<Marca, null>
     strokeWidth: 1.3,
     strokeDasharray: "3 2.6",
   };
-  if (bloque.tipo === "contenedor") {
-    return (
-      <>
-        {marca === "seleccion" ? (
-          <ellipse cx={x + w / 2 + 2} cy={y + h / 2 + 3} rx={w / 2 + 9} ry={h / 2 + 9} fill={color} fillOpacity={0.07} />
-        ) : null}
-        <ellipse cx={x + w / 2} cy={y + h / 2} rx={w / 2 + m} ry={h / 2 + m} {...trazo} />
-      </>
-    );
-  }
   const r = radioTapa(bloque);
   return (
     <>
@@ -1947,62 +2003,248 @@ function cuerpoLocal(b: Bloque, mat: Material, H: number, pintado: boolean, libr
   );
 }
 
-/** Contenedor: tambor pulido, sin zunchos (con zuncho parecía una pila de monedas). */
-function cuerpoTambor(b: Bloque, mat: Material, H: number, pintado: boolean, libre: boolean) {
+/** Contéiner: caja de chapa acanalada del color del estado, con las puertas (junta y
+ * trabas) en la cabecera que mira a la cámara: sur si está parado, este si acostado. */
+function cuerpoConteiner(b: Bloque, mat: Material, H: number, pintado: boolean, libre: boolean) {
   const { x, y, w, h } = b.rect;
   const M = MAT[mat];
-  const cx = x + w / 2;
-  const cy = y + h / 2;
-  const rx = w / 2;
-  const ry = h / 2;
-  const [tcx, tcy] = P(cx, cy, H);
-  const cuerpo = barridoElipse(cx, cy, rx, ry, 0, H);
-  const vencido = mat === "vencido";
+  const r = radioTapa(b);
+  const tx = x - K * H;
+  const ty = y - H;
+  const parado = h > w;
+  const dSur = caraSur(x, y, w, h, r, H, 0);
+  let canal = "";
+  let puertas = "";
+  let nervios = "";
+  if (parado) {
+    for (let yy = y + 4; yy < y + h - 2; yy += 4.5) canal += `M${pt(P(x + w, yy, 1))}L${pt(P(x + w, yy, H - 1))}`;
+    for (const u of [0.26, 0.5, 0.74]) puertas += `M${pt(P(x + w * u, y + h, 1.2))}L${pt(P(x + w * u, y + h, H - 1.2))}`;
+    for (let yy = y + 7; yy < y + h - 4; yy += 7) nervios += `M${f(tx + 3)} ${f(yy - H)}H${f(tx + w - 3)}`;
+  } else {
+    for (let xx = x + 4; xx < x + w - 2; xx += 4.5) canal += `M${pt(P(xx, y + h, 1))}L${pt(P(xx, y + h, H - 1))}`;
+    for (const u of [0.26, 0.5, 0.74]) puertas += `M${pt(P(x + w, y + h * u, 1.2))}L${pt(P(x + w, y + h * u, H - 1.2))}`;
+    for (let xx = x + 7; xx < x + w - 4; xx += 7) nervios += `M${f(xx - K * H)} ${f(ty + 3)}V${f(ty + h - 3)}`;
+  }
   return (
     <>
+      <path d={caraEste(x, y, w, h, r, H, 0)} fill={M.lado} />
       <path
-        d={cuerpo}
-        fill={`url(#mapa-tambor-${mat})`}
+        d={dSur}
+        fill={pintado ? `url(#mapa-faldon-${mat})` : M.frente}
         stroke={pintado ? M.faldonBorde : M.bisel}
-        strokeOpacity={0.45}
-        strokeWidth={0.8}
+        strokeOpacity={0.5}
+        strokeWidth={0.7}
       />
-      {mat === "debe" ? <path d={cuerpo} fill="url(#mapa-rayas-debe)" fillOpacity={0.92} /> : null}
-      <ellipse
-        cx={f(tcx)}
-        cy={f(tcy)}
-        rx={rx}
-        ry={ry}
-        fill={`url(#mapa-disco-${mat})`}
-        stroke={M.bisel}
-        strokeWidth={M.grosor}
-      />
-      {/* Aro interior (en un libre, el lote punteado) */}
+      {mat === "debe" ? <path d={dSur} fill="url(#mapa-rayas-debe)" /> : null}
+      {H >= 6 ? (
+        <>
+          <path d={canal} stroke={TINTA_SOMBRA} strokeOpacity={0.16} strokeWidth={1.1} />
+          <path d={puertas} stroke={TINTA_SOMBRA} strokeOpacity={0.36} strokeWidth={0.9} strokeLinecap="round" />
+        </>
+      ) : null}
+      {tapa(tx, ty, w, h, r, mat)}
+      {nervios ? <path d={nervios} stroke={M.bisel} strokeOpacity={0.22} strokeWidth={1} /> : null}
       {libre ? (
-        <ellipse cx={f(tcx)} cy={f(tcy)} rx={rx - 5} ry={ry - 5} fill="none" stroke={M.lote} strokeDasharray="2.5 2.5" />
-      ) : (
-        <ellipse
-          cx={f(tcx)}
-          cy={f(tcy)}
-          rx={rx - 5}
-          ry={ry - 5}
+        <rect
+          x={f(tx + 4)}
+          y={f(ty + 4)}
+          width={w - 8}
+          height={h - 8}
+          rx={1.5}
+          fill="none"
+          stroke={M.lote}
+          strokeDasharray="2.5 2.5"
+        />
+      ) : null}
+      {cantoTapa(tx, ty, w, h, r, mat)}
+    </>
+  );
+}
+
+/** Subgalpón: depósito con portón de enrollar en el frente, del color del estado (en uno
+ * libre, la persiana gris y el lote punteado en el techo). */
+function cuerpoGalpon(b: Bloque, mat: Material, H: number, pintado: boolean, libre: boolean) {
+  const { x, y, w, h } = b.rect;
+  const M = MAT[mat];
+  const r = radioTapa(b);
+  const tx = x - K * H;
+  const ty = y - H;
+  const m = Math.min(7, w * 0.1);
+  const porton = poly([P(x + m, y + h, 0), P(x + w - m, y + h, 0), P(x + w - m, y + h, H - 3), P(x + m, y + h, H - 3)]);
+  let lamas = "";
+  for (let z = 1.8; z < H - 3.4; z += 1.8) lamas += `M${pt(P(x + m, y + h, z))}L${pt(P(x + w - m, y + h, z))}`;
+  return (
+    <>
+      <path d={caraEste(x, y, w, h, r, H, 0)} fill={pintado ? "oklch(0.86 0.016 80)" : M.lado} />
+      <path d={caraSur(x, y, w, h, r, H, 0)} fill={pintado ? "oklch(0.955 0.012 85)" : M.frente} />
+      {H >= 6 ? (
+        <>
+          <path
+            d={porton}
+            fill={pintado ? `url(#mapa-faldon-${mat})` : "oklch(0.86 0.01 258)"}
+            stroke={pintado ? M.faldonBorde : M.bisel}
+            strokeWidth={0.6}
+          />
+          {mat === "debe" ? <path d={porton} fill="url(#mapa-rayas-debe)" /> : null}
+          {lamas ? <path d={lamas} stroke={TINTA_SOMBRA} strokeOpacity={0.14} strokeWidth={0.6} /> : null}
+        </>
+      ) : null}
+      {tapa(tx, ty, w, h, r, mat)}
+      {pintado ? (
+        <rect
+          x={f(tx + 3.5)}
+          y={f(ty + 3.5)}
+          width={w - 7}
+          height={h - 7}
+          rx={1.5}
           fill="none"
           stroke={M.bisel}
-          strokeOpacity={vencido ? 0.5 : 0.28}
+          strokeOpacity={0.35}
         />
-      )}
-      {/* Brillo */}
-      <path
-        d={
-          `M${f(tcx - rx * 0.66)} ${f(tcy - ry * 0.2)}` +
-          `A${f(rx * 0.7)} ${f(ry * 0.7)} 0 0 1 ${f(tcx - rx * 0.12)} ${f(tcy - ry * 0.7)}`
-        }
-        fill="none"
-        stroke="#fff"
-        strokeOpacity={vencido ? 0.45 : 0.9}
-        strokeWidth={2}
-        strokeLinecap="round"
+      ) : null}
+      {libre ? (
+        <rect
+          x={f(tx + 4)}
+          y={f(ty + 4)}
+          width={w - 8}
+          height={h - 8}
+          rx={2}
+          fill="none"
+          stroke={M.lote}
+          strokeDasharray="2.5 2.5"
+        />
+      ) : null}
+      {cantoTapa(tx, ty, w, h, r, mat)}
+    </>
+  );
+}
+
+// ---------- Cocheras y quintas: el vehículo estacionado ----------
+
+/** Huella de un vehículo: a lo largo del lado más largo de su lugar, con la trompa
+ * hacia la cámara (al sur si el lugar está parado, al este si está acostado). */
+type Vehiculo = Rect & { parado: boolean };
+
+/** El auto de una cochera o la camioneta de una quinta, dentro de su lugar. */
+function vehiculoDe(b: Pick<Bloque, "tipo" | "rect">): Vehiculo | null {
+  if (b.tipo !== "cochera" && b.tipo !== "quinta") return null;
+  const { x, y, w, h } = b.rect;
+  const parado = h >= w;
+  const lado = parado ? w : h;
+  const largo = (parado ? h : w) - (b.tipo === "cochera" ? 7 : 3);
+  const ancho = b.tipo === "cochera" ? Math.min(lado - 9, largo * 0.48) : lado - 3;
+  return parado
+    ? { x: x + (w - ancho) / 2, y: y + (h - largo) / 2, w: ancho, h: largo, parado }
+    : { x: x + (w - largo) / 2, y: y + (h - ancho) / 2, w: largo, h: ancho, parado };
+}
+
+/** Un tramo del vehículo a lo largo (0 = cola, 1 = trompa), con `borde` a los costados. */
+function tramo(v: Vehiculo, t0: number, t1: number, borde = 0): Rect {
+  return v.parado
+    ? { x: v.x + borde, y: v.y + v.h * t0, w: v.w - 2 * borde, h: v.h * (t1 - t0) }
+    : { x: v.x + v.w * t0, y: v.y + borde, w: v.w * (t1 - t0), h: v.h - 2 * borde };
+}
+
+/** Dónde va el número: el techo del auto o la lona de la camioneta (z relativa a la tapa). */
+function techoVehiculo(b: Pick<Bloque, "tipo" | "rect">): { r: Rect; dz: number } | null {
+  const v = vehiculoDe(b);
+  if (!v) return null;
+  return b.tipo === "cochera" ? { r: tramo(v, 0.3, 0.72, 1.6), dz: 0 } : { r: tramo(v, 0.02, 0.6, 0.6), dz: -0.5 };
+}
+
+/** Caja de esquinas redondeadas entre z0 y z1: caras este y sur y la tapa. */
+function caja(r: Rect, radio: number, z0: number, z1: number, p: { sur: string; este: string; tapa: string; borde?: string }) {
+  const { x, y, w, h } = r;
+  return (
+    <>
+      <path d={caraEste(x, y, w, h, radio, z1, z0)} fill={p.este} />
+      <path d={caraSur(x, y, w, h, radio, z1, z0)} fill={p.sur} />
+      <rect
+        x={f(x - K * z1)}
+        y={f(y - z1)}
+        width={f(w)}
+        height={f(h)}
+        rx={f(radio)}
+        fill={p.tapa}
+        stroke={p.borde}
+        strokeWidth={p.borde ? 0.8 : undefined}
       />
+    </>
+  );
+}
+
+/** Cochera o quinta sin vehículo: el lugar pintado en el piso (punteado si está libre;
+ * en el mapa del Jefe, que no sabe si está ocupado, liso). */
+function lugarPintado(b: Bloque, mat: Material, libre: boolean) {
+  const { x, y, w, h } = b.rect;
+  const M = MAT[mat];
+  return (
+    <rect
+      x={f(x + 2)}
+      y={f(y + 2)}
+      width={f(w - 4)}
+      height={f(h - 4)}
+      rx={2.5}
+      fill={libre ? "#fff" : M.tapa[1]}
+      fillOpacity={libre ? 0.4 : 0.85}
+      stroke={M.lote}
+      strokeWidth={1}
+      strokeDasharray={libre ? "2.5 2.5" : undefined}
+    />
+  );
+}
+
+/** Cochera ocupada: el auto, con la carrocería del color del estado (a rayas si debe),
+ * cabina vidriada y el techo claro con el número. */
+function cuerpoCochera(b: Bloque, mat: Material, H: number, libre: boolean) {
+  const v = vehiculoDe(b);
+  if (!v || H <= ALT.piso) return lugarPintado(b, mat, libre);
+  const M = MAT[mat];
+  const zc = H * 0.5;
+  const radio = Math.min(4, Math.min(v.w, v.h) / 4);
+  const vidrio = "url(#mapa-ventana)";
+  const oscuro = "oklch(0.52 0.03 250)";
+  return (
+    <>
+      {caja(v, radio, 0.8, zc, { sur: `url(#mapa-faldon-${mat})`, este: M.lado, tapa: M.faldon[0], borde: M.faldonBorde })}
+      {mat === "debe" ? <path d={caraSur(v.x, v.y, v.w, v.h, radio, zc, 0.8)} fill="url(#mapa-rayas-debe)" /> : null}
+      {caja(tramo(v, 0.3, 0.72, 1.6), 2.5, zc, H, {
+        sur: v.parado ? vidrio : oscuro,
+        este: v.parado ? oscuro : vidrio,
+        tapa: `url(#mapa-tapa-${mat})`,
+        borde: M.bisel,
+      })}
+    </>
+  );
+}
+
+/** Quinta ocupada: la camioneta del quintero, con la carga tapada por una lona del color
+ * del estado (ahí va el número) y la cabina adelante, del lado de la trompa. */
+function cuerpoQuinta(b: Bloque, mat: Material, H: number, libre: boolean) {
+  const v = vehiculoDe(b);
+  if (!v || H <= ALT.piso) return lugarPintado(b, mat, libre);
+  const M = MAT[mat];
+  const zc = H * 0.55;
+  const chapa = `url(#mapa-faldon-${mat})`;
+  const carga = tramo(v, 0, 0.62);
+  return (
+    <>
+      {caja(carga, 1.5, 0.8, zc, { sur: chapa, este: M.lado, tapa: M.faldon[1] })}
+      {mat === "debe" ? (
+        <path d={caraSur(carga.x, carga.y, carga.w, carga.h, 1.5, zc, 0.8)} fill="url(#mapa-rayas-debe)" />
+      ) : null}
+      {caja(tramo(v, 0.02, 0.6, 0.6), 2, zc, H - 0.5, {
+        sur: M.faldon[0],
+        este: M.lado,
+        tapa: `url(#mapa-tapa-${mat})`,
+        borde: M.bisel,
+      })}
+      {caja(tramo(v, 0.66, 1, 0.8), 2, 0.8, H, {
+        sur: v.parado ? "url(#mapa-ventana)" : chapa,
+        este: v.parado ? M.lado : "url(#mapa-ventana)",
+        tapa: M.faldon[0],
+        borde: M.faldonBorde,
+      })}
     </>
   );
 }
@@ -2026,8 +2268,11 @@ const Cuerpo = memo(function Cuerpo({
   detalle: boolean;
   conApodo: boolean;
 }) {
-  if (bloque.tipo === "contenedor") return cuerpoTambor(bloque, material, alto, pintado, libre);
+  if (bloque.tipo === "contenedor") return cuerpoConteiner(bloque, material, alto, pintado, libre);
   if (bloque.tipo === "local") return cuerpoLocal(bloque, material, alto, pintado, libre);
+  if (bloque.tipo === "galpon") return cuerpoGalpon(bloque, material, alto, pintado, libre);
+  if (bloque.tipo === "cochera") return cuerpoCochera(bloque, material, alto, libre);
+  if (bloque.tipo === "quinta") return cuerpoQuinta(bloque, material, alto, libre);
   return cuerpoPuesto(bloque, material, alto, pintado, libre, detalle, conApodo);
 });
 
@@ -2132,28 +2377,36 @@ function textosBloque(
 ): TextoPlano[] {
   const { x, y, w, h } = b.rect;
   const out: TextoPlano[] = [];
-  if (b.tipo === "contenedor") {
-    const e = b.espacios[0];
-    const [cx, cy] = P(x + w / 2, y + h / 2, zt);
-    // Tambor ovalado: con zoom lleva el apodo (parado, en el plano girado, también).
-    const parado = h > w;
-    const apodo = detalle && etiqueta !== null && (parado ? h : w) >= 60 && !atenuado ? etiqueta : null;
+  const e0 = b.espacios[0];
+  if (b.tipo === "cochera" || b.tipo === "quinta") {
+    // Números chicos: solo con zoom (de lejos alcanza el color). En el techo del auto,
+    // en la lona de la camioneta o, si no hay vehículo, pintados en el piso.
+    if (!detalle) return out;
+    const t = e0.numero ?? "?";
+    const techo = zt > ALT.piso ? techoVehiculo(b) : null;
+    const r = techo?.r ?? { x: x + 2, y: y + 2, w: w - 4, h: h - 4 };
+    const [cx, cy] = P(r.x + r.w / 2, r.y + r.h / 2, zt + (techo?.dz ?? 0));
+    const tope = b.tipo === "cochera" ? 12 : 10;
     out.push({
-      k: e.id,
+      k: e0.id,
       x: cx,
-      y: cy + (apodo ? (parado ? -9 : -6) : 0.5),
-      t: e.numero ?? "?",
-      tam: 17,
+      y: cy + 0.3,
+      t,
+      tam: f(Math.min(tope, (r.w - 1.5) / (t.length * 0.62), r.h * 0.8)),
       clase: "num",
-      grosor: 2.5,
+      grosor: 1.8,
+      espaciado: -0.2,
     });
-    if (apodo) {
-      const a = apodoAjustado(apodo, parado ? w - 8 : w - 18);
-      out.push({ ...APODO, x: cx, y: cy + (parado ? 11 : 10), t: a.t, tam: a.tam });
-    }
     return out;
   }
-  if (b.eje === "y") return textosColumna(b, zt, detalle, etiqueta, atenuado);
+  if (b.tipo === "contenedor") {
+    // Caja angosta: el número solo (el nombre está en el cartel del mouse y la tarjeta).
+    const [cx, cy] = P(x + w / 2, y + h / 2, zt);
+    out.push({ k: e0.id, x: cx, y: cy + 0.5, t: e0.numero ?? "?", tam: f(Math.min(17, Math.min(w, h) * 0.56)), clase: "num", grosor: 2.5 });
+    return out;
+  }
+  // El subgalpón es una caja sola: número y nota (o apodo) como un puesto de la fila.
+  if (b.eje === "y" && b.tipo !== "galpon") return textosColumna(b, zt, detalle, etiqueta, atenuado);
   const apodo =
     detalle && etiqueta !== null && h >= 36 && !atenuado && !b.espacios.every((e) => e.medio)
       ? // Dos renglones solo en una tapa alta (puesto de 52 u) y sin medio puesto (su "½"
@@ -2335,7 +2588,6 @@ const ZonaTactil = memo(function ZonaTactil({
         y={f(env.y)}
         width={f(env.w)}
         height={f(env.h)}
-        rx={e.tipo === "contenedor" ? e.w / 2 : undefined}
         fill="transparent"
       />
     </g>
@@ -2476,7 +2728,7 @@ export function anilloDe(b: Bloque, rect: Rect, tono: Anillo["tono"], al: Altura
   return {
     clave: b.clave,
     rect,
-    forma: b.tipo === "contenedor" ? "elipse" : "rect",
+    forma: "rect",
     tono,
     z0: al.z0,
     zTop: al.zTop,
