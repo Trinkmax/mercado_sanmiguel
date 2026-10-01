@@ -211,7 +211,7 @@ export default async function CobranzaPage({ searchParams }: { searchParams: Sp 
   const descripcion = esJefe
     ? "Buscá al quintero o ambulante y cobrá en tres toques."
     : perfil.rol === "lider"
-      ? "Puesteros, quinteros y ambulantes. Lo que cobres va a la caja de Administración."
+      ? "Puesteros, quinteros, ambulantes y empleados. Lo que cobres va a la caja de Administración."
       : "Buscá el puesto y cobrá en tres toques.";
 
   return (

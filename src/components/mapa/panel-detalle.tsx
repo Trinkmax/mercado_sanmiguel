@@ -176,7 +176,11 @@ export function PanelDetalle({
       !categoriasGestion || !cliente.categoria || categoriasGestion.includes(cliente.categoria);
     const puedeCobrar = gestiona && destinos.cobro !== null && (!soloQuinteros || esQuintero);
     const quienGestiona =
-      cliente.categoria === "puestero" ? "Administración" : cliente.categoria ? "el Jefe de Portería" : null;
+      cliente.categoria === "puestero" || cliente.categoria === "empleado"
+        ? "Administración"
+        : cliente.categoria
+          ? "el Jefe de Portería"
+          : null;
     // Cocheras y galpones que factura y todavía no se ubicaron en el plano: se nombran
     // igual, así la tarjeta dice lo mismo que su carpeta y que Clientes.
     const sinLugar = vista === "porteria" ? [] : sinLugarEnPlano(cliente.facturado, suyos);

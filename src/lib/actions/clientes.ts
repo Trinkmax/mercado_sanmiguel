@@ -17,6 +17,7 @@ import {
 import {
   categoriasDeRol,
   LABEL_CATEGORIA,
+  tienePortal,
   type CategoriaCliente,
 } from "@/lib/segmentos";
 import { etiquetaEspacio } from "@/components/mapa/geometria";
@@ -145,7 +146,9 @@ async function clienteGestionable(
 function mensajeNoCorresponde(categoria: CategoriaCliente): string {
   return categoria === "ambulante"
     ? "Al ambulante se le cobra por día: no paga conceptos mensuales."
-    : `Ese concepto no le corresponde a un ${LABEL_CATEGORIA[categoria].toLowerCase()}. Solo se puede dejar de facturar.`;
+    : categoria === "empleado"
+      ? "A un empleado solo se le cobra la cochera."
+      : `Ese concepto no le corresponde a un ${LABEL_CATEGORIA[categoria].toLowerCase()}. Solo se puede dejar de facturar.`;
 }
 
 /** "teléfono", "teléfono y email", "teléfono, email y dirección". */
@@ -186,8 +189,8 @@ const schemaCuotasMes = z.coerce
   .min(1, "Como mínimo paga en 1 vez")
   .max(31, "Como máximo 31 veces por mes (todos los días)");
 
-const schemaCategoria = z.enum(["puestero", "quintero", "ambulante"], {
-  error: "Elegí qué es: puestero, quintero o ambulante",
+const schemaCategoria = z.enum(["puestero", "quintero", "ambulante", "empleado"], {
+  error: "Elegí qué es: puestero, quintero, ambulante o empleado",
 });
 
 /** N° de carpeta: vacío = automático (el que sigue). */
@@ -309,6 +312,8 @@ export async function crearCliente(
   if (!categoriasDeRol(perfil.rol).includes(categoria))
     return fallo(mensajeCategoriaAjena(perfil.rol));
   const esAmbulante = categoria === "ambulante";
+  // Empleado (0040): solo alquila cochera. Alcanza con el nombre; no es socio ni paga en cuotas.
+  const esEmpleado = categoria === "empleado";
 
   const supabase = await createClient();
 
@@ -347,15 +352,19 @@ export async function crearCliente(
     codigo: n,
     nombre: datos.nombre,
     apodo: datos.apodo,
-    tipo_persona: esAmbulante ? "fisica" : (datos.tipo_persona ?? "fisica"),
-    cuit: datos.cuit,
-    telefono: datos.telefono,
-    email: esAmbulante ? null : datos.email,
-    direccion: esAmbulante ? null : datos.direccion,
+    tipo_persona: esAmbulante || esEmpleado ? "fisica" : (datos.tipo_persona ?? "fisica"),
+    cuit: esEmpleado ? null : datos.cuit,
+    telefono: esEmpleado ? null : datos.telefono,
+    email: esAmbulante || esEmpleado ? null : datos.email,
+    direccion: esAmbulante || esEmpleado ? null : datos.direccion,
     notas: datos.notas,
     categoria,
-    es_socio: esAmbulante ? false : (datos.es_socio ?? false),
-    ...(esAmbulante ? {} : datos.cuotas_mes !== undefined ? { cuotas_mes: datos.cuotas_mes } : {}),
+    es_socio: esAmbulante || esEmpleado ? false : (datos.es_socio ?? false),
+    ...(esAmbulante || esEmpleado
+      ? {}
+      : datos.cuotas_mes !== undefined
+        ? { cuotas_mes: datos.cuotas_mes }
+        : {}),
     conceptos: conceptoIds.map((concepto_id) => {
       const porcentaje = porcentajePorConcepto.get(concepto_id) ?? 100;
       return {
@@ -427,12 +436,14 @@ export async function editarCliente(
   if (datos.categoria && datos.categoria !== actual.categoria) {
     if (!categoriasDeRol(perfil.rol).includes(datos.categoria))
       return fallo(mensajeCategoriaAjena(perfil.rol));
-    if (datos.categoria === "ambulante" && actual.auth_user_id)
-      return fallo("Un ambulante no puede tener acceso al portal: quitale el acceso primero");
+    if (!tienePortal(datos.categoria) && actual.auth_user_id)
+      return fallo(
+        `Un ${LABEL_CATEGORIA[datos.categoria].toLowerCase()} no puede tener acceso al portal: quitale el acceso primero`
+      );
   }
   const categoriaFinal = datos.categoria ?? actual.categoria;
-  // El ambulante no es socio (no se le pregunta): si pasa a ambulante, deja de serlo.
-  if (categoriaFinal === "ambulante") {
+  // Ni el ambulante ni el empleado son socios (no se les pregunta): si pasa a serlo, deja de ser socio.
+  if (categoriaFinal === "ambulante" || categoriaFinal === "empleado") {
     datos.es_socio = false;
     enviadas.add("es_socio");
   }
@@ -477,14 +488,18 @@ export async function editarCliente(
       )
       .map((c) => c.codigo);
     const efectos = dejaDe.length > 0 ? [`deja de facturarse ${enumerar(dejaDe)}`] : [];
-    if (categoriaFinal === "ambulante") {
+    if (categoriaFinal === "ambulante" || categoriaFinal === "empleado") {
       // También se liberan sus lugares del plano y se desactivan sus medidores (0024). El
       // Jefe no lee espacios: lugares_del_cliente devuelve los del cliente que gestiona.
-      const [{ data: lugares }, { data: medidores }] = await Promise.all([
+      // El empleado conserva sus cocheras (0040).
+      const [{ data: todos }, { data: medidores }] = await Promise.all([
         supabase.rpc("lugares_del_cliente", { p_cliente: id }),
         supabase.from("medidores").select("numero").eq("cliente_id", id).eq("activo", true).order("numero"),
       ]);
-      if (lugares && lugares.length > 0)
+      const lugares = (todos ?? []).filter(
+        (e) => categoriaFinal === "ambulante" || e.tipo !== "cochera"
+      );
+      if (lugares.length > 0)
         efectos.push(
           `se libera${lugares.length > 1 ? "n" : ""} ${enumerar(lugares.map((e) => etiquetaEspacio(e)))}`
         );
@@ -527,6 +542,8 @@ export async function editarCuotasMes(
   if (!cliente.ok) return fallo(cliente.error);
   if (cliente.categoria === "ambulante")
     return fallo("Al ambulante se le cobra por día: no paga en cuotas.");
+  if (cliente.categoria === "empleado")
+    return fallo("Al empleado se le cobra la cochera en un solo pago por mes.");
 
   const res = await solicitarCambio(supabase, {
     entidad: "cliente",

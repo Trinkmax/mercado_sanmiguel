@@ -885,6 +885,7 @@ export function PantallaAltaLider() {
         {tarjeta("Puestero", "Tiene puesto, local, galpón o contéiner", true)}
         {tarjeta("Quintero", "Alquila la quinta: paga por mes", false)}
         {tarjeta("Ambulante", "Vende por día: se le cobra cuando viene", false)}
+        {tarjeta("Empleado", "Alquila cochera: solo se le cobra eso", false)}
       </Resaltado>
       <CampoEjemplo etiqueta="Nombre y apellido" valor="Oscar Fernández" />
       <BotonEjemplo className="w-full">

@@ -134,13 +134,13 @@ export default async function EnergiaPage({
         .eq("origen", "generacion")
         .neq("estado", "anulado"),
       // "Agregar un medidor": puesteros y quinteros activos (Energía es de Administración
-      // para todas las categorías, §4.7). Los ambulantes no tienen medidor.
+      // para todas las categorías, §4.7). Ambulantes y empleados (solo cochera) no tienen medidor.
       supabase
         .from("clientes")
         .select("id, codigo, nombre, apodo, categoria")
         .eq("org_id", perfil.org_id)
         .eq("activo", true)
-        .neq("categoria", "ambulante")
+        .not("categoria", "in", "(ambulante,empleado)")
         .order("nombre"),
     ]);
 
@@ -201,7 +201,12 @@ export default async function EnergiaPage({
   {
     const clientesVistos = new Set<string>();
     for (const m of medidores) {
-      if (m.cliente?.activo === false || m.cliente?.categoria === "ambulante" || clientesVistos.has(m.cliente_id))
+      if (
+        m.cliente?.activo === false ||
+        m.cliente?.categoria === "ambulante" ||
+        m.cliente?.categoria === "empleado" ||
+        clientesVistos.has(m.cliente_id)
+      )
         continue;
       clientesVistos.add(m.cliente_id);
       const abono = abonoDe(m.cliente_id);

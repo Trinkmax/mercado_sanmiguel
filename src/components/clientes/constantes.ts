@@ -46,15 +46,17 @@ export function normalizarCategoriaDocumento(texto: string): string {
 /**
  * ¿Un concepto MENSUAL sigue facturándose si el cliente pasa a esta categoría?
  * Espejo de private.aplicar_cambio (0024) y de lo que la ficha ofrece en "Qué paga":
- * el ambulante no tiene mensuales (paga por día); el quintero, solo lo de quinteros;
- * el puestero, todo menos lo de quinteros y ambulantes. Energía (ABEN/ENER) no cuenta.
+ * el ambulante no tiene mensuales (paga por día); el quintero, solo lo de quinteros; el
+ * empleado, solo la cochera (0040); el puestero, todo menos lo de quinteros y ambulantes.
+ * Energía (ABEN/ENER) no cuenta.
  */
 export function conceptoSigueConCategoria(
   segmento: string | null,
-  categoria: "puestero" | "quintero" | "ambulante"
+  categoria: "puestero" | "quintero" | "ambulante" | "empleado"
 ): boolean {
   if (categoria === "ambulante") return false;
   if (categoria === "quintero") return segmento === "quinteros";
+  if (categoria === "empleado") return segmento === "cocheras";
   return segmento !== "quinteros" && segmento !== "ambulantes";
 }
 

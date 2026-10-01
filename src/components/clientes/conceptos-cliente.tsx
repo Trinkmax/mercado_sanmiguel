@@ -200,7 +200,9 @@ export function ConceptosCliente({
               descripcion={
                 categoria === "quintero"
                   ? "Agregale abajo la quinta (Expensas Quinteros)."
-                  : "Agregale abajo lo que paga cada mes: la expensa del puesto, un local, un galpón…"
+                  : categoria === "empleado"
+                    ? "Agregale abajo la cochera: es lo único que se le cobra a un empleado."
+                    : "Agregale abajo lo que paga cada mes: la expensa del puesto, un local, un galpón…"
               }
             />
           ) : (
@@ -265,14 +267,17 @@ export function ConceptosCliente({
         </CardContent>
       </Card>
 
-      <CuotasCard
-        clienteId={clienteId}
-        categoria={categoria}
-        cuotasMes={cuotasMes}
-        cuotasPedidas={cuotasPedidas}
-        totalMes={total}
-        directo={directo}
-      />
+      {/* El empleado paga la cochera en un solo pago por mes (0040): no elige cuotas. */}
+      {categoria !== "empleado" ? (
+        <CuotasCard
+          clienteId={clienteId}
+          categoria={categoria}
+          cuotasMes={cuotasMes}
+          cuotasPedidas={cuotasPedidas}
+          totalMes={total}
+          directo={directo}
+        />
+      ) : null}
     </div>
   );
 }

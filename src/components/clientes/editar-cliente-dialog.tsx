@@ -22,6 +22,7 @@ export function EditarClienteDialog({
   rol,
   conceptosActivos,
   lugaresTexto,
+  lugaresSinCocheraTexto,
   medidoresActivos,
 }: {
   cliente: DatosCliente;
@@ -30,6 +31,8 @@ export function EditarClienteDialog({
   conceptosActivos?: ConceptoActivo[];
   /** Sus lugares del plano (se liberan si pasa a ambulante). */
   lugaresTexto?: string | null;
+  /** Los mismos sin las cocheras (las conserva si pasa a empleado). */
+  lugaresSinCocheraTexto?: string | null;
   /** N° de sus medidores activos (se desactivan si pasa a ambulante). */
   medidoresActivos?: string[];
 }) {
@@ -58,6 +61,7 @@ export function EditarClienteDialog({
           rol={rol}
           conceptosActivos={conceptosActivos}
           lugaresTexto={lugaresTexto}
+          lugaresSinCocheraTexto={lugaresSinCocheraTexto}
           medidoresActivos={medidoresActivos}
           alGuardar={() => setAbierto(false)}
         />

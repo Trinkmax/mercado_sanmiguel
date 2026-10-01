@@ -20,8 +20,8 @@ export function segmentosDeRol(rol: Rol): Segmento[] {
     "conteiners",
     "cocheras",
   ];
-  if (rol === "lider") return [...puesteros, "quinteros", "ambulantes", "socios"];
-  return [...puesteros, "socios"];
+  if (rol === "lider") return [...puesteros, "quinteros", "ambulantes", "empleados", "socios"];
+  return [...puesteros, "empleados", "socios"];
 }
 
 export { LABEL_SEGMENTO };

@@ -104,6 +104,7 @@ const LABELS: Record<string, { texto: string; variante: Variante }> = {
   camion: { texto: "Camión", variante: "neutro" },
   ambulante: { texto: "Ambulante", variante: "neutro" },
   quintero: { texto: "Quintero", variante: "neutro" },
+  empleado: { texto: "Empleado", variante: "neutro" },
 };
 
 /**

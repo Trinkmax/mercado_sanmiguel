@@ -231,7 +231,7 @@ function Apodo({ apodo }: { apodo: string | null }) {
 function DetalleFila({ c, hoy }: { c: FilaCliente; hoy: string }) {
   return (
     <>
-      {c.categoria === "puestero" ? null : <Apodo apodo={c.apodo} />}
+      {c.categoria === "puestero" || c.categoria === "empleado" ? null : <Apodo apodo={c.apodo} />}
       <DetalleCategoria c={c} hoy={hoy} />
     </>
   );

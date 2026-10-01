@@ -39,7 +39,7 @@ export default async function LibreDeudaPage({ params }: Props) {
 
   const categoria = cliente.categoria as CategoriaCliente;
   if (!categoriasDeRol(perfil.rol).includes(categoria)) {
-    const quien = categoria === "puestero" ? "Administración" : "el Jefe de Portería";
+    const quien = categoria === "puestero" || categoria === "empleado" ? "Administración" : "el Jefe de Portería";
     return (
       <div className="space-y-6 py-10">
         <div className="etiqueta">

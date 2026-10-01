@@ -77,7 +77,7 @@ export type ClienteMapa = {
   deuda: number;
   estado: EstadoCobro;
   facturado: Facturado;
-  /** Quién lo gestiona (puestero → Administración; quintero/ambulante → Jefe). */
+  /** Quién lo gestiona (puestero/empleado → Administración; quintero/ambulante → Jefe). */
   categoria?: CategoriaCliente;
   /** Avance del mes (v_avance_mes del período actual): "2 de 4 · Falta $165.000". */
   mes?: AvanceMes | null;

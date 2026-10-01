@@ -255,6 +255,7 @@ async function FichaSoloEnergia({
         abono={abono}
         rol={rol}
         ambulante={categoria === "ambulante"}
+        empleado={categoria === "empleado"}
       />
     </div>
   );
@@ -525,7 +526,7 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
 
   const contacto = [
     cliente.apodo ? `Le dicen “${cliente.apodo}”` : null,
-    categoria === "ambulante" ? null : LABEL_TIPO_PERSONA[cliente.tipo_persona],
+    categoria === "ambulante" || categoria === "empleado" ? null : LABEL_TIPO_PERSONA[cliente.tipo_persona],
     cliente.cuit ? `${categoria === "ambulante" ? "DNI" : "CUIT/DNI"} ${cliente.cuit}` : null,
     cliente.telefono,
     cliente.email,
@@ -553,12 +554,15 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
   const lugaresAviso: { tipo: TipoEspacio; numero: string | null; medio: boolean; propio: boolean }[] = esJefe
     ? (lugaresJefeRes.data ?? []).filter((e): e is typeof e & { tipo: TipoEspacio } => TIPOS_LUGAR.includes(e.tipo))
     : espaciosPlano;
-  const lugaresTexto =
-    lugaresAviso.length === 0
+  const textoLugares = (lugares: typeof lugaresAviso) =>
+    lugares.length === 0
       ? null
-      : new Set(lugaresAviso.map((e) => e.tipo)).size === 1
-        ? etiquetaEspacios(lugaresAviso)
-        : lugaresAviso.map((e) => etiquetaEspacio(e)).join(" · ");
+      : new Set(lugares.map((e) => e.tipo)).size === 1
+        ? etiquetaEspacios(lugares)
+        : lugares.map((e) => etiquetaEspacio(e)).join(" · ");
+  const lugaresTexto = textoLugares(lugaresAviso);
+  // Si pasa a empleado conserva sus cocheras (0040): solo se libera lo demás.
+  const lugaresSinCocheraTexto = textoLugares(lugaresAviso.filter((e) => e.tipo !== "cochera"));
   // Medidores activos: al pasar a ambulante se desactivan (0024), y el formulario lo avisa.
   const medidoresActivos = esJefe
     ? (medidoresJefeRes.data ?? []).map((m) => m.numero)
@@ -577,7 +581,10 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
     { valor: "paga", label: "Qué paga" },
     { valor: "documentos", label: "Documentos" },
     ...(puedeRegistrar ? [{ valor: "registros", label: "Registros" }] : []),
-    ...(veEnergia ? [{ valor: "medidores", label: "Medidores" }] : []),
+    // El empleado solo alquila cochera: sin medidores, salvo que le haya quedado alguno prendido.
+    ...(veEnergia && (categoria !== "empleado" || medidoresActivos.length > 0)
+      ? [{ valor: "medidores", label: "Medidores" }]
+      : []),
   ];
   const solapaInicial = solapas.some((p) => p.valor === tab) ? (tab as string) : "cuenta";
 
@@ -619,6 +626,7 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
               rol={perfil.rol}
               conceptosActivos={conceptosActivos}
               lugaresTexto={lugaresTexto}
+              lugaresSinCocheraTexto={lugaresSinCocheraTexto}
               medidoresActivos={medidoresActivos}
             />
             <BajaCliente
@@ -873,6 +881,7 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
               abono={energia.abono}
               rol={perfil.rol}
               ambulante={categoria === "ambulante"}
+              empleado={categoria === "empleado"}
             />
           </TabsContent>
         ) : null}

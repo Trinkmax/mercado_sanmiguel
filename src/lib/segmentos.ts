@@ -16,29 +16,36 @@ import { formatARS } from "@/lib/format";
 // ---------------------------------------------------------------------------
 
 /** Igual al enum `categoria_cliente` (Enums<"categoria_cliente"> cuando se regeneren los tipos). */
-export type CategoriaCliente = "puestero" | "quintero" | "ambulante";
+export type CategoriaCliente = "puestero" | "quintero" | "ambulante" | "empleado";
 
-export const CATEGORIAS: CategoriaCliente[] = ["puestero", "quintero", "ambulante"];
+export const CATEGORIAS: CategoriaCliente[] = ["puestero", "quintero", "ambulante", "empleado"];
 
 export const LABEL_CATEGORIA: Record<CategoriaCliente, string> = {
   puestero: "Puestero",
   quintero: "Quintero",
   ambulante: "Ambulante",
+  empleado: "Empleado",
 };
 
 export const LABEL_CATEGORIA_PLURAL: Record<CategoriaCliente, string> = {
   puestero: "Puesteros",
   quintero: "Quinteros",
   ambulante: "Ambulantes",
+  empleado: "Empleados",
 };
+
+/** Las que tienen usuario del portal: puesteros y quinteros. Ambulantes y empleados no (0040). */
+export function tienePortal(categoria: CategoriaCliente): boolean {
+  return categoria === "puestero" || categoria === "quintero";
+}
 
 /** Categorías que gestiona (escribe / cobra) cada rol. Espejo de private.categorias_gestionables(). */
 export function categoriasDeRol(rol: Rol): CategoriaCliente[] {
   switch (rol) {
     case "lider":
-      return ["puestero", "quintero", "ambulante"];
+      return ["puestero", "quintero", "ambulante", "empleado"];
     case "admin":
-      return ["puestero"];
+      return ["puestero", "empleado"];
     case "guardia":
       return ["quintero", "ambulante"];
     default:
@@ -59,7 +66,8 @@ export type Segmento =
   | "conteiners"
   | "cocheras"
   | "quinteros"
-  | "ambulantes";
+  | "ambulantes"
+  | "empleados";
 
 /** En el orden en que se muestran los chips. */
 export const SEGMENTOS: { valor: Segmento; label: string; singular: string }[] = [
@@ -71,6 +79,7 @@ export const SEGMENTOS: { valor: Segmento; label: string; singular: string }[] =
   { valor: "cocheras", label: "Cocheras", singular: "Cochera" },
   { valor: "quinteros", label: "Quinteros", singular: "Quintero" },
   { valor: "ambulantes", label: "Ambulantes", singular: "Ambulante" },
+  { valor: "empleados", label: "Empleados", singular: "Empleado" },
   { valor: "socios", label: "Socios", singular: "Socio" },
 ];
 
@@ -116,6 +125,7 @@ export function segmentosDeCliente(c: {
   }
   if (c.categoria === "quintero") set.add("quinteros");
   if (c.categoria === "ambulante") set.add("ambulantes");
+  if (c.categoria === "empleado") set.add("empleados");
   if (c.es_socio) set.add("socios");
   return [...set].sort();
 }
@@ -176,7 +186,7 @@ export function leerPublico(publico: string[] | null): EleccionPublico {
 
 /**
  * ¿Una circular con este público le llega a este cliente? Misma regla que
- * private.cliente_en_publico: los ambulantes nunca; "socios" filtra; "todos" (o vacío, o solo
+ * private.cliente_en_publico: ambulantes y empleados nunca (no tienen portal); "socios" filtra; "todos" (o vacío, o solo
  * socios) no filtra por segmento; si no, algún segmento en común.
  * `segmentos` = v_clientes_segmentos.segmentos (incluye "socios" si es socio).
  */
@@ -184,7 +194,7 @@ export function clienteEnPublico(
   c: { categoria: CategoriaCliente; segmentos: string[] },
   publico: string[] | null
 ): boolean {
-  if (c.categoria === "ambulante") return false;
+  if (!tienePortal(c.categoria)) return false;
   const p = publico ?? [];
   if (p.includes("socios") && !c.segmentos.includes("socios")) return false;
   const elegidos = p.filter((v) => v !== "socios");

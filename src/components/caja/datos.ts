@@ -158,7 +158,7 @@ async function nombresPorUsuario(
   return mapa;
 }
 
-const CATEGORIAS = new Set(["puestero", "quintero", "ambulante"]);
+const CATEGORIAS = new Set(["puestero", "quintero", "ambulante", "empleado"]);
 const ICONOS = new Set(["camioneta", "camion", "balancin", "equipo", "estadia"]);
 
 function mensajeError(error: { message?: string } | null): string | null {

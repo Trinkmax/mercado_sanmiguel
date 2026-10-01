@@ -3440,7 +3440,7 @@ export type Database = {
       }
     }
     Enums: {
-      categoria_cliente: "puestero" | "quintero" | "ambulante"
+      categoria_cliente: "puestero" | "quintero" | "ambulante" | "empleado"
       cuenta_tesoreria: "efectivo" | "banco"
       estado_caja: "abierta" | "cerrada" | "integrada" | "validada"
       estado_cambio: "pendiente" | "aprobado" | "rechazado"
@@ -3649,7 +3649,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      categoria_cliente: ["puestero", "quintero", "ambulante"],
+      categoria_cliente: ["puestero", "quintero", "ambulante", "empleado"],
       cuenta_tesoreria: ["efectivo", "banco"],
       estado_caja: ["abierta", "cerrada", "integrada", "validada"],
       estado_cambio: ["pendiente", "aprobado", "rechazado"],

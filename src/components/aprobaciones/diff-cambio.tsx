@@ -270,8 +270,10 @@ function ListaAlta({
   datos: Datos;
   conceptosPorId: Record<string, ReferenciaConcepto>;
 }) {
-  // Al ambulante se le cobra por día: ni cuotas ni tipo de persona dicen nada en su alta.
-  const ocultasAmbulante = datos.categoria === "ambulante" ? ["cuotas_mes", "tipo_persona"] : [];
+  // Al ambulante se le cobra por día y al empleado solo la cochera: ni cuotas ni tipo de
+  // persona dicen nada en su alta.
+  const ocultasAmbulante =
+    datos.categoria === "ambulante" || datos.categoria === "empleado" ? ["cuotas_mes", "tipo_persona"] : [];
   const campos = ordenarCampos(
     Object.keys(datos).filter(
       (k) => !CLAVES_OCULTAS.has(k) && !esVacio(datos[k]) && !ocultasAmbulante.includes(k)

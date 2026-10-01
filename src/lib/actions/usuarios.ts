@@ -8,7 +8,12 @@ import { requireRol, type Perfil, type Rol } from "@/lib/auth";
 import { ok, fallo, type ActionResult } from "@/lib/actions/result";
 import { ROLES_ASIGNABLES_STAFF, puedeGestionarRol, LABEL_ROL } from "@/lib/roles";
 import { esDniValido, formatDni, normalizarDni } from "@/lib/format";
-import { categoriasDeRol, type CategoriaCliente } from "@/lib/segmentos";
+import {
+  categoriasDeRol,
+  LABEL_CATEGORIA_PLURAL,
+  tienePortal,
+  type CategoriaCliente,
+} from "@/lib/segmentos";
 
 /*
  * Gestión de usuarios (F1–F5, contrato §4.11):
@@ -250,8 +255,10 @@ export async function crearAccesoSocio(input: unknown): Promise<ActionResult<Usu
   if (errCliente) return fallo(errCliente);
   if (!cliente) return fallo("No encontramos ese cliente.");
   const categoria = cliente.categoria as CategoriaCliente;
-  if (categoria === "ambulante") {
-    return fallo("Los ambulantes no tienen acceso al portal.");
+  if (!tienePortal(categoria)) {
+    return fallo(
+      `Los ${LABEL_CATEGORIA_PLURAL[categoria].toLowerCase()} no tienen acceso al portal: es solo para puesteros y quinteros.`
+    );
   }
   if (!categoriasDeRol(perfil.rol).includes(categoria)) {
     return fallo("A quinteros y ambulantes los gestiona el Jefe de Portería.");

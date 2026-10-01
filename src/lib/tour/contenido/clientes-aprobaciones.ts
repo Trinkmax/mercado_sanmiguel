@@ -314,12 +314,13 @@ function pasosAdministracion(): Paso[] {
     {
       id: "alta",
       ruta: "/clientes/nuevo",
-      ancla: ["clientes-alta-conceptos", "clientes-alta-enviar"],
+      ancla: ["clientes-alta-que-es", "clientes-alta-conceptos", "clientes-alta-enviar"],
       titulo: "Un puestero nuevo",
       texto:
         "Cargás sus datos y marcás qué paga cada mes, con cantidad y porcentaje. Al final tocás «Enviar a aprobación»: aparece en la lista cuando el Líder lo apruebe.",
       pantalla: PantallaAltaPuestero,
-      consejo: "Mientras espera, arriba de la lista vas a ver «Hay 1 alta esperando la aprobación del Líder de Procesos».",
+      consejo:
+        "Si solo alquila una cochera, en «¿Qué es?» elegí «Empleado»: alcanza con el nombre y se le cobra solo la cochera. Mientras espera, arriba de la lista vas a ver «Hay 1 alta esperando la aprobación del Líder de Procesos».",
       sinAncla: {
         texto:
           "Acá se cargan sus datos y qué paga cada mes, con cantidad y porcentaje. Al final tocás «Enviar a aprobación»: aparece en la lista cuando el Líder lo apruebe.",
@@ -410,10 +411,10 @@ function pasosLider(): Paso[] {
       ancla: "clientes-alta-que-es",
       titulo: "Un cliente nuevo",
       texto:
-        "En «¿Qué es?» elegís si es puestero, quintero o ambulante, y cargás sus datos y qué paga. Al final tocás «Dar de alta al puestero» (o al quintero, o al ambulante) y queda creado en el acto.",
+        "En «¿Qué es?» elegís si es puestero, quintero, ambulante o empleado (solo alquila cochera), y cargás sus datos y qué paga. Al final tocás «Dar de alta al puestero» (o al que corresponda) y queda creado en el acto.",
       sinAncla: {
         texto:
-          "Acá elegís si es puestero, quintero o ambulante, y cargás sus datos y qué paga. Al final tocás «Dar de alta al puestero» (o al quintero, o al ambulante) y queda creado en el acto.",
+          "Acá elegís si es puestero, quintero, ambulante o empleado, y cargás sus datos y qué paga. Al final tocás «Dar de alta al puestero» (o al que corresponda) y queda creado en el acto.",
         pantalla: PantallaAltaLider,
       },
     },

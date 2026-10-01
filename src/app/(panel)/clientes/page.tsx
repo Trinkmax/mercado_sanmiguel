@@ -264,7 +264,7 @@ export default async function ClientesPage({ searchParams }: Props) {
             </p>
             <p className="text-parcial/90">
               {altasPendientes
-                .map((a) => a.resumen.replace(/^Alta de (cliente|puestero|quintero|ambulante) /, ""))
+                .map((a) => a.resumen.replace(/^Alta de (cliente|puestero|quintero|ambulante|empleado) /, ""))
                 .join(" · ")}
               {esLider ? (
                 <>

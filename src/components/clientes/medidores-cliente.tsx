@@ -72,6 +72,7 @@ export function MedidoresCliente({
   abono,
   rol,
   ambulante = false,
+  empleado = false,
 }: {
   clienteId: string;
   medidores: MedidorConLectura[];
@@ -81,6 +82,8 @@ export function MedidoresCliente({
   rol: string;
   /** Es ambulante: no paga abono (se le cobra por día; private.generar_abonos_energia, 0024). */
   ambulante?: boolean;
+  /** Es empleado: solo alquila cochera y tampoco paga abono (0040). */
+  empleado?: boolean;
 }) {
   const router = useRouter();
   const [pendiente, startTransition] = useTransition();
@@ -130,13 +133,14 @@ export function MedidoresCliente({
 
   return (
     <div className="space-y-6">
-      {ambulante ? (
+      {ambulante || empleado ? (
         <div className="flex items-start gap-4 rounded-lg border bg-card px-4 py-4">
           <Zap className="size-6 shrink-0 text-muted-foreground" strokeWidth={1.8} />
           <div className="min-w-0 space-y-1">
-            <p className="font-semibold">Es ambulante: no paga abono de energía</p>
+            <p className="font-semibold">Es {ambulante ? "ambulante" : "empleado"}: no paga abono de energía</p>
             <p className="text-sm text-muted-foreground">
-              Se le cobra por día. Si tiene un medidor activo, paga solo la luz que consume (kWh).
+              {ambulante ? "Se le cobra por día." : "Solo alquila cochera."} Si tiene un medidor activo, paga solo
+              la luz que consume (kWh).
             </p>
           </div>
         </div>

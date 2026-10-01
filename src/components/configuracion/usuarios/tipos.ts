@@ -24,7 +24,7 @@ export type EmpleadoPadron = {
   conUsuario: boolean;
 };
 
-/** Cliente que puede tener acceso al portal (puesteros y quinteros; nunca ambulantes). */
+/** Cliente que puede tener acceso al portal (puesteros y quinteros; nunca ambulantes ni empleados). */
 export type ClienteAcceso = {
   id: string;
   codigo: number;

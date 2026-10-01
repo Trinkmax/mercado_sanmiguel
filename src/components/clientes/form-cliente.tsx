@@ -63,6 +63,7 @@ const AYUDA_CATEGORIA: Record<CategoriaCliente, string> = {
   puestero: "Tiene puesto, local, galpón o contéiner",
   quintero: "Alquila la quinta: paga por mes",
   ambulante: "Vende por día: se le cobra cuando viene",
+  empleado: "Alquila cochera: solo se le cobra eso",
 };
 
 type Campos = {
@@ -98,6 +99,7 @@ export function FormCliente({
   precioAmbulante,
   conceptosActivos = [],
   lugaresTexto = null,
+  lugaresSinCocheraTexto = null,
   medidoresActivos = [],
   alGuardar,
 }: {
@@ -116,6 +118,8 @@ export function FormCliente({
   conceptosActivos?: ConceptoActivo[];
   /** Edición: sus lugares en el plano ("Puestos 58 · 60"), que se liberan si pasa a ambulante. */
   lugaresTexto?: string | null;
+  /** Edición: los mismos sin las cocheras, que conserva si pasa a empleado (0040). */
+  lugaresSinCocheraTexto?: string | null;
   /** Edición: N° de sus medidores activos, que se desactivan si pasa a ambulante. */
   medidoresActivos?: string[];
   alGuardar?: () => void;
@@ -169,11 +173,17 @@ export function FormCliente({
 
   const esAmbulante = categoria === "ambulante";
   const esQuintero = categoria === "quintero";
+  // Empleado (0040): solo para cobrarle la cochera. Alcanza con el nombre: sin DNI ni contacto,
+  // no es socio, no tiene portal y paga en un pago por mes.
+  const esEmpleado = categoria === "empleado";
+  const sinDatosPersonales = esAmbulante || esEmpleado;
   const mostrarCategorias = categoriasRol.length > 1;
   const conceptosVisibles = (conceptos ?? []).filter((c) =>
     esQuintero
       ? c.segmento === "quinteros"
-      : c.segmento !== "quinteros" && c.segmento !== "ambulantes"
+      : esEmpleado
+        ? c.segmento === "cocheras"
+        : c.segmento !== "quinteros" && c.segmento !== "ambulantes"
   );
   const { opciones: opcionesCuotas, permitirOtra } = cuotasDeCategoria(categoria);
   const { total: totalMes } = totalMensual(
@@ -223,7 +233,7 @@ export function FormCliente({
     e.preventDefault();
     const faltan: typeof errores = {};
     if (!campos.nombre.trim()) faltan.nombre = "Poné el nombre";
-    if (!esAmbulante && esSocio === null) faltan.socio = "Elegí si es socio de la cooperativa";
+    if (!sinDatosPersonales && esSocio === null) faltan.socio = "Elegí si es socio de la cooperativa";
     if (codigoAbierto && !/^\d+$/.test(codigo.trim()))
       faltan.codigo = "Poné el número de carpeta, solo números";
     setErrores(faltan);
@@ -236,14 +246,19 @@ export function FormCliente({
     const datos = {
       nombre: campos.nombre,
       apodo: campos.apodo,
-      cuit: esAmbulante ? normalizarDni(campos.cuit) : campos.cuit,
-      telefono: campos.telefono,
-      ...(esAmbulante
+      // Del empleado no se piden datos personales: no se mandan (si los tenía, quedan).
+      ...(esEmpleado
+        ? {}
+        : {
+            cuit: esAmbulante ? normalizarDni(campos.cuit) : campos.cuit,
+            telefono: campos.telefono,
+          }),
+      ...(sinDatosPersonales
         ? {}
         : { email: campos.email, direccion: campos.direccion, tipo_persona: tipoPersona }),
       notas: campos.notas,
       categoria,
-      es_socio: esAmbulante ? false : Boolean(esSocio),
+      es_socio: sinDatosPersonales ? false : Boolean(esSocio),
     };
 
     startTransition(async () => {
@@ -279,7 +294,7 @@ export function FormCliente({
 
       const res = await llamarAccion(() => crearCliente({
         ...datos,
-        ...(esAmbulante ? {} : { cuotas_mes: cuotasMes }),
+        ...(sinDatosPersonales ? {} : { cuotas_mes: cuotasMes }),
         ...(codigoAbierto ? { codigo: codigo.trim() } : {}),
         conceptos: conceptosElegidos,
         ref,
@@ -391,7 +406,8 @@ export function FormCliente({
             aria-label="¿Qué es?"
             className={cn(
               "grid gap-2",
-              categoriasRol.length === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2"
+              categoriasRol.length === 3 ? "sm:grid-cols-3" : "sm:grid-cols-2",
+              categoriasRol.length === 4 && "xl:grid-cols-4"
             )}
           >
             {categoriasRol.map((c) => {
@@ -429,8 +445,14 @@ export function FormCliente({
             <AvisoCambioCategoria
               categoria={categoria}
               dejaDe={conceptosActivos.filter((c) => !conceptoSigueConCategoria(c.segmento, categoria))}
-              lugaresTexto={categoria === "ambulante" ? lugaresTexto : null}
-              medidores={categoria === "ambulante" ? medidoresActivos : []}
+              lugaresTexto={
+                categoria === "ambulante"
+                  ? lugaresTexto
+                  : categoria === "empleado"
+                    ? lugaresSinCocheraTexto
+                    : null
+              }
+              medidores={categoria === "ambulante" || categoria === "empleado" ? medidoresActivos : []}
               directo={directo}
             />
           ) : null}
@@ -439,13 +461,13 @@ export function FormCliente({
 
       <div className="space-y-2">
         <Label htmlFor="nombre" className="text-base">
-          {tipoPersona === "juridica" && !esAmbulante ? "Razón social" : "Nombre y apellido"}
+          {tipoPersona === "juridica" && !sinDatosPersonales ? "Razón social" : "Nombre y apellido"}
         </Label>
         <Input
           id="nombre"
           value={campos.nombre}
           onChange={(e) => cambiarCampo("nombre", e.target.value)}
-          placeholder={esAmbulante ? "Ej.: Juan Pérez" : "Ej.: Verdulería Juárez e Hijos"}
+          placeholder={sinDatosPersonales ? "Ej.: Juan Pérez" : "Ej.: Verdulería Juárez e Hijos"}
           className="h-12 text-base"
           autoComplete="off"
           aria-invalid={errores.nombre ? true : undefined}
@@ -470,7 +492,7 @@ export function FormCliente({
         />
       </div>
 
-      {!esAmbulante ? (
+      {!sinDatosPersonales ? (
         <fieldset className="space-y-2">
           <legend className="mb-2 text-base font-medium">¿Es socio de la cooperativa?</legend>
           <div role="radiogroup" aria-label="¿Es socio de la cooperativa?" className="flex gap-2">
@@ -504,7 +526,12 @@ export function FormCliente({
         </fieldset>
       ) : null}
 
-      {esAmbulante ? (
+      {esEmpleado ? (
+        <p className="rounded-lg bg-muted/50 px-4 py-3 text-base">
+          Para un empleado alcanza con el nombre: no hace falta DNI ni otros datos. Solo se le cobra la
+          cochera, no tiene acceso al portal y no es socio.
+        </p>
+      ) : esAmbulante ? (
         <div className="grid gap-5 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="cuit" className="text-base">
@@ -629,7 +656,13 @@ export function FormCliente({
         />
       ) : null}
 
-      {esAlta && !esAmbulante ? (
+      {esAlta && esEmpleado && conceptosVisibles.length === 0 ? (
+        <p className="rounded-lg bg-muted/50 px-4 py-3 text-base text-muted-foreground">
+          Falta el concepto de cocheras en Configuración → Precios.
+        </p>
+      ) : null}
+
+      {esAlta && !sinDatosPersonales ? (
         <div className="space-y-2">
           <p className="text-base font-medium">
             {esQuintero ? "¿En cuántos pagos cobra la quinta?" : "Paga el mes en"}
@@ -774,7 +807,9 @@ function articulo(categoria: CategoriaCliente): string {
     ? "al puestero"
     : categoria === "quintero"
       ? "al quintero"
-      : "al ambulante";
+      : categoria === "empleado"
+        ? "al empleado"
+        : "al ambulante";
 }
 
 /**
@@ -807,14 +842,22 @@ function AvisoCambioCategoria({
         <p className="font-medium">
           {categoria === "ambulante"
             ? "Como ambulante se le cobra por día: no paga por mes, ni en cuotas, y no es socio."
-            : `Pasa a ser ${LABEL_CATEGORIA[categoria].toLowerCase()}.`}
+            : categoria === "empleado"
+              ? "Como empleado solo se le cobra la cochera: no es socio, no tiene acceso al portal y paga en un pago por mes."
+              : `Pasa a ser ${LABEL_CATEGORIA[categoria].toLowerCase()}.`}
         </p>
         {dejaDe.length > 0 ? (
           <p className="break-words">
             {cuando} deja de facturarse: {dejaDe.map((c) => `${c.codigo} (${c.nombre})`).join(", ")}.
           </p>
         ) : null}
-        {lugaresTexto ? <p className="break-words">También se libera en el plano: {lugaresTexto}.</p> : null}
+        {lugaresTexto ? (
+          <p className="break-words">
+            {categoria === "empleado"
+              ? `Se libera en el plano: ${lugaresTexto} (conserva sus cocheras).`
+              : `También se libera en el plano: ${lugaresTexto}.`}
+          </p>
+        ) : null}
         {medidores.length > 0 ? (
           <p className="break-words">
             {medidores.length === 1

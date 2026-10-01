@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import type { Perfil } from "@/lib/auth";
 import { labelPeriodo, periodoActual } from "@/lib/format";
+import { categoriasDeRol } from "@/lib/segmentos";
 import { CajaRegistradora } from "@/components/shared/iconos";
 import { Button } from "@/components/ui/button";
 import {
@@ -132,7 +133,7 @@ export async function InicioGestion({ perfil, supabase }: { perfil: Perfil; supa
       : Promise.resolve({ data: [] as { codigo: string }[] }),
   ]);
 
-  // Clientes con deuda vencida: Administración ve solo los puesteros (los demás son de Portería).
+  // Clientes con deuda vencida: Administración ve solo puesteros y empleados (los demás son de Portería).
   let clientesVencidos = (vencidosRes.data ?? []).length;
   if (rol === "admin" && clientesVencidos > 0) {
     const ids = (vencidosRes.data ?? []).map((v) => v.cliente_id).filter((id): id is string => Boolean(id));
@@ -141,7 +142,7 @@ export async function InicioGestion({ perfil, supabase }: { perfil: Perfil; supa
         .from("clientes")
         .select("id", { count: "exact", head: true })
         .in("id", ids)
-        .eq("categoria", "puestero")
+        .in("categoria", categoriasDeRol("admin"))
     );
   }
 

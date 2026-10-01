@@ -1,12 +1,14 @@
-import { Footprints, Store, Tractor, type LucideIcon } from "lucide-react";
+import { CarFront, Footprints, Store, Tractor, type LucideIcon } from "lucide-react";
 import { LABEL_CATEGORIA, type CategoriaCliente } from "@/lib/segmentos";
 import { cn } from "@/lib/utils";
 
-/** Ícono de cada categoría: el puesto, el tractor de la quinta y los pasos del ambulante. */
+/** Ícono de cada categoría: el puesto, el tractor de la quinta, los pasos del ambulante y el
+ * auto del empleado (alquila cochera). */
 export const ICONO_CATEGORIA: Record<CategoriaCliente, LucideIcon> = {
   puestero: Store,
   quintero: Tractor,
   ambulante: Footprints,
+  empleado: CarFront,
 };
 
 /**

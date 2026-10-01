@@ -27,7 +27,7 @@ export async function RegistrosCliente({
   const supabase = await createClient();
   const categorias = categoriasDeRol(perfil.rol);
   // Líder y Administración ven los registros de los clientes que gestionan (la RLS deja leer).
-  const verTodo = categorias.length > 0 ? categorias : (["puestero", "quintero", "ambulante"] as const);
+  const verTodo = categorias.length > 0 ? categorias : (["puestero", "quintero", "ambulante", "empleado"] as const);
   const registros = ordenarRegistros(
     await cargarRegistros(supabase, { categorias: [...verTodo], clienteId })
   );
