@@ -222,7 +222,9 @@ export default async function EnergiaPage({
 
   const filas: FilaMedidor[] = medidores.map((m) => {
     const lectura = lecturasPorMedidor.get(m.id);
-    const anterior = lectura ? Number(lectura.lectura_anterior) : (ultimaConocida.get(m.id) ?? null);
+    // Solo la de meses anteriores: la anterior de la lectura de este mes viaja en `cargada`
+    // (si no, una primera lectura ya guardada no dejaba corregir su anterior).
+    const anterior = ultimaConocida.get(m.id) ?? null;
     const espacio = m.espacio as EspacioMedidor;
     const abono = abonoPorMedidor.get(m.id) ?? null;
     return {

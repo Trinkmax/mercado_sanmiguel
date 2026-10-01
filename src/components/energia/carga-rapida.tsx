@@ -24,7 +24,7 @@ export type FilaMedidor = {
   espacioId?: string | null;
   /** I1: abono mensual del cliente (solo en su primer medidor) o "exento". */
   abono?: { monto: number } | "exento" | null;
-  /** Última lectura conocida de períodos anteriores (su lectura_actual). */
+  /** Última lectura conocida de períodos anteriores (su lectura_actual). null = primera vez. */
   anteriorConocida: number | null;
   /** Lectura ya cargada en este período, si existe. */
   cargada: {
@@ -119,19 +119,24 @@ export function CargaRapida({
   }
 
   function corregir(id: string) {
+    // Una lectura inicial (primera vez, anterior = actual) se corrige como inicial: la
+    // anterior queda vacía y sigue a la actual que se tipee.
+    const primeraVez = filas.find((f) => f.id === id)?.anteriorConocida === null;
     setEstado((prev) => {
       const v = prev[id].valores;
+      const inicial = primeraVez && v !== null && v.anterior === v.actual;
       return {
         ...prev,
         [id]: {
           ...prev[id],
           modo: "corrigiendo",
-          anterior: v ? String(v.anterior) : "",
+          anterior: v && !inicial ? String(v.anterior) : "",
           actual: v ? String(v.actual) : "",
           error: null,
         },
       };
     });
+    // Al corregir se pueden cambiar las dos: el foco va a la actual, que es lo más común.
     requestAnimationFrame(() => {
       inputsActual.current.get(id)?.focus();
       inputsActual.current.get(id)?.select();
@@ -148,18 +153,21 @@ export function CargaRapida({
   async function confirmar(fila: FilaMedidor) {
     const est = estado[fila.id];
     if (!est || est.guardando) return;
-    const anteriorEditable = fila.anteriorConocida === null;
+    const primeraVez = fila.anteriorConocida === null;
+    // Al corregir se pueden cambiar las dos lecturas; al cargar, la anterior solo la
+    // primera vez (después viene sola del mes anterior).
+    const anteriorEditable = primeraVez || est.modo === "corrigiendo";
 
     const actual = est.actual === "" ? null : Number(est.actual);
     // Primera vez sin anterior: lo que se tipea es la lectura inicial (0 kWh, no se cobra
     // consumo); el mes siguiente se descuenta desde acá.
     const anterior = anteriorEditable
       ? est.anterior === ""
-        ? actual
+        ? primeraVez
+          ? actual
+          : null
         : Number(est.anterior)
-      : est.modo === "corrigiendo" && est.valores
-        ? est.valores.anterior
-        : fila.anteriorConocida;
+      : fila.anteriorConocida;
 
     const marcarError = (mensaje: string) =>
       setEstado((prev) => ({
@@ -167,9 +175,14 @@ export function CargaRapida({
         [fila.id]: { ...prev[fila.id], error: mensaje },
       }));
 
-    if (actual === null || anterior === null) {
+    if (actual === null) {
       marcarError("Poné la lectura actual del medidor.");
       inputsActual.current.get(fila.id)?.focus();
+      return;
+    }
+    if (anterior === null) {
+      marcarError("Poné la lectura anterior del medidor.");
+      inputsAnterior.current.get(fila.id)?.focus();
       return;
     }
     if (actual < anterior) {
@@ -275,7 +288,8 @@ export function CargaRapida({
               const est = estado[fila.id];
               if (!est) return null;
               const editando = est.modo !== "cargada";
-              const anteriorEditable = fila.anteriorConocida === null;
+              const primeraVez = fila.anteriorConocida === null;
+              const anteriorEditable = primeraVez || est.modo === "corrigiendo";
 
               // Cálculo en vivo mientras se tipea (gris hasta guardar)
               const actualNum =
@@ -283,11 +297,11 @@ export function CargaRapida({
               const anteriorNum = editando
                 ? anteriorEditable
                   ? est.anterior === ""
-                    ? actualNum
+                    ? primeraVez
+                      ? actualNum
+                      : null
                     : Number(est.anterior)
-                  : est.modo === "corrigiendo" && est.valores
-                    ? est.valores.anterior
-                    : fila.anteriorConocida
+                  : fila.anteriorConocida
                 : null;
               const kwhVivo =
                 anteriorNum !== null && actualNum !== null && actualNum >= anteriorNum
@@ -367,8 +381,12 @@ export function CargaRapida({
                         }}
                         inputMode="numeric"
                         autoComplete="off"
-                        placeholder="Inicial"
-                        title="Primera lectura de este medidor: si la dejás vacía, la actual queda como lectura inicial (sin consumo)"
+                        placeholder={primeraVez ? "Inicial" : undefined}
+                        title={
+                          primeraVez
+                            ? "Primera lectura de este medidor: si la dejás vacía, la actual queda como lectura inicial (sin consumo)"
+                            : undefined
+                        }
                         aria-label={`Lectura anterior del medidor ${fila.numero}`}
                         className="h-11 w-full text-base tabular md:text-base @5xl:text-right"
                         value={est.anterior}
