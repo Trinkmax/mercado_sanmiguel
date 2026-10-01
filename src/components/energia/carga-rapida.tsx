@@ -95,12 +95,9 @@ export function CargaRapida({
   const total = filas.length;
   const pct = total > 0 ? Math.round((cargadas / total) * 100) : 0;
 
-  function enfocarFila(fila: FilaMedidor, est: EstadoFila) {
-    const anteriorEditable = fila.anteriorConocida === null;
-    const input =
-      anteriorEditable && est.anterior === ""
-        ? inputsAnterior.current.get(fila.id)
-        : inputsActual.current.get(fila.id);
+  // Siempre a la actual: en la primera lectura de un medidor la anterior es opcional.
+  function enfocarFila(fila: FilaMedidor) {
+    const input = inputsActual.current.get(fila.id);
     input?.focus();
     input?.select();
   }
@@ -108,7 +105,7 @@ export function CargaRapida({
   // Al entrar, el foco va directo al primer medidor sin lectura.
   useEffect(() => {
     const primera = filas.find((f) => estado[f.id]?.modo === "pendiente");
-    if (primera) enfocarFila(primera, estado[primera.id]);
+    if (primera) enfocarFila(primera);
     // Solo al montar: después el foco lo maneja cada guardado.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -153,14 +150,16 @@ export function CargaRapida({
     if (!est || est.guardando) return;
     const anteriorEditable = fila.anteriorConocida === null;
 
+    const actual = est.actual === "" ? null : Number(est.actual);
+    // Primera vez sin anterior: lo que se tipea es la lectura inicial (0 kWh, no se cobra
+    // consumo); el mes siguiente se descuenta desde acá.
     const anterior = anteriorEditable
       ? est.anterior === ""
-        ? null
+        ? actual
         : Number(est.anterior)
       : est.modo === "corrigiendo" && est.valores
         ? est.valores.anterior
         : fila.anteriorConocida;
-    const actual = est.actual === "" ? null : Number(est.actual);
 
     const marcarError = (mensaje: string) =>
       setEstado((prev) => ({
@@ -168,14 +167,7 @@ export function CargaRapida({
         [fila.id]: { ...prev[fila.id], error: mensaje },
       }));
 
-    if (anterior === null) {
-      marcarError(
-        "Poné la lectura anterior: es la primera vez que se carga este medidor."
-      );
-      inputsAnterior.current.get(fila.id)?.focus();
-      return;
-    }
-    if (actual === null) {
+    if (actual === null || anterior === null) {
       marcarError("Poné la lectura actual del medidor.");
       inputsActual.current.get(fila.id)?.focus();
       return;
@@ -226,10 +218,7 @@ export function CargaRapida({
     const siguiente = filas.find(
       (f, i) => i > desde && estado[f.id]?.modo === "pendiente"
     );
-    if (siguiente) {
-      const estadoSiguiente = estado[siguiente.id];
-      requestAnimationFrame(() => enfocarFila(siguiente, estadoSiguiente));
-    }
+    if (siguiente) requestAnimationFrame(() => enfocarFila(siguiente));
   }
 
   return (
@@ -289,17 +278,17 @@ export function CargaRapida({
               const anteriorEditable = fila.anteriorConocida === null;
 
               // Cálculo en vivo mientras se tipea (gris hasta guardar)
+              const actualNum =
+                editando && est.actual !== "" ? Number(est.actual) : null;
               const anteriorNum = editando
                 ? anteriorEditable
                   ? est.anterior === ""
-                    ? null
+                    ? actualNum
                     : Number(est.anterior)
                   : est.modo === "corrigiendo" && est.valores
                     ? est.valores.anterior
                     : fila.anteriorConocida
                 : null;
-              const actualNum =
-                editando && est.actual !== "" ? Number(est.actual) : null;
               const kwhVivo =
                 anteriorNum !== null && actualNum !== null && actualNum >= anteriorNum
                   ? actualNum - anteriorNum
@@ -378,7 +367,8 @@ export function CargaRapida({
                         }}
                         inputMode="numeric"
                         autoComplete="off"
-                        placeholder="Primera vez"
+                        placeholder="Inicial"
+                        title="Primera lectura de este medidor: si la dejás vacía, la actual queda como lectura inicial (sin consumo)"
                         aria-label={`Lectura anterior del medidor ${fila.numero}`}
                         className="h-11 w-full text-base tabular md:text-base @5xl:text-right"
                         value={est.anterior}
