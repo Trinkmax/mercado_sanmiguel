@@ -104,15 +104,15 @@ function pasoBuscar(rol: Rol): Paso {
     accion: "tocar",
     titulo: "Buscá al cliente",
     texto: jefe
-      ? "Escribí el nombre, el apodo o el número de carpeta: la lista se achica mientras escribís. Probalo ahora si querés, no se guarda nada."
-      : "Escribí el nombre, el apodo o el número de puesto: la lista se achica mientras escribís. Probalo ahora si querés, no se guarda nada.",
+      ? "Escribí el nombre, el apodo, el número de carpeta o el DNI: la lista se achica mientras escribís. Probalo ahora si querés, no se guarda nada."
+      : "Escribí el nombre, el apodo, el número de puesto o el DNI: la lista se achica mientras escribís. Probalo ahora si querés, no se guarda nada.",
     consejo: jefe
       ? "Si es un ambulante nuevo, tocá «Nuevo ambulante», arriba: lo cargás y le cobrás enseguida."
       : "El número de la izquierda de cada fila es el de su carpeta: también sirve para buscar.",
     sinAncla: {
       texto: jefe
-        ? "Cuando haya quinteros y ambulantes cargados, arriba de la lista está el buscador. Escribís el nombre, el apodo o el número de carpeta y la lista se achica."
-        : "Cuando haya clientes cargados, arriba de la lista está el buscador. Escribís el nombre, el apodo o el número de puesto y la lista se achica.",
+        ? "Cuando haya quinteros y ambulantes cargados, arriba de la lista está el buscador. Escribís el nombre, el apodo, el número de carpeta o el DNI y la lista se achica."
+        : "Cuando haya clientes cargados, arriba de la lista está el buscador. Escribís el nombre, el apodo, el número de puesto o el DNI y la lista se achica.",
       pantalla,
     },
   };

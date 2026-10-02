@@ -113,9 +113,10 @@ export function FormCliente({
   cuotasQuintero?: number;
   /** Edición: lo mensual que factura hoy (qué deja de facturarse al cambiar de categoría). */
   conceptosActivos?: ConceptoActivo[];
-  /** Edición: sus lugares en el plano ("Puestos 58 · 60"), que se liberan si pasa a ambulante. */
+  /** Edición: sus lugares en el plano ("Puestos 58 · 60 · Cochera 3"). */
   lugaresTexto?: string | null;
-  /** Edición: los mismos sin las cocheras, que conserva si pasa a empleado (0040). */
+  /** Edición: los mismos sin las cocheras: es lo que se libera si pasa a empleado (0040) o a
+   * ambulante (0045), que conservan sus cocheras. */
   lugaresSinCocheraTexto?: string | null;
   /** Edición: N° de sus medidores activos, que se desactivan si pasa a ambulante. */
   medidoresActivos?: string[];
@@ -442,12 +443,10 @@ export function FormCliente({
             <AvisoCambioCategoria
               categoria={categoria}
               dejaDe={conceptosActivos.filter((c) => !conceptoSigueConCategoria(c.segmento, categoria))}
-              lugaresTexto={
-                categoria === "ambulante"
-                  ? lugaresTexto
-                  : categoria === "empleado"
-                    ? lugaresSinCocheraTexto
-                    : null
+              lugaresTexto={categoria === "ambulante" || categoria === "empleado" ? lugaresSinCocheraTexto : null}
+              // Si sin las cocheras queda otro texto, es que tiene cocheras (y las conserva).
+              conservaCocheras={
+                (categoria === "ambulante" || categoria === "empleado") && lugaresTexto !== lugaresSinCocheraTexto
               }
               medidores={categoria === "ambulante" || categoria === "empleado" ? medidoresActivos : []}
               directo={directo}
@@ -634,7 +633,8 @@ export function FormCliente({
             en cada cobro.
           </p>
           <p className="text-sm text-muted-foreground">
-            No tiene acceso al portal ni paga en cuotas.
+            No tiene acceso al portal ni paga en cuotas. Si alquila cochera, la cochera se cobra
+            aparte, por mes: se agrega después en su carpeta.
           </p>
         </div>
       ) : null}
@@ -810,21 +810,26 @@ function articulo(categoria: CategoriaCliente): string {
 }
 
 /**
- * Qué pasa al cambiar de categoría (lo aplica private.aplicar_cambio, 0024): lo mensual que
- * la categoría nueva no tiene deja de facturarse y, si pasa a ambulante, se liberan sus
- * lugares del plano y se desactivan sus medidores (abono y consumo de luz). Se dice ANTES
- * de guardar, con los códigos, para que no sorprenda.
+ * Qué pasa al cambiar de categoría (lo aplica private.aplicar_cambio, 0024/0040/0045): lo
+ * mensual que la categoría nueva no tiene deja de facturarse y, si pasa a ambulante o a
+ * empleado, se liberan sus lugares del plano (menos las cocheras, que conserva) y se
+ * desactivan sus medidores (abono y consumo de luz). Se dice ANTES de guardar, con los
+ * códigos, para que no sorprenda.
  */
 function AvisoCambioCategoria({
   categoria,
   dejaDe,
   lugaresTexto,
+  conservaCocheras,
   medidores,
   directo,
 }: {
   categoria: CategoriaCliente;
   dejaDe: ConceptoActivo[];
+  /** Lo que se libera en el plano. */
   lugaresTexto: string | null;
+  /** Tiene cocheras en el plano y se quedan con él. */
+  conservaCocheras: boolean;
   medidores: string[];
   directo: boolean;
 }) {
@@ -838,7 +843,7 @@ function AvisoCambioCategoria({
       <div className="min-w-0 space-y-1">
         <p className="font-medium">
           {categoria === "ambulante"
-            ? "Como ambulante se le cobra por día: no paga por mes, ni en cuotas, y no es socio."
+            ? "Como ambulante se le cobra por día: no paga en cuotas y no es socio. Por mes solo se le cobra la cochera, si alquila."
             : categoria === "empleado"
               ? "Como empleado solo se le cobra la cochera: no es socio, no tiene acceso al portal y paga en un pago por mes."
               : `Pasa a ser ${LABEL_CATEGORIA[categoria].toLowerCase()}.`}
@@ -850,10 +855,12 @@ function AvisoCambioCategoria({
         ) : null}
         {lugaresTexto ? (
           <p className="break-words">
-            {categoria === "empleado"
+            {conservaCocheras
               ? `Se libera en el plano: ${lugaresTexto} (conserva sus cocheras).`
               : `También se libera en el plano: ${lugaresTexto}.`}
           </p>
+        ) : conservaCocheras ? (
+          <p className="break-words">Conserva sus cocheras en el plano.</p>
         ) : null}
         {medidores.length > 0 ? (
           <p className="break-words">

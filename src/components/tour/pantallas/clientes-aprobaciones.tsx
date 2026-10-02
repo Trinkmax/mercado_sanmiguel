@@ -288,7 +288,7 @@ function ListaEjemplo({ jefe = false, resaltar }: { jefe?: boolean; resaltar: "f
     <div className="space-y-1.5">
       <BuscadorEjemplo
         texto={buscado ? (jefe ? "tucu" : "colo") : undefined}
-        placeholder={jefe ? "Nombre, apodo o N° de carpeta" : "Nombre, apodo o N° de puesto"}
+        placeholder={jefe ? "Nombre, apodo, carpeta o DNI" : "Nombre, apodo, puesto o DNI"}
       />
       <p className={cn(CHICO, "font-medium text-muted-foreground")}>¿Qué tiene?</p>
       <div className="flex flex-wrap gap-1">

@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { ChevronRight, Search, SearchX } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { SELLO_NIVEL_DEUDA, type NivelDeuda } from "@/lib/format";
+import { coincideDni, dniBuscado, SELLO_NIVEL_DEUDA, textoDniCliente, type NivelDeuda } from "@/lib/format";
 import {
   LABEL_CATEGORIA_PLURAL,
   textoAvance,
@@ -26,6 +26,8 @@ export type FilaCliente = {
   nombre: string;
   apodo: string | null;
   categoria: CategoriaCliente;
+  /** DNI/CUIT tal como se cargó: con 6 números o más tipeados, también se busca por él. */
+  cuit: string | null;
   /** Lo que debe hoy, neto del saldo a favor. */
   deuda: number;
   nivel: NivelDeuda;
@@ -46,13 +48,15 @@ function normalizar(texto: string): string {
     .replace(/[̀-ͯ]/g, "");
 }
 
-function coincide(c: FilaCliente, q: string): boolean {
+/** `dni`: los números de lo tipeado si son 6 o más (dniBuscado), para buscar por DNI/CUIT. */
+function coincide(c: FilaCliente, q: string, dni: string | null): boolean {
   if (q === "") return true;
   return (
     normalizar(c.nombre).includes(q) ||
     (c.apodo ? normalizar(c.apodo).includes(q) : false) ||
     String(c.codigo) === q ||
-    c.numerosPlano.some((n) => normalizar(n) === q)
+    c.numerosPlano.some((n) => normalizar(n) === q) ||
+    coincideDni(c.cuit, dni)
   );
 }
 
@@ -93,13 +97,14 @@ export function BuscadorClientes({
   }
 
   const q = normalizar(busqueda.trim());
+  const dni = dniBuscado(busqueda);
   const deLaCategoria = clientes.filter((c) => c.categoria === categoria);
-  const filtrados = deLaCategoria.filter((c) => coincide(c, q));
+  const filtrados = deLaCategoria.filter((c) => coincide(c, q, dni));
   const enOtras =
     q !== "" && filtrados.length === 0
       ? categorias
           .filter((cat) => cat !== categoria)
-          .map((cat) => ({ cat, n: clientes.filter((c) => c.categoria === cat && coincide(c, q)).length }))
+          .map((cat) => ({ cat, n: clientes.filter((c) => c.categoria === cat && coincide(c, q, dni)).length }))
           .filter((x) => x.n > 0)
       : [];
 
@@ -158,8 +163,8 @@ export function BuscadorClientes({
             q === ""
               ? undefined
               : buscaPuestos
-                ? "Probá con otra parte del nombre, el apodo, el N° de puesto o el N° de carpeta (el número de la izquierda de cada fila)."
-                : "Probá con otra parte del nombre, el apodo o el N° de carpeta (el número de la izquierda de cada fila)."
+                ? "Probá con otra parte del nombre, el apodo, el N° de puesto, el N° de carpeta (el número de la izquierda de cada fila) o el DNI."
+                : "Probá con otra parte del nombre, el apodo, el N° de carpeta (el número de la izquierda de cada fila) o el DNI."
           }
         >
           {enOtras.map((x) => (
@@ -197,6 +202,12 @@ export function BuscadorClientes({
                         {c.nombre}
                       </span>
                       <DetalleFila c={c} hoy={hoy} />
+                      {/* Encontrado por DNI/CUIT: se muestra, así se ve que es la persona buscada. */}
+                      {c.cuit && coincideDni(c.cuit, dni) ? (
+                        <span className="block text-sm text-muted-foreground tabular">
+                          {textoDniCliente(c.cuit, c.categoria)}
+                        </span>
+                      ) : null}
                     </span>
                     {muestraDeuda ? (
                       <span className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 sm:mt-0 sm:shrink-0 sm:flex-col sm:items-end sm:gap-1">

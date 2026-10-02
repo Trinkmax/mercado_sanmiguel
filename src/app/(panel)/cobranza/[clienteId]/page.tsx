@@ -367,6 +367,14 @@ export default async function CobrarClientePage({
   );
 
   const tieneOtrosCargos = todos.some((c) => c.origen !== "diario");
+  // El ambulante que alquila cochera la paga por mes (EXPC, 0045): se cobra en "Otras deudas".
+  const debeCochera = items.some((c) => c.codigo === "EXPC");
+  const debeOtras = items.some((c) => c.codigo !== "EXPC");
+  const detalleOtras = debeCochera
+    ? debeOtras
+      ? "La cochera y otros cargos: tocá para cobrarlos"
+      : "La cochera: tocá para cobrarla"
+    : undefined;
   const pagados = todos
     .filter((c) => c.origen === "diario" && c.desde && c.hasta)
     .map((c) => ({ desde: c.desde as string, hasta: c.hasta as string }));
@@ -411,7 +419,7 @@ export default async function CobrarClientePage({
             irACaja={irACaja}
           />
           {tieneOtrosCargos || deudaTotal > 0 ? (
-            <OtrasDeudas deuda={deudaNeta}>
+            <OtrasDeudas deuda={deudaNeta} detalle={detalleOtras}>
               {deudaDelDia}
               {formCobro}
             </OtrasDeudas>

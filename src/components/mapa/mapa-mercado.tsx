@@ -616,15 +616,15 @@ export function MapaMercado({
     (ids: string[], clienteId: string | null) => {
       const afectados = ids.flatMap((id) => espacioPorId.get(id) ?? []);
       if (afectados.length === 0) return;
-      // El empleado solo alquila cochera (0041 también lo frena en la base).
-      if (
-        clienteId &&
-        clientePorId.get(clienteId)?.categoria === "empleado" &&
-        afectados.some((e) => e.tipo !== "cochera")
-      ) {
-        toast.error("A un empleado solo se le asigna cochera. Si también tiene otro lugar, cargalo como puestero.", {
-          id: "mapa-asignacion",
-        });
+      // El empleado y el ambulante solo alquilan cochera (0041 y 0045 también lo frenan en la base).
+      const categoria = clienteId ? clientePorId.get(clienteId)?.categoria : undefined;
+      if ((categoria === "empleado" || categoria === "ambulante") && afectados.some((e) => e.tipo !== "cochera")) {
+        toast.error(
+          categoria === "empleado"
+            ? "A un empleado solo se le asigna cochera. Si también tiene otro lugar, cargalo como puestero."
+            : "A un ambulante solo se le asigna cochera. Si también tiene otro lugar, cargalo como puestero.",
+          { id: "mapa-asignacion" }
+        );
         return;
       }
       const pasos = agruparPorDuenio(afectados).map(([actual, lista]) => ({

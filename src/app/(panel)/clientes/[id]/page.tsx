@@ -384,8 +384,9 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
       : supabase.from("espacios").select("id, tipo, numero, medio, propio, x, y").eq("cliente_id", id),
     veEnergia ? datosEnergia(supabase, id) : Promise.resolve(null),
     // El Jefe y un quintero: qué lugares del plano y qué medidores tiene, para avisarle
-    // ANTES de pasarlo a ambulante qué se libera y qué deja de facturarse (el Jefe no lee
-    // espacios: lugares_del_cliente; los medidores de sus clientes sí los lee).
+    // ANTES de pasarlo a ambulante qué se libera (todo menos las cocheras) y qué deja de
+    // facturarse (el Jefe no lee espacios: lugares_del_cliente; los medidores de sus
+    // clientes sí los lee).
     esJefe && categoria === "quintero"
       ? supabase.rpc("lugares_del_cliente", { p_cliente: id })
       : Promise.resolve({ data: [] as { id: string; tipo: string; numero: string; medio: boolean; propio: boolean }[] }),
@@ -549,7 +550,8 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
       .reduce((acc, i) => acc + Number(i.cantidad), 0);
   const sinLugar = { cocheras: facturado("EXPC"), galpones: facturado("EXPG") };
   const quinteroActivo = categoria === "quintero" && cliente.activo;
-  // "Puestos 58 · 60" (o "Puesto 58 · Local 3"): se liberan al darlo de baja o pasarlo a ambulante.
+  // "Puestos 58 · 60" (o "Puesto 58 · Local 3"): se liberan al darlo de baja (y, menos las
+  // cocheras, al pasarlo a ambulante o a empleado).
   const lugaresAviso: { tipo: TipoEspacio; numero: string | null; medio: boolean; propio: boolean }[] = esJefe
     ? (lugaresJefeRes.data ?? []).filter((e): e is typeof e & { tipo: TipoEspacio } => TIPOS_LUGAR.includes(e.tipo))
     : espaciosPlano;
@@ -560,7 +562,7 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
         ? etiquetaEspacios(lugares)
         : lugares.map((e) => etiquetaEspacio(e)).join(" · ");
   const lugaresTexto = textoLugares(lugaresAviso);
-  // Si pasa a empleado conserva sus cocheras (0040): solo se libera lo demás.
+  // Si pasa a empleado (0040) o a ambulante (0045) conserva sus cocheras: solo se libera lo demás.
   const lugaresSinCocheraTexto = textoLugares(lugaresAviso.filter((e) => e.tipo !== "cochera"));
   // Medidores activos: al pasar a ambulante se desactivan (0024), y el formulario lo avisa.
   const medidoresActivos = esJefe
@@ -724,7 +726,7 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
               titulo="Todavía no tiene cargos"
               descripcion={
                 categoria === "ambulante"
-                  ? "Se le cobra por día: cada cobro deja su cargo y su recibo acá."
+                  ? "Se le cobra por día: cada cobro deja su cargo y su recibo acá. Si alquila cochera, la cochera se factura por mes."
                   : "Se generan solos con la facturación mensual, según lo que paga."
               }
             />

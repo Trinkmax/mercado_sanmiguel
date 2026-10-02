@@ -20,7 +20,7 @@ import {
 import { LABEL_CATEGORIA, type CategoriaCliente } from "@/lib/segmentos";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
@@ -36,6 +36,7 @@ import {
   GRUPOS_CONCEPTO,
   TOAST_ENVIADO_APROBACION,
   aplicaDirectoRol,
+  conceptoAsignablePorRol,
   conceptoSigueConCategoria,
   cuotasDeCategoria,
   grupoDeConcepto,
@@ -93,7 +94,8 @@ function textoCuotasCorto(cuotas: number): string {
 
 /** Pestaña "Qué paga": lo que se le factura cada mes (agrupado, con precio y total) y en
  * cuántas veces lo paga. El Líder aplica directo; Administración y el Jefe proponen y el
- * cambio queda esperando aprobación (se ve arriba en la ficha). */
+ * cambio queda esperando aprobación (se ve arriba en la ficha). El ambulante paga por día
+ * y, si alquila cochera, la cochera por mes (0045): sin cuotas. */
 export function ConceptosCliente({
   clienteId,
   categoria,
@@ -116,11 +118,17 @@ export function ConceptosCliente({
   rol: Rol;
 }) {
   const directo = aplicaDirectoRol(rol);
+  // Lo que el rol no puede tocar (la cochera de un ambulante, para el Jefe) se ve sin controles.
+  const soloLectura = (i: ItemConcepto) => !conceptoAsignablePorRol({ tipo: "recurrente", segmento: i.segmento }, rol);
 
   if (categoria === "ambulante") {
-    // Un ambulante no paga por mes. Si le quedó algo mensual prendido (de antes de pasar a
-    // ambulante), se muestra para apagarlo: no queda escondido.
-    const prendidos = items.filter((i) => i.activo);
+    // El ambulante paga por día; por mes, solo la cochera si alquila una (0045). Si le quedó
+    // otra cosa mensual prendida (de antes de pasar a ambulante), se muestra aparte para
+    // apagarla: no queda escondida.
+    const cocheras = items.filter((i) => conceptoSigueConCategoria(i.segmento, categoria));
+    const prendidos = items.filter((i) => i.activo && !conceptoSigueConCategoria(i.segmento, categoria));
+    const alquila = cocheras.some((i) => i.activo) || altasPendientes.length > 0;
+    const puedeCambiar = disponibles.length > 0 || cocheras.some((i) => !soloLectura(i));
     return (
       <div className="space-y-6">
         <Card className="text-base" data-tour="clientes-paga-ambulante">
@@ -129,12 +137,44 @@ export function ConceptosCliente({
             <div className="min-w-0 flex-1 space-y-1">
               <p className="text-lg font-semibold">Se le cobra por día, cuando viene</p>
               <p className="text-muted-foreground">
-                No hay un precio fijo: cuánto paga por día se pone en cada cobro. No tiene cargos
-                mensuales ni paga en cuotas.
+                No hay un precio fijo: cuánto paga por día se pone en cada cobro. No paga en cuotas.{" "}
+                {alquila
+                  ? "Aparte, la cochera se le cobra por mes."
+                  : "Si alquila cochera, la cochera se cobra aparte, por mes."}
               </p>
             </div>
           </CardContent>
         </Card>
+        {cocheras.length > 0 || altasPendientes.length > 0 || disponibles.length > 0 ? (
+          <Card className="text-base">
+            <CardHeader>
+              <CardTitle className="text-lg">La cochera, por mes</CardTitle>
+              <CardDescription>
+                Aparte de lo que paga por día.
+                {puedeCambiar
+                  ? ` Los cambios rigen desde la próxima facturación mensual${directo ? "." : ": cada uno lo aprueba el Líder de Procesos."}`
+                  : ""}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              {cocheras.length === 0 && altasPendientes.length === 0 ? (
+                <p className="text-muted-foreground">
+                  No alquila cochera. Si alquila una, agregala abajo: se le cobra por mes.
+                </p>
+              ) : (
+                <ListaConceptos
+                  items={cocheras}
+                  altasPendientes={altasPendientes}
+                  clienteId={clienteId}
+                  categoria={categoria}
+                  directo={directo}
+                  soloLectura={soloLectura}
+                />
+              )}
+              <AgregarConcepto clienteId={clienteId} disponibles={disponibles} directo={directo} />
+            </CardContent>
+          </Card>
+        ) : null}
         {prendidos.length > 0 ? (
           <Card className="text-base">
             <CardHeader>
@@ -144,8 +184,10 @@ export function ConceptosCliente({
               <Alert className="border-parcial/40 bg-parcial-suave">
                 <TriangleAlert className="size-4 text-parcial" />
                 <AlertDescription className="text-base text-foreground">
-                  Como ambulante no se le factura por mes. Apagalo para que quede en orden
-                  {directo ? "." : ": el Líder de Procesos lo aprueba."}
+                  Como ambulante, por mes solo se le factura la cochera.{" "}
+                  {prendidos.every(soloLectura)
+                    ? "Avisale al Líder de Procesos para que lo apague."
+                    : `Apagalo para que quede en orden${directo ? "." : ": el Líder de Procesos lo aprueba."}`}
                 </AlertDescription>
               </Alert>
               <div className="divide-y rounded-lg border">
@@ -156,6 +198,7 @@ export function ConceptosCliente({
                     clienteId={clienteId}
                     directo={directo}
                     soloApagar
+                    soloLectura={soloLectura(item)}
                   />
                 ))}
               </div>
@@ -166,12 +209,7 @@ export function ConceptosCliente({
     );
   }
 
-  const activos = items.filter((i) => i.activo);
-  const { total, conBeneficio } = totalMensual(activos);
-  const grupos = GRUPOS_CONCEPTO.map((g) => ({
-    ...g,
-    items: items.filter((i) => grupoDeConcepto(i) === g.valor),
-  })).filter((g) => g.items.length > 0);
+  const { total } = totalMensual(items.filter((i) => i.activo));
 
   return (
     <div className="space-y-6">
@@ -201,61 +239,14 @@ export function ConceptosCliente({
               }
             />
           ) : (
-            <>
-              <div className="divide-y rounded-lg border">
-                {grupos.map((g) => (
-                  <div key={g.valor} className="divide-y">
-                    {grupos.length > 1 ? (
-                      <p className="bg-muted/40 px-3 py-1.5 text-xs font-semibold text-muted-foreground">
-                        {g.label}
-                      </p>
-                    ) : null}
-                    {g.items.map((item) => (
-                      <FilaConcepto
-                        key={`${item.id}-${item.cantidad}-${item.porcentaje}-${item.activo}-${item.pendiente ? 1 : 0}`}
-                        item={item}
-                        clienteId={clienteId}
-                        directo={directo}
-                        noCorresponde={
-                          conceptoSigueConCategoria(item.segmento, categoria)
-                            ? null
-                            : LABEL_CATEGORIA[categoria].toLowerCase()
-                        }
-                      />
-                    ))}
-                  </div>
-                ))}
-                {altasPendientes.map((a) => (
-                  <div key={a.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 bg-parcial-suave/40 px-3 py-3">
-                    <div className="flex min-w-0 flex-1 basis-full items-start gap-3 sm:basis-0">
-                      <Codigo codigo={a.codigo} className="mt-0.5" />
-                      <div className="min-w-0 flex-1">
-                        <p className="font-medium break-words">{a.nombre}</p>
-                        <p className="text-sm text-muted-foreground">
-                          Pedido: {formatFraccion(a.cantidad)}
-                          {a.porcentaje !== 100 ? ` al ${formatPorcentaje(a.porcentaje)}` : ""} ·{" "}
-                          <Money monto={montoConcepto(a.cantidad, a.precio, a.porcentaje)} /> por mes. Se suma cuando
-                          lo apruebe el Líder de Procesos.
-                        </p>
-                      </div>
-                    </div>
-                    <Sello estado="pendiente_aprobacion" />
-                  </div>
-                ))}
-              </div>
-              <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 rounded-lg bg-muted/50 px-4 py-3">
-                <span className="text-sm text-muted-foreground">Por mes</span>
-                <span className="text-right">
-                  <Money monto={total} className="text-xl font-bold" />
-                  {conBeneficio < total ? (
-                    <span className="block text-sm text-muted-foreground">
-                      con beneficio en término{" "}
-                      <Money monto={conBeneficio} className="font-semibold text-pagado" />
-                    </span>
-                  ) : null}
-                </span>
-              </div>
-            </>
+            <ListaConceptos
+              items={items}
+              altasPendientes={altasPendientes}
+              clienteId={clienteId}
+              categoria={categoria}
+              directo={directo}
+              soloLectura={soloLectura}
+            />
           )}
 
           <AgregarConcepto clienteId={clienteId} disponibles={disponibles} directo={directo} />
@@ -274,6 +265,89 @@ export function ConceptosCliente({
         />
       ) : null}
     </div>
+  );
+}
+
+/** Lo que paga por mes, agrupado, con las altas que esperan al Líder y el total del mes. */
+function ListaConceptos({
+  items,
+  altasPendientes,
+  clienteId,
+  categoria,
+  directo,
+  soloLectura,
+}: {
+  items: ItemConcepto[];
+  altasPendientes: AltaPendiente[];
+  clienteId: string;
+  categoria: CategoriaCliente;
+  directo: boolean;
+  /** El rol no puede tocar esta fila (se ve sin controles). */
+  soloLectura: (item: ItemConcepto) => boolean;
+}) {
+  const { total, conBeneficio } = totalMensual(items.filter((i) => i.activo));
+  const grupos = GRUPOS_CONCEPTO.map((g) => ({
+    ...g,
+    items: items.filter((i) => grupoDeConcepto(i) === g.valor),
+  })).filter((g) => g.items.length > 0);
+
+  return (
+    <>
+      <div className="divide-y rounded-lg border">
+        {grupos.map((g) => (
+          <div key={g.valor} className="divide-y">
+            {grupos.length > 1 ? (
+              <p className="bg-muted/40 px-3 py-1.5 text-xs font-semibold text-muted-foreground">
+                {g.label}
+              </p>
+            ) : null}
+            {g.items.map((item) => (
+              <FilaConcepto
+                key={`${item.id}-${item.cantidad}-${item.porcentaje}-${item.activo}-${item.pendiente ? 1 : 0}`}
+                item={item}
+                clienteId={clienteId}
+                directo={directo}
+                noCorresponde={
+                  conceptoSigueConCategoria(item.segmento, categoria)
+                    ? null
+                    : LABEL_CATEGORIA[categoria].toLowerCase()
+                }
+                soloLectura={soloLectura(item)}
+              />
+            ))}
+          </div>
+        ))}
+        {altasPendientes.map((a) => (
+          <div key={a.id} className="flex flex-wrap items-center gap-x-4 gap-y-2 bg-parcial-suave/40 px-3 py-3">
+            <div className="flex min-w-0 flex-1 basis-full items-start gap-3 sm:basis-0">
+              <Codigo codigo={a.codigo} className="mt-0.5" />
+              <div className="min-w-0 flex-1">
+                <p className="font-medium break-words">{a.nombre}</p>
+                <p className="text-sm text-muted-foreground">
+                  Pedido: {formatFraccion(a.cantidad)}
+                  {a.porcentaje !== 100 ? ` al ${formatPorcentaje(a.porcentaje)}` : ""} ·{" "}
+                  <Money monto={montoConcepto(a.cantidad, a.precio, a.porcentaje)} /> por mes. Se suma cuando
+                  lo apruebe el Líder de Procesos.
+                </p>
+              </div>
+            </div>
+            <Sello estado="pendiente_aprobacion" />
+          </div>
+        ))}
+      </div>
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 rounded-lg bg-muted/50 px-4 py-3">
+        <span className="text-sm text-muted-foreground">Por mes</span>
+        <span className="text-right">
+          <Money monto={total} className="text-xl font-bold" />
+          {conBeneficio < total ? (
+            <span className="block text-sm text-muted-foreground">
+              con beneficio en término{" "}
+              <Money monto={conBeneficio} className="font-semibold text-pagado" />
+            </span>
+          ) : null}
+        </span>
+      </div>
+    </>
   );
 }
 
@@ -547,6 +621,7 @@ function FilaConcepto({
   directo,
   soloApagar = false,
   noCorresponde = null,
+  soloLectura = false,
 }: {
   item: ItemConcepto;
   clienteId: string;
@@ -556,6 +631,8 @@ function FilaConcepto({
   /** La categoría del cliente ("quintero") cuando el concepto ya no le corresponde (quedó
    * de antes de cambiar de categoría): solo se puede apagar, no prender ni cambiar. */
   noCorresponde?: string | null;
+  /** El rol no lo puede cambiar (la cochera de un ambulante, para el Jefe): se ve sin controles. */
+  soloLectura?: boolean;
 }) {
   const router = useRouter();
   const [pendiente, startTransition] = useTransition();
@@ -652,13 +729,16 @@ function FilaConcepto({
           {noCorresponde ? (
             <p className="text-sm font-medium text-parcial">
               No le corresponde a un {noCorresponde}
-              {activo ? ": apagalo para dejar de facturarlo." : "."}
+              {activo && !soloLectura ? ": apagalo para dejar de facturarlo." : "."}
             </p>
+          ) : null}
+          {soloLectura ? (
+            <p className="text-sm text-muted-foreground">Lo cambia el Líder de Procesos.</p>
           ) : null}
         </div>
       </div>
       {item.pendiente ? <Sello estado="pendiente_aprobacion" /> : null}
-      <div className={cn("flex flex-wrap items-center gap-2", (soloApagar || noCorresponde) && "hidden")}>
+      <div className={cn("flex flex-wrap items-center gap-2", (soloApagar || noCorresponde || soloLectura) && "hidden")}>
         <StepperCantidad
           id={`cantidad-${item.id}`}
           valor={cantidad}
@@ -706,7 +786,7 @@ function FilaConcepto({
         <Switch
           id={`activo-${item.id}`}
           checked={activo}
-          disabled={pendiente || esperando || (Boolean(noCorresponde) && !activo)}
+          disabled={pendiente || esperando || soloLectura || (Boolean(noCorresponde) && !activo)}
           onCheckedChange={cambiarActivo}
           aria-label={`${item.nombre}: facturar o no`}
         />

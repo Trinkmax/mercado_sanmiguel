@@ -29,11 +29,11 @@ export function EditarClienteDialog({
   rol: Rol;
   /** Lo mensual que factura hoy (para avisar qué deja de facturarse si cambia de categoría). */
   conceptosActivos?: ConceptoActivo[];
-  /** Sus lugares del plano (se liberan si pasa a ambulante). */
+  /** Sus lugares del plano. */
   lugaresTexto?: string | null;
-  /** Los mismos sin las cocheras (las conserva si pasa a empleado). */
+  /** Los mismos sin las cocheras: se liberan si pasa a ambulante o a empleado (las cocheras las conserva). */
   lugaresSinCocheraTexto?: string | null;
-  /** N° de sus medidores activos (se desactivan si pasa a ambulante). */
+  /** N° de sus medidores activos (se desactivan si pasa a ambulante o a empleado). */
   medidoresActivos?: string[];
 }) {
   const [abierto, setAbierto] = useState(false);

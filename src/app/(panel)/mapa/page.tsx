@@ -53,16 +53,17 @@ export default async function MapaPage({ searchParams }: Props) {
   const vista: VistaMapa = perfil.rol === "guardia" ? "porteria" : "completa";
   const puedeEditar = perfil.rol === "admin" || perfil.rol === "lider";
 
-  // Clientes: el Jefe solo sus quinteros (los ambulantes no tienen lugar en el plano);
-  // Administración y el Líder, todos menos ambulantes. El Jefe NO trae datos de puesteros.
+  // Clientes: el Jefe solo sus quinteros (sus quintas) y NO trae datos de puesteros.
+  // Administración y el Líder, todos: también los ambulantes, que pueden alquilar cochera
+  // (0045): así se les asigna una y la cochera dice quién la tiene. Cobrar, la ficha y la
+  // carpeta siguen siendo de quien gestiona cada categoría (categoriasGestion).
   let consultaClientes = supabase
     .from("clientes")
     .select("id, codigo, nombre, apodo, categoria, cliente_conceptos(id, cantidad, activo, conceptos(id, codigo))")
     .eq("org_id", perfil.org_id)
     .eq("activo", true)
     .order("codigo");
-  consultaClientes =
-    vista === "porteria" ? consultaClientes.eq("categoria", "quintero") : consultaClientes.neq("categoria", "ambulante");
+  if (vista === "porteria") consultaClientes = consultaClientes.eq("categoria", "quintero");
 
   const [plano, clientesRes, deudaRes, avanceRes, conceptosRes, pendientesRes, avisosRes, quintasRes] = await Promise.all([
     cargarPlano(supabase, perfil, { conClientes: vista === "completa" }),

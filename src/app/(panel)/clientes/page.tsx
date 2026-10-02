@@ -2,7 +2,14 @@ import Link from "next/link";
 import { ChevronRight, ClipboardClock, UserPlus, Users } from "lucide-react";
 import { aplicaDirecto, requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { nivelDeuda, SELLO_NIVEL_DEUDA, type NivelDeuda } from "@/lib/format";
+import {
+  coincideDni,
+  dniBuscado,
+  nivelDeuda,
+  SELLO_NIVEL_DEUDA,
+  textoDniCliente,
+  type NivelDeuda,
+} from "@/lib/format";
 import { categoriasDeRol, LABEL_SEGMENTO, type CategoriaCliente, type Segmento } from "@/lib/segmentos";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -102,9 +109,11 @@ export default async function ClientesPage({ searchParams }: Props) {
   // Un segmento que el rol no tiene como chip (link viejo) no filtra.
   const seg = filtros.seg && chipsSegmento.includes(filtros.seg) ? filtros.seg : null;
   const estado = filtros.estado;
+  // Con 6 números o más, la búsqueda también mira el DNI/CUIT ("30.111.222", "20-12345678-3").
+  const dni = dniBuscado(texto);
 
   const supabase = await createClient();
-  const [clientesRes, itemsRes, espaciosRes, deudaRes, saldoRes, cambiosRes] = await Promise.all([
+  const [clientesRes, itemsRes, espaciosRes, deudaRes, saldoRes, cambiosRes, cuitRes] = await Promise.all([
     // Administración lee todos (joins de caja y circulares) pero acá ve solo puesteros (G8).
     supabase
       .from("v_clientes_segmentos")
@@ -128,7 +137,16 @@ export default async function ClientesPage({ searchParams }: Props) {
       .from("cambios_pendientes")
       .select("cliente_id, entidad, accion, resumen, datos")
       .eq("estado", "pendiente"),
+    // El DNI/CUIT no está en la vista de segmentos: se trae solo si se busca por DNI.
+    dni
+      ? supabase
+          .from("clientes")
+          .select("id, cuit")
+          .in("categoria", categorias)
+          .not("cuit", "is", null)
+      : Promise.resolve({ data: [] as { id: string; cuit: string | null }[] }),
   ]);
+  const cuitPorCliente = new Map((cuitRes.data ?? []).map((c) => [c.id, c.cuit]));
 
   const deudaPorCliente = new Map(
     (deudaRes.data ?? []).flatMap((d) =>
@@ -185,6 +203,7 @@ export default async function ClientesPage({ searchParams }: Props) {
         segmentos: (c.segmentos ?? []) as string[],
         etiquetas: etiquetasCliente(espacios, conceptosPorCliente.get(c.cliente_id) ?? []),
         numerosPlano: espacios.map((e) => e.numero ?? ""),
+        cuit: cuitPorCliente.get(c.cliente_id) ?? null,
         deuda,
         vencida: d?.vencida ?? 0,
         saldoFavor,
@@ -195,10 +214,12 @@ export default async function ClientesPage({ searchParams }: Props) {
   });
   type Fila = (typeof todos)[number];
 
-  // Búsqueda: número = carpeta o N° de puesto; texto = nombre o apodo (sin tildes).
+  // Búsqueda: número = carpeta o N° de puesto; texto = nombre o apodo (sin tildes). Con 6
+  // números o más, también el DNI/CUIT (sin puntos ni guiones).
   const buscado = normalizarBusqueda(texto);
   const coincideTexto = (c: Fila) => {
     if (!buscado) return true;
+    if (coincideDni(c.cuit, dni)) return true;
     if (/^\d+$/.test(buscado))
       return String(c.codigo) === buscado || c.numerosPlano.includes(buscado);
     return (
@@ -287,11 +308,11 @@ export default async function ClientesPage({ searchParams }: Props) {
             seg={seg}
             estado={estado}
             // Corto para que entre entero en un celular de 360 px; el aria-label dice todo.
-            placeholder={esJefe ? "Nombre, apodo o N° de carpeta" : "Nombre, apodo o N° de puesto"}
+            placeholder={esJefe ? "Nombre, apodo, carpeta o DNI" : "Nombre, apodo, puesto o DNI"}
             etiqueta={
               esJefe
-                ? "Buscá al quintero o ambulante por nombre, apodo o N° de carpeta"
-                : "Buscá por nombre, apodo, N° de puesto o N° de carpeta"
+                ? "Buscá al quintero o ambulante por nombre, apodo, N° de carpeta o DNI"
+                : "Buscá por nombre, apodo, N° de puesto, N° de carpeta o DNI/CUIT"
             }
           />
 
@@ -351,8 +372,8 @@ export default async function ClientesPage({ searchParams }: Props) {
           descripcion={
             texto
               ? esJefe
-                ? "Probá con otra parte del nombre, el apodo o el N° de carpeta (el número azul de cada fila)."
-                : "Probá con otra parte del nombre, el apodo, el N° de puesto o el N° de carpeta (el número azul de cada fila)."
+                ? "Probá con otra parte del nombre, el apodo, el N° de carpeta (el número azul de cada fila) o el DNI."
+                : "Probá con otra parte del nombre, el apodo, el N° de puesto, el N° de carpeta (el número azul de cada fila) o el DNI/CUIT."
               : "Nadie cumple con los filtros elegidos. Tocá un chip marcado para sacarlo."
           }
         >
@@ -392,7 +413,12 @@ export default async function ClientesPage({ searchParams }: Props) {
           <Card className="gap-0 divide-y overflow-hidden py-0">
             {clientes.map((c) => {
               const tieneSaldo = c.saldoFavor > 0.009;
-              const detalle = [c.apodo ? `“${c.apodo}”` : null, ...c.etiquetas]
+              // Encontrado por DNI/CUIT: se muestra, así se ve que es la persona buscada.
+              const detalle = [
+                c.apodo ? `“${c.apodo}”` : null,
+                ...c.etiquetas,
+                c.cuit && coincideDni(c.cuit, dni) ? textoDniCliente(c.cuit, c.categoria) : null,
+              ]
                 .filter(Boolean)
                 .join(" · ");
               return (

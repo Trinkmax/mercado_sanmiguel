@@ -8,15 +8,19 @@ import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
 
 /**
- * Ambulante con otras deudas (p. ej. una multa): el cobro por días es la acción principal y
- * el cobro de lo demás queda plegado. Se monta siempre (aunque ya no deba) para que la
- * confirmación del cobro de adentro no se pierda cuando la página se actualiza.
+ * Ambulante con otras deudas (la cochera del mes, si alquila una, o una multa): el cobro por
+ * días es la acción principal y el cobro de lo demás queda plegado. Se monta siempre (aunque
+ * ya no deba) para que la confirmación del cobro de adentro no se pierda cuando la página se
+ * actualiza.
  */
 export function OtrasDeudas({
   deuda,
+  detalle = "Multas u otros cargos: tocá para cobrarlos",
   children,
 }: {
   deuda: number;
+  /** Qué debe, en una línea (cuando debe): "La cochera: tocá para cobrarla". */
+  detalle?: string;
   children: React.ReactNode;
 }) {
   const [abierto, setAbierto] = useState(false);
@@ -33,7 +37,7 @@ export function OtrasDeudas({
               {debe ? "Tiene otras deudas" : "Otras deudas"}
             </span>
             <span className="block text-sm text-muted-foreground">
-              {debe ? "Multas u otros cargos: tocá para cobrarlos" : "No debe nada más"}
+              {debe ? detalle : "No debe nada más"}
             </span>
           </span>
           {debe ? (

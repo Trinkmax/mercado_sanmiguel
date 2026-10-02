@@ -400,8 +400,8 @@ export function PanelDetalle({
   if (espacio) {
     const titulo =
       espacio.tipo === "bar" ? "Bar" : `${NOMBRE_TIPO[espacio.tipo]} ${numeroVisible(espacio)}`;
-    // Ocupado por alguien que no está en el mapa (dado de baja o ambulante): no hay ficha
-    // que mostrar; se ofrece dejarlo libre.
+    // Ocupado por alguien que no está en el mapa (dado de baja): no hay ficha que mostrar;
+    // se ofrece dejarlo libre. Los ambulantes sí están (pueden alquilar cochera, 0045).
     const huerfano = espacio.clienteId !== null;
     const sumarA = puedeEditar && onSumar && !huerfano ? vecinos : [];
     return (
@@ -423,7 +423,7 @@ export function PanelDetalle({
           <p className="font-display text-lg font-bold">{titulo}</p>
           <p className="text-sm text-muted-foreground">
             {huerfano
-              ? "Figura a nombre de un cliente que ya no está en el mapa (dado de baja o ambulante). Si quedó libre, liberalo."
+              ? "Figura a nombre de un cliente que ya no está en el mapa (dado de baja). Si quedó libre, liberalo."
               : espacio.nota
                 ? `${espacio.nota}. Sin ${ocupante(espacio.tipo)} asignado en el sistema.`
                 : `Sin ${ocupante(espacio.tipo)} asignado en el sistema.`}

@@ -328,6 +328,26 @@ export function formatDni(dni: string | null | undefined): string {
   return d.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 }
 
+/**
+ * Buscadores de clientes: lo tipeado leído como DNI/CUIT. Quedan solo los números, y solo
+ * si son 6 o más ("30.111.222" → "30111222"); con menos es un N° de carpeta o de puesto.
+ */
+export function dniBuscado(texto: string): string | null {
+  const d = normalizarDni(texto);
+  return d.length >= 6 ? d : null;
+}
+
+/** ¿El DNI/CUIT guardado del cliente (con o sin puntos y guiones) contiene esos números?
+ * Así "12345678" encuentra el CUIT 20-12345678-3. */
+export function coincideDni(cuit: string | null | undefined, buscado: string | null): boolean {
+  return Boolean(buscado && cuit && normalizarDni(cuit).includes(buscado));
+}
+
+/** "DNI 30.111.222" (el ambulante guarda el DNI) o "CUIT/DNI 20-12345678-3", como la ficha. */
+export function textoDniCliente(cuit: string, categoria: string): string {
+  return categoria === "ambulante" ? `DNI ${formatDni(cuit)}` : `CUIT/DNI ${cuit}`;
+}
+
 /** CUIT: solo dígitos ("20-12345678-3" → "20123456783"). */
 export function limpiarCuit(v: string): string {
   return v.replace(/\D/g, "");

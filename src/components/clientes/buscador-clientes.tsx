@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 
 /**
- * Búsqueda por nombre, apodo, N° de carpeta o N° de puesto.
+ * Búsqueda por nombre, apodo, N° de carpeta, N° de puesto o DNI/CUIT (con 6 números o más).
  * Actualiza la URL (?q=…) con debounce y conserva los chips activos (?seg, ?estado):
  * el listado filtra en el servidor.
  */
@@ -15,8 +15,8 @@ export function BuscadorClientes({
   inicial,
   seg,
   estado,
-  placeholder = "Nombre, apodo o N° de puesto",
-  etiqueta = "Buscá por nombre, apodo, N° de puesto o N° de carpeta",
+  placeholder = "Nombre, apodo, puesto o DNI",
+  etiqueta = "Buscá por nombre, apodo, N° de puesto, N° de carpeta o DNI/CUIT",
 }: {
   inicial: string;
   seg?: string | null;

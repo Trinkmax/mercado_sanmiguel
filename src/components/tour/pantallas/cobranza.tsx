@@ -179,7 +179,7 @@ function ListaEjemplo({ quien, resaltar }: { quien: Quien; resaltar: ParteLista 
       {categorias ? marcar("categorias", <CategoriasEjemplo opciones={categorias} />) : null}
       {marcar(
         "buscador",
-        <BuscadorEjemplo texto={jefe ? "Nombre, apodo o N° de carpeta" : "Nombre, apodo o N° de puesto"} />
+        <BuscadorEjemplo texto={jefe ? "Nombre, apodo, N° de carpeta o DNI" : "Nombre, apodo, N° de puesto o DNI"} />
       )}
       {resaltar === "fila" ? (
         <>

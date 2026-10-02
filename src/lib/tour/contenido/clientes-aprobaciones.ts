@@ -64,15 +64,15 @@ function pasoBuscar(jefe: boolean, lider: boolean): Paso {
     ancla: "clientes-buscar",
     titulo: "Buscá o filtrá",
     texto: jefe
-      ? "Arriba escribís el nombre, el apodo o el N° de carpeta, y la lista se achica sola. Abajo filtrás con un toque: «Quinteros», «Ambulantes», «Con deuda»."
+      ? "Arriba escribís el nombre, el apodo, el N° de carpeta o el DNI, y la lista se achica sola. Abajo filtrás con un toque: «Quinteros», «Ambulantes», «Con deuda»."
       : lider
-        ? "Arriba escribís el nombre, el apodo o el N° de puesto, y la lista se achica sola. Abajo filtrás con un toque: «Galpones», «Quinteros», «Con deuda», «Vencidos»."
-        : "Arriba escribís el nombre, el apodo o el N° de puesto, y la lista se achica sola. Abajo filtrás con un toque: «Galpones», «Socios», «Con deuda», «Vencidos».",
+        ? "Arriba escribís el nombre, el apodo, el N° de puesto o el DNI, y la lista se achica sola. Abajo filtrás con un toque: «Galpones», «Quinteros», «Con deuda», «Vencidos»."
+        : "Arriba escribís el nombre, el apodo, el N° de puesto o el DNI, y la lista se achica sola. Abajo filtrás con un toque: «Galpones», «Socios», «Con deuda», «Vencidos».",
     consejo: "El número de cada botón dice cuántos hay. Para ver a todos de nuevo, tocá «Sacar filtros».",
     sinAncla: {
       texto: jefe
-        ? "Cuando haya quinteros y ambulantes, arriba de la lista aparece el buscador: escribís el nombre, el apodo o el N° de carpeta. Abajo, botones para filtrar con un toque."
-        : "Cuando haya clientes, arriba de la lista aparece el buscador: escribís el nombre, el apodo o el N° de puesto. Abajo, botones para filtrar con un toque.",
+        ? "Cuando haya quinteros y ambulantes, arriba de la lista aparece el buscador: escribís el nombre, el apodo, el N° de carpeta o el DNI. Abajo, botones para filtrar con un toque."
+        : "Cuando haya clientes, arriba de la lista aparece el buscador: escribís el nombre, el apodo, el N° de puesto o el DNI. Abajo, botones para filtrar con un toque.",
       pantalla: jefe ? PantallaBuscarJefe : PantallaBuscarClientes,
       consejo: undefined,
     },
@@ -169,7 +169,7 @@ function pasoQuePaga(lider: boolean): Paso {
       "clientes-paga-ambulante": {
         titulo: "El ambulante paga por día",
         texto:
-          "Al ambulante se le cobra por día, cuando viene: no tiene nada mensual. En un puestero o un quintero, acá ves cada cosa que paga con su cantidad y su porcentaje.",
+          "Al ambulante se le cobra por día, cuando viene; si alquila cochera, la cochera se cobra por mes. En un puestero o un quintero, acá ves cada cosa que paga con su cantidad y su porcentaje.",
       },
       "clientes-solapa-paga": {
         texto: `Lo que se le factura cada mes está en «Qué paga»: tocá la pestaña para verlo. ${explicacion}`,
@@ -216,7 +216,7 @@ const pasoQuePagaJefe: Paso = {
     "clientes-paga-ambulante": {
       titulo: "El ambulante paga por día",
       texto:
-        "Al ambulante se le cobra por día, cuando viene: no tiene nada mensual ni cuotas. Lo mensual es del quintero: su quinta y en cuántos pagos la cobra.",
+        "Al ambulante se le cobra por día, cuando viene, y no paga en cuotas; si alquila cochera, la cochera se cobra por mes. Lo mensual del quintero es su quinta y en cuántos pagos la cobra.",
     },
     "clientes-conceptos": {
       texto:

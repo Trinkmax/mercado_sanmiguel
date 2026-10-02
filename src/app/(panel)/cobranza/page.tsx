@@ -45,7 +45,7 @@ export default async function CobranzaPage({ searchParams }: { searchParams: Sp 
     await Promise.all([
       supabase
         .from("clientes")
-        .select("id, codigo, nombre, apodo, categoria")
+        .select("id, codigo, nombre, apodo, categoria, cuit")
         .eq("activo", true)
         .in("categoria", categorias)
         .order("codigo"),
@@ -184,6 +184,7 @@ export default async function CobranzaPage({ searchParams }: { searchParams: Sp 
       nombre: c.nombre,
       apodo: c.apodo,
       categoria: c.categoria as CategoriaCliente,
+      cuit: c.cuit,
       deuda: Math.max(Math.round((d.deuda - saldo) * 100) / 100, 0),
       nivel: nivelDeuda({ deuda: d.deuda, deudaVencida: d.vencida, saldoFavor: saldo }),
       numerosPlano: espacios.flatMap((e) => (e.numero ? [e.numero] : [])),
@@ -295,11 +296,11 @@ export default async function CobranzaPage({ searchParams }: { searchParams: Sp 
           categoriaInicial={categoriaInicial}
           hoy={hoy}
           // Corto para que entre entero en un celular de 360 px; el aria-label dice todo.
-          placeholder={esJefe ? "Nombre, apodo o N° de carpeta" : "Nombre, apodo o N° de puesto"}
+          placeholder={esJefe ? "Nombre, apodo, N° de carpeta o DNI" : "Nombre, apodo, N° de puesto o DNI"}
           etiqueta={
             esJefe
-              ? "Buscá al quintero o ambulante por nombre, apodo o N° de carpeta"
-              : "Buscá por nombre, apodo, N° de puesto o N° de carpeta"
+              ? "Buscá al quintero o ambulante por nombre, apodo, N° de carpeta o DNI"
+              : "Buscá por nombre, apodo, N° de puesto, N° de carpeta o DNI/CUIT"
           }
           buscaPuestos={cobraPuesteros}
         />
