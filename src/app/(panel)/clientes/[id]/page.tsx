@@ -387,7 +387,8 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
     // ANTES de pasarlo a ambulante qué se libera (todo menos las cocheras) y qué deja de
     // facturarse (el Jefe no lee espacios: lugares_del_cliente; los medidores de sus
     // clientes sí los lee).
-    esJefe && categoria === "quintero"
+    // 0045: el ambulante también puede tener cochera (se libera si se lo da de baja).
+    esJefe && (categoria === "quintero" || categoria === "ambulante")
       ? supabase.rpc("lugares_del_cliente", { p_cliente: id })
       : Promise.resolve({ data: [] as { id: string; tipo: string; numero: string; medio: boolean; propio: boolean }[] }),
     esJefe && categoria === "quintero"

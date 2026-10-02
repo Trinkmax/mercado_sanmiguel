@@ -394,30 +394,34 @@ export default async function CobrarClientePage({
 
       <AvisoCajaCerrada caja={cajaHoy} rol={perfil.rol} />
 
-      {esAmbulante && !ambRes.data?.activo ? (
-        <Alert variant="destructive">
-          <AlertTitle className="text-base font-semibold">Los cobros a ambulantes están desactivados</AlertTitle>
-          <AlertDescription className="text-base">
-            El concepto «Ambulantes» (AMB) está apagado en Configuración → Precios. Pedile al Líder de Procesos
-            que lo prenda para poder cobrar.
-          </AlertDescription>
-        </Alert>
-      ) : esAmbulante ? (
+      {esAmbulante ? (
         <>
-          <CobroAmbulante
-            clienteId={cliente.id}
-            clienteNombre={cliente.nombre}
-            precioAnterior={
-              Number(ultimoPrecioRes.data?.precio_unitario ?? 0) > 0
-                ? Number(ultimoPrecioRes.data?.precio_unitario)
-                : null
-            }
-            pagados={pagados}
-            ultimoPagoHasta={ultimoPagoRes.data?.pago_hasta ?? null}
-            volverA={volverA}
-            cajaCerrada={cajaCerrada}
-            irACaja={irACaja}
-          />
+          {/* AMB apagado frena solo el cobro por día: la cochera del mes y otras deudas se
+              siguen cobrando abajo (registrar_cobro no depende de AMB). */}
+          {!ambRes.data?.activo ? (
+            <Alert variant="destructive">
+              <AlertTitle className="text-base font-semibold">Los cobros por día están desactivados</AlertTitle>
+              <AlertDescription className="text-base">
+                El concepto «Ambulantes» (AMB) está apagado en Configuración → Precios. Pedile al Líder de
+                Procesos que lo prenda para poder cobrar por día.
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <CobroAmbulante
+              clienteId={cliente.id}
+              clienteNombre={cliente.nombre}
+              precioAnterior={
+                Number(ultimoPrecioRes.data?.precio_unitario ?? 0) > 0
+                  ? Number(ultimoPrecioRes.data?.precio_unitario)
+                  : null
+              }
+              pagados={pagados}
+              ultimoPagoHasta={ultimoPagoRes.data?.pago_hasta ?? null}
+              volverA={volverA}
+              cajaCerrada={cajaCerrada}
+              irACaja={irACaja}
+            />
+          )}
           {tieneOtrosCargos || deudaTotal > 0 ? (
             <OtrasDeudas deuda={deudaNeta} detalle={detalleOtras}>
               {deudaDelDia}
