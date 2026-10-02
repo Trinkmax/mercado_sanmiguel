@@ -74,12 +74,14 @@ const UNIDAD: Partial<Record<TipoConcepto, string>> = {
   abono_energia: "por mes",
 };
 
-/** Conceptos cuyo monto no sale del precio del catálogo. */
-const SIN_PRECIO: TipoConcepto[] = ["deuda", "eventual", "canon_diario"];
+/** Conceptos cuyo monto no sale del precio del catálogo. El ambulante (diario) paga lo que
+ * se pone en cada cobro: no tiene precio fijo. */
+const SIN_PRECIO: TipoConcepto[] = ["deuda", "eventual", "canon_diario", "diario"];
 const TEXTO_SIN_PRECIO: Partial<Record<TipoConcepto, string>> = {
   deuda: "Según cada deuda",
   eventual: "Según cada registro",
   canon_diario: "Por tarifa",
+  diario: "El precio por día se pone en cada cobro",
 };
 
 type Grupo = { clave: string; titulo: string; ayuda: string };
@@ -161,10 +163,12 @@ export function TablaConceptos({
 
   function guardar() {
     if (!editando) return;
+    // Sin precio de catálogo (deudas, eventuales, el ambulante): no se manda ninguno.
+    const sinPrecioCatalogo = SIN_PRECIO.includes(editando.tipo);
     startGuardar(async () => {
       const res = await llamarAccion(() => actualizarConcepto({
         id: editando.id,
-        precio: Number(precio || 0),
+        precio: sinPrecioCatalogo ? undefined : Number(precio || 0),
         descuento_pronto_pago: porcentajeNumero(descuento),
         orden_imputacion: Number(orden || 0),
       }));

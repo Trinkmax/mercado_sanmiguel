@@ -26,10 +26,12 @@ const SEGMENTOS_PORTERIA = ["quinteros", "ambulantes"];
 
 const conceptoSchema = z.object({
   id: z.uuid("No encontramos el concepto."),
+  /** Sin precio: conceptos que no lo toman del catálogo (deudas, eventuales, el ambulante). */
   precio: z
     .number("Poné el precio en números.")
     .min(0, "El precio no puede ser negativo.")
-    .max(1_000_000_000, "Ese precio es demasiado grande. Revisalo."),
+    .max(1_000_000_000, "Ese precio es demasiado grande. Revisalo.")
+    .optional(),
   descuento_pronto_pago: z
     .number("Poné el beneficio en números.")
     .min(0, "El beneficio va de 0 a 100.")
@@ -47,7 +49,8 @@ const conceptoSchema = z.object({
  * Cambia precio / beneficio por pago en término / orden de un concepto.
  * Pasa por `solicitar_cambio` con SOLO las claves que cambian: el Líder aplica
  * en el acto; los demás roles dejan el cambio esperando aprobación.
- * - Jefe de Portería: solo el PRECIO de Quintas (EXPQ) y Ambulantes (AMB).
+ * - Jefe de Portería: solo el PRECIO de Quintas (EXPQ). El ambulante (AMB, tipo diario) no
+ *   tiene precio fijo: cuánto paga por día se pone en cada cobro (cobrar_diario, p_precio).
  * - Administración: todo menos Quintas, Ambulantes y el bono camioneros (BC).
  * La base (solicitar_cambio) repite estas reglas: esto es para avisar claro y antes.
  */
@@ -76,9 +79,15 @@ export async function actualizarConcepto(
       "El bono camioneros se cobra por tarifa: cambialo en Configuración → Tarifas de transporte."
     );
   }
+  // El ambulante no tiene precio fijo: cuánto paga por día se pone en cada cobro.
+  const precioEnCadaCobro = actual.tipo === "diario";
+  if (precioEnCadaCobro) delete nuevos.precio;
   if (perfil.rol === "guardia") {
+    if (precioEnCadaCobro) {
+      return fallo("El ambulante no tiene un precio fijo: cuánto paga por día se pone en cada cobro.");
+    }
     if (!esDePorteria) {
-      return fallo("Desde Portería solo se cambia el precio de Quintas y Ambulantes.");
+      return fallo("Desde Portería solo se cambia el precio de la quinta.");
     }
     // El Jefe cambia solo el precio: el beneficio y el orden no se tocan.
     delete nuevos.descuento_pronto_pago;
@@ -91,7 +100,7 @@ export async function actualizarConcepto(
   // Solo lo que cambia (así el diff que ve el Líder es el real).
   const datos: Record<string, number> = {};
   const partes: { campo: string; valor: string }[] = [];
-  if (Number(actual.precio) !== nuevos.precio) {
+  if (nuevos.precio !== undefined && Number(actual.precio) !== nuevos.precio) {
     datos.precio = nuevos.precio;
     partes.push({ campo: "precio", valor: formatARS(nuevos.precio) });
   }

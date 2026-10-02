@@ -391,7 +391,7 @@ const PASO_QUE_ES: Record<"lider" | "admin" | "guardia", Paso> = {
     ancla: "encabezado",
     titulo: "Tus ajustes",
     texto:
-      "Acá decidís en cuántos pagos se cobra la quinta, proponés los precios de quintas y ambulantes y creás los usuarios de Portería.",
+      "Acá decidís en cuántos pagos se cobra la quinta, proponés su precio y creás los usuarios de Portería. Al ambulante no hay precio fijo: se pone en cada cobro.",
   },
 };
 
@@ -515,10 +515,10 @@ function pasosLider(): Paso[] {
       texto:
         "Cada vehículo que entra, con su precio. Si cambiás uno, tocás «Guardar cambios» y rige desde el próximo cobro: los cobros ya hechos no cambian. Con «Agregar tarifa» sumás otro.",
       consejo:
-        "La quinta y el ambulante están en «Quintas y ambulantes»: los propone el Jefe de Portería y, si los cambiás vos, se aplican en el acto.",
+        "El precio de la quinta está en «Quintas y ambulantes»: lo propone el Jefe de Portería y, si lo cambiás vos, se aplica en el acto. El ambulante no tiene precio fijo: cuánto paga por día se pone en cada cobro.",
       sinAncla: {
         texto:
-          "En «Tarifas de transporte» está cada vehículo con su precio; al lado, en «Quintas y ambulantes», la quinta y el ambulante. Así se ve:",
+          "En «Tarifas de transporte» está cada vehículo con su precio; al lado, en «Quintas y ambulantes», el precio de la quinta (el del ambulante se pone en cada cobro). Así se ve:",
         pantalla: PantallaTarifasPorteria,
       },
     },
@@ -674,14 +674,14 @@ function pasosJefe(): Paso[] {
       id: "precios",
       ruta: pestana("quintas"),
       ancla: "config-precios-porteria",
-      titulo: "Precios de quinta y ambulante",
+      titulo: "El precio de la quinta",
       texto:
-        "La quinta va por mes y el ambulante por día. Para cambiar uno tocás «Cambiar el precio», escribís el nuevo y tocás «Enviar al Líder».",
+        "La quinta va por mes: para cambiarlo tocás «Cambiar el precio», escribís el nuevo y tocás «Enviar al Líder». El ambulante no tiene precio fijo: cuánto paga por día lo escribís en cada cobro.",
       pantalla: PantallaPrecioQuinta,
       consejo: "Hasta que el Líder no lo apruebe, se sigue cobrando el precio de ahora.",
       sinAncla: {
         texto:
-          "En «Quintas y ambulantes» están el precio de la quinta por mes y el del ambulante por día. Con «Cambiar el precio» proponés uno nuevo:",
+          "En «Quintas y ambulantes» está el precio de la quinta por mes; con «Cambiar el precio» proponés uno nuevo. El del ambulante no se fija acá: se pone en cada cobro. Así se ve:",
       },
     },
     {

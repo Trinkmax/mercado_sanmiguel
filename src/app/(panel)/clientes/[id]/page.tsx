@@ -496,7 +496,6 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
       descuentoPp: Number(c.descuento_pronto_pago),
       segmento: c.segmento,
     }));
-  const precioAmbulante = catalogo.find((c) => c.codigo === "AMB")?.precio ?? null;
 
   // URLs firmadas (1 h) para ver los documentos.
   const documentos = documentosRes.data ?? [];
@@ -842,7 +841,6 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
             altasPendientes={altasPendientes}
             cuotasPedidas={cuotasPedidas}
             rol={perfil.rol}
-            precioAmbulante={precioAmbulante !== null ? Number(precioAmbulante) : null}
           />
         </TabsContent>
 

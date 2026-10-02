@@ -42,7 +42,6 @@ export default async function NuevoClientePage({ searchParams }: Props) {
       descuentoPp: Number(c.descuento_pronto_pago),
       segmento: c.segmento,
     }));
-  const amb = (conceptosRes.data ?? []).find((c) => c.codigo === "AMB");
   const esJefe = perfil.rol === "guardia";
   const soloAmbulante = categoriaInicial === "ambulante" && categoriasRol.includes("ambulante");
 
@@ -83,7 +82,6 @@ export default async function NuevoClientePage({ searchParams }: Props) {
           rol={perfil.rol}
           categoriaInicial={categoriaInicial}
           cuotasQuintero={configRes.data?.cuotas_default_quintero ?? 4}
-          precioAmbulante={amb ? Number(amb.precio) : null}
         />
       </div>
     </div>

@@ -148,9 +148,17 @@ const cobroSchema = z.object({
   permitirSaldoFavor: z.boolean().optional(),
 });
 
+/** Precio por día del ambulante: lo pone quien cobra en cada cobro (no hay precio fijo). */
+const precioDia = z
+  .number({ error: "Poné cuánto paga por día" })
+  .positive("Poné cuánto paga por día")
+  .max(10_000_000, "El precio por día es demasiado alto")
+  .refine((n) => Math.abs(n * 100 - Math.round(n * 100)) < 1e-6, "El precio por día admite hasta 2 decimales");
+
 const diarioSchema = z.object({
   clienteId: idCliente,
   loteId: idLote,
+  precio: precioDia,
   dias: z
     .number()
     .int("Elegí entre 1 y 31 días")
@@ -381,8 +389,9 @@ export async function registrarCobro(
 
 /**
  * Cobro por días del ambulante (G5, G6): crea el cargo AMB de esos días y lo paga en el acto.
- * Jefe de Portería (caja de portería) y Líder (caja de administración, §1.3). Mismo formato
- * de líneas que registrarCobro, solo efectivo o transferencia; la suma tiene que ser exacta.
+ * El precio por día no es fijo: lo pone quien cobra (`precio`, p_precio); el total es días ×
+ * precio. Jefe de Portería (caja de portería) y Líder (caja de administración, §1.3). Mismo
+ * formato de líneas que registrarCobro, solo efectivo o transferencia; la suma tiene que ser exacta.
  */
 export async function cobrarDiario(
   formData: FormData
@@ -391,7 +400,7 @@ export async function cobrarDiario(
 
   const parsed = diarioSchema.safeParse(leerDatos(formData));
   if (!parsed.success) return fallo(parsed.error.issues[0].message);
-  const { clienteId, loteId, dias, desde, lineas, notas: nota } = parsed.data;
+  const { clienteId, loteId, precio, dias, desde, lineas, notas: nota } = parsed.data;
 
   if (new Set(lineas.map((l) => l.id)).size !== lineas.length) {
     return fallo("No pudimos leer el cobro. Probá de nuevo.");
@@ -416,6 +425,7 @@ export async function cobrarDiario(
     p_desde: desde,
     p_notas: nota || undefined,
     p_lote: loteId,
+    p_precio: precio,
   });
   if (error) {
     await borrarComprobantes(supabase, subidos);

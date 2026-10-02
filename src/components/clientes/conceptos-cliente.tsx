@@ -12,7 +12,6 @@ import {
 } from "@/lib/actions/clientes";
 import {
   CUOTAS_TODOS_LOS_DIAS,
-  formatARS,
   formatFraccion,
   formatPorcentaje,
   montoConcepto,
@@ -104,7 +103,6 @@ export function ConceptosCliente({
   altasPendientes = [],
   cuotasPedidas = null,
   rol,
-  precioAmbulante,
 }: {
   clienteId: string;
   categoria: CategoriaCliente;
@@ -116,7 +114,6 @@ export function ConceptosCliente({
   /** "En cuántas veces paga" pedido y esperando al Líder. */
   cuotasPedidas?: number | null;
   rol: Rol;
-  precioAmbulante?: number | null;
 }) {
   const directo = aplicaDirectoRol(rol);
 
@@ -132,10 +129,8 @@ export function ConceptosCliente({
             <div className="min-w-0 flex-1 space-y-1">
               <p className="text-lg font-semibold">Se le cobra por día, cuando viene</p>
               <p className="text-muted-foreground">
-                {precioAmbulante
-                  ? `${formatARS(precioAmbulante)} por día (concepto AMB).`
-                  : "El precio por día sale del concepto AMB."}{" "}
-                No tiene cargos mensuales ni paga en cuotas.
+                No hay un precio fijo: cuánto paga por día se pone en cada cobro. No tiene cargos
+                mensuales ni paga en cuotas.
               </p>
             </div>
           </CardContent>

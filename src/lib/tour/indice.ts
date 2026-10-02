@@ -235,7 +235,7 @@ export const CAPITULOS_META: Record<IdCapitulo, MetaCapitulo> = {
     titulo: (rol) => nombreNav("/configuracion", rol, "Configuración"),
     resumen: (rol) =>
       rol === "guardia"
-        ? "Los usuarios de Portería y los precios de quintas y ambulantes"
+        ? "Los usuarios de Portería y el precio de la quinta"
         : rol === "admin"
           ? "Los precios, el vencimiento y el acceso de los clientes al portal"
           : "Usuarios, precios, beneficios y ajustes del sistema",

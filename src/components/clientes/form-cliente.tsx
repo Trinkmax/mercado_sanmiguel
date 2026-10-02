@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import type { Rol } from "@/lib/auth";
 import { crearCliente, editarCliente } from "@/lib/actions/clientes";
-import { formatARS, formatDni, normalizarDni } from "@/lib/format";
+import { formatDni, normalizarDni } from "@/lib/format";
 import { categoriasDeRol, LABEL_CATEGORIA, type CategoriaCliente } from "@/lib/segmentos";
 import { cn, uuidV4 } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -96,7 +96,6 @@ export function FormCliente({
   rol,
   categoriaInicial,
   cuotasQuintero = 4,
-  precioAmbulante,
   conceptosActivos = [],
   lugaresTexto = null,
   lugaresSinCocheraTexto = null,
@@ -112,8 +111,6 @@ export function FormCliente({
   categoriaInicial?: CategoriaCliente;
   /** configuracion.cuotas_default_quintero (G7). */
   cuotasQuintero?: number;
-  /** Precio por día del concepto AMB, para contarlo en el alta del ambulante. */
-  precioAmbulante?: number | null;
   /** Edición: lo mensual que factura hoy (qué deja de facturarse al cambiar de categoría). */
   conceptosActivos?: ConceptoActivo[];
   /** Edición: sus lugares en el plano ("Puestos 58 · 60"), que se liberan si pasa a ambulante. */
@@ -633,8 +630,8 @@ export function FormCliente({
       {esAlta && esAmbulante ? (
         <div className="rounded-lg bg-muted/50 px-4 py-3 text-base">
           <p className="font-medium">
-            Se le cobra por día cuando viene
-            {precioAmbulante ? `: ${formatARS(precioAmbulante)} por día` : ""}.
+            Se le cobra por día cuando viene. No hay un precio fijo: cuánto paga por día se pone
+            en cada cobro.
           </p>
           <p className="text-sm text-muted-foreground">
             No tiene acceso al portal ni paga en cuotas.

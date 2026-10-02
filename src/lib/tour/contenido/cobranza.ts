@@ -29,7 +29,8 @@ import {
 //  - Administración: solo puesteros (sin pestañas), busca por N° de puesto, cobra con
 //    efectivo, transferencia o cheque, y todo va a su "Caja del día".
 //  - Jefe de Portería: quinteros y ambulantes (pestañas), "Hoy cobraste" siempre a la vista,
-//    sin cheque; al ambulante le cobra por día. Todo va a su "Caja de portería".
+//    sin cheque; al ambulante le cobra por día (sin precio fijo: escribe cuánto paga por día
+//    en cada cobro). Todo va a su "Caja de portería".
 //  - Líder: los tres grupos, con cheque; lo que cobra va a la caja de Administración.
 // La cuenta del cliente es /cobranza/[id]: se entra por la primera fila de la lista. Con la
 // lista vacía (producción arranca así) cada paso de la cuenta se cuenta con su dibujo.
@@ -204,7 +205,14 @@ function pasoMonto(rol: Rol): Paso {
     id: "monto",
     ...CUENTA,
     ancla: lider
-      ? ["cobranza-plan", "cobranza-monto", "cobranza-dias", "cobranza-al-dia", "cobranza-saldo-cubre"]
+      ? [
+          "cobranza-plan",
+          "cobranza-monto",
+          "cobranza-precio-dia",
+          "cobranza-dias",
+          "cobranza-al-dia",
+          "cobranza-saldo-cubre",
+        ]
       : ["cobranza-plan", "cobranza-monto", "cobranza-al-dia", "cobranza-saldo-cubre"],
     titulo: "¿Cuánto te pagan?",
     texto:
@@ -217,11 +225,18 @@ function pasoMonto(rol: Rol): Paso {
           "Este cliente paga el mes en cuotas: acá ves cuántas cubrió y cuánto le falta. «Cobrar la cuota» te completa el monto; si te da otra cifra, la escribís abajo, en «¿Cuánto te pagan?».",
         consejo: "Si debe meses anteriores, la plata va primero a lo más viejo.",
       },
+      "cobranza-precio-dia": {
+        titulo: "¿Cuánto paga por día?",
+        texto:
+          "Al ambulante se le cobra por día y no hay un precio fijo: primero escribís cuánto te paga por día. Después elegís cuántos días («Solo hoy», «2 días», «3 días» o «Semana (7)»). Abajo, en verde, los días que ya pagó.",
+        consejo:
+          "El total se calcula solo: los días por el precio que escribiste. Si paga lo mismo que la otra vez, tocá «Como la última vez».",
+      },
       "cobranza-dias": {
         titulo: "¿Cuántos días paga?",
         texto:
-          "Al ambulante se le cobra por día. Elegís «Solo hoy», «2 días», «3 días» o «Semana (7)», o sumás y restás con los botones redondos. Abajo, en verde, los días que ya pagó.",
-        consejo: "El total se calcula solo: los días por el precio del día.",
+          "Al ambulante se le cobra por día. Arriba escribís cuánto te paga por día y acá elegís «Solo hoy», «2 días», «3 días» o «Semana (7)», o sumás y restás con los botones redondos. Abajo, en verde, los días que ya pagó.",
+        consejo: "El total se calcula solo: los días por el precio que escribiste.",
       },
       ...SIN_NADA_QUE_COBRAR,
     },
@@ -258,19 +273,40 @@ const pasoCuotasJefe: Paso = {
   },
 };
 
+/** Jefe: el ambulante no tiene precio fijo; primero cuánto paga por día, después los días. */
 const pasoAmbulanteJefe: Paso = {
   id: "ambulante",
   ...CUENTA,
-  ancla: "cobranza-dias",
-  titulo: "Al ambulante, por día",
+  ancla: ["cobranza-precio-dia", "cobranza-dias"],
+  titulo: "Al ambulante, ¿cuánto por día?",
   texto:
-    "Al ambulante se le cobra por día. Elegís «Solo hoy», «2 días», «3 días» o «Semana (7)», o sumás y restás con los botones redondos. Abajo, en verde, los días que ya pagó.",
-  consejo: "El total se calcula solo: los días por el precio del día.",
+    "Al ambulante se le cobra por día y no hay un precio fijo: cada vez escribís cuánto te paga por día. El campo arranca vacío.",
+  consejo: "Si paga lo mismo que la otra vez, tocá «Como la última vez» y se completa solo.",
+  variantes: {
+    "cobranza-dias": {
+      titulo: "Al ambulante, por día",
+      texto:
+        "Al ambulante se le cobra por día. Arriba escribís cuánto te paga por día y acá elegís «Solo hoy», «2 días», «3 días» o «Semana (7)», o sumás y restás con los botones redondos.",
+      consejo: "El total se calcula solo: los días por el precio que escribiste.",
+    },
+  },
   sinAncla: {
     texto:
-      "Al ambulante se le cobra por día: elegís cuántos días paga y el total se calcula solo. Los días en verde ya están pagos. Así se ve:",
+      "Al ambulante se le cobra por día y no hay un precio fijo: escribís cuánto te paga por día, elegís cuántos días y el total se calcula solo. Los días en verde ya están pagos. Así se ve:",
     pantalla: PantallaCobroAmbulante,
   },
+};
+
+/** Jefe: los días del ambulante (si no hay un ambulante en pantalla, ya lo mostró el dibujo). */
+const pasoDiasAmbulanteJefe: Paso = {
+  id: "ambulante-dias",
+  ...CUENTA,
+  ancla: "cobranza-dias",
+  titulo: "¿Cuántos días paga?",
+  texto:
+    "Elegís «Solo hoy», «2 días», «3 días» o «Semana (7)», o sumás y restás con los botones redondos. Abajo, en verde, los días que ya pagó.",
+  consejo: "El total se calcula solo: los días por el precio que escribiste. Por ejemplo, 3 días × $ 8.000 = $ 24.000.",
+  opcional: true,
 };
 
 function pasoMedio(rol: Rol): Paso {
@@ -318,7 +354,8 @@ function pasoRegistrar(rol: Rol): Paso {
     variantes: {
       "cobranza-cobrar-dias": {
         texto:
-          "El botón dice cuántos días y cuánto: «Cobrar 1 día — $ 15.000». Al tocarlo, esos días quedan pagos y sale el recibo. Después tocás «Ver recibo» y se lo imprimís.",
+          "Con el precio por día escrito, el botón dice cuántos días y cuánto: «Cobrar 3 días — $ 24.000». Al tocarlo, esos días quedan pagos y sale el recibo. Después tocás «Ver recibo» y se lo imprimís.",
+        consejo: "Si te olvidaste de escribir cuánto paga por día, el botón te lo marca y te lleva al campo.",
         pantalla: PantallaCobroRegistradoAmbulante,
       },
     },
@@ -355,6 +392,7 @@ export const COBRAR: ContenidoCapitulo = {
         pasoFila(rol),
         pasoCuotasJefe,
         pasoAmbulanteJefe,
+        pasoDiasAmbulanteJefe,
         pasoMedio(rol),
         pasoRegistrar(rol),
       ];

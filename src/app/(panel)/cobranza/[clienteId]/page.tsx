@@ -10,6 +10,7 @@ import {
   type AvanceMes,
   type CategoriaCliente,
 } from "@/lib/segmentos";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
 import { Codigo } from "@/components/shared/codigo";
@@ -119,7 +120,7 @@ export default async function CobrarClientePage({
   const recibeCheques = !esJefe;
   const conPlan = !esAmbulante && cliente.cuotas_mes > 1;
 
-  const [cargosRes, saldoFavorRes, avanceRes, espaciosRes, proveedoresRes, ambRes, cajaRes, ultimoPagoRes] =
+  const [cargosRes, saldoFavorRes, avanceRes, espaciosRes, proveedoresRes, ultimoPrecioRes, cajaRes, ultimoPagoRes, ambRes] =
     await Promise.all([
       // Los días pagados de un ambulante (un cargo por cobro) crecen sin techo: de esos se traen
       // solo los de los últimos dos meses (la tira y los choques miran ±30 días), así la consulta
@@ -156,12 +157,17 @@ export default async function CobrarClientePage({
             .order("creado_en", { ascending: false })
             .limit(200)
         : Promise.resolve({ data: null }),
+      // El ambulante no tiene precio fijo: quien cobra pone cuánto paga por día. Del último
+      // cobro por días sale el atajo «Como la última vez» (no se precarga solo).
       esAmbulante
         ? supabase
-            .from("conceptos")
-            .select("precio")
-            .eq("codigo", "AMB")
-            .eq("activo", true)
+            .from("cargos")
+            .select("precio_unitario")
+            .eq("cliente_id", clienteId)
+            .eq("origen", "diario")
+            .neq("estado", "anulado")
+            .order("creado_en", { ascending: false })
+            .limit(1)
             .maybeSingle()
         : Promise.resolve({ data: null }),
       // La caja de hoy de quien cobra: si ya está cerrada, se avisa ANTES de cargar el cobro.
@@ -178,6 +184,10 @@ export default async function CobrarClientePage({
             .select("pago_hasta")
             .eq("cliente_id", clienteId)
             .maybeSingle()
+        : Promise.resolve({ data: null }),
+      // Con el concepto AMB apagado no se cobra a ambulantes (cobrar_diario lo frena): se avisa antes.
+      esAmbulante
+        ? supabase.from("conceptos").select("activo").eq("org_id", perfil.org_id).eq("codigo", "AMB").maybeSingle()
         : Promise.resolve({ data: null }),
     ]);
 
@@ -376,12 +386,24 @@ export default async function CobrarClientePage({
 
       <AvisoCajaCerrada caja={cajaHoy} rol={perfil.rol} />
 
-      {esAmbulante ? (
+      {esAmbulante && !ambRes.data?.activo ? (
+        <Alert variant="destructive">
+          <AlertTitle className="text-base font-semibold">Los cobros a ambulantes están desactivados</AlertTitle>
+          <AlertDescription className="text-base">
+            El concepto «Ambulantes» (AMB) está apagado en Configuración → Precios. Pedile al Líder de Procesos
+            que lo prenda para poder cobrar.
+          </AlertDescription>
+        </Alert>
+      ) : esAmbulante ? (
         <>
           <CobroAmbulante
             clienteId={cliente.id}
             clienteNombre={cliente.nombre}
-            precioDia={ambRes.data ? Number(ambRes.data.precio) : null}
+            precioAnterior={
+              Number(ultimoPrecioRes.data?.precio_unitario ?? 0) > 0
+                ? Number(ultimoPrecioRes.data?.precio_unitario)
+                : null
+            }
             pagados={pagados}
             ultimoPagoHasta={ultimoPagoRes.data?.pago_hasta ?? null}
             volverA={volverA}

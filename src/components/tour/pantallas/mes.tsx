@@ -1463,11 +1463,11 @@ export function PantallaTarifasPorteria() {
           </p>
           <Chico>En 4 pagos: $ 82.500 cada uno</Chico>
         </FilaEjemplo>
-        <FilaEjemplo derecha={<Money monto={15000} className="text-[0.8rem] font-bold" />}>
+        <FilaEjemplo>
           <p className="flex items-center gap-1.5 text-[0.75rem] font-semibold">
             <Footprints className="size-3.5 text-primary" /> Ambulante <Codigo codigo="AMB" />
           </p>
-          <Chico>3 días = $ 45.000</Chico>
+          <Chico>El precio por día se pone en cada cobro.</Chico>
         </FilaEjemplo>
       </Tarjeta>
     </MarcoPantalla>
@@ -1527,7 +1527,7 @@ export function PantallaPrecioQuinta() {
       <div>
         <Titulo>Precios</Titulo>
         <Chico>
-          Los cambios los aprueba el Líder de Procesos. Hasta que los apruebe, se sigue cobrando el precio de ahora.
+          El de la quinta lo aprueba el Líder de Procesos. Hasta que lo apruebe, se sigue cobrando el precio de ahora.
         </Chico>
       </div>
       <Tarjeta>
@@ -1561,12 +1561,11 @@ export function PantallaPrecioQuinta() {
           </div>
         </div>
       </Tarjeta>
-      <FilaEjemplo derecha={<Money monto={15000} className="text-[0.8rem] font-bold" />}>
+      <FilaEjemplo>
         <p className="flex items-center gap-1.5 text-[0.75rem] font-semibold">
           <Footprints className="size-3.5 text-primary" /> Ambulante <Codigo codigo="AMB" />
-          <Sello estado="pendiente_aprobacion" />
         </p>
-        <Chico>3 días = $ 45.000</Chico>
+        <Chico>El precio por día se pone en cada cobro: escribís cuánto paga y se multiplica por los días.</Chico>
       </FilaEjemplo>
     </MarcoPantalla>
   );

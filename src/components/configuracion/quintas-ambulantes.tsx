@@ -31,9 +31,10 @@ function soloDigitos(v: string): string {
 }
 
 /**
- * Configuración del Jefe de Portería (G7): en cuántos pagos se cobra la quinta
- * y los precios de la quinta (EXPQ, por mes) y del ambulante (AMB, por día).
- * Las cuotas se guardan al tocar (con "Deshacer"); los precios los aprueba el Líder.
+ * Configuración del Jefe de Portería (G7): en cuántos pagos se cobra la quinta y su precio
+ * (EXPQ, por mes). El ambulante (AMB) no tiene precio fijo: cuánto paga por día se pone en
+ * cada cobro, así que acá solo se aclara eso.
+ * Las cuotas se guardan al tocar (con "Deshacer"); el precio de la quinta lo aprueba el Líder.
  */
 export function QuintasAmbulantes({
   quinta,
@@ -55,8 +56,8 @@ export function QuintasAmbulantes({
           <h2 className="font-display text-lg font-bold">Precios</h2>
           <p className="text-sm text-muted-foreground">
             {aplicaDirecto
-              ? "Rigen desde el próximo mes que se genere (la quinta) y desde el próximo cobro (el ambulante)."
-              : "Los cambios los aprueba el Líder de Procesos. Hasta que los apruebe, se sigue cobrando el precio de ahora."}
+              ? "El de la quinta rige desde el próximo mes que se genere."
+              : "El de la quinta lo aprueba el Líder de Procesos. Hasta que lo apruebe, se sigue cobrando el precio de ahora."}
           </p>
         </div>
         <div className="divide-y overflow-hidden rounded-xl border bg-card" data-tour="config-precios-porteria">
@@ -79,14 +80,7 @@ export function QuintasAmbulantes({
             </p>
           )}
           {ambulante ? (
-            <FilaPrecio
-              concepto={ambulante}
-              icono={Footprints}
-              titulo="Ambulante"
-              unidad="por día"
-              ejemplo={(precio) => `3 días = ${formatARS(precio * 3)}`}
-              aplicaDirecto={aplicaDirecto}
-            />
+            <FilaAmbulante concepto={ambulante} />
           ) : (
             <p className="px-5 py-4 text-sm text-muted-foreground">
               Falta el concepto de los ambulantes (AMB). Pedile al Líder de Procesos que lo cargue.
@@ -192,6 +186,36 @@ function CuotasQuinta({ cuotasDefault, precioQuinta }: { cuotasDefault: number; 
         ) : null}
       </p>
     </section>
+  );
+}
+
+/* ---------- Ambulante: sin precio fijo ---------- */
+
+/** El ambulante paga lo que se pone en cada cobro: acá no hay precio para cambiar. */
+function FilaAmbulante({ concepto }: { concepto: PrecioPorteria }) {
+  return (
+    <div className="space-y-3 px-4 py-4 sm:px-5">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-accent text-primary">
+          <Footprints className="size-5" strokeWidth={2} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="flex flex-wrap items-center gap-2 text-base font-semibold">
+            Ambulante <Codigo codigo={concepto.codigo} />
+            {concepto.pendiente ? <Sello estado="pendiente_aprobacion" /> : null}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            El precio por día se pone en cada cobro: escribís cuánto paga y el sistema lo
+            multiplica por los días.
+          </p>
+        </div>
+      </div>
+      {concepto.pendiente ? (
+        <p className="rounded-lg bg-parcial-suave px-3 py-2 text-sm">
+          Esperando al Líder: {concepto.pendiente}
+        </p>
+      ) : null}
+    </div>
   );
 }
 

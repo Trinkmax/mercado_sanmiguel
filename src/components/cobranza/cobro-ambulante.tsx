@@ -4,7 +4,6 @@ import { useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  AlertCircle,
   ArrowRight,
   Banknote,
   CalendarDays,
@@ -30,7 +29,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Money } from "@/components/shared/money";
 import { AlertaError, esErrorDeCajaCerrada } from "@/components/cobranza/alerta-error";
 import { Chip } from "@/components/cobranza/datos-cheque";
@@ -55,6 +53,9 @@ import { llamarAccion } from "@/lib/llamar-accion";
 
 type Medio = "efectivo" | "transferencia";
 
+/** Tope del precio por día (el mismo que pone la base en cobrar_diario). */
+const MAX_PRECIO_DIA = 10_000_000;
+
 const ATAJOS = [
   { dias: 1, label: "Solo hoy" },
   { dias: 2, label: "2 días" },
@@ -63,9 +64,10 @@ const ATAJOS = [
 ];
 
 /**
- * Cobro por días del ambulante (G5, G6): "$15.000 por día", cuántos días (stepper + atajos),
- * desde qué día (la tira marca lo ya pagado), total grande y un botón que dice lo que hace.
- * El cargo AMB y su pago se crean juntos en la base (cobrar_diario).
+ * Cobro por días del ambulante (G5, G6): cuánto paga por día (no hay precio fijo: lo escribe
+ * quien cobra, con el atajo «Como la última vez»), cuántos días (stepper + atajos), desde qué
+ * día (la tira marca lo ya pagado), total = días × precio y un botón que dice lo que hace.
+ * El cargo AMB y su pago se crean juntos en la base (cobrar_diario, con p_precio).
  *
  * A1: un mismo cobro puede ir parte en efectivo y parte por transferencia (UN recibo): se
  * escribe cuánto va por transferencia y el efectivo es el resto (la suma siempre da el total).
@@ -75,7 +77,7 @@ const ATAJOS = [
 export function CobroAmbulante({
   clienteId,
   clienteNombre,
-  precioDia,
+  precioAnterior = null,
   pagados,
   ultimoPagoHasta = null,
   volverA = "/cobranza",
@@ -84,8 +86,8 @@ export function CobroAmbulante({
 }: {
   clienteId: string;
   clienteNombre: string;
-  /** Precio del concepto AMB (null o 0 = falta configurarlo). */
-  precioDia: number | null;
+  /** Precio por día de su último cobro por días (no anulado): atajo «Como la última vez». */
+  precioAnterior?: number | null;
   /** Rangos ya pagados (cargos AMB vigentes de los últimos meses). */
   pagados: { desde: string; hasta: string }[];
   /** Último día pago de todos los tiempos (v_ultimo_pago_ambulante), aunque sea viejo. */
@@ -104,6 +106,9 @@ export function CobroAmbulante({
   );
   const arranque = pagoHasta && pagoHasta >= hoy ? sumarDias(pagoHasta, 1) : hoy;
 
+  // Sin precio predefinido: arranca vacío y lo escribe quien cobra.
+  const [precioTexto, setPrecioTexto] = useState("");
+  const [errorPrecio, setErrorPrecio] = useState<string | undefined>();
   const [dias, setDias] = useState(1);
   const [desde, setDesde] = useState(arranque);
   const [otroDia, setOtroDia] = useState(false);
@@ -125,7 +130,7 @@ export function CobroAmbulante({
   const [refrescando, startRefresh] = useTransition();
   const loteRef = useRef<string | null>(null);
 
-  const precio = Number(precioDia ?? 0);
+  const precio = redondear2(parseMonto(precioTexto));
   const hasta = sumarDias(desde, dias - 1);
   const total = Math.round(dias * precio * 100) / 100;
   const parteTransferencia = mixto ? redondear2(parseMonto(montoTransferencia)) : 0;
@@ -158,6 +163,8 @@ export function CobroAmbulante({
 
   const fueraDeRango = diasEntre(hoy, desde) < -30 || diasEntre(hoy, desde) > 31;
   const sinPrecio = !(precio > 0);
+  const precioAlto = precio > MAX_PRECIO_DIA;
+  const anterior = precioAnterior !== null && precioAnterior > 0 ? redondear2(precioAnterior) : null;
   const hoyPagado = diasPagados.has(hoy);
 
   // Cobro mixto: la transferencia tiene que ser más que cero y no pasarse del total.
@@ -169,6 +176,11 @@ export function CobroAmbulante({
         ? `La transferencia no puede ser más que el total (${formatARS(total)})`
         : null;
 
+  function cambiarPrecio(texto: string) {
+    setPrecioTexto(texto);
+    setErrorPrecio(undefined);
+    setErrorRpc(null);
+  }
   function elegirDias(n: number) {
     setDias(Math.min(31, Math.max(1, n)));
     setErrorRpc(null);
@@ -204,6 +216,11 @@ export function CobroAmbulante({
   function registrar() {
     if (isPending || cajaCerrada || preparandoFoto) return;
     setErrorRpc(null);
+    if (sinPrecio || precioAlto) {
+      setErrorPrecio(sinPrecio ? "Poné cuánto paga por día" : "El precio por día es demasiado alto");
+      document.getElementById("precio-dia-amb")?.focus();
+      return;
+    }
     if (problemaMixto) {
       setErrorMonto(problemaMixto);
       document.getElementById("monto-transferencia-amb")?.focus();
@@ -223,6 +240,7 @@ export function CobroAmbulante({
     const datos: InputCobroDiario = {
       clienteId,
       loteId: loteRef.current,
+      precio,
       dias,
       desde,
       lineas,
@@ -255,6 +273,9 @@ export function CobroAmbulante({
     const siguiente = sumarDias(r.hasta || hasta, 1);
     loteRef.current = null;
     setResultado(null);
+    // El precio vuelve a quedar vacío (el atajo «Como la última vez» lo completa con un toque).
+    setPrecioTexto("");
+    setErrorPrecio(undefined);
     setDias(1);
     setDesde(siguiente);
     setOtroDia(false);
@@ -320,21 +341,19 @@ export function CobroAmbulante({
         ? `Último día pago: ${diaCorto(pagoHasta)}`
         : "Todavía no pagó nunca";
 
-  const bloqueado =
-    isPending || cajaCerrada || sinPrecio || choques.length > 0 || fueraDeRango || preparandoFoto;
+  // Sin precio el botón sigue activo: al tocarlo avisa en el campo y lo enfoca.
+  const bloqueado = isPending || cajaCerrada || choques.length > 0 || fueraDeRango || preparandoFoto;
   // Se ve en vivo si se pasa del total; si falta el monto, recién al tocar "Cobrar".
-  const mensajeMonto = errorMonto ?? (parteTransferencia > total ? problemaMixto : null);
+  const mensajeMonto =
+    errorMonto ?? (total > 0 && parteTransferencia > total ? problemaMixto : null);
+  // El precio: si falta, recién al tocar "Cobrar"; si es demasiado alto, en vivo.
+  const mensajePrecio =
+    errorPrecio ?? (precioAlto ? "El precio por día es demasiado alto" : null);
 
   return (
     <section className="space-y-6 rounded-lg border bg-card p-5 sm:p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="text-sm text-muted-foreground">Cobro por día</p>
-          <p className="text-2xl font-bold">
-            {sinPrecio ? "Sin precio" : <Money monto={precio} />}{" "}
-            <span className="text-base font-medium text-muted-foreground">por día</span>
-          </p>
-        </div>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="font-display text-xl font-bold">Cobro por día</h2>
         <p
           className={cn(
             "rounded-full px-3 py-1.5 text-sm font-semibold",
@@ -345,16 +364,44 @@ export function CobroAmbulante({
         </p>
       </div>
 
-      {sinPrecio ? (
-        <Alert className="border-pendiente/40 bg-pendiente-suave px-4 py-3 text-pendiente">
-          <AlertCircle className="size-5" strokeWidth={2} />
-          <AlertTitle className="text-base font-semibold">Falta el precio por día</AlertTitle>
-          <AlertDescription className="text-[15px] leading-relaxed text-pendiente">
-            Falta configurar el precio por día de los ambulantes (concepto AMB). Pedile al Líder de
-            Procesos que lo cargue.
-          </AlertDescription>
-        </Alert>
-      ) : null}
+      <div className="space-y-2" data-tour="cobranza-precio-dia">
+        <Label htmlFor="precio-dia-amb" className="text-base font-medium">
+          ¿Cuánto paga por día?
+        </Label>
+        <Input
+          id="precio-dia-amb"
+          inputMode="decimal"
+          autoComplete="off"
+          placeholder="0"
+          value={precioTexto}
+          onChange={(e) => cambiarPrecio(sanitizarMonto(e.target.value))}
+          // Al salir del campo queda con sus puntos de miles ("8.000"), como en el cobro común.
+          onBlur={() => setPrecioTexto((v) => (v ? montoConMiles(parseMonto(v)) : v))}
+          aria-invalid={Boolean(mensajePrecio)}
+          aria-describedby="precio-dia-amb-ayuda"
+          className="h-14 text-2xl font-semibold tabular md:text-2xl"
+        />
+        {anterior !== null ? (
+          <Chip activo={precio === anterior} onClick={() => cambiarPrecio(montoConMiles(anterior))}>
+            <Repeat className="size-4" strokeWidth={2} />
+            Como la última vez: {formatARS(anterior)}
+          </Chip>
+        ) : null}
+        {/* Renglón siempre presente: al escribir cambia el texto, no se corre la pantalla. */}
+        <div id="precio-dia-amb-ayuda" className="min-h-5 text-sm">
+          {mensajePrecio ? (
+            <p className="font-medium text-destructive">{mensajePrecio}</p>
+          ) : precio > 0 ? (
+            <p className="text-muted-foreground tabular">
+              <span className="font-semibold text-foreground">{formatARS(precio)}</span> por día
+            </p>
+          ) : (
+            <p className="text-muted-foreground">
+              No hay un precio fijo: escribí cuánto te paga por cada día.
+            </p>
+          )}
+        </div>
+      </div>
 
       <div className="space-y-3" data-tour="cobranza-dias">
         <Label className="text-base font-medium">¿Cuántos días paga?</Label>
@@ -476,13 +523,16 @@ export function CobroAmbulante({
       <div className="flex flex-wrap items-end justify-between gap-3 rounded-lg bg-muted/40 px-4 py-3">
         <div className="min-w-0">
           <p className="text-sm text-muted-foreground">Total</p>
-          <Money monto={total} className="block text-3xl font-bold" />
+          <Money
+            monto={total}
+            className={cn("block text-3xl font-bold", sinPrecio && "text-muted-foreground")}
+          />
         </div>
-        {!sinPrecio ? (
-          <p className="text-sm text-muted-foreground tabular">
-            {dias} {dias === 1 ? "día" : "días"} × {formatARS(precio)}
-          </p>
-        ) : null}
+        <p className="text-sm text-muted-foreground tabular">
+          {sinPrecio
+            ? `${dias} ${dias === 1 ? "día" : "días"} × falta el precio por día`
+            : `${dias} ${dias === 1 ? "día" : "días"} × ${formatARS(precio)} = ${formatARS(total)}`}
+        </p>
       </div>
 
       {!mixto ? (
@@ -584,7 +634,7 @@ export function CobroAmbulante({
         </div>
       ) : null}
 
-      {!mixto && !sinPrecio ? (
+      {!mixto ? (
         <Button
           type="button"
           variant="outline"
@@ -638,7 +688,7 @@ export function CobroAmbulante({
             Esperá, preparando la foto…
           </>
         ) : (
-          `Cobrar ${dias} ${dias === 1 ? "día" : "días"} — ${formatARS(total)}`
+          `Cobrar ${dias} ${dias === 1 ? "día" : "días"}${sinPrecio ? "" : ` — ${formatARS(total)}`}`
         )}
       </Button>
     </section>

@@ -631,11 +631,17 @@ export function PantallaCobroRegistradoAmbulante() {
     <CobroRegistradoEjemplo
       nombre="Rosa Villalba"
       numero={2419}
-      monto={15000}
-      destacado="Pagó hasta el mié 30/09"
+      monto={24000}
+      destacado="Pagó hasta el vie 02/10"
       otro="Cobrar a otro ambulante"
       imputaciones={[
-        { codigo: "AMB", descripcion: "Ambulantes · 30/09", periodo: "Septiembre de 2026", monto: 15000, saldado: true },
+        {
+          codigo: "AMB",
+          descripcion: "Ambulantes · 3 días (30/09 al 02/10)",
+          periodo: "Septiembre de 2026",
+          monto: 24000,
+          saldado: true,
+        },
       ]}
     />
   );
@@ -758,54 +764,59 @@ const TIRA_DIAS = [
   { dia: "Lun", n: "28", pagado: true },
   { dia: "Mar", n: "29" },
   { dia: "Hoy", n: "30", elegido: true },
-  { dia: "Jue", n: "01" },
-  { dia: "Vie", n: "02" },
+  { dia: "Jue", n: "01", elegido: true },
+  { dia: "Vie", n: "02", elegido: true },
   { dia: "Sáb", n: "03" },
   { dia: "Dom", n: "04" },
 ];
 
-/** El cobro por día de un ambulante. */
+/** El cobro por día de un ambulante: no hay precio fijo, primero se escribe cuánto paga por
+ * día (o «Como la última vez»), después cuántos días, y el total es días × precio. */
 export function PantallaCobroAmbulante() {
   return (
     <MarcoPantalla titulo="Cobrar · Rosa Villalba">
-      <div className="flex items-start justify-between gap-2">
-        <div>
-          <p className="text-[0.72rem] text-muted-foreground">Cobro por día</p>
-          <p className="font-bold">
-            <Money monto={15000} className="text-[1.05rem]" />{" "}
-            <span className="text-[0.72rem] font-medium text-muted-foreground">por día</span>
-          </p>
-        </div>
+      <div className="flex items-center justify-between gap-2">
+        <p className="font-display text-[1.05rem] font-bold">Cobro por día</p>
         <span className="rounded-full bg-muted px-2 py-1 text-[0.72rem] font-semibold text-muted-foreground">
           Último día pago: lun 28/09
         </span>
       </div>
       <Resaltado>
         <div className="space-y-1.5 p-1">
-          <p className="font-medium">¿Cuántos días paga?</p>
-          <div className="flex items-center justify-center gap-3">
-            <span className="flex size-8 items-center justify-center rounded-full border border-border bg-card text-muted-foreground/50">
-              <Minus className="size-4" strokeWidth={2.2} />
-            </span>
-            <p>
-              <span className="font-display text-[1.3rem] font-bold tabular">1</span>{" "}
-              <span className="text-muted-foreground">día</span>
-            </p>
-            <span className="flex size-8 items-center justify-center rounded-full border border-border bg-card">
-              <Plus className="size-4" strokeWidth={2.2} />
-            </span>
-          </div>
-          <div className="flex flex-wrap justify-center gap-1">
-            <ChipEjemplo activo>Solo hoy</ChipEjemplo>
-            <ChipEjemplo>2 días</ChipEjemplo>
-            <ChipEjemplo>3 días</ChipEjemplo>
-            <ChipEjemplo>Semana (7)</ChipEjemplo>
+          <p className="font-medium">¿Cuánto paga por día?</p>
+          <CampoMonto valor="8.000" />
+          <div className="flex flex-wrap items-center gap-1.5">
+            <ChipEjemplo activo>
+              <Repeat className="mr-1 size-3" strokeWidth={2} />
+              Como la última vez: $ 8.000
+            </ChipEjemplo>
           </div>
         </div>
       </Resaltado>
+      <div className="space-y-1.5 pt-2">
+        <p className="font-medium">¿Cuántos días paga?</p>
+        <div className="flex items-center justify-center gap-3">
+          <span className="flex size-8 items-center justify-center rounded-full border border-border bg-card">
+            <Minus className="size-4" strokeWidth={2.2} />
+          </span>
+          <p>
+            <span className="font-display text-[1.3rem] font-bold tabular">3</span>{" "}
+            <span className="text-muted-foreground">días</span>
+          </p>
+          <span className="flex size-8 items-center justify-center rounded-full border border-border bg-card">
+            <Plus className="size-4" strokeWidth={2.2} />
+          </span>
+        </div>
+        <div className="flex flex-wrap justify-center gap-1">
+          <ChipEjemplo>Solo hoy</ChipEjemplo>
+          <ChipEjemplo>2 días</ChipEjemplo>
+          <ChipEjemplo activo>3 días</ChipEjemplo>
+          <ChipEjemplo>Semana (7)</ChipEjemplo>
+        </div>
+      </div>
       <div className="space-y-1 pt-2">
         <div className="flex items-center justify-between gap-2">
-          <p className="font-medium">Paga el mié 30/09</p>
+          <p className="font-medium">Paga del mié 30/09 al vie 02/10</p>
           <span className="flex items-center gap-1 text-[0.72rem] font-semibold text-primary">
             <CalendarDays className="size-3" strokeWidth={2} />
             Empieza otro día
@@ -834,11 +845,11 @@ export function PantallaCobroAmbulante() {
       <div className="flex items-end justify-between gap-2 rounded-lg bg-muted/40 px-2.5 py-1.5">
         <div>
           <p className="text-[0.72rem] text-muted-foreground">Total</p>
-          <Money monto={15000} className="text-[1.05rem] font-bold" />
+          <Money monto={24000} className="text-[1.05rem] font-bold" />
         </div>
-        <p className="text-[0.72rem] text-muted-foreground tabular">1 día × $ 15.000</p>
+        <p className="text-[0.72rem] text-muted-foreground tabular">3 días × $ 8.000 = $ 24.000</p>
       </div>
-      <BotonEjemplo className="min-h-10 w-full">Cobrar 1 día — $ 15.000</BotonEjemplo>
+      <BotonEjemplo className="min-h-10 w-full">Cobrar 3 días — $ 24.000</BotonEjemplo>
     </MarcoPantalla>
   );
 }

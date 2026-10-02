@@ -3077,10 +3077,11 @@ export type Database = {
           p_lineas: Json
           p_lote?: string
           p_notas?: string
+          p_precio?: number
         }
         Returns: Json
       }
-      conciliar_canon: { Args: { p_ids: string[] }; Returns: Json }
+      conciliar_canon:{ Args: { p_ids: string[] }; Returns: Json }
       configurar_rubro_gasto: {
         Args: {
           p_cargar_este_mes?: boolean
