@@ -367,14 +367,26 @@ export default async function CobrarClientePage({
   );
 
   const tieneOtrosCargos = todos.some((c) => c.origen !== "diario");
-  // El ambulante que alquila cochera la paga por mes (EXPC, 0045): se cobra en "Otras deudas".
-  const debeCochera = items.some((c) => c.codigo === "EXPC");
-  const debeOtras = items.some((c) => c.codigo !== "EXPC");
-  const detalleOtras = debeCochera
-    ? debeOtras
-      ? "La cochera y otros cargos: tocá para cobrarlos"
-      : "La cochera: tocá para cobrarla"
-    : undefined;
+  // El ambulante que alquila cochera o quinta la paga por mes (EXPC, 0045; EXPQ, 0047): se
+  // cobra en "Otras deudas".
+  const delMes = [
+    items.some((c) => c.codigo === "EXPC") ? "la cochera" : null,
+    items.some((c) => c.codigo === "EXPQ") ? "la quinta" : null,
+  ].filter((t): t is string => t !== null);
+  const debeOtras = items.some((c) => c.codigo !== "EXPC" && c.codigo !== "EXPQ");
+  // "La cochera: tocá para cobrarla" · "La cochera y la quinta: tocá para cobrarlas" ·
+  // "La quinta y otros cargos: tocá para cobrarlos"
+  const partesOtras = [...delMes, ...(debeOtras ? ["otros cargos"] : [])];
+  const listaOtras =
+    partesOtras.length > 1
+      ? `${partesOtras.slice(0, -1).join(", ")} y ${partesOtras[partesOtras.length - 1]}`
+      : (partesOtras[0] ?? "");
+  const detalleOtras =
+    delMes.length > 0
+      ? `${listaOtras.charAt(0).toUpperCase()}${listaOtras.slice(1)}: tocá para ${
+          debeOtras ? "cobrarlos" : delMes.length > 1 ? "cobrarlas" : "cobrarla"
+        }`
+      : undefined;
   const pagados = todos
     .filter((c) => c.origen === "diario" && c.desde && c.hasta)
     .map((c) => ({ desde: c.desde as string, hasta: c.hasta as string }));
@@ -396,8 +408,8 @@ export default async function CobrarClientePage({
 
       {esAmbulante ? (
         <>
-          {/* AMB apagado frena solo el cobro por día: la cochera del mes y otras deudas se
-              siguen cobrando abajo (registrar_cobro no depende de AMB). */}
+          {/* AMB apagado frena solo el cobro por día: la cochera o la quinta del mes y otras
+              deudas se siguen cobrando abajo (registrar_cobro no depende de AMB). */}
           {!ambRes.data?.activo ? (
             <Alert variant="destructive">
               <AlertTitle className="text-base font-semibold">Los cobros por día están desactivados</AlertTitle>

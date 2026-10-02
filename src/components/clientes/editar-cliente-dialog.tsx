@@ -13,7 +13,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { FormCliente, type ConceptoActivo, type DatosCliente } from "./form-cliente";
+import { FormCliente, type ConceptoActivo, type DatosCliente, type LugaresSiPasaA } from "./form-cliente";
 import { aplicaDirectoRol } from "./constantes";
 
 /** Botón "Editar" de la ficha: abre el formulario de datos en un diálogo. */
@@ -21,18 +21,16 @@ export function EditarClienteDialog({
   cliente,
   rol,
   conceptosActivos,
-  lugaresTexto,
-  lugaresSinCocheraTexto,
+  lugaresSiPasaA,
   medidoresActivos,
 }: {
   cliente: DatosCliente;
   rol: Rol;
   /** Lo mensual que factura hoy (para avisar qué deja de facturarse si cambia de categoría). */
   conceptosActivos?: ConceptoActivo[];
-  /** Sus lugares del plano. */
-  lugaresTexto?: string | null;
-  /** Los mismos sin las cocheras: se liberan si pasa a ambulante o a empleado (las cocheras las conserva). */
-  lugaresSinCocheraTexto?: string | null;
+  /** Qué se libera y qué conserva en el plano si pasa a empleado (sus cocheras) o a ambulante
+   * (sus cocheras y quintas). */
+  lugaresSiPasaA?: LugaresSiPasaA;
   /** N° de sus medidores activos (se desactivan si pasa a ambulante o a empleado). */
   medidoresActivos?: string[];
 }) {
@@ -60,8 +58,7 @@ export function EditarClienteDialog({
           cliente={cliente}
           rol={rol}
           conceptosActivos={conceptosActivos}
-          lugaresTexto={lugaresTexto}
-          lugaresSinCocheraTexto={lugaresSinCocheraTexto}
+          lugaresSiPasaA={lugaresSiPasaA}
           medidoresActivos={medidoresActivos}
           alGuardar={() => setAbierto(false)}
         />

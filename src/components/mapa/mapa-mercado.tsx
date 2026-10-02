@@ -200,7 +200,7 @@ export function MapaMercado({
   clientes: ClienteMapa[];
   puedeEditar: boolean;
   destinos: Destinos;
-  /** Jefe de Portería: solo cobra quinteros. */
+  /** Jefe de Portería: en su mapa cobra a sus quinteros (y al ambulante que tiene quinta, 0047). */
   soloQuinteros: boolean;
   inicial: { clienteId: string | null; puesto: string | null; editar: boolean; espacioId?: string | null };
   /** "porteria" = mapa del Jefe (G11): puestos anónimos y solo la zona de quinteros. */
@@ -374,7 +374,9 @@ export function MapaMercado({
       const estado = estadoEspacio(b.tipo, b.clienteId);
       let atenuado = false;
       if (filtro === "propio") atenuado = !b.espacios.some((e) => e.propio);
-      else if (filtro) atenuado = estado !== filtro;
+      // Mapa del Jefe: la leyenda filtra y cuenta a sus quinteros; la quinta de un ambulante
+      // (0047) no entra en esas cuentas, así que tampoco se enciende con el filtro.
+      else if (filtro) atenuado = estado !== filtro || (esPorteria && cli !== null && !esQuintero(cli));
       else if (modo === "ver" && clienteSel) atenuado = b.clienteId !== clienteSel;
       let marca: Marca = null;
       if (
@@ -395,7 +397,7 @@ export function MapaMercado({
       });
     }
     return m;
-  }, [bloques, clientePorId, estadoEspacio, filtro, modo, clienteSel, espacioSelId, pincel, confirmacion, sugerencia]);
+  }, [bloques, clientePorId, estadoEspacio, filtro, modo, clienteSel, espacioSelId, pincel, confirmacion, sugerencia, esPorteria]);
 
   const fichas = useMemo<FichaQuintero[]>(
     () =>
@@ -617,13 +619,18 @@ export function MapaMercado({
     (ids: string[], clienteId: string | null) => {
       const afectados = ids.flatMap((id) => espacioPorId.get(id) ?? []);
       if (afectados.length === 0) return;
-      // El empleado y el ambulante solo alquilan cochera (0041 y 0045 también lo frenan en la base).
+      // El empleado solo alquila cochera (0041); el ambulante, cochera o quinta (0045, 0047).
+      // La base también lo frena.
       const categoria = clienteId ? clientePorId.get(clienteId)?.categoria : undefined;
-      if ((categoria === "empleado" || categoria === "ambulante") && afectados.some((e) => e.tipo !== "cochera")) {
+      if (categoria === "empleado" && afectados.some((e) => e.tipo !== "cochera")) {
+        toast.error("A un empleado solo se le asigna cochera. Si también tiene otro lugar, cargalo como puestero.", {
+          id: "mapa-asignacion",
+        });
+        return;
+      }
+      if (categoria === "ambulante" && afectados.some((e) => e.tipo !== "cochera" && e.tipo !== "quinta")) {
         toast.error(
-          categoria === "empleado"
-            ? "A un empleado solo se le asigna cochera. Si también tiene otro lugar, cargalo como puestero."
-            : "A un ambulante solo se le asigna cochera. Si también tiene otro lugar, cargalo como puestero.",
+          "A un ambulante solo se le asignan cocheras o quintas. Si también tiene otro lugar, cargalo como puestero.",
           { id: "mapa-asignacion" }
         );
         return;

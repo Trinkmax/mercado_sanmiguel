@@ -41,8 +41,9 @@ const CONCEPTO_FACTURADO: Record<string, keyof Facturado> = {
 
 const CODIGOS_PLANO: CodigoPlano[] = ["EXME", "EXPP", "EXPL", "EXPE", "EXPG", "EXPC", "EXPQ"];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-/** Mapa del Jefe: dueño de una quinta que no es uno de sus quinteros (un puestero que además
- * alquila quinta, 0046). No es ningún cliente del mapa: se pinta "ocupada", sin datos. */
+/** Mapa del Jefe: dueño de una quinta que no es uno de sus clientes (un puestero que además
+ * alquila quinta, 0046, o alguien dado de baja). No es ningún cliente del mapa: se pinta
+ * "ocupada", sin datos. */
 const QUINTA_DE_OTRO = "ocupada";
 
 const uno = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
@@ -56,17 +57,18 @@ export default async function MapaPage({ searchParams }: Props) {
   const vista: VistaMapa = perfil.rol === "guardia" ? "porteria" : "completa";
   const puedeEditar = perfil.rol === "admin" || perfil.rol === "lider";
 
-  // Clientes: el Jefe solo sus quinteros (sus quintas) y NO trae datos de puesteros.
-  // Administración y el Líder, todos: también los ambulantes, que pueden alquilar cochera
-  // (0045): así se les asigna una y la cochera dice quién la tiene. Cobrar, la ficha y la
-  // carpeta siguen siendo de quien gestiona cada categoría (categoriasGestion).
+  // Clientes: el Jefe, sus quinteros y sus ambulantes (de estos, solo los que tienen quinta:
+  // 0047), y NO trae datos de puesteros. Administración y el Líder, todos: también los
+  // ambulantes, que pueden alquilar cochera o quinta (0045, 0047): así se les asigna y el
+  // lugar dice quién lo tiene. Cobrar, la ficha y la carpeta siguen siendo de quien gestiona
+  // cada categoría (categoriasGestion).
   let consultaClientes = supabase
     .from("clientes")
     .select("id, codigo, nombre, apodo, categoria, cliente_conceptos(id, cantidad, activo, conceptos(id, codigo))")
     .eq("org_id", perfil.org_id)
     .eq("activo", true)
     .order("codigo");
-  if (vista === "porteria") consultaClientes = consultaClientes.eq("categoria", "quintero");
+  if (vista === "porteria") consultaClientes = consultaClientes.in("categoria", ["quintero", "ambulante"]);
 
   const [plano, clientesRes, deudaRes, avanceRes, conceptosRes, pendientesRes, avisosRes, quintasRes] = await Promise.all([
     cargarPlano(supabase, perfil, { conClientes: vista === "completa" }),
@@ -98,22 +100,28 @@ export default async function MapaPage({ searchParams }: Props) {
           .order("creada_en", { ascending: false })
           .limit(300)
       : Promise.resolve({ data: [] as { id: string; numero: number; asunto: string; estado: string; creada_en: string; espacio_id: string | null }[] }),
-    // El Jefe no lee la tabla espacios: qué quintero está en cada quinta (0032) y, desde
-    // 0046, cuáles ocupa otro (un puestero), sin decir quién.
+    // El Jefe no lee la tabla espacios: qué quintero está en cada quinta (0032), desde 0047
+    // también qué ambulante, y desde 0046 cuáles ocupa otro (un puestero), sin decir quién.
     vista === "porteria"
       ? supabase.rpc("quintas_del_plano")
       : Promise.resolve({ data: [] as { espacio_id: string; cliente_id: string }[] }),
   ]);
 
   // El Jefe no ve "puesto propio" (no es dato suyo y no tiene leyenda): todos iguales. De
-  // las quintas sabe quién está si es uno de sus quinteros. Si la alquila un puestero (0046),
-  // solo que está ocupada: ni quién es ni su id llegan al navegador (se ve "Ocupada", sin
-  // tarjeta, y tocarla es para avisarle algo al Líder, como un puesto).
-  const quinterosDelJefe = new Set((clientesRes.data ?? []).map((c) => c.id));
+  // las quintas sabe quién está si es uno de sus quinteros o ambulantes (0047). Si la alquila
+  // un puestero (0046), solo que está ocupada: ni quién es ni su id llegan al navegador (se ve
+  // "Ocupada", sin tarjeta, y tocarla es para avisarle algo al Líder, como un puesto).
+  // De los ambulantes, al mapa del Jefe solo van los que tienen quinta: los demás no tienen
+  // nada que mostrar ahí (su cochera, como los puestos, no es dato suyo).
+  const conQuinta = new Set((quintasRes.data ?? []).flatMap((q) => (q.cliente_id ? [q.cliente_id] : [])));
+  const filasClientes = (clientesRes.data ?? []).filter(
+    (c) => vista !== "porteria" || c.categoria !== "ambulante" || conQuinta.has(c.id)
+  );
+  const clientesDelJefe = new Set(filasClientes.map((c) => c.id));
   const ocupanteQuinta = new Map(
     (quintasRes.data ?? []).map((q) => [
       q.espacio_id,
-      q.cliente_id && quinterosDelJefe.has(q.cliente_id) ? q.cliente_id : QUINTA_DE_OTRO,
+      q.cliente_id && clientesDelJefe.has(q.cliente_id) ? q.cliente_id : QUINTA_DE_OTRO,
     ])
   );
   const espacios =
@@ -148,7 +156,7 @@ export default async function MapaPage({ searchParams }: Props) {
     if (CODIGOS_PLANO.includes(c.codigo as CodigoPlano)) conceptosPlano[c.codigo as CodigoPlano] = c.id;
   }
 
-  const clientes: ClienteMapa[] = (clientesRes.data ?? []).map((c) => {
+  const clientes: ClienteMapa[] = filasClientes.map((c) => {
     const facturado: Facturado = {
       puestos: 0,
       propios: 0,

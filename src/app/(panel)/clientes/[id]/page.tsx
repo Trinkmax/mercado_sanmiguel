@@ -54,7 +54,7 @@ import {
 } from "@/components/clientes/constantes";
 import { DescripcionCargo } from "@/components/cobranza/descripcion-cargo";
 import { EnElPlano } from "@/components/mapa/en-el-plano";
-import { etiquetaEspacio, etiquetaEspacios } from "@/components/mapa/geometria";
+import { conArticulo, etiquetaEspacio, etiquetaEspacios, listaConY } from "@/components/mapa/geometria";
 import type { TipoEspacio } from "@/components/mapa/tipos";
 
 export const metadata = { title: "Ficha del cliente" };
@@ -384,10 +384,11 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
       : supabase.from("espacios").select("id, tipo, numero, medio, propio, x, y").eq("cliente_id", id),
     veEnergia ? datosEnergia(supabase, id) : Promise.resolve(null),
     // El Jefe y un quintero: qué lugares del plano y qué medidores tiene, para avisarle
-    // ANTES de pasarlo a ambulante qué se libera (todo menos las cocheras) y qué deja de
+    // ANTES de pasarlo a ambulante qué se libera (todo menos cocheras y quintas) y qué deja de
     // facturarse (el Jefe no lee espacios: lugares_del_cliente; los medidores de sus
     // clientes sí los lee).
-    // 0045: el ambulante también puede tener cochera (se libera si se lo da de baja).
+    // 0045 y 0047: el ambulante también puede tener cochera y quinta (se liberan si se lo da
+    // de baja; la quinta, además, se nombra con su link al mapa).
     esJefe && (categoria === "quintero" || categoria === "ambulante")
       ? supabase.rpc("lugares_del_cliente", { p_cliente: id })
       : Promise.resolve({ data: [] as { id: string; tipo: string; numero: string; medio: boolean; propio: boolean }[] }),
@@ -554,10 +555,22 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
   const sinLugar = { cocheras: facturado("EXPC"), galpones: facturado("EXPG") };
   const quinteroActivo = categoria === "quintero" && cliente.activo;
   // "Puestos 58 · 60" (o "Puesto 58 · Local 3"): se liberan al darlo de baja (y, menos las
-  // cocheras, al pasarlo a ambulante o a empleado).
+  // cocheras, al pasarlo a empleado; menos cocheras y quintas, al pasarlo a ambulante).
+  const lugaresJefe = (lugaresJefeRes.data ?? []).filter((e): e is typeof e & { tipo: TipoEspacio } =>
+    TIPOS_LUGAR.includes(e.tipo)
+  );
   const lugaresAviso: { tipo: TipoEspacio; numero: string | null; medio: boolean; propio: boolean }[] = esJefe
-    ? (lugaresJefeRes.data ?? []).filter((e): e is typeof e & { tipo: TipoEspacio } => TIPOS_LUGAR.includes(e.tipo))
+    ? lugaresJefe
     : espaciosPlano;
+  // El Jefe no lee el plano, pero en su mapa ve las quintas de sus ambulantes (0047): la ficha
+  // las nombra con el link al mapa, como a los quinteros.
+  const quintasAmbulanteJefe =
+    esJefe && categoria === "ambulante" && cliente.activo
+      ? lugaresJefe
+          .filter((e) => e.tipo === "quinta")
+          .map((e) => ({ id: e.id, tipo: e.tipo, numero: e.numero, medio: e.medio, x: 0, y: 0 }))
+          .sort((a, b) => a.numero.localeCompare(b.numero, "es", { numeric: true }))
+      : [];
   const textoLugares = (lugares: typeof lugaresAviso) =>
     lugares.length === 0
       ? null
@@ -565,8 +578,19 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
         ? etiquetaEspacios(lugares)
         : lugares.map((e) => etiquetaEspacio(e)).join(" · ");
   const lugaresTexto = textoLugares(lugaresAviso);
-  // Si pasa a empleado (0040) o a ambulante (0045) conserva sus cocheras: solo se libera lo demás.
-  const lugaresSinCocheraTexto = textoLugares(lugaresAviso.filter((e) => e.tipo !== "cochera"));
+  // Si pasa a empleado (0040) conserva sus cocheras; si pasa a ambulante, sus cocheras y sus
+  // quintas (0045, 0047). Lo demás se libera.
+  const lugaresAlPasar = (seQueda: TipoEspacio[]) => {
+    const conserva = lugaresAviso.filter((e) => seQueda.includes(e.tipo));
+    return {
+      libera: textoLugares(lugaresAviso.filter((e) => !seQueda.includes(e.tipo))),
+      conserva: conserva.length > 0 ? listaConY(conserva.map((e) => conArticulo(e))) : null,
+    };
+  };
+  const lugaresSiPasaA = {
+    empleado: lugaresAlPasar(["cochera"]),
+    ambulante: lugaresAlPasar(["cochera", "quinta"]),
+  };
   // Medidores activos: al pasar a ambulante se desactivan (0024), y el formulario lo avisa.
   const medidoresActivos = esJefe
     ? (medidoresJefeRes.data ?? []).map((m) => m.numero)
@@ -629,8 +653,7 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
               }}
               rol={perfil.rol}
               conceptosActivos={conceptosActivos}
-              lugaresTexto={lugaresTexto}
-              lugaresSinCocheraTexto={lugaresSinCocheraTexto}
+              lugaresSiPasaA={lugaresSiPasaA}
               medidoresActivos={medidoresActivos}
             />
             <BajaCliente
@@ -642,16 +665,18 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
             />
           </PageHeader>
           {/* El Jefe no lee el plano con puesteros, pero sí ve a sus quinteros en la zona de
-              quinteros del mapa de Portería (lo enfoca con ?cliente=). Dado de baja: el mapa no lo
-              carga y sus conceptos siguen activos pero ya no se facturan, así que no se nombran. */}
-          {!esJefe || quinteroActivo ? (
+              quinteros del mapa de Portería (lo enfoca con ?cliente=) y las quintas de sus
+              ambulantes (0047). Dado de baja: el mapa no lo carga y sus conceptos siguen activos
+              pero ya no se facturan, así que no se nombran. */}
+          {!esJefe || quinteroActivo || quintasAmbulanteJefe.length > 0 ? (
             <EnElPlano
               clienteId={cliente.id}
-              espacios={espaciosPlano}
+              espacios={esJefe ? quintasAmbulanteJefe : espaciosPlano}
               facturaPuestos={facturaPuestos && cliente.activo}
               puedeUbicar={perfil.rol === "admin" || perfil.rol === "lider"}
               quintero={quinteroActivo}
-              sinLugar={cliente.activo ? sinLugar : undefined}
+              // El Jefe no ve las cocheras en el plano: no se le dice que les falta lugar.
+              sinLugar={cliente.activo && !esJefe ? sinLugar : undefined}
             />
           ) : null}
         </div>
@@ -729,7 +754,7 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
               titulo="Todavía no tiene cargos"
               descripcion={
                 categoria === "ambulante"
-                  ? "Se le cobra por día: cada cobro deja su cargo y su recibo acá. Si alquila cochera, la cochera se factura por mes."
+                  ? "Se le cobra por día: cada cobro deja su cargo y su recibo acá. Si alquila cochera o quinta, eso se factura por mes."
                   : "Se generan solos con la facturación mensual, según lo que paga."
               }
             />

@@ -47,15 +47,16 @@ type Categoria = "puestero" | "quintero" | "ambulante" | "empleado";
 
 /**
  * ¿Un concepto MENSUAL sigue facturándose si el cliente pasa a esta categoría?
- * Espejo de private.aplicar_cambio (0024, 0040, 0045, 0046) y de lo que la ficha ofrece en
- * "Qué paga": el ambulante paga por día y por mes solo la cochera, si alquila (0045); el
- * quintero, solo lo de quinteros; el empleado, solo la cochera (0040); el puestero, todo menos
- * lo de ambulantes: también la quinta (EXPQ), si además del puesto alquila una (0046).
- * Energía (ABEN/ENER) no cuenta.
+ * Espejo de private.aplicar_cambio (0024, 0040, 0045, 0046, 0047) y de lo que la ficha ofrece
+ * en "Qué paga": el ambulante paga por día y por mes solo la cochera y la quinta, si alquila
+ * (0045, 0047); el quintero, solo lo de quinteros; el empleado, solo la cochera (0040); el
+ * puestero, todo menos lo de ambulantes: también la quinta (EXPQ), si además del puesto
+ * alquila una (0046). Energía (ABEN/ENER) no cuenta.
  */
 export function conceptoSigueConCategoria(segmento: string | null, categoria: Categoria): boolean {
   if (categoria === "quintero") return segmento === "quinteros";
-  if (categoria === "ambulante" || categoria === "empleado") return segmento === "cocheras";
+  if (categoria === "ambulante") return segmento === "cocheras" || segmento === "quinteros";
+  if (categoria === "empleado") return segmento === "cocheras";
   return segmento !== "ambulantes";
 }
 
@@ -156,9 +157,11 @@ export function grupoDeConcepto(c: { codigo: string; segmento: string | null }):
 }
 
 /** Conceptos que el rol puede asignar a la carpeta de un cliente de esta categoría (espejo de
- * solicitar_cambio, §4.7 y 0046). Solo mensuales: los de energía van en Medidores; AMB, MULT,
- * RD y BC se cobran en el momento. Lo de quinteros y ambulantes es del Jefe de Portería, salvo
- * la quinta de un PUESTERO: a él la factura y la cobra Administración (0046). */
+ * solicitar_cambio, §4.7, 0046 y 0047). Solo mensuales: los de energía van en Medidores; AMB,
+ * MULT, RD y BC se cobran en el momento. Lo de quinteros y ambulantes es del Jefe de Portería,
+ * salvo la quinta de un PUESTERO: a él la factura y la cobra Administración (0046). Al
+ * ambulante, la quinta se la pide el Jefe y la cochera la carga el Líder (el Jefe no maneja
+ * cocheras); Administración no gestiona ambulantes (0045, 0047). */
 export function conceptoAsignablePorRol(
   c: { tipo: string; segmento: string | null },
   rol: string,
@@ -168,7 +171,10 @@ export function conceptoAsignablePorRol(
   const dePorteria = c.segmento === "quinteros" || c.segmento === "ambulantes";
   if (rol === "lider") return true;
   if (rol === "guardia") return dePorteria;
-  if (rol === "admin") return !dePorteria || (c.segmento === "quinteros" && categoria === "puestero");
+  if (rol === "admin")
+    return (
+      categoria !== "ambulante" && (!dePorteria || (c.segmento === "quinteros" && categoria === "puestero"))
+    );
   return false;
 }
 
@@ -180,6 +186,9 @@ export function ayudaAlOfrecer(
 ): string | undefined {
   if (categoria === "puestero" && c.segmento === "quinteros")
     return "Si además del puesto alquila una quinta: la quinta entera, por mes";
+  // El ambulante paga por día; la quinta, si alquila una, va aparte y en un pago (0047).
+  if (categoria === "ambulante" && c.segmento === "quinteros")
+    return "Si alquila una quinta: la quinta entera, por mes, en un pago";
   return AYUDA_CONCEPTO[c.codigo];
 }
 
@@ -203,7 +212,7 @@ export function totalMensual(
 }
 
 /** Cuotas que se ofrecen según la categoría (C5, G7). El ambulante no elige: paga por día
- * (y la cochera, si alquila, en un pago por mes). */
+ * (y la cochera o la quinta, si alquila, en un pago por mes). */
 export function cuotasDeCategoria(categoria: string): { opciones?: number[]; permitirOtra: boolean } {
   if (categoria === "quintero") return { opciones: [1, 2, 3, 4], permitirOtra: false };
   return { permitirOtra: true };

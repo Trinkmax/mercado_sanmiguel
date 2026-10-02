@@ -142,10 +142,10 @@ async function clienteGestionable(
   };
 }
 
-/** Un concepto mensual que no es de la categoría del cliente (misma regla que 0024/0040/0045). */
+/** Un concepto mensual que no es de la categoría del cliente (misma regla que 0024/0040/0045/0047). */
 function mensajeNoCorresponde(categoria: CategoriaCliente): string {
   return categoria === "ambulante"
-    ? "Al ambulante se le cobra por día: por mes solo se le cobra la cochera."
+    ? "Al ambulante se le cobra por día: por mes solo se le cobra la cochera o la quinta."
     : categoria === "empleado"
       ? "A un empleado solo se le cobra la cochera."
       : `Ese concepto no le corresponde a un ${LABEL_CATEGORIA[categoria].toLowerCase()}. Solo se puede dejar de facturar.`;
@@ -319,7 +319,7 @@ export async function crearCliente(
 
   // Un renglón por concepto (si viniera repetido, gana el último) y pertenencia a MI
   // organización antes de proponer nada. El alta del ambulante va sin conceptos (paga por
-  // día); si alquila cochera, se le agrega después desde su carpeta.
+  // día); si alquila cochera o quinta, se le agrega después desde su carpeta.
   const cantidadPorConcepto = new Map(
     esAmbulante ? [] : (conceptosAlta ?? []).map((c) => [c.concepto_id, c.cantidad])
   );
@@ -492,18 +492,20 @@ export async function editarCliente(
     if (categoriaFinal === "ambulante" || categoriaFinal === "empleado") {
       // También se liberan sus lugares del plano y se desactivan sus medidores (0024). El
       // Jefe no lee espacios: lugares_del_cliente devuelve los del cliente que gestiona.
-      // El empleado (0040) y el ambulante (0045) conservan sus cocheras.
+      // El empleado conserva sus cocheras (0040); el ambulante, sus cocheras y sus quintas
+      // (0045, 0047).
       const [{ data: todos }, { data: medidores }] = await Promise.all([
         supabase.rpc("lugares_del_cliente", { p_cliente: id }),
         supabase.from("medidores").select("numero").eq("cliente_id", id).eq("activo", true).order("numero"),
       ]);
-      const lugares = (todos ?? []).filter((e) => e.tipo !== "cochera");
-      const cocheras = (todos ?? []).filter((e) => e.tipo === "cochera");
+      const seQueda = categoriaFinal === "ambulante" ? ["cochera", "quinta"] : ["cochera"];
+      const lugares = (todos ?? []).filter((e) => !seQueda.includes(e.tipo));
+      const conserva = (todos ?? []).filter((e) => seQueda.includes(e.tipo));
       if (lugares.length > 0)
         efectos.push(
           `se libera${lugares.length > 1 ? "n" : ""} ${enumerar(lugares.map((e) => etiquetaEspacio(e)))}`
         );
-      if (cocheras.length > 0) efectos.push(`conserva ${enumerar(cocheras.map((e) => etiquetaEspacio(e)))}`);
+      if (conserva.length > 0) efectos.push(`conserva ${enumerar(conserva.map((e) => etiquetaEspacio(e)))}`);
       if (medidores && medidores.length > 0)
         efectos.push(
           `se desactiva${medidores.length > 1 ? "n los medidores" : " el medidor"} N° ${enumerar(medidores.map((m) => m.numero))}`

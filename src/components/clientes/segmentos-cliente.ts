@@ -95,8 +95,8 @@ function cantidadConNombre(n: number, singular: string, plural: string): string 
 /**
  * Lo que tiene el cliente, en el orden del plano. Lo ubicado en el plano manda (con sus
  * números); si factura algo que todavía no está ubicado, se muestra la cantidad facturada.
- * La quinta, solo la del puestero que además alquila una (0046), al final: la del quintero
- * ya la dice su categoría.
+ * La quinta, solo la del puestero que además alquila una (0046) o la del ambulante (0047), al
+ * final: la del quintero ya la dice su categoría.
  */
 export function etiquetasCliente(
   espacios: EspacioDeCliente[],
@@ -132,7 +132,7 @@ export function etiquetasCliente(
 
   if (cantidad("EXPC") > 0) etiquetas.push(cantidadConNombre(cantidad("EXPC"), "cochera", "cocheras"));
 
-  if (categoria === "puestero") {
+  if (categoria === "puestero" || categoria === "ambulante") {
     const quintas = espacios.filter((e) => e.tipo === "quinta");
     if (quintas.length > 0) etiquetas.push(etiquetaGrupo("Quinta", "Quintas", quintas));
     else if (cantidad("EXPQ") > 0) etiquetas.push(cantidadConNombre(cantidad("EXPQ"), "quinta", "quintas"));

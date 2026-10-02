@@ -169,7 +169,7 @@ function pasoQuePaga(lider: boolean): Paso {
       "clientes-paga-ambulante": {
         titulo: "El ambulante paga por día",
         texto:
-          "Al ambulante se le cobra por día, cuando viene; si alquila cochera, la cochera se cobra por mes. En un puestero o un quintero, acá ves cada cosa que paga con su cantidad y su porcentaje.",
+          "Al ambulante se le cobra por día, cuando viene; si alquila cochera o quinta, eso se cobra por mes, en un pago. En un puestero o un quintero, acá ves cada cosa que paga con su cantidad y su porcentaje.",
       },
       "clientes-solapa-paga": {
         texto: `Lo que se le factura cada mes está en «Qué paga»: tocá la pestaña para verlo. ${explicacion}`,
@@ -216,7 +216,7 @@ const pasoQuePagaJefe: Paso = {
     "clientes-paga-ambulante": {
       titulo: "El ambulante paga por día",
       texto:
-        "Al ambulante se le cobra por día, cuando viene, y no paga en cuotas; si alquila cochera, la cochera se cobra por mes. Lo mensual del quintero es su quinta y en cuántos pagos la cobra.",
+        "Al ambulante se le cobra por día, cuando viene, y no paga en cuotas. Si alquila quinta o cochera, eso se cobra por mes, en un pago: la quinta la pedís vos abajo y la aprueba el Líder; la cochera la carga él. Lo mensual del quintero es su quinta y en cuántos pagos la cobra.",
     },
     "clientes-conceptos": {
       texto:

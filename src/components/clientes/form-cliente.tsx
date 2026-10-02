@@ -81,6 +81,12 @@ type AltaHecha = { id: string; nombre: string; codigo?: number; revisaLider: boo
 /** Lo mensual que factura hoy (edición): para avisar qué deja de facturarse si cambia de categoría. */
 export type ConceptoActivo = { codigo: string; nombre: string; segmento: string | null };
 
+/** Edición: qué pasa en el plano si pasa a esta categoría. `libera`: lo que queda libre
+ * ("Puestos 58 · 60"); `conserva`: lo que se queda con él ("la cochera 3 y la quinta 40"). */
+export type LugaresAlPasar = { libera: string | null; conserva: string | null };
+/** El empleado conserva sus cocheras (0040); el ambulante, sus cocheras y quintas (0045, 0047). */
+export type LugaresSiPasaA = Partial<Record<"empleado" | "ambulante", LugaresAlPasar>>;
+
 /**
  * Formulario de datos del cliente: sirve para el alta y para la edición.
  * El alta se adapta a lo que es (¿Qué es?): el ambulante lleva nombre, apodo, DNI y
@@ -97,8 +103,7 @@ export function FormCliente({
   categoriaInicial,
   cuotasQuintero = 4,
   conceptosActivos = [],
-  lugaresTexto = null,
-  lugaresSinCocheraTexto = null,
+  lugaresSiPasaA = {},
   medidoresActivos = [],
   alGuardar,
 }: {
@@ -113,11 +118,9 @@ export function FormCliente({
   cuotasQuintero?: number;
   /** Edición: lo mensual que factura hoy (qué deja de facturarse al cambiar de categoría). */
   conceptosActivos?: ConceptoActivo[];
-  /** Edición: sus lugares en el plano ("Puestos 58 · 60 · Cochera 3"). */
-  lugaresTexto?: string | null;
-  /** Edición: los mismos sin las cocheras: es lo que se libera si pasa a empleado (0040) o a
-   * ambulante (0045), que conservan sus cocheras. */
-  lugaresSinCocheraTexto?: string | null;
+  /** Edición: qué se libera y qué conserva si pasa a empleado (sus cocheras, 0040) o a
+   * ambulante (sus cocheras y quintas, 0045 y 0047). */
+  lugaresSiPasaA?: LugaresSiPasaA;
   /** Edición: N° de sus medidores activos, que se desactivan si pasa a ambulante. */
   medidoresActivos?: string[];
   alGuardar?: () => void;
@@ -439,11 +442,7 @@ export function FormCliente({
             <AvisoCambioCategoria
               categoria={categoria}
               dejaDe={conceptosActivos.filter((c) => !conceptoSigueConCategoria(c.segmento, categoria))}
-              lugaresTexto={categoria === "ambulante" || categoria === "empleado" ? lugaresSinCocheraTexto : null}
-              // Si sin las cocheras queda otro texto, es que tiene cocheras (y las conserva).
-              conservaCocheras={
-                (categoria === "ambulante" || categoria === "empleado") && lugaresTexto !== lugaresSinCocheraTexto
-              }
+              lugares={categoria === "ambulante" || categoria === "empleado" ? lugaresSiPasaA[categoria] : undefined}
               medidores={categoria === "ambulante" || categoria === "empleado" ? medidoresActivos : []}
               directo={directo}
             />
@@ -629,7 +628,7 @@ export function FormCliente({
             en cada cobro.
           </p>
           <p className="text-sm text-muted-foreground">
-            No tiene acceso al portal ni paga en cuotas. Si alquila cochera, la cochera se cobra
+            No tiene acceso al portal ni paga en cuotas. Si alquila cochera o quinta, se cobra
             aparte, por mes: se agrega después en su carpeta.
           </p>
         </div>
@@ -807,29 +806,28 @@ function articulo(categoria: CategoriaCliente): string {
 }
 
 /**
- * Qué pasa al cambiar de categoría (lo aplica private.aplicar_cambio, 0024/0040/0045): lo
- * mensual que la categoría nueva no tiene deja de facturarse y, si pasa a ambulante o a
- * empleado, se liberan sus lugares del plano (menos las cocheras, que conserva) y se
- * desactivan sus medidores (abono y consumo de luz). Se dice ANTES de guardar, con los
- * códigos, para que no sorprenda.
+ * Qué pasa al cambiar de categoría (lo aplica private.aplicar_cambio, 0024/0040/0045/0047):
+ * lo mensual que la categoría nueva no tiene deja de facturarse y, si pasa a ambulante o a
+ * empleado, se liberan sus lugares del plano (menos lo que conserva: las cocheras el
+ * empleado; cocheras y quintas el ambulante) y se desactivan sus medidores (abono y consumo
+ * de luz). Se dice ANTES de guardar, con los códigos, para que no sorprenda.
  */
 function AvisoCambioCategoria({
   categoria,
   dejaDe,
-  lugaresTexto,
-  conservaCocheras,
+  lugares,
   medidores,
   directo,
 }: {
   categoria: CategoriaCliente;
   dejaDe: ConceptoActivo[];
-  /** Lo que se libera en el plano. */
-  lugaresTexto: string | null;
-  /** Tiene cocheras en el plano y se quedan con él. */
-  conservaCocheras: boolean;
+  /** Lo que se libera en el plano y lo que conserva. */
+  lugares?: LugaresAlPasar;
   medidores: string[];
   directo: boolean;
 }) {
+  const libera = lugares?.libera ?? null;
+  const conserva = lugares?.conserva ?? null;
   const cuando = directo ? "Al guardar" : "Cuando el Líder lo apruebe";
   return (
     <div
@@ -840,7 +838,7 @@ function AvisoCambioCategoria({
       <div className="min-w-0 space-y-1">
         <p className="font-medium">
           {categoria === "ambulante"
-            ? "Como ambulante se le cobra por día: no paga en cuotas y no es socio. Por mes solo se le cobra la cochera, si alquila."
+            ? "Como ambulante se le cobra por día: no paga en cuotas y no es socio. Por mes solo se le cobra la cochera o la quinta, si alquila."
             : categoria === "empleado"
               ? "Como empleado solo se le cobra la cochera: no es socio, no tiene acceso al portal y paga en un pago por mes."
               : `Pasa a ser ${LABEL_CATEGORIA[categoria].toLowerCase()}.`}
@@ -850,14 +848,14 @@ function AvisoCambioCategoria({
             {cuando} deja de facturarse: {dejaDe.map((c) => `${c.codigo} (${c.nombre})`).join(", ")}.
           </p>
         ) : null}
-        {lugaresTexto ? (
+        {libera ? (
           <p className="break-words">
-            {conservaCocheras
-              ? `Se libera en el plano: ${lugaresTexto} (conserva sus cocheras).`
-              : `También se libera en el plano: ${lugaresTexto}.`}
+            {conserva
+              ? `Se libera en el plano: ${libera} (conserva ${conserva}).`
+              : `También se libera en el plano: ${libera}.`}
           </p>
-        ) : conservaCocheras ? (
-          <p className="break-words">Conserva sus cocheras en el plano.</p>
+        ) : conserva ? (
+          <p className="break-words">Conserva en el plano {conserva}.</p>
         ) : null}
         {medidores.length > 0 ? (
           <p className="break-words">

@@ -496,7 +496,7 @@ function pasosMapaJefe(): Paso[] {
       ancla: "mapa-plano",
       titulo: "El plano del mercado",
       texto:
-        "Es el mercado visto desde arriba. Tus quintas están pintadas según cómo viene cada quintero con el pago; en blanco, las libres, y en azul las que alquila un puestero (esas las lleva Administración). Los puestos van todos del mismo color, porque son de Administración.",
+        "Es el mercado visto desde arriba. Tus quintas están pintadas según cómo viene con el pago el quintero (o el ambulante) que la alquila; en blanco, las libres, y en azul las que alquila un puestero (esas las lleva Administración). Los puestos van todos del mismo color, porque son de Administración.",
       sinAncla: {
         texto: "Acá vas a ver el mercado visto desde arriba, con tus quintas pintadas según cómo viene cada quintero. Así:",
         pantalla: PortadaMapa,

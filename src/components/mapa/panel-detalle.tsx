@@ -174,7 +174,9 @@ export function PanelDetalle({
     const esQuintero = cliente.categoria ? cliente.categoria === "quintero" : cliente.facturado.quintas > 0;
     const gestiona =
       !categoriasGestion || !cliente.categoria || categoriasGestion.includes(cliente.categoria);
-    const puedeCobrar = gestiona && destinos.cobro !== null && (!soloQuinteros || esQuintero);
+    // El Jefe cobra a sus quinteros y también al ambulante que tiene una quinta (0047).
+    const puedeCobrar =
+      gestiona && destinos.cobro !== null && (!soloQuinteros || esQuintero || cliente.categoria === "ambulante");
     const quienGestiona =
       cliente.categoria === "puestero" || cliente.categoria === "empleado"
         ? "Administración"
@@ -401,7 +403,8 @@ export function PanelDetalle({
     const titulo =
       espacio.tipo === "bar" ? "Bar" : `${NOMBRE_TIPO[espacio.tipo]} ${numeroVisible(espacio)}`;
     // Ocupado por alguien que no está en el mapa (dado de baja): no hay ficha que mostrar;
-    // se ofrece dejarlo libre. Los ambulantes sí están (pueden alquilar cochera, 0045).
+    // se ofrece dejarlo libre. Los ambulantes sí están (pueden alquilar cochera o quinta,
+    // 0045 y 0047).
     const huerfano = espacio.clienteId !== null;
     const sumarA = puedeEditar && onSumar && !huerfano ? vecinos : [];
     return (

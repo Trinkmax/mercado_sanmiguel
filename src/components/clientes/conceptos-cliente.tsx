@@ -96,7 +96,7 @@ function textoCuotasCorto(cuotas: number): string {
 /** Pestaña "Qué paga": lo que se le factura cada mes (agrupado, con precio y total) y en
  * cuántas veces lo paga. El Líder aplica directo; Administración y el Jefe proponen y el
  * cambio queda esperando aprobación (se ve arriba en la ficha). El ambulante paga por día
- * y, si alquila cochera, la cochera por mes (0045): sin cuotas. */
+ * y, si alquila cochera o quinta, eso por mes (0045, 0047): sin cuotas. */
 export function ConceptosCliente({
   clienteId,
   categoria,
@@ -125,13 +125,13 @@ export function ConceptosCliente({
     !conceptoAsignablePorRol({ tipo: "recurrente", segmento: i.segmento }, rol, categoria);
 
   if (categoria === "ambulante") {
-    // El ambulante paga por día; por mes, solo la cochera si alquila una (0045). Si le quedó
-    // otra cosa mensual prendida (de antes de pasar a ambulante), se muestra aparte para
-    // apagarla: no queda escondida.
-    const cocheras = items.filter((i) => conceptoSigueConCategoria(i.segmento, categoria));
+    // El ambulante paga por día; por mes, solo la cochera y la quinta si alquila (0045, 0047),
+    // en un pago. Si le quedó otra cosa mensual prendida (de antes de pasar a ambulante), se
+    // muestra aparte para apagarla: no queda escondida.
+    const mensuales = items.filter((i) => conceptoSigueConCategoria(i.segmento, categoria));
     const prendidos = items.filter((i) => i.activo && !conceptoSigueConCategoria(i.segmento, categoria));
-    const alquila = cocheras.some((i) => i.activo) || altasPendientes.length > 0;
-    const puedeCambiar = disponibles.length > 0 || cocheras.some((i) => !soloLectura(i));
+    const alquila = mensuales.some((i) => i.activo) || altasPendientes.length > 0;
+    const puedeCambiar = disponibles.length > 0 || mensuales.some((i) => !soloLectura(i));
     return (
       <div className="space-y-6">
         <Card className="text-base" data-tour="clientes-paga-ambulante">
@@ -141,32 +141,28 @@ export function ConceptosCliente({
               <p className="text-lg font-semibold">Se le cobra por día, cuando viene</p>
               <p className="text-muted-foreground">
                 No hay un precio fijo: cuánto paga por día se pone en cada cobro. No paga en cuotas.{" "}
-                {alquila
-                  ? "Aparte, la cochera se le cobra por mes."
-                  : "Si alquila cochera, la cochera se cobra aparte, por mes."}
+                {alquila ? textoAlquilaAmbulante(mensuales) : "Si alquila cochera o quinta, se cobra aparte, por mes."}
               </p>
             </div>
           </CardContent>
         </Card>
-        {cocheras.length > 0 || altasPendientes.length > 0 || disponibles.length > 0 ? (
+        {mensuales.length > 0 || altasPendientes.length > 0 || disponibles.length > 0 ? (
           <Card className="text-base">
             <CardHeader>
-              <CardTitle className="text-lg">La cochera, por mes</CardTitle>
+              <CardTitle className="text-lg">Cochera y quinta, por mes</CardTitle>
               <CardDescription>
-                Aparte de lo que paga por día.
+                Aparte de lo que paga por día, en un pago por mes.
                 {puedeCambiar
                   ? ` Los cambios rigen desde la próxima facturación mensual${directo ? "." : ": cada uno lo aprueba el Líder de Procesos."}`
                   : ""}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-5">
-              {cocheras.length === 0 && altasPendientes.length === 0 ? (
-                <p className="text-muted-foreground">
-                  No alquila cochera. Si alquila una, agregala abajo: se le cobra por mes.
-                </p>
+              {mensuales.length === 0 && altasPendientes.length === 0 ? (
+                <p className="text-muted-foreground">{textoSinAlquilerAmbulante(disponibles, directo)}</p>
               ) : (
                 <ListaConceptos
-                  items={cocheras}
+                  items={mensuales}
                   altasPendientes={altasPendientes}
                   clienteId={clienteId}
                   categoria={categoria}
@@ -187,7 +183,7 @@ export function ConceptosCliente({
               <Alert className="border-parcial/40 bg-parcial-suave">
                 <TriangleAlert className="size-4 text-parcial" />
                 <AlertDescription className="text-base text-foreground">
-                  Como ambulante, por mes solo se le factura la cochera.{" "}
+                  Como ambulante, por mes solo se le facturan la cochera y la quinta.{" "}
                   {prendidos.every(soloLectura)
                     ? "Avisale al Líder de Procesos para que lo apague."
                     : `Apagalo para que quede en orden${directo ? "." : ": el Líder de Procesos lo aprueba."}`}
@@ -269,6 +265,31 @@ export function ConceptosCliente({
       ) : null}
     </div>
   );
+}
+
+/** Ambulante que alquila: qué se le cobra por mes, aparte de los días ("Aparte, la quinta se
+ * le cobra por mes."). Con solo un pedido esperando al Líder, sin nombrarlo. */
+function textoAlquilaAmbulante(mensuales: ItemConcepto[]): string {
+  const cochera = mensuales.some((i) => i.activo && i.segmento === "cocheras");
+  const quinta = mensuales.some((i) => i.activo && i.segmento === "quinteros");
+  if (cochera && quinta) return "Aparte, la cochera y la quinta se le cobran por mes.";
+  if (cochera) return "Aparte, la cochera se le cobra por mes.";
+  if (quinta) return "Aparte, la quinta se le cobra por mes.";
+  return "Aparte, lo que alquila se le cobra por mes.";
+}
+
+/** Ambulante que no alquila nada: qué puede agregar quien mira (el Jefe, la quinta; el
+ * Líder, cochera y quinta, 0047). */
+function textoSinAlquilerAmbulante(disponibles: ConceptoDisponible[], directo: boolean): string {
+  const cochera = disponibles.some((c) => c.segmento === "cocheras");
+  const quinta = disponibles.some((c) => c.segmento === "quinteros");
+  if (cochera && quinta) return "No alquila cochera ni quinta. Si alquila, agregalo abajo: se le cobra por mes.";
+  if (quinta)
+    return `No alquila cochera ni quinta. Si alquila una quinta, agregala abajo: se le cobra por mes.${
+      directo ? "" : " La cochera la carga el Líder de Procesos."
+    }`;
+  if (cochera) return "No alquila cochera ni quinta. Si alquila una cochera, agregala abajo: se le cobra por mes.";
+  return "No alquila cochera ni quinta.";
 }
 
 /** Lo que paga por mes, agrupado, con las altas que esperan al Líder y el total del mes. */

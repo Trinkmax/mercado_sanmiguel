@@ -8,7 +8,7 @@ import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
 
 /**
- * Ambulante con otras deudas (la cochera del mes, si alquila una, o una multa): el cobro por
+ * Ambulante con otras deudas (la cochera o la quinta del mes, si alquila, o una multa): el cobro por
  * días es la acción principal y el cobro de lo demás queda plegado. Se monta siempre (aunque
  * ya no deba) para que la confirmación del cobro de adentro no se pierda cuando la página se
  * actualiza.
@@ -19,7 +19,8 @@ export function OtrasDeudas({
   children,
 }: {
   deuda: number;
-  /** Qué debe, en una línea (cuando debe): "La cochera: tocá para cobrarla". */
+  /** Qué debe, en una línea (cuando debe): "La cochera: tocá para cobrarla", "La cochera y la
+   * quinta: tocá para cobrarlas". */
   detalle?: string;
   children: React.ReactNode;
 }) {

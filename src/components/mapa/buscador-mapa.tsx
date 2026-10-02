@@ -185,7 +185,13 @@ export function BuscadorMapa({
             ? textoEspacios(suyos)
             : "No factura lugares del plano";
       } else if (anonimo) {
-        detalle = c.mes ? `Quintero · ${textoAvance(c.mes)}` : "Quintero";
+        // Mapa del Jefe: sus quinteros y los ambulantes que tienen quinta (0047).
+        detalle =
+          c.categoria === "ambulante"
+            ? ["Ambulante", ...(suyos.length > 0 ? [textoEspacios(suyos)] : [])].join(" · ")
+            : c.mes
+              ? `Quintero · ${textoAvance(c.mes)}`
+              : "Quintero";
       } else {
         // Todo lo que tiene, como en Clientes: lo ubicado y lo que no se marca en el plano.
         const sinLugar = sinLugarEnPlano(c.facturado, suyos);
