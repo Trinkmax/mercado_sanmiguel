@@ -487,7 +487,9 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
   const disponibles = catalogo
     .filter(
       (c) =>
-        !asignados.has(c.id) && !conceptoPendiente.has(c.id) && conceptoAsignablePorRol(c, perfil.rol)
+        !asignados.has(c.id) &&
+        !conceptoPendiente.has(c.id) &&
+        conceptoAsignablePorRol(c, perfil.rol, categoria)
     )
     .filter((c) => conceptoSigueConCategoria(c.segmento, categoria))
     .map((c) => ({

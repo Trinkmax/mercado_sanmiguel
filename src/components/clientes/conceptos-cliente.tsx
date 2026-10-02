@@ -36,6 +36,7 @@ import {
   GRUPOS_CONCEPTO,
   TOAST_ENVIADO_APROBACION,
   aplicaDirectoRol,
+  ayudaAlOfrecer,
   conceptoAsignablePorRol,
   conceptoSigueConCategoria,
   cuotasDeCategoria,
@@ -119,7 +120,9 @@ export function ConceptosCliente({
 }) {
   const directo = aplicaDirectoRol(rol);
   // Lo que el rol no puede tocar (la cochera de un ambulante, para el Jefe) se ve sin controles.
-  const soloLectura = (i: ItemConcepto) => !conceptoAsignablePorRol({ tipo: "recurrente", segmento: i.segmento }, rol);
+  // La quinta de un puestero sí la toca Administración (0046).
+  const soloLectura = (i: ItemConcepto) =>
+    !conceptoAsignablePorRol({ tipo: "recurrente", segmento: i.segmento }, rol, categoria);
 
   if (categoria === "ambulante") {
     // El ambulante paga por día; por mes, solo la cochera si alquila una (0045). Si le quedó
@@ -171,7 +174,7 @@ export function ConceptosCliente({
                   soloLectura={soloLectura}
                 />
               )}
-              <AgregarConcepto clienteId={clienteId} disponibles={disponibles} directo={directo} />
+              <AgregarConcepto clienteId={clienteId} categoria={categoria} disponibles={disponibles} directo={directo} />
             </CardContent>
           </Card>
         ) : null}
@@ -249,7 +252,7 @@ export function ConceptosCliente({
             />
           )}
 
-          <AgregarConcepto clienteId={clienteId} disponibles={disponibles} directo={directo} />
+          <AgregarConcepto clienteId={clienteId} categoria={categoria} disponibles={disponibles} directo={directo} />
         </CardContent>
       </Card>
 
@@ -354,10 +357,12 @@ function ListaConceptos({
 /** "Agregar": chips con lo que todavía no paga (pocas opciones → un toque), cantidad y botón. */
 function AgregarConcepto({
   clienteId,
+  categoria,
   disponibles,
   directo,
 }: {
   clienteId: string;
+  categoria: CategoriaCliente;
   disponibles: ConceptoDisponible[];
   directo: boolean;
 }) {
@@ -465,7 +470,7 @@ function AgregarConcepto({
             />
           </div>
           <p className="min-w-40 flex-1 pb-2.5 text-sm text-muted-foreground">
-            {AYUDA_CONCEPTO[concepto.codigo] ?? concepto.nombre} ·{" "}
+            {ayudaAlOfrecer(concepto, categoria) ?? concepto.nombre} ·{" "}
             <Money
               monto={montoConcepto(cantidad, concepto.precio, porcentaje)}
               className="font-semibold text-foreground"

@@ -32,8 +32,11 @@ export default async function NuevoClientePage({ searchParams }: Props) {
     supabase.from("configuracion").select("cuotas_default_quintero").maybeSingle(),
   ]);
 
+  // Lo que el rol puede asignar en alguna de las categorías que da de alta (el formulario
+  // muestra lo de la elegida): a Administración también le llega la quinta, para el puestero
+  // que además alquila una (0046).
   const conceptos = (conceptosRes.data ?? [])
-    .filter((c) => conceptoAsignablePorRol(c, perfil.rol))
+    .filter((c) => categoriasRol.some((cat) => conceptoAsignablePorRol(c, perfil.rol, cat)))
     .map((c) => ({
       id: c.id,
       codigo: c.codigo,

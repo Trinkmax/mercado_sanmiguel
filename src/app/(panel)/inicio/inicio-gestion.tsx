@@ -123,7 +123,10 @@ export async function InicioGestion({ perfil, supabase }: { perfil: Perfil; supa
       .eq("org_id", org)
       .in("estado", ["nueva", "en_revision", "en_consejo", "resuelta", "asignada"]),
     // Quintas y ambulantes los cobra el Jefe de Portería (G8): no van en la cobranza
-    // ni en el "por cobrar" de Administración.
+    // ni en el "por cobrar" de Administración. La quinta de un puestero (0046) la cobra
+    // Administración, pero resumen_conceptos suma EXPQ por código, sin separar quinteros de
+    // puesteros: sumarla acá metería las quintas de Portería. Queda afuera (lo dice el
+    // "sin quintas ni ambulantes"); en Cobrar, la caja y la ficha del puestero sí está.
     rol === "admin"
       ? supabase
           .from("conceptos")

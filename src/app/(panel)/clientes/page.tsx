@@ -201,7 +201,7 @@ export default async function ClientesPage({ searchParams }: Props) {
         esSocio: Boolean(c.es_socio),
         activo: Boolean(c.activo),
         segmentos: (c.segmentos ?? []) as string[],
-        etiquetas: etiquetasCliente(espacios, conceptosPorCliente.get(c.cliente_id) ?? []),
+        etiquetas: etiquetasCliente(espacios, conceptosPorCliente.get(c.cliente_id) ?? [], c.categoria),
         numerosPlano: espacios.map((e) => e.numero ?? ""),
         cuit: cuitPorCliente.get(c.cliente_id) ?? null,
         deuda,

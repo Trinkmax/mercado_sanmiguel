@@ -20,6 +20,7 @@ import {
   CODIGO_DIFERENCIA,
   compararNumero,
   diferencias,
+  esFemenino,
   etiquetaEspacio,
   etiquetaEspacios,
   limitesPlano,
@@ -733,7 +734,9 @@ export function MapaMercado({
       if (esPorteria && e.tipo !== "quinta") return `${nombre}. Tocá para avisarle algo al Líder`;
       if (!e.clienteId) return `${nombre}, libre${e.nota ? ` (${e.nota})` : ""}`;
       const c = clientePorId.get(e.clienteId);
-      return c ? `${nombre}, ${c.nombre}, ${TEXTO_ESTADO[c.estado]}` : `${nombre}, ocupado`;
+      return c
+        ? `${nombre}, ${c.nombre}, ${TEXTO_ESTADO[c.estado]}`
+        : `${nombre}, ${esFemenino(e.tipo) ? "ocupada" : "ocupado"}`;
     },
     [clientePorId, esPorteria]
   );
@@ -1014,7 +1017,7 @@ export function MapaMercado({
           <>
             <p className="text-sm font-semibold">{nombreEspacio(e)}</p>
             <p className="text-xs text-muted-foreground">
-              {e.clienteId ? "Ocupado" : "Libre"}
+              {e.clienteId ? (esFemenino(e.tipo) ? "Ocupada" : "Ocupado") : "Libre"}
               {e.propio ? " · puesto propio de la cooperativa" : ""}
               {e.medio ? " · medio puesto" : tamanoDe(e) > 1 ? ` · ${formatFraccion(tamanoDe(e))} puestos` : ""}
               {e.enAlquiler ? ` · en alquiler${e.duenio ? ` (dueño: ${e.duenio})` : ""}` : ""}

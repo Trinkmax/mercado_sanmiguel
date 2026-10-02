@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import {
   compararNumero,
   diferencias,
+  esFemenino,
   etiquetaEspacio,
   normalizar,
   numeroVisible,
@@ -135,7 +136,9 @@ export function BuscadorMapa({
               : duenio
                 ? duenio.apodo ?? duenio.nombre
                 : e.clienteId
-                  ? "Ocupado"
+                  ? esFemenino(e.tipo)
+                    ? "Ocupada"
+                    : "Ocupado"
                   : "Libre",
           });
         }

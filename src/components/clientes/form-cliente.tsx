@@ -176,13 +176,9 @@ export function FormCliente({
   const esEmpleado = categoria === "empleado";
   const sinDatosPersonales = esAmbulante || esEmpleado;
   const mostrarCategorias = categoriasRol.length > 1;
-  const conceptosVisibles = (conceptos ?? []).filter((c) =>
-    esQuintero
-      ? c.segmento === "quinteros"
-      : esEmpleado
-        ? c.segmento === "cocheras"
-        : c.segmento !== "quinteros" && c.segmento !== "ambulantes"
-  );
+  // Lo que paga cada categoría (la misma regla que la ficha): el quintero, la quinta; el
+  // empleado, la cochera; el puestero, lo del puesto y también la quinta si alquila una (0046).
+  const conceptosVisibles = (conceptos ?? []).filter((c) => conceptoSigueConCategoria(c.segmento, categoria));
   const { opciones: opcionesCuotas, permitirOtra } = cuotasDeCategoria(categoria);
   const { total: totalMes } = totalMensual(
     conceptosVisibles
@@ -642,6 +638,7 @@ export function FormCliente({
       {esAlta && !esAmbulante && conceptosVisibles.length > 0 ? (
         <ConceptosAlta
           conceptos={conceptosVisibles}
+          categoria={categoria}
           cantidades={cantidades}
           onCambiar={(conceptoId, cantidad) =>
             setCantidades((prev) => ({ ...prev, [conceptoId]: cantidad }))

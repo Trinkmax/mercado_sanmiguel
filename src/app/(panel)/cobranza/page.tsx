@@ -188,7 +188,7 @@ export default async function CobranzaPage({ searchParams }: { searchParams: Sp 
       deuda: Math.max(Math.round((d.deuda - saldo) * 100) / 100, 0),
       nivel: nivelDeuda({ deuda: d.deuda, deudaVencida: d.vencida, saldoFavor: saldo }),
       numerosPlano: espacios.flatMap((e) => (e.numero ? [e.numero] : [])),
-      lugares: etiquetasCliente(espacios, conceptosPorCliente.get(c.id) ?? []),
+      lugares: etiquetasCliente(espacios, conceptosPorCliente.get(c.id) ?? [], c.categoria),
       avance: avancePorCliente.get(c.id) ?? null,
       pagoHasta: pagoHastaPorCliente.get(c.id) ?? null,
     };

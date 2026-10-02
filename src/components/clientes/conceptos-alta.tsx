@@ -7,11 +7,13 @@ import { CampoPorcentaje } from "@/components/clientes/campo-porcentaje";
 import {
   AYUDA_CONCEPTO,
   GRUPOS_CONCEPTO,
+  ayudaAlOfrecer,
   grupoDeConcepto,
   totalMensual,
 } from "@/components/clientes/constantes";
 import { cn } from "@/lib/utils";
 import { montoConcepto } from "@/lib/format";
+import type { CategoriaCliente } from "@/lib/segmentos";
 
 export type ConceptoRecurrente = {
   id: string;
@@ -33,12 +35,15 @@ export { normalizarCantidad } from "@/components/clientes/stepper-cantidad";
  */
 export function ConceptosAlta({
   conceptos,
+  categoria,
   cantidades,
   onCambiar,
   porcentajes = {},
   onCambiarPorcentaje,
 }: {
   conceptos: ConceptoRecurrente[];
+  /** Lo que se está dando de alta: al puestero, la quinta se le explica distinto (0046). */
+  categoria?: CategoriaCliente;
   cantidades: Record<string, number>;
   onCambiar: (conceptoId: string, cantidad: number) => void;
   /** Porcentaje del precio por concepto (sin cargar = 100). */
@@ -81,7 +86,7 @@ export function ConceptosAlta({
               const cantidad = cantidades[c.id] ?? 0;
               const porcentaje = porcentajes[c.id] ?? 100;
               const paga = cantidad > 0;
-              const ayuda = AYUDA_CONCEPTO[c.codigo];
+              const ayuda = categoria ? ayudaAlOfrecer(c, categoria) : AYUDA_CONCEPTO[c.codigo];
               return (
                 <div key={c.id} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2.5">
                   <div className="flex min-w-0 flex-1 basis-56 items-start gap-3">

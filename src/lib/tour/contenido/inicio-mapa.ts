@@ -43,7 +43,7 @@ function pasoCobranzaMes(rol: Rol): Paso {
     titulo: "Cómo viene el mes",
     texto: lider
       ? "Cada concepto tiene su barra: verde lo cobrado, rojo lo que falta y gris el beneficio por pagar a tiempo. Abajo, el total cobrado y el total por cobrar. «Ver reportes» te lleva al detalle, mes a mes."
-      : "Cada concepto tiene su barra: verde lo cobrado, rojo lo que falta y gris el beneficio por pagar a tiempo. Abajo, el total cobrado y el total por cobrar. Son los puesteros: quintas y ambulantes los cobra el Jefe de Portería.",
+      : "Cada concepto tiene su barra: verde lo cobrado, rojo lo que falta y gris el beneficio por pagar a tiempo. Abajo, el total cobrado y el total por cobrar. Son los puesteros, sin quintas ni ambulantes: esos no entran acá.",
     variantes: {
       "inicio-cobranza-vacia": {
         texto: lider
@@ -496,7 +496,7 @@ function pasosMapaJefe(): Paso[] {
       ancla: "mapa-plano",
       titulo: "El plano del mercado",
       texto:
-        "Es el mercado visto desde arriba. Tus quintas están pintadas según cómo viene cada quintero con el pago; en blanco, las que no tienen quintero. Los puestos van todos del mismo color, porque son de Administración.",
+        "Es el mercado visto desde arriba. Tus quintas están pintadas según cómo viene cada quintero con el pago; en blanco, las libres, y en azul las que alquila un puestero (esas las lleva Administración). Los puestos van todos del mismo color, porque son de Administración.",
       sinAncla: {
         texto: "Acá vas a ver el mercado visto desde arriba, con tus quintas pintadas según cómo viene cada quintero. Así:",
         pantalla: PortadaMapa,

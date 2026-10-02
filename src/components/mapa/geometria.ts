@@ -310,9 +310,10 @@ export function conArticulo(e: Pick<Espacio, "tipo" | "numero" | "medio">): stri
   return `${esFemenino(e.tipo) ? "la" : "el"} ${NOMBRE_TIPO[e.tipo].toLowerCase()} ${numeroVisible(e)}`;
 }
 
-/** Quién ocupa un lugar: el quintero (quinta), el cliente (cochera, invernadero) o el puestero. */
+/** Quién ocupa un lugar: el cliente (cochera, invernadero, quinta) o el puestero. La quinta
+ * dice "cliente": la alquila un quintero o un puestero que además tiene puesto (0046). */
 export function ocupante(tipo: TipoEspacio): string {
-  return tipo === "quinta" ? "quintero" : tipo === "cochera" || tipo === "invernadero" ? "cliente" : "puestero";
+  return tipo === "quinta" || tipo === "cochera" || tipo === "invernadero" ? "cliente" : "puestero";
 }
 
 /** "58", "34½", "34 (1½)", "?" — el número tal como se lee en el plano (con el tamaño si
