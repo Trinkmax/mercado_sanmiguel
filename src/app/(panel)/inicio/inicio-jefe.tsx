@@ -29,11 +29,13 @@ export async function InicioJefe({ perfil, supabase }: { perfil: Perfil; supabas
 
   const [resumen, quinterosRes, avanceRes, caja, paraResolver] = await Promise.all([
     resumenDelMes(supabase, periodo),
+    // Quinteros y ambulantes con quinta (0047): la tarjeta suma la EXPQ de todos (resumen_conceptos),
+    // así que «al día / deben» cuenta a los mismos.
     supabase
       .from("clientes")
-      .select("id")
+      .select("id, categoria, cliente_conceptos(activo, conceptos(codigo))")
       .eq("org_id", org)
-      .eq("categoria", "quintero")
+      .in("categoria", ["quintero", "ambulante"])
       .eq("activo", true),
     supabase
       .from("v_avance_mes")
@@ -52,7 +54,15 @@ export async function InicioJefe({ perfil, supabase }: { perfil: Perfil; supabas
 
   const expq = resumen.find((f) => f.codigo === "EXPQ");
   const amb = resumen.find((f) => f.codigo === "AMB");
-  const quinteros = new Set((quinterosRes.data ?? []).map((c) => c.id));
+  const quinteros = new Set(
+    (quinterosRes.data ?? [])
+      .filter(
+        (c) =>
+          c.categoria === "quintero" ||
+          (c.cliente_conceptos ?? []).some((cc) => cc.activo && cc.conceptos?.codigo === "EXPQ")
+      )
+      .map((c) => c.id)
+  );
   const avanceQuinteros = (avanceRes.data ?? []).filter(
     (a) => a.cliente_id && quinteros.has(a.cliente_id) && Number(a.total ?? 0) > 0
   );

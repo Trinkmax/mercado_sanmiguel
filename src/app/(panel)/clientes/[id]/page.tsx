@@ -569,7 +569,8 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
       ? lugaresJefe
           .filter((e) => e.tipo === "quinta")
           .map((e) => ({ id: e.id, tipo: e.tipo, numero: e.numero, medio: e.medio, x: 0, y: 0 }))
-          .sort((a, b) => a.numero.localeCompare(b.numero, "es", { numeric: true }))
+          // El número puede quedar vacío si lo borran en el editor del plano.
+          .sort((a, b) => (a.numero ?? "").localeCompare(b.numero ?? "", "es", { numeric: true }))
       : [];
   const textoLugares = (lugares: typeof lugaresAviso) =>
     lugares.length === 0
