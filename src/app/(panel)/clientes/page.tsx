@@ -22,31 +22,34 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { BotonExportar } from "@/components/shared/boton-exportar";
 import { BuscadorClientes } from "@/components/clientes/buscador-clientes";
 import { ChipCategoria } from "@/components/clientes/chip-categoria";
+import { FiltroConcepto } from "@/components/clientes/filtro-concepto";
+import { todasLasFilas } from "@/components/comunicaciones/datos";
 import {
+  etiquetaConcepto,
   etiquetasCliente,
   FILTROS_ESTADO,
+  hrefListado,
   leerFiltrosListado,
   normalizarBusqueda,
   segmentosDeRol,
   type ConceptoDeCliente,
   type EspacioDeCliente,
   type FiltroEstado,
+  type OpcionConcepto,
 } from "@/components/clientes/segmentos-cliente";
 
 export const metadata = { title: "Clientes" };
 
 type Props = {
-  searchParams: Promise<{ q?: string; seg?: string; estado?: string; tipo?: string; filtro?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    seg?: string;
+    estado?: string;
+    concepto?: string;
+    tipo?: string;
+    filtro?: string;
+  }>;
 };
-
-function hrefListado(p: { q?: string; seg?: string | null; estado?: string | null }): string {
-  const params = new URLSearchParams();
-  if (p.q) params.set("q", p.q);
-  if (p.seg) params.set("seg", p.seg);
-  if (p.estado) params.set("estado", p.estado);
-  const qs = params.toString();
-  return qs ? `/clientes?${qs}` : "/clientes";
-}
 
 /**
  * Fila de chips: en celular es UNA fila que se desliza de costado (con 9 chips + 3, en varias
@@ -113,17 +116,34 @@ export default async function ClientesPage({ searchParams }: Props) {
   const dni = dniBuscado(texto);
 
   const supabase = await createClient();
-  const [clientesRes, itemsRes, espaciosRes, deudaRes, saldoRes, cambiosRes, cuitRes] = await Promise.all([
+  const [clientesRes, items, catalogoRes, espaciosRes, deudaRes, saldoRes, cambiosRes, cuitRes] = await Promise.all([
     // Administración lee todos (joins de caja y circulares) pero acá ve solo puesteros (G8).
     supabase
       .from("v_clientes_segmentos")
       .select("cliente_id, codigo, nombre, apodo, categoria, es_socio, activo, segmentos")
       .in("categoria", categorias)
       .order("codigo"),
+    // Lo que paga cada uno (etiquetas y filtro por concepto). Solo de SUS categorías, como la
+    // lista: la RLS a Administración le deja leer también los de quinteros. En tandas: con
+    // varios conceptos por cliente esto pasa las 1000 filas antes que la lista de clientes.
+    todasLasFilas((desde, hasta) =>
+      supabase
+        .from("cliente_conceptos")
+        .select("id, cliente_id, cantidad, conceptos!inner(codigo, activo), clientes!inner(categoria)")
+        .eq("activo", true)
+        .eq("conceptos.activo", true)
+        .in("clientes.categoria", categorias)
+        .order("id")
+        .range(desde, hasta)
+    ),
+    // Opciones del filtro «Concepto»: los mensuales, en el orden de siempre.
     supabase
-      .from("cliente_conceptos")
-      .select("cliente_id, cantidad, conceptos(codigo, activo)")
-      .eq("activo", true),
+      .from("conceptos")
+      .select("codigo, nombre")
+      .eq("tipo", "recurrente")
+      .eq("activo", true)
+      .order("orden_imputacion")
+      .order("codigo"),
     // El Jefe no lee la tabla espacios (0022): sus quinteros y ambulantes no están en el plano.
     esJefe
       ? Promise.resolve({ data: [] as (EspacioDeCliente & { cliente_id: string | null })[] })
@@ -161,7 +181,7 @@ export default async function ClientesPage({ searchParams }: Props) {
     )
   );
   const conceptosPorCliente = new Map<string, ConceptoDeCliente[]>();
-  for (const i of itemsRes.data ?? []) {
+  for (const i of items) {
     if (!i.conceptos?.activo) continue;
     const lista = conceptosPorCliente.get(i.cliente_id) ?? [];
     lista.push({ codigo: i.conceptos.codigo, cantidad: Number(i.cantidad) });
@@ -191,6 +211,7 @@ export default async function ClientesPage({ searchParams }: Props) {
     const deuda = d?.deuda ?? 0;
     const nivel: NivelDeuda = nivelDeuda({ deuda, deudaVencida: d?.vencida ?? 0, saldoFavor });
     const espacios = espaciosPorCliente.get(c.cliente_id) ?? [];
+    const conceptosDelCliente = conceptosPorCliente.get(c.cliente_id) ?? [];
     return [
       {
         id: c.cliente_id,
@@ -201,7 +222,8 @@ export default async function ClientesPage({ searchParams }: Props) {
         esSocio: Boolean(c.es_socio),
         activo: Boolean(c.activo),
         segmentos: (c.segmentos ?? []) as string[],
-        etiquetas: etiquetasCliente(espacios, conceptosPorCliente.get(c.cliente_id) ?? [], c.categoria),
+        etiquetas: etiquetasCliente(espacios, conceptosDelCliente, c.categoria),
+        conceptos: conceptosDelCliente.map((x) => x.codigo),
         numerosPlano: espacios.map((e) => e.numero ?? ""),
         cuit: cuitPorCliente.get(c.cliente_id) ?? null,
         deuda,
@@ -235,21 +257,44 @@ export default async function ClientesPage({ searchParams }: Props) {
     return true;
   };
   const coincideSegmento = (c: Fila, s: Segmento | null) => !s || c.segmentos.includes(s);
+  const coincideConcepto = (c: Fila, codigo: string | null) => !codigo || c.conceptos.includes(codigo);
+
+  // Concepto: solo uno mensual y activo que exista (un link viejo o mal escrito no filtra).
+  const catalogo = catalogoRes.data ?? [];
+  const conceptoElegido = catalogo.find((c) => c.codigo.toUpperCase() === filtros.concepto) ?? null;
+  const concepto = conceptoElegido?.codigo ?? null;
 
   const buscados = todos.filter(coincideTexto);
   const conteoSegmento = (s: Segmento) =>
-    buscados.filter((c) => coincideEstado(c, estado) && coincideSegmento(c, s)).length;
+    buscados.filter(
+      (c) => coincideEstado(c, estado) && coincideSegmento(c, s) && coincideConcepto(c, concepto)
+    ).length;
   const conteoEstado = (e: FiltroEstado) =>
-    buscados.filter((c) => coincideEstado(c, e) && coincideSegmento(c, seg)).length;
+    buscados.filter(
+      (c) => coincideEstado(c, e) && coincideSegmento(c, seg) && coincideConcepto(c, concepto)
+    ).length;
 
-  const clientes = buscados
-    .filter((c) => coincideEstado(c, estado) && coincideSegmento(c, seg))
+  // Las opciones: los conceptos que tiene alguien de la lista del rol (nunca de otra
+  // categoría), más el elegido. El número, como en los chips: con los otros filtros puestos.
+  const conCodigo = new Set(todos.flatMap((c) => c.conceptos));
+  const otrosFiltros = buscados.filter((c) => coincideEstado(c, estado) && coincideSegmento(c, seg));
+  const opcionesConcepto: OpcionConcepto[] = catalogo
+    .filter((c) => c.codigo === concepto || conCodigo.has(c.codigo))
+    .map((c) => ({
+      codigo: c.codigo,
+      nombre: c.nombre,
+      cantidad: otrosFiltros.filter((f) => f.conceptos.includes(c.codigo)).length,
+    }));
+
+  const clientes = otrosFiltros
+    .filter((c) => coincideConcepto(c, concepto))
     .sort((a, b) =>
       estado === "deuda" || estado === "vencidos" ? b.deuda - a.deuda : a.codigo - b.codigo
     );
   const totalDeuda = clientes.reduce((acc, c) => acc + (c.activo ? c.deuda : 0), 0);
   const totalVencido = clientes.reduce((acc, c) => acc + (c.activo ? c.vencida : 0), 0);
-  const hayFiltro = Boolean(texto || seg || estado);
+  const hayFiltro = Boolean(texto || seg || estado || concepto);
+  const textoConcepto = conceptoElegido ? etiquetaConcepto(conceptoElegido) : null;
   const hayClientes = todos.length > 0;
 
   const titulo = esJefe ? "Quinteros y ambulantes" : "Clientes";
@@ -307,6 +352,7 @@ export default async function ClientesPage({ searchParams }: Props) {
             inicial={texto}
             seg={seg}
             estado={estado}
+            concepto={concepto}
             // Corto para que entre entero en un celular de 360 px; el aria-label dice todo.
             placeholder={esJefe ? "Nombre, apodo, carpeta o DNI" : "Nombre, apodo, puesto o DNI"}
             etiqueta={
@@ -322,7 +368,7 @@ export default async function ClientesPage({ searchParams }: Props) {
               {chipsSegmento.map((s) => (
                 <ChipFiltro
                   key={s}
-                  href={hrefListado({ q: texto, seg: seg === s ? null : s, estado })}
+                  href={hrefListado({ q: texto, seg: seg === s ? null : s, estado, concepto })}
                   label={LABEL_SEGMENTO[s]}
                   cantidad={conteoSegmento(s)}
                   activo={seg === s}
@@ -337,7 +383,7 @@ export default async function ClientesPage({ searchParams }: Props) {
               {FILTROS_ESTADO.map((f) => (
                 <ChipFiltro
                   key={f.valor}
-                  href={hrefListado({ q: texto, seg, estado: estado === f.valor ? null : f.valor })}
+                  href={hrefListado({ q: texto, seg, estado: estado === f.valor ? null : f.valor, concepto })}
                   label={f.label}
                   cantidad={conteoEstado(f.valor)}
                   activo={estado === f.valor}
@@ -345,6 +391,21 @@ export default async function ClientesPage({ searchParams }: Props) {
               ))}
             </div>
           </div>
+
+          {opcionesConcepto.length > 0 ? (
+            <div className="space-y-1.5 sm:space-y-2" data-tour="clientes-concepto">
+              <label htmlFor="filtro-concepto" className="block text-sm font-medium text-muted-foreground">
+                Concepto
+              </label>
+              <FiltroConcepto
+                opciones={opcionesConcepto}
+                concepto={concepto}
+                q={texto}
+                seg={seg}
+                estado={estado}
+              />
+            </div>
+          ) : null}
         </div>
       ) : null}
 
@@ -374,7 +435,11 @@ export default async function ClientesPage({ searchParams }: Props) {
               ? esJefe
                 ? "Probá con otra parte del nombre, el apodo, el N° de carpeta (el número azul de cada fila) o el DNI."
                 : "Probá con otra parte del nombre, el apodo, el N° de puesto, el N° de carpeta (el número azul de cada fila) o el DNI/CUIT."
-              : "Nadie cumple con los filtros elegidos. Tocá un chip marcado para sacarlo."
+              : textoConcepto && !seg && !estado
+                ? `Nadie de la lista tiene ${textoConcepto}. Elegí otro concepto o «Todos».`
+                : textoConcepto
+                  ? "Nadie cumple con los filtros elegidos. Tocá un chip marcado para sacarlo, o elegí «Todos» en Concepto."
+                  : "Nadie cumple con los filtros elegidos. Tocá un chip marcado para sacarlo."
           }
         >
           <Button asChild variant="outline" size="lg" className="h-11 px-5 text-base">
@@ -387,6 +452,7 @@ export default async function ClientesPage({ searchParams }: Props) {
             <span>
               {clientes.length === 1 ? "1 cliente" : `${clientes.length} clientes`}
               {estado === "bajas" ? " dados de baja" : ""}
+              {textoConcepto ? ` con ${textoConcepto}` : ""}
             </span>
             {totalDeuda > 0.009 ? (
               <span>

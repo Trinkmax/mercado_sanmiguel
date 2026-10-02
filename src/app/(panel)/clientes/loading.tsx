@@ -1,7 +1,7 @@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card } from "@/components/ui/card";
 
-/** Silueta del listado de clientes: buscador, dos filas de chips y filas con etiquetas. */
+/** Silueta del listado de clientes: buscador, dos filas de chips, el concepto y filas con etiquetas. */
 export default function ClientesLoading() {
   return (
     <div className="space-y-8">
@@ -28,6 +28,10 @@ export default function ClientesLoading() {
             </div>
           </div>
         ))}
+        <div className="space-y-2">
+          <Skeleton className="h-4 w-20" />
+          <Skeleton className="h-11 w-64 max-w-full rounded-full" />
+        </div>
       </div>
 
       <div className="space-y-3">

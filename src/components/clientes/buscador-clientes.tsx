@@ -5,22 +5,25 @@ import { useRouter } from "next/navigation";
 import { Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
+import { hrefListado } from "@/components/clientes/segmentos-cliente";
 
 /**
  * Búsqueda por nombre, apodo, N° de carpeta, N° de puesto o DNI/CUIT (con 6 números o más).
- * Actualiza la URL (?q=…) con debounce y conserva los chips activos (?seg, ?estado):
- * el listado filtra en el servidor.
+ * Actualiza la URL (?q=…) con debounce y conserva los filtros activos (?seg, ?estado,
+ * ?concepto): el listado filtra en el servidor.
  */
 export function BuscadorClientes({
   inicial,
   seg,
   estado,
+  concepto,
   placeholder = "Nombre, apodo, puesto o DNI",
   etiqueta = "Buscá por nombre, apodo, N° de puesto, N° de carpeta o DNI/CUIT",
 }: {
   inicial: string;
   seg?: string | null;
   estado?: string | null;
+  concepto?: string | null;
   /** Corto: tiene que entrar entero en un celular de 360 px. */
   placeholder?: string;
   /** Lo que se lee en voz alta: puede ser más completo que el placeholder. */
@@ -41,15 +44,10 @@ export function BuscadorClientes({
     // La URL ya refleja lo escrito (primer render, o se tocó un chip): no hay nada que hacer.
     if (valor.trim() === inicial.trim()) return;
     const timer = setTimeout(() => {
-      const params = new URLSearchParams();
-      if (valor.trim()) params.set("q", valor.trim());
-      if (seg) params.set("seg", seg);
-      if (estado) params.set("estado", estado);
-      const qs = params.toString();
-      router.replace(qs ? `/clientes?${qs}` : "/clientes", { scroll: false });
+      router.replace(hrefListado({ q: valor, seg, estado, concepto }), { scroll: false });
     }, 350);
     return () => clearTimeout(timer);
-  }, [valor, inicial, seg, estado, router]);
+  }, [valor, inicial, seg, estado, concepto, router]);
 
   return (
     <div className="relative">

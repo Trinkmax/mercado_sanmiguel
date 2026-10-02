@@ -68,7 +68,7 @@ function pasoBuscar(jefe: boolean, lider: boolean): Paso {
       : lider
         ? "Arriba escribís el nombre, el apodo, el N° de puesto o el DNI, y la lista se achica sola. Abajo filtrás con un toque: «Galpones», «Quinteros», «Con deuda», «Vencidos»."
         : "Arriba escribís el nombre, el apodo, el N° de puesto o el DNI, y la lista se achica sola. Abajo filtrás con un toque: «Galpones», «Socios», «Con deuda», «Vencidos».",
-    consejo: "El número de cada botón dice cuántos hay. Para ver a todos de nuevo, tocá «Sacar filtros».",
+    consejo: `El número de cada botón dice cuántos hay. En «Concepto» elegís uno (por ejemplo, «${jefe ? "Expensas Quinteros" : "Contribución Puestos"}») y ves solo a los que lo tienen. Para ver a todos de nuevo, tocá «Sacar filtros».`,
     sinAncla: {
       texto: jefe
         ? "Cuando haya quinteros y ambulantes, arriba de la lista aparece el buscador: escribís el nombre, el apodo, el N° de carpeta o el DNI. Abajo, botones para filtrar con un toque."

@@ -1,5 +1,6 @@
 /**
- * Listado de Clientes: chips de filtro por rol y mini-etiquetas de lo que tiene
+ * Listado de Clientes: chips de filtro por rol, filtro por concepto, links con los filtros
+ * y mini-etiquetas de lo que tiene
  * cada cliente ("Puesto 58 · 60", "Local 3", "2 galpones"). Compartido server/client.
  * Los segmentos en sí salen SIEMPRE de `v_clientes_segmentos` (espejo: src/lib/segmentos.ts);
  * acá solo se decide qué chips ve cada rol y cómo se escriben las etiquetas.
@@ -36,15 +37,29 @@ export const FILTROS_ESTADO: { valor: FiltroEstado; label: string }[] = [
 ];
 
 /**
+ * Fila 3 del listado — "Concepto" (?concepto=EXCO): los que tienen ese concepto mensual
+ * activo. `cantidad` cuenta como los chips: entre los clientes que el rol ve y que pasan
+ * los demás filtros.
+ */
+export type OpcionConcepto = { codigo: string; nombre: string; cantidad: number };
+
+/** "Contribución Puestos (EXCO)" */
+export function etiquetaConcepto(c: { codigo: string; nombre: string }): string {
+  return `${c.nombre} (${c.codigo})`;
+}
+
+/**
  * Compatibilidad con links viejos: ?tipo=vencidos|deuda (Inicio) y ?filtro=vencidos pasan
  * a estado; ?tipo=puesteros|locales|quinteros a segmento; ?tipo=depositos se ignora.
+ * El concepto sale en mayúsculas; si existe lo decide la página (lo busca en la base).
  */
 export function leerFiltrosListado(sp: {
   seg?: string;
   estado?: string;
+  concepto?: string;
   tipo?: string;
   filtro?: string;
-}): { seg: Segmento | null; estado: FiltroEstado | null } {
+}): { seg: Segmento | null; estado: FiltroEstado | null; concepto: string | null } {
   const estados = new Set<string>(FILTROS_ESTADO.map((f) => f.valor));
   const segmentos = new Set<string>(Object.keys(LABEL_SEGMENTO));
   let estado: FiltroEstado | null = sp.estado && estados.has(sp.estado) ? (sp.estado as FiltroEstado) : null;
@@ -52,7 +67,28 @@ export function leerFiltrosListado(sp: {
   const viejo = sp.tipo ?? sp.filtro;
   if (!estado && (viejo === "vencidos" || viejo === "deuda")) estado = viejo;
   if (!seg && viejo && viejo !== "depositos" && segmentos.has(viejo)) seg = viejo as Segmento;
-  return { seg, estado };
+  const codigo = (sp.concepto ?? "").trim().toUpperCase();
+  const concepto = /^[A-Z0-9_-]{1,20}$/.test(codigo) ? codigo : null;
+  return { seg, estado, concepto };
+}
+
+/**
+ * Link del listado con sus filtros (se combinan: AND). Lo vacío no va. Lo usan los chips,
+ * el buscador y el filtro por concepto, así ninguno pierde los filtros de los otros.
+ */
+export function hrefListado(p: {
+  q?: string | null;
+  seg?: string | null;
+  estado?: string | null;
+  concepto?: string | null;
+}): string {
+  const params = new URLSearchParams();
+  if (p.q?.trim()) params.set("q", p.q.trim());
+  if (p.seg) params.set("seg", p.seg);
+  if (p.estado) params.set("estado", p.estado);
+  if (p.concepto) params.set("concepto", p.concepto);
+  const qs = params.toString();
+  return qs ? `/clientes?${qs}` : "/clientes";
 }
 
 /* ------------------------------------------------------------------ */
