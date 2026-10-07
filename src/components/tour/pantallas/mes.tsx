@@ -35,7 +35,6 @@ import { cn } from "@/lib/utils";
 import { Codigo } from "@/components/shared/codigo";
 import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
-import { GRIS_BENEFICIO, RAYADO_EN_TERMINO } from "@/components/reportes/fila-ingreso";
 import { BotonEjemplo, CampoEjemplo, FilaEjemplo, MarcoPantalla, Resaltado } from "@/components/tour/pantalla";
 
 // Tour guiado · mes: pantallas de ejemplo de Facturación, Energía, Reportes y Configuración
@@ -144,12 +143,21 @@ function Termino({
 // Facturación
 // ---------------------------------------------------------------------------------------
 
-type ConceptoMes = { codigo: string; nombre: string; clientes: string; monto: number; luz?: boolean };
+/** `monto` a precio completo; `enTermino`, pagando en término (si el concepto tiene beneficio). */
+type ConceptoMes = {
+  codigo: string;
+  nombre: string;
+  clientes: string;
+  monto: number;
+  enTermino?: number;
+  luz?: boolean;
+};
 
 const CONCEPTOS_MES: ConceptoMes[] = [
   { codigo: "EXPC", nombre: "Alquiler Cocheras", clientes: "38 clientes", monto: 1240000 },
   { codigo: "EXCO", nombre: "Contribución Puestos", clientes: "112 clientes", monto: 2800000 },
-  { codigo: "EXME", nombre: "Expensas Cobradas", clientes: "112 clientes", monto: 124200000 },
+  // 15 % de beneficio: 124.200.000 / 1,15 = 108.000.000.
+  { codigo: "EXME", nombre: "Expensas Cobradas", clientes: "112 clientes", monto: 124200000, enTermino: 108000000 },
   { codigo: "EXPG", nombre: "Expensas Galpón", clientes: "9 clientes", monto: 1404000 },
   {
     codigo: "ABEN",
@@ -159,7 +167,10 @@ const CONCEPTOS_MES: ConceptoMes[] = [
     luz: true,
   },
 ];
+/** A precio completo (el tope si pagan fuera de término). */
 const TOTAL_MES = CONCEPTOS_MES.reduce((acc, c) => acc + c.monto, 0);
+/** Pagando en término: el «Total estimado» de la pantalla. */
+const TOTAL_EN_TERMINO = CONCEPTOS_MES.reduce((acc, c) => acc + (c.enTermino ?? c.monto), 0);
 
 function ListaConceptosMes({ filas = CONCEPTOS_MES }: { filas?: ConceptoMes[] }) {
   return (
@@ -173,10 +184,33 @@ function ListaConceptosMes({ filas = CONCEPTOS_MES }: { filas?: ConceptoMes[] })
               {c.nombre}
             </p>
             <Chico>{c.clientes}</Chico>
+            {c.enTermino !== undefined ? (
+              <Chico>
+                Si pagan fuera de término: hasta <Money monto={c.monto} />
+              </Chico>
+            ) : null}
           </div>
-          <Money monto={c.monto} className="shrink-0 text-[0.75rem] font-medium" />
+          <Money monto={c.enTermino ?? c.monto} className="shrink-0 text-[0.75rem] font-medium" />
         </div>
       ))}
+    </div>
+  );
+}
+
+/** El total del mes: pagando en término (el principal) y, en chico, a precio completo. */
+function TotalEstimadoMes() {
+  return (
+    <div className="space-y-0.5 border-t border-border pt-1.5">
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="text-[0.75rem] font-medium">
+          Total estimado <span className="font-normal text-muted-foreground">pagando en término</span>
+        </p>
+        <Money monto={TOTAL_EN_TERMINO} className="text-[0.95rem] font-bold" />
+      </div>
+      <Chico>
+        Si pagan fuera de término, a precio completo: hasta{" "}
+        <Money monto={TOTAL_MES} className="font-semibold text-foreground" />.
+      </Chico>
     </div>
   );
 }
@@ -205,10 +239,7 @@ export function PortadaFacturacion() {
       <Tarjeta className="space-y-2">
         <CabeceraMes />
         <ListaConceptosMes />
-        <div className="flex items-baseline justify-between border-t border-border pt-1.5">
-          <p className="text-[0.75rem] font-medium">Total estimado</p>
-          <Money monto={TOTAL_MES} className="text-[0.95rem] font-bold" />
-        </div>
+        <TotalEstimadoMes />
         <Resaltado>
           <BotonGenerar />
         </Resaltado>
@@ -226,10 +257,7 @@ export function PantallaEstimadoMes() {
         <Resaltado mano={false} className="ring-offset-card">
           <ListaConceptosMes />
         </Resaltado>
-        <div className="flex items-baseline justify-between border-t border-border pt-1.5">
-          <p className="text-[0.75rem] font-medium">Total estimado</p>
-          <Money monto={TOTAL_MES} className="text-[0.95rem] font-bold" />
-        </div>
+        <TotalEstimadoMes />
       </Tarjeta>
       <div className="space-y-1 rounded-lg bg-accent/60 p-2.5">
         <p className="text-[0.75rem] font-semibold">Sale de la carpeta de cada cliente</p>
@@ -258,9 +286,11 @@ export function PantallaConfirmarGenerar() {
         titulo={`¿Generar ${MES}?`}
         descripcion={
           <>
-            Se van a crear aprox. 367 cargos por <Money monto={TOTAL_MES} /> (incluye 96 abonos de energía). Si
-            algún cliente tiene saldo a favor, se le descuenta solo. Esto se hace una vez por mes. Quedate
-            tranquilo: si se corre dos veces, no se duplica nada (solo suma lo que falte, como un medidor nuevo).
+            Se van a crear aprox. 367 cargos (incluye 96 abonos de energía) por{" "}
+            <Money monto={TOTAL_EN_TERMINO} /> pagando en término (hasta <Money monto={TOTAL_MES} /> si pagan
+            fuera de término). Si algún cliente tiene saldo a favor, se le descuenta solo. Esto se hace una
+            vez por mes. Quedate tranquilo: si se corre dos veces, no se duplica nada (solo suma lo que falte,
+            como un medidor nuevo).
           </>
         }
         botones={
@@ -341,13 +371,17 @@ function FilaPeriodo({
   vence,
   generado,
   estimado,
+  completo,
   cobrado,
   reporte,
 }: {
   mes: string;
   vence: string;
   generado: string;
+  /** Pagando en término: cobrado + lo que falta. */
   estimado: number;
+  /** A precio completo, sin ningún beneficio. */
+  completo: number;
   cobrado: number;
   reporte: boolean;
 }) {
@@ -363,6 +397,9 @@ function FilaPeriodo({
         <div>
           <Chico>Estimado</Chico>
           <Money monto={estimado} className="text-[0.8rem] font-semibold" />
+          <Chico>
+            a precio completo <Money monto={completo} />
+          </Chico>
         </div>
         <div>
           <Chico>Cobrado</Chico>
@@ -389,7 +426,8 @@ function Historial({ reporte }: { reporte: boolean }) {
               mes={MES}
               vence={VENCE}
               generado="01/10/2026 09:12 por Marta Núñez"
-              estimado={TOTAL_MES}
+              estimado={TOTAL_EN_TERMINO}
+              completo={TOTAL_MES}
               cobrado={48350000}
               reporte={reporte}
             />
@@ -400,7 +438,8 @@ function Historial({ reporte }: { reporte: boolean }) {
             mes="Septiembre de 2026"
             vence="30/09/2026"
             generado="01/09/2026 08:47 por Marta Núñez"
-            estimado={129870000}
+            estimado={116940000}
+            completo={129870000}
             cobrado={114620000}
             reporte={false}
           />
@@ -748,6 +787,11 @@ export function PantallaAgregarMedidor() {
 // Reportes
 // ---------------------------------------------------------------------------------------
 
+/**
+ * `estimado` es pagando en término (cobrado + falta, src/lib/estimado.ts); `enTermino`, el
+ * beneficio de quienes todavía están a tiempo (si pagan tarde, se cobra: el tope es
+ * estimado + enTermino); `otorgados`, los beneficios ya descontados.
+ */
 type Ingreso = {
   codigo: string;
   nombre: string;
@@ -760,19 +804,19 @@ type Ingreso = {
 const INGRESOS: Ingreso[] = [
   { codigo: "EXPC", nombre: "Alquiler Cocheras", estimado: 1240000, cobrado: 1054000, otorgados: 0, enTermino: 0 },
   {
+    // Facturación: 124.200.000 a precio completo, 108.000.000 pagando en término.
     codigo: "EXME",
     nombre: "Expensas Cobradas",
-    estimado: 124200000,
-    cobrado: 68420000,
-    otorgados: 8370000,
-    enTermino: 5600000,
+    estimado: 108000000,
+    cobrado: 66000000,
+    otorgados: 9900000,
+    enTermino: 6300000,
   },
   { codigo: "ENER", nombre: "Recupero Energía (kWh)", estimado: 2315400, cobrado: 1180000, otorgados: 0, enTermino: 0 },
 ];
 
 function FilaIngresoChica({ fila }: { fila: Ingreso }) {
-  const pct = (m: number) => (m / fila.estimado) * 100;
-  const falta = fila.estimado - fila.cobrado - fila.otorgados - fila.enTermino;
+  const falta = fila.estimado - fila.cobrado;
   return (
     <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2 py-1.5">
       <Codigo codigo={fila.codigo} className="mt-0.5" />
@@ -784,23 +828,20 @@ function FilaIngresoChica({ fila }: { fila: Ingreso }) {
           </p>
         </div>
         <div className="flex h-2 overflow-hidden rounded-full bg-pendiente-suave">
-          <div className="h-full bg-pagado" style={{ width: `${pct(fila.cobrado)}%` }} />
-          {fila.otorgados > 0 ? (
-            <div className={cn("h-full", GRIS_BENEFICIO)} style={{ width: `${pct(fila.otorgados)}%` }} />
-          ) : null}
-          {fila.enTermino > 0 ? (
-            <div className="h-full bg-muted" style={{ width: `${pct(fila.enTermino)}%`, ...RAYADO_EN_TERMINO }} />
-          ) : null}
+          <div className="h-full rounded-full bg-pagado" style={{ width: `${(fila.cobrado / fila.estimado) * 100}%` }} />
         </div>
-        <div className="flex flex-wrap justify-between gap-x-2 text-[0.72rem] text-muted-foreground">
+        <div className="flex flex-wrap gap-x-2 text-[0.72rem] text-muted-foreground">
+          {fila.enTermino > 0 ? (
+            <span>
+              Si pagan fuera de término: hasta <Money monto={fila.estimado + fila.enTermino} />
+            </span>
+          ) : null}
           {fila.otorgados > 0 ? (
             <span>
               Beneficios otorgados <Money monto={fila.otorgados} />
             </span>
-          ) : (
-            <span />
-          )}
-          <span className="font-medium text-pendiente">
+          ) : null}
+          <span className="ml-auto font-medium text-pendiente">
             Faltan <Money monto={falta} />
           </span>
         </div>
@@ -881,9 +922,6 @@ export function PantallaIngresosConcepto() {
             <span className="inline-block size-2.5 rounded-full bg-pagado" /> Cobrado
           </span>
           <span className="flex items-center gap-1">
-            <span className={cn("inline-block size-2.5 rounded-full", GRIS_BENEFICIO)} /> Beneficios
-          </span>
-          <span className="flex items-center gap-1">
             <span className="inline-block size-2.5 rounded-full bg-pendiente-suave ring-1 ring-pendiente/40" /> Falta
           </span>
         </div>
@@ -892,14 +930,20 @@ export function PantallaIngresosConcepto() {
   );
 }
 
-/** La cuenta del mes: estimado = cobrado + beneficios + falta cobrar. */
+/** La cuenta del mes: estimado (pagando en término) = cobrado + falta cobrar. */
 export function PantallaTotalesMes() {
-  const datos: { etiqueta: string; monto: number; className?: string; nota?: string }[] = [
-    { etiqueta: "Estimado", monto: 131132000, className: "font-semibold" },
+  const datos: { etiqueta: string; monto: number; className?: string; antes?: string; nota?: string }[] = [
+    { etiqueta: "Estimado", monto: 117540000, className: "font-semibold", nota: "pagando en término" },
     { etiqueta: "Cobrado", monto: 72480000, className: "font-bold text-pagado" },
-    { etiqueta: "Beneficios otorgados", monto: 8370000, className: "font-semibold" },
-    { etiqueta: "Beneficio en término", monto: 5600000, className: "font-semibold", nota: "se pierde si pagan tarde" },
-    { etiqueta: "Falta cobrar", monto: 44682000, className: "font-bold text-pendiente" },
+    { etiqueta: "Falta cobrar", monto: 45060000, className: "font-bold text-pendiente" },
+    {
+      etiqueta: "Si pagan fuera de término",
+      monto: 123840000,
+      className: "font-semibold",
+      antes: "hasta ",
+      nota: "$ 6.300.000 más",
+    },
+    { etiqueta: "Beneficios otorgados", monto: 9900000, className: "font-semibold", nota: "ya descontados" },
   ];
   return (
     <MarcoPantalla titulo="Reportes">
@@ -910,14 +954,18 @@ export function PantallaTotalesMes() {
             {datos.map((d) => (
               <div key={d.etiqueta} className="min-w-0">
                 <Chico>{d.etiqueta}</Chico>
-                <Money monto={d.monto} className={cn("text-[0.8rem]", d.className)} />
+                <p className="text-[0.8rem]">
+                  {d.antes ? <span className="text-[0.72rem] text-muted-foreground">{d.antes}</span> : null}
+                  <Money monto={d.monto} className={d.className} />
+                </p>
                 {d.nota ? <Chico>{d.nota}</Chico> : null}
               </div>
             ))}
           </div>
         </Resaltado>
         <Chico className="pt-1">
-          Estimado = cobrado + beneficios otorgados + beneficio en término + falta cobrar.
+          Estimado = cobrado + falta cobrar: lo que se espera cobrar si los que están en término pagan en
+          término.
         </Chico>
       </Tarjeta>
     </MarcoPantalla>

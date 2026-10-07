@@ -5,15 +5,15 @@ import { CajaRegistradora } from "@/components/shared/iconos";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Money } from "@/components/shared/money";
 import { ChartCobranzaDiaria } from "@/components/charts/chart-cobranza-diaria";
-import { beneficioEnTerminoDe } from "@/components/reportes/fila-ingreso";
+import { porcentajeCobrado, sumarEstimado } from "@/lib/estimado";
 import { cajasParaValidar, contar, resumenDelMes, serieUltimos14, type Supabase } from "./datos";
 import { BarraConcepto, BarraEstimado, TarjetaAviso, type Aviso } from "./bloques";
 
 /**
  * Inicio de Tesorería (J1, J4, J5, J7): no cobra ni tiene caja propia. Lo que
- * importa es cuánto se tendría que cobrar en el mes y cuánto se cobró (estimado
- * vs cobrado), el bono camioneros aparte, y lo que espera su control: cajas para
- * validar, transferencias sin conciliar y cheques para depositar.
+ * importa es cuánto se tendría que cobrar en el mes si pagan en término y cuánto se
+ * cobró (estimado vs cobrado), el bono camioneros aparte, y lo que espera su control:
+ * cajas para validar, transferencias sin conciliar y cheques para depositar.
  */
 export async function InicioTesoreria({ perfil, supabase }: { perfil: Perfil; supabase: Supabase }) {
   const org = perfil.org_id;
@@ -72,16 +72,12 @@ export async function InicioTesoreria({ perfil, supabase }: { perfil: Perfil; su
         : "";
 
   // El bono camioneros (BC) no tiene "estimado": se cobra en el momento. Va aparte.
-  // Estimado = cobrado + beneficios otorgados + beneficio en término + falta cobrar (lo que se
-  // debe hoy): los mismos cuatro nombres y cifras que Reportes, sin una segunda "deuda".
+  // Estimado = cobrado + falta cobrar: lo que se espera cobrar si los que están en término
+  // pagan en término (src/lib/estimado.ts, la misma cuenta que Reportes y Facturación).
   const conceptos = resumen.filter((f) => f.codigo !== "BC");
   const bono = resumen.find((f) => f.codigo === "BC");
-  const estimado = conceptos.reduce((a, f) => a + f.estimado, 0);
-  const cobrado = conceptos.reduce((a, f) => a + f.cobrado, 0);
-  const otorgados = conceptos.reduce((a, f) => a + f.descuentos, 0);
-  const enTermino = conceptos.reduce((a, f) => a + beneficioEnTerminoDe(f), 0);
-  const falta = conceptos.reduce((a, f) => a + f.pendiente, 0);
-  const pct = estimado > 0 ? Math.round((cobrado / estimado) * 100) : 0;
+  const montos = sumarEstimado(conceptos);
+  const pct = Math.round(porcentajeCobrado(montos));
 
   const avisos: Aviso[] = [
     {
@@ -138,7 +134,9 @@ export async function InicioTesoreria({ perfil, supabase }: { perfil: Perfil; su
       <Card data-tour={conceptos.length === 0 ? "inicio-estimado-vacio" : "inicio-estimado"}>
         <CardHeader>
           <CardTitle className="text-lg">Estimado y cobrado de {labelPeriodo(periodo)}</CardTitle>
-          <CardDescription>Lo que se tendría que cobrar en el mes y lo que ya entró.</CardDescription>
+          <CardDescription>
+            Lo que se tendría que cobrar en el mes si pagan en término y lo que ya entró.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           {conceptos.length === 0 ? (
@@ -151,32 +149,42 @@ export async function InicioTesoreria({ perfil, supabase }: { perfil: Perfil; su
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <p className="text-sm text-muted-foreground">Se tendría que cobrar</p>
-                  <Money monto={estimado} className="font-display text-3xl font-extrabold" />
+                  <Money monto={montos.estimado} className="font-display text-3xl font-extrabold" />
+                  <p className="text-sm text-muted-foreground">pagando en término</p>
                 </div>
                 <div>
                   <p className="text-sm text-muted-foreground">Se cobró</p>
                   <p className="flex flex-wrap items-baseline gap-x-2">
-                    <Money monto={cobrado} className="font-display text-3xl font-extrabold text-pagado" />
+                    <Money monto={montos.cobrado} className="font-display text-3xl font-extrabold text-pagado" />
                     <span className="text-lg font-semibold text-muted-foreground tabular">{pct} %</span>
                   </p>
                 </div>
               </div>
               <BarraEstimado
-                cobrado={cobrado}
-                otorgados={otorgados}
-                enTermino={enTermino}
-                falta={falta}
-                etiqueta={`Cobrado ${formatARS(cobrado)} de ${formatARS(estimado)}; falta cobrar ${formatARS(falta)}`}
+                montos={montos}
+                etiqueta={`Cobrado ${formatARS(montos.cobrado)} de ${formatARS(montos.estimado)} estimados pagando en término; falta cobrar ${formatARS(montos.falta)}`}
               />
-              {enTermino > 0.5 ? (
-                <p className="text-sm text-muted-foreground">
-                  El beneficio en término es el de quienes todavía no pagaron, pero están a tiempo:
-                  si pagan después del vencimiento, lo pierden y pasa a lo que falta cobrar.
-                </p>
+              {montos.enTermino > 0.5 || montos.otorgados > 0.5 ? (
+                <div className="space-y-1 text-sm text-muted-foreground">
+                  {montos.enTermino > 0.5 ? (
+                    <p>
+                      Si pagan fuera de término: hasta{" "}
+                      <Money monto={montos.fueraDeTermino} className="font-semibold text-foreground" />. Son{" "}
+                      <Money monto={montos.enTermino} className="font-semibold text-foreground" /> más: el
+                      beneficio de quienes todavía no pagaron, pero están a tiempo. Si pagan después del
+                      vencimiento, lo pierden.
+                    </p>
+                  ) : null}
+                  {montos.otorgados > 0.5 ? (
+                    <p>
+                      Beneficios ya otorgados a quienes pagaron en término:{" "}
+                      <Money monto={montos.otorgados} className="font-semibold text-foreground" />.
+                    </p>
+                  ) : null}
+                </div>
               ) : null}
 
-              {/* Cada concepto contra su estimado, igual que en Reportes: cobrado + beneficios
-                  otorgados + beneficio en término + faltan = estimado. */}
+              {/* Cada concepto contra su estimado, igual que en Reportes: cobrado + faltan = estimado. */}
               <div className="divide-y border-t">
                 {conceptos.map((fila) => (
                   <BarraConcepto key={fila.codigo} fila={fila} />

@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { BotonImprimir } from "@/components/shared/boton-imprimir";
 import { Marca } from "@/components/shared/marca";
 import { Money } from "@/components/shared/money";
-import { beneficioEnTerminoDe } from "@/components/reportes/fila-ingreso";
+import { montosEstimado, sumarEstimado } from "@/lib/estimado";
 
 export const metadata = { title: "Reporte mensual" };
 
@@ -37,18 +37,11 @@ export default async function ReporteMensualPage({
     a.tipo === b.tipo ? a.codigo.localeCompare(b.codigo) : a.tipo === "fijo" ? -1 : 1
   );
 
-  const totIngresos = ingresos.reduce(
-    (acc, f) => ({
-      estimado: acc.estimado + Number(f.estimado),
-      cobrado: acc.cobrado + Number(f.cobrado),
-      descuentos: acc.descuentos + Number(f.descuentos),
-      pendiente: acc.pendiente + Number(f.pendiente),
-    }),
-    { estimado: 0, cobrado: 0, descuentos: 0, pendiente: 0 }
-  );
-  // Beneficio en término: el de quienes todavía no pagaron, pero están a tiempo (solo en el mes en
-  // curso). No va en ninguna columna; se aclara debajo para que la fila del total cierre.
-  const enTermino = ingresos.reduce((acc, f) => acc + beneficioEnTerminoDe(f), 0);
+  // Estimado = cobrado + pendiente: lo que se espera cobrar si los que están en término pagan
+  // en término (src/lib/estimado.ts, igual que en pantalla y en el Excel). El precio completo y
+  // el tope si pagan fuera de término se aclaran debajo de la tabla.
+  const filasIngresos = ingresos.map((f) => ({ ...f, montos: montosEstimado(f) }));
+  const totIngresos = sumarEstimado(ingresos);
   const totGastos = gastos.reduce(
     (acc, g) => ({
       pagado: acc.pagado + Number(g.pagado),
@@ -88,37 +81,37 @@ export default async function ReporteMensualPage({
                 <tr className="border-b border-foreground/60 text-left">
                   <th className={cn(th, "pr-3")}>Código</th>
                   <th className={cn(th, "pr-3")}>Concepto</th>
-                  <th className={cn(th, "pl-3 text-right")}>Estimado</th>
+                  <th className={cn(th, "pl-3 text-right")}>Estimado pagando en término</th>
                   <th className={cn(th, "pl-3 text-right")}>Cobrado</th>
-                  <th className={cn(th, "pl-3 text-right")}>Beneficios otorgados</th>
                   <th className={cn(th, "pl-3 text-right")}>Pendiente</th>
+                  <th className={cn(th, "pl-3 text-right")}>Beneficios otorgados</th>
                 </tr>
               </thead>
               <tbody>
-                {ingresos.length === 0 ? (
+                {filasIngresos.length === 0 ? (
                   <tr className="border-b border-border">
                     <td className={cn(td, "text-muted-foreground")} colSpan={6}>
                       Sin cargos generados en este período.
                     </td>
                   </tr>
                 ) : (
-                  ingresos.map((f) => (
+                  filasIngresos.map((f) => (
                     <tr key={f.codigo} className="border-b border-border">
                       <td className={cn(td, "pr-3 font-display tracking-widest")}>
                         {f.codigo}
                       </td>
                       <td className={cn(td, "pr-3")}>{f.nombre}</td>
                       <td className={cn(td, "pl-3 text-right")}>
-                        <Money monto={f.estimado} />
+                        <Money monto={f.montos.estimado} />
                       </td>
                       <td className={cn(td, "pl-3 text-right")}>
-                        <Money monto={f.cobrado} />
+                        <Money monto={f.montos.cobrado} />
                       </td>
                       <td className={cn(td, "pl-3 text-right")}>
-                        <Money monto={f.descuentos} />
+                        <Money monto={f.montos.falta} />
                       </td>
                       <td className={cn(td, "pl-3 text-right")}>
-                        <Money monto={f.pendiente} />
+                        <Money monto={f.montos.otorgados} />
                       </td>
                     </tr>
                   ))
@@ -136,20 +129,33 @@ export default async function ReporteMensualPage({
                     <Money monto={totIngresos.cobrado} />
                   </td>
                   <td className="py-2 pl-3 text-right">
-                    <Money monto={totIngresos.descuentos} />
+                    <Money monto={totIngresos.falta} />
                   </td>
                   <td className="py-2 pl-3 text-right">
-                    <Money monto={totIngresos.pendiente} />
+                    <Money monto={totIngresos.otorgados} />
                   </td>
                 </tr>
               </tfoot>
             </table>
-            {enTermino > 0.5 ? (
+            {filasIngresos.length > 0 ? (
               <p className="text-sm text-muted-foreground">
-                Además, <Money monto={enTermino} className="font-medium text-foreground" /> de
-                beneficio en término: el de quienes todavía no pagaron, pero están a tiempo (si
-                pagan tarde, pasa a pendiente). Estimado = cobrado + beneficios otorgados + beneficio en
-                término + pendiente.
+                Estimado pagando en término = cobrado + pendiente: lo que se espera cobrar si los que están
+                en término pagan en término.
+                {totIngresos.enTermino > 0.5 ? (
+                  <>
+                    {" "}
+                    Si pagan fuera de término, pierden el beneficio: hasta{" "}
+                    <Money monto={totIngresos.fueraDeTermino} className="font-medium text-foreground" /> (
+                    <Money monto={totIngresos.enTermino} className="font-medium text-foreground" /> más).
+                  </>
+                ) : null}
+                {totIngresos.completo - totIngresos.estimado > 0.5 ? (
+                  <>
+                    {" "}
+                    A precio completo, sin ningún beneficio, el mes suma{" "}
+                    <Money monto={totIngresos.completo} className="font-medium text-foreground" />.
+                  </>
+                ) : null}
               </p>
             ) : null}
           </section>

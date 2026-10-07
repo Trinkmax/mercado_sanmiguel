@@ -43,12 +43,16 @@ export function GenerarPeriodoBoton({
   label,
   cargosEstimados,
   totalEstimado,
+  totalCompleto,
   abonosEstimados = 0,
 }: {
   periodo: string;
   label: string;
   cargosEstimados: number;
+  /** Lo que se espera cobrar si pagan en término (con el beneficio de cada concepto). */
   totalEstimado: number;
+  /** El mismo total a precio completo: el tope si pagan fuera de término. */
+  totalCompleto: number;
   /** Cuántos abonos de energía se van a generar (clientes con medidor, sin exentos). */
   abonosEstimados?: number;
 }) {
@@ -127,10 +131,13 @@ export function GenerarPeriodoBoton({
           <DialogHeader>
             <DialogTitle className="text-lg">¿Generar {label}?</DialogTitle>
             <DialogDescription className="text-sm/relaxed">
-              Se van a crear aprox. {formatNumero(cargosEstimados)} cargos por{" "}
-              {formatARS(totalEstimado)}
+              Se van a crear aprox. {formatNumero(cargosEstimados)} cargos
               {abonosEstimados > 0
                 ? ` (incluye ${formatNumero(abonosEstimados)} ${abonosEstimados === 1 ? "abono" : "abonos"} de energía)`
+                : ""}{" "}
+              por {formatARS(totalEstimado)}
+              {totalCompleto - totalEstimado > 0.5
+                ? ` pagando en término (hasta ${formatARS(totalCompleto)} si pagan fuera de término)`
                 : ""}
               . Si algún cliente tiene saldo a favor, se le descuenta solo. Esto se
               hace una vez por mes. Quedate tranquilo: si se corre dos veces, no se

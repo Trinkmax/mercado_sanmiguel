@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowRight, Footprints, HandCoins, MessagesSquare, Tractor } from "lucide-react";
 import type { Perfil } from "@/lib/auth";
 import { labelPeriodo, periodoActual } from "@/lib/format";
+import { porcentajeCobrado, sumarEstimado } from "@/lib/estimado";
 import { CajaRegistradora } from "@/components/shared/iconos";
 import { Button } from "@/components/ui/button";
 import {
@@ -69,10 +70,11 @@ export async function InicioJefe({ perfil, supabase }: { perfil: Perfil; supabas
   const alDia = avanceQuinteros.filter((a) => Number(a.falta ?? 0) <= 0.009).length;
   const deben = avanceQuinteros.length - alDia;
 
-  const estimado = Number(expq?.estimado ?? 0);
-  const cobrado = Number(expq?.cobrado ?? 0);
-  const falta = Math.max(estimado - cobrado - Number(expq?.descuentos ?? 0), 0);
-  const pct = estimado > 0 ? Math.min((cobrado / estimado) * 100, 100) : 0;
+  // Estimado = cobrado + falta: lo que se espera cobrar si los que están en término pagan en
+  // término (src/lib/estimado.ts, la misma cuenta que los demás Inicios y Reportes).
+  const quintas = sumarEstimado(expq ? [expq] : []);
+  const { estimado, cobrado, falta } = quintas;
+  const pct = porcentajeCobrado(quintas);
   const mesGenerado = Boolean(expq) || avanceQuinteros.length > 0;
 
   const avisos: Aviso[] = [
@@ -107,6 +109,7 @@ export async function InicioJefe({ perfil, supabase }: { perfil: Perfil; supabas
                 Se cobró <Money monto={cobrado} className="font-display text-3xl font-extrabold text-pagado" />{" "}
                 <span className="text-muted-foreground">
                   de <Money monto={estimado} className="font-semibold text-foreground" />
+                  {quintas.enTermino > 0.5 ? " pagando en término" : ""}
                 </span>
               </p>
               <div
@@ -132,6 +135,12 @@ export async function InicioJefe({ perfil, supabase }: { perfil: Perfil; supabas
                   {deben > 0 ? <Sello estado="debe" texto={`${deben} ${deben === 1 ? "debe" : "deben"}`} /> : null}
                 </p>
               </div>
+              {quintas.enTermino > 0.5 ? (
+                <p className="text-sm text-muted-foreground">
+                  Si pagan fuera de término: hasta{" "}
+                  <Money monto={quintas.fueraDeTermino} className="font-semibold text-foreground" />.
+                </p>
+              ) : null}
             </div>
           ) : (
             <p className="rounded-lg bg-muted/50 px-4 py-3 text-sm text-muted-foreground">

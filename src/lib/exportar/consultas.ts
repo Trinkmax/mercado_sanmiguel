@@ -12,6 +12,7 @@ import {
   sumarMeses,
 } from "@/lib/format";
 import { CATEGORIAS, categoriasDeRol, LABEL_SEGMENTO, type CategoriaCliente, type Segmento } from "@/lib/segmentos";
+import { montosEstimado, sumarEstimado } from "@/lib/estimado";
 import { labelTipoRegistro } from "@/components/comunicaciones/constantes";
 import { etiquetaEspacio } from "@/components/mapa/geometria";
 import type { DatasetExportable } from "@/lib/exportar/datasets";
@@ -1190,16 +1191,11 @@ async function balanceMensual({ supabase, perfil, periodo }: ContextoExportacion
   if (conceptosRes.error) throw new ErrorExportacion(conceptosRes.error.message);
   if (gastosRes.error) throw new ErrorExportacion(gastosRes.error.message);
 
+  // Estimado pagando en término = cobrado + pendiente (src/lib/estimado.ts, igual que en
+  // pantalla); el de precio completo es la suma de los cargos sin beneficio. Las dos columnas
+  // van juntas, con nombres que no se confunden.
   const conceptos = conceptosRes.data ?? [];
-  const totI = conceptos.reduce(
-    (acc, f) => ({
-      estimado: acc.estimado + n(f.estimado),
-      cobrado: acc.cobrado + n(f.cobrado),
-      beneficios: acc.beneficios + n(f.descuentos),
-      pendiente: acc.pendiente + n(f.pendiente),
-    }),
-    { estimado: 0, cobrado: 0, beneficios: 0, pendiente: 0 }
-  );
+  const totI = sumarEstimado(conceptos);
 
   const gastosOrdenados = [...(gastosRes.data ?? [])].sort((a, b) =>
     a.tipo === b.tipo ? a.codigo.localeCompare(b.codigo) : a.tipo === "fijo" ? -1 : 1
@@ -1222,9 +1218,11 @@ async function balanceMensual({ supabase, perfil, periodo }: ContextoExportacion
 
   const resumen: Celda[][] = [
     ["Período", mes],
+    ["Estimado pagando en término", totI.estimado],
+    ["Estimado a precio completo (sin beneficio)", totI.completo],
     ["Cobrado en el mes", totI.cobrado],
-    ["Beneficios por pago en término otorgados", totI.beneficios],
-    ["Falta cobrar", totI.pendiente],
+    ["Beneficios por pago en término otorgados", totI.otorgados],
+    ["Falta cobrar", totI.falta],
     ["Gastado (pagado)", totG.pagado],
     ["Gastos pendientes", totG.pendiente],
     ["Resultado del mes (cobrado − gastado)", resultado],
@@ -1256,22 +1254,20 @@ async function balanceMensual({ supabase, perfil, periodo }: ContextoExportacion
       columnas: [
         { titulo: "Código", ancho: 9 },
         { titulo: "Concepto", ancho: 36 },
-        { titulo: "Estimado", tipo: "moneda" },
+        { titulo: "Estimado pagando en término", tipo: "moneda", ancho: 22 },
+        { titulo: "Estimado a precio completo", tipo: "moneda", ancho: 22 },
         { titulo: "Cobrado", tipo: "moneda" },
         { titulo: "Beneficios otorgados", tipo: "moneda", ancho: 20 },
         { titulo: "Pendiente", tipo: "moneda" },
       ],
-      filas: conceptos.map((f) => [
-        f.codigo,
-        f.nombre,
-        n(f.estimado),
-        n(f.cobrado),
-        n(f.descuentos),
-        n(f.pendiente),
-      ]),
-      totales: [["", "Total ingresos", totI.estimado, totI.cobrado, totI.beneficios, totI.pendiente]],
+      filas: conceptos.map((f) => {
+        const m = montosEstimado(f);
+        return [f.codigo, f.nombre, m.estimado, m.completo, m.cobrado, m.otorgados, m.falta];
+      }),
+      totales: [["", "Total ingresos", totI.estimado, totI.completo, totI.cobrado, totI.otorgados, totI.falta]],
       notas: [
         `Ingresos de ${mes}. BC es el bono camioneros (canon de transporte) cobrado en portería; AMB son los ambulantes cobrados por día.`,
+        "Estimado pagando en término = cobrado + pendiente: lo que se espera cobrar si los que están en término pagan en término. Estimado a precio completo = la suma de los cargos sin ningún beneficio.",
         "EXME es la expensa de los puestos comunes y EXPP la de los puestos propios de la cooperativa; ABEN es el abono mensual de energía y MULT las multas.",
       ],
     },

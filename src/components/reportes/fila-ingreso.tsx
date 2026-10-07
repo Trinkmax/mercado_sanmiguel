@@ -1,5 +1,5 @@
 import { formatARS } from "@/lib/format";
-import { cn } from "@/lib/utils";
+import { montosEstimado, porcentajeCobrado, type MontosEstimado } from "@/lib/estimado";
 import { Codigo } from "@/components/shared/codigo";
 
 export type ResumenConcepto = {
@@ -12,71 +12,15 @@ export type ResumenConcepto = {
 };
 
 /**
- * Beneficio en término de un concepto: el de quienes todavía no pagaron y siguen en término
- * (su deuda de hoy ya viene con el descuento). Si pagan después del vencimiento, lo pierden y
- * pasa a "Falta cobrar". Con él, estimado = cobrado + beneficios otorgados + beneficio en
- * término + falta cobrar, y la cuenta cierra en pantalla.
- */
-export function beneficioEnTerminoDe(fila: ResumenConcepto): number {
-  return Math.max(
-    Number(fila.estimado) - Number(fila.cobrado) - Number(fila.pendiente) - Number(fila.descuentos),
-    0
-  );
-}
-
-/** Gris de los beneficios, opaco: sobre la pista roja de una barra no se tiñe de rosa. */
-export const GRIS_BENEFICIO = "bg-[color-mix(in_oklch,var(--muted-foreground)_30%,var(--card))]";
-
-/** Rayado del beneficio en término (sobre bg-muted): todavía puede cambiar si pagan tarde. */
-export const RAYADO_EN_TERMINO: React.CSSProperties = {
-  backgroundImage:
-    "repeating-linear-gradient(135deg, color-mix(in oklch, var(--muted-foreground) 45%, transparent) 0 2px, transparent 2px 5px)",
-};
-
-/**
- * Muestra de color de cada beneficio, la misma en todas las pantallas: gris liso los
- * otorgados, gris rayado el beneficio en término. El tamaño y el margen van en `className`.
- */
-export function MuestraBeneficio({
-  tipo,
-  className,
-}: {
-  tipo: "otorgados" | "en-termino";
-  className?: string;
-}) {
-  return tipo === "otorgados" ? (
-    <span aria-hidden className={cn("inline-block rounded-full", GRIS_BENEFICIO, className)} />
-  ) : (
-    <span
-      aria-hidden
-      className={cn("inline-block rounded-full bg-muted ring-1 ring-muted-foreground/40", className)}
-      style={RAYADO_EN_TERMINO}
-    />
-  );
-}
-
-/** Los cuatro montos de un concepto (estimado = cobrado + otorgados + en término + pendiente). */
-function montosDe(fila: ResumenConcepto) {
-  return {
-    estimado: Number(fila.estimado),
-    cobrado: Number(fila.cobrado),
-    otorgados: Number(fila.descuentos),
-    enTermino: beneficioEnTerminoDe(fila),
-    pendiente: Number(fila.pendiente),
-  };
-}
-
-/**
- * Barra de un concepto contra su estimado: verde lo cobrado, gris los beneficios otorgados,
- * rayado el beneficio en término y la pista roja suave lo que falta. La usan Reportes y el
- * Inicio (Tesorería, Administración y Líder), así el mismo concepto se ve igual en todos lados.
+ * Barra de un concepto contra su estimado (lo que se espera cobrar pagando en término,
+ * `montosEstimado` en src/lib/estimado.ts): verde lo cobrado y la pista roja suave lo que
+ * falta. Cobrado + falta = estimado, así la barra nunca muestra plata que no va a entrar. La
+ * usan Reportes y el Inicio (Tesorería, Administración y Líder): el mismo concepto se ve
+ * igual en todos lados.
  */
 export function BarraIngreso({ fila }: { fila: ResumenConcepto }) {
-  const { estimado, cobrado, otorgados, enTermino, pendiente } = montosDe(fila);
-  const porcentaje = (monto: number) => (estimado > 0 ? Math.max((monto / estimado) * 100, 0) : 0);
-  const pct = estimado > 0 ? Math.min(porcentaje(cobrado), 100) : 100;
-  const pctOtorgados = Math.min(porcentaje(otorgados), 100 - pct);
-  const pctEnTermino = Math.min(porcentaje(enTermino), 100 - pct - pctOtorgados);
+  const m = montosEstimado(fila);
+  const pct = porcentajeCobrado(m);
   return (
     <div
       className="flex h-3 overflow-hidden rounded-full bg-pendiente-suave"
@@ -85,53 +29,54 @@ export function BarraIngreso({ fila }: { fila: ResumenConcepto }) {
       aria-valuemin={0}
       aria-valuemax={100}
       aria-label={
-        `${fila.nombre}: cobrado ${formatARS(cobrado)} de ${formatARS(estimado)} estimados` +
-        (otorgados > 0.5 ? `, beneficios otorgados ${formatARS(otorgados)}` : "") +
-        (enTermino > 0.5 ? `, beneficio en término ${formatARS(enTermino)}` : "") +
-        (pendiente > 0.009 ? `, faltan ${formatARS(pendiente)}` : ", completo")
+        `${fila.nombre}: cobrado ${formatARS(m.cobrado)} de ${formatARS(m.estimado)} estimados pagando en término` +
+        (m.falta > 0.009 ? `, faltan ${formatARS(m.falta)}` : ", completo") +
+        (m.enTermino > 0.5 ? `; si pagan fuera de término, hasta ${formatARS(m.fueraDeTermino)}` : "")
       }
     >
-      <div
-        className={cn("h-full bg-pagado transition-[width]", pctOtorgados + pctEnTermino === 0 && "rounded-full")}
-        style={{ width: `${pct}%` }}
-      />
-      {pctOtorgados > 0 ? (
-        <div className={cn("h-full", GRIS_BENEFICIO)} style={{ width: `${pctOtorgados}%` }} />
-      ) : null}
-      {pctEnTermino > 0 ? (
-        <div className="h-full bg-muted" style={{ width: `${pctEnTermino}%`, ...RAYADO_EN_TERMINO }} />
-      ) : null}
+      <div className="h-full rounded-full bg-pagado transition-[width]" style={{ width: `${pct}%` }} />
     </div>
   );
 }
 
 /**
- * Los montos de debajo de la barra: los beneficios que haya (cada uno con su muestra y su
- * nombre) y, a la derecha, "Faltan $X" o "Completo". `antes` va primero (el Inicio pone ahí
- * "$ cobrado de $ estimado"). Cada dato baja entero; en un celular angosto, el monto puede ir
- * debajo de su nombre.
+ * Lo que queda fuera del estimado, en chico y sin barra: el tope si quienes están en término
+ * pagan tarde («Si pagan fuera de término: hasta $X») y los beneficios ya otorgados. Cada
+ * dato baja entero. Sin nada que decir, no muestra nada.
+ */
+export function ExtrasEstimado({ montos }: { montos: MontosEstimado }) {
+  return (
+    <>
+      {montos.enTermino > 0.5 ? (
+        <span>
+          <span className="whitespace-nowrap">Si pagan fuera de término:</span>{" "}
+          <span className="whitespace-nowrap">hasta {formatARS(montos.fueraDeTermino)}</span>
+        </span>
+      ) : null}
+      {montos.otorgados > 0.5 ? (
+        <span>
+          <span className="whitespace-nowrap">Beneficios otorgados</span>{" "}
+          <span className="whitespace-nowrap">{formatARS(montos.otorgados)}</span>
+        </span>
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * Los montos de debajo de la barra: lo que queda fuera del estimado (si pagan fuera de
+ * término, beneficios otorgados) y, a la derecha, "Faltan $X" o "Completo". `antes` va
+ * primero (el Inicio pone ahí "$ cobrado de $ estimado"). Cada dato baja entero; en un
+ * celular angosto, el monto puede ir debajo de su nombre.
  */
 export function MontosIngreso({ fila, antes }: { fila: ResumenConcepto; antes?: React.ReactNode }) {
-  const { otorgados, enTermino, pendiente } = montosDe(fila);
+  const m = montosEstimado(fila);
   return (
     <div className="flex flex-wrap items-baseline gap-x-5 gap-y-0.5 pt-0.5 text-sm text-muted-foreground tabular">
       {antes}
-      {otorgados > 0.5 ? (
-        <span>
-          <MuestraBeneficio tipo="otorgados" className="mr-1.5 size-2.5" />
-          <span className="whitespace-nowrap">Beneficios otorgados</span>{" "}
-          <span className="whitespace-nowrap">{formatARS(otorgados)}</span>
-        </span>
-      ) : null}
-      {enTermino > 0.5 ? (
-        <span>
-          <MuestraBeneficio tipo="en-termino" className="mr-1.5 size-2.5" />
-          <span className="whitespace-nowrap">Beneficio en término</span>{" "}
-          <span className="whitespace-nowrap">{formatARS(enTermino)}</span>
-        </span>
-      ) : null}
-      {pendiente > 0.009 ? (
-        <span className="ml-auto font-medium whitespace-nowrap text-pendiente">Faltan {formatARS(pendiente)}</span>
+      <ExtrasEstimado montos={m} />
+      {m.falta > 0.009 ? (
+        <span className="ml-auto font-medium whitespace-nowrap text-pendiente">Faltan {formatARS(m.falta)}</span>
       ) : (
         <span className="ml-auto font-medium text-pagado">Completo</span>
       )}
@@ -140,14 +85,15 @@ export function MontosIngreso({ fila, antes }: { fila: ResumenConcepto; antes?: 
 }
 
 /**
- * Fila de ingresos por concepto, contra su estimado (el mismo de Facturación y del Inicio):
- * el nombre y "$ cobrado de $ estimado", la barra y debajo cada tramo con su monto. La cuenta
- * cierra en el renglón (cobrado + otorgados + en término + faltan = estimado).
+ * Fila de ingresos por concepto, contra su estimado pagando en término (el mismo de
+ * Facturación y del Inicio): el nombre y "$ cobrado de $ estimado", la barra y debajo lo que
+ * falta. La cuenta cierra en el renglón (cobrado + faltan = estimado); el tope si pagan
+ * fuera de término y los beneficios otorgados van aparte, en chico.
  * `descuentos` es el nombre de la columna de la RPC; en pantalla (y en la impresión y el
  * Excel) es "Beneficios otorgados": los que ya se descontaron a quienes pagaron en término.
  */
 export function FilaIngreso({ fila }: { fila: ResumenConcepto }) {
-  const { estimado, cobrado } = montosDe(fila);
+  const { estimado, cobrado } = montosEstimado(fila);
   return (
     <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-4 py-4 sm:grid-cols-[5rem_minmax(0,1fr)]">
       <Codigo codigo={fila.codigo} className="mt-0.5" />

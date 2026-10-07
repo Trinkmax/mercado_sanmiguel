@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 import {
   ArrowRight,
   Banknote,
@@ -35,7 +35,6 @@ import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
 import { Codigo } from "@/components/shared/codigo";
 import { CajaRegistradora } from "@/components/shared/iconos";
-import { GRIS_BENEFICIO, RAYADO_EN_TERMINO } from "@/components/reportes/fila-ingreso";
 import { BotonEjemplo, CampoEjemplo, FilaEjemplo, MarcoPantalla, Resaltado } from "@/components/tour/pantalla";
 
 // Tour guiado · inicio-mapa: pantallas de ejemplo de Inicio y del Mapa (docs/GUIA-TOUR.md).
@@ -72,17 +71,22 @@ function Barra({ pct, className }: { pct: number; className?: string }) {
   );
 }
 
-/** Un concepto contra su estimado, como en Inicio y Reportes. */
+/**
+ * Un concepto contra su estimado pagando en término, como en Inicio y Reportes: verde lo
+ * cobrado, rojo lo que falta y, en chico, el tope si pagan fuera de término (`hasta`).
+ */
 function FilaConcepto({
   codigo,
   nombre,
   cobrado,
   estimado,
+  hasta,
 }: {
   codigo: string;
   nombre: string;
   cobrado: number;
   estimado: number;
+  hasta?: number;
 }) {
   return (
     <div className="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-x-2.5 py-1.5">
@@ -97,6 +101,11 @@ function FilaConcepto({
               de <Money monto={estimado} />
             </span>
           </span>
+          {hasta ? (
+            <span className="text-muted-foreground">
+              Si pagan fuera de término: hasta <Money monto={hasta} />
+            </span>
+          ) : null}
           <span className="font-medium text-pendiente">
             Faltan <Money monto={estimado - cobrado} />
           </span>
@@ -200,7 +209,7 @@ export function PortadaInicio() {
       </Tarjeta>
       <Tarjeta>
         <TituloTarjeta>Cobranza de Septiembre de 2026</TituloTarjeta>
-        <FilaConcepto codigo="EXME" nombre="Expensas Cobradas" cobrado={21600000} estimado={32400000} />
+        <FilaConcepto codigo="EXME" nombre="Expensas Cobradas" cobrado={18900000} estimado={28000000} />
       </Tarjeta>
     </MarcoPantalla>
   );
@@ -269,7 +278,13 @@ export function PantallaCobranzaMes() {
       <Tarjeta className="space-y-0.5">
         <TituloTarjeta>Cobranza de Septiembre de 2026</TituloTarjeta>
         <div className="divide-y divide-border">
-          <FilaConcepto codigo="EXME" nombre="Expensas Cobradas" cobrado={21600000} estimado={32400000} />
+          <FilaConcepto
+            codigo="EXME"
+            nombre="Expensas Cobradas"
+            cobrado={18900000}
+            estimado={28000000}
+            hasta={29365000}
+          />
           <FilaConcepto codigo="EXPC" nombre="Alquiler Cocheras" cobrado={186000} estimado={248000} />
           <FilaConcepto codigo="EXPG" nombre="Expensas Galpón" cobrado={360000} estimado={600000} />
         </div>
@@ -277,15 +292,20 @@ export function PantallaCobranzaMes() {
           <Chico>Total del mes</Chico>
           <p className="flex flex-wrap gap-x-2.5 text-[0.75rem]">
             <span>
-              <Money monto={22146000} className="font-bold text-pagado" />{" "}
+              <Money monto={19446000} className="font-bold text-pagado" />{" "}
               <span className="text-muted-foreground">cobrado</span>
             </span>
             <span>
-              <Money monto={11102000} className="font-bold text-pendiente" />{" "}
+              <Money monto={9402000} className="font-bold text-pendiente" />{" "}
               <span className="text-muted-foreground">por cobrar</span>
             </span>
           </p>
         </div>
+        <Chico>
+          Estimado del mes, pagando en término:{" "}
+          <Money monto={28848000} className="font-semibold text-foreground" />. Si pagan fuera de término:
+          hasta <Money monto={30213000} className="font-semibold text-foreground" />.
+        </Chico>
       </Tarjeta>
     </MarcoPantalla>
   );
@@ -609,29 +629,19 @@ export function PantallaAvisosTesoreria() {
   );
 }
 
-/** Estimado y cobrado del mes (Tesorería): la barra en cuatro tramos. */
+/** Estimado y cobrado del mes (Tesorería): lo que se espera pagando en término, en dos tramos. */
 export function PantallaEstimadoTesoreria() {
-  const total = 39248000;
-  const tramos: { label: string; monto: number; muestra: ReactNode; clase?: string }[] = [
-    { label: "Cobrado", monto: 26346000, muestra: <span className="size-2.5 rounded-full bg-pagado" />, clase: "text-pagado" },
-    {
-      label: "Beneficios otorgados",
-      monto: 1944000,
-      muestra: <span className={cn("size-2.5 rounded-full", GRIS_BENEFICIO)} />,
-    },
-    {
-      label: "Beneficio en término",
-      monto: 1296000,
-      muestra: <span className="size-2.5 rounded-full bg-muted" style={RAYADO_EN_TERMINO} />,
-    },
+  const estimado = 36008000;
+  const cobrado = 26346000;
+  const tramos: { label: string; monto: number; muestra: ReactNode; clase: string }[] = [
+    { label: "Cobrado", monto: cobrado, muestra: <span className="size-2.5 rounded-full bg-pagado" />, clase: "text-pagado" },
     {
       label: "Falta cobrar",
-      monto: 9662000,
+      monto: estimado - cobrado,
       muestra: <span className="size-2.5 rounded-full bg-pendiente-suave ring-1 ring-pendiente/40" />,
       clase: "text-pendiente",
     },
   ];
-  const ancho = (m: number): CSSProperties => ({ width: `${(m / total) * 100}%` });
   return (
     <MarcoPantalla titulo="Inicio · Estimado y cobrado">
       <Tarjeta className="space-y-2">
@@ -639,21 +649,18 @@ export function PantallaEstimadoTesoreria() {
         <div className="grid grid-cols-2 gap-2">
           <div>
             <Chico>Se tendría que cobrar</Chico>
-            <Money monto={total} className="font-display text-[1rem] font-extrabold" />
+            <Money monto={estimado} className="font-display text-[1rem] font-extrabold" />
+            <Chico>pagando en término</Chico>
           </div>
           <div>
             <Chico>Se cobró</Chico>
             <p className="flex items-baseline gap-1">
-              <Money monto={26346000} className="font-display text-[1rem] font-extrabold text-pagado" />
-              <span className="text-[0.72rem] font-semibold text-muted-foreground">67 %</span>
+              <Money monto={cobrado} className="font-display text-[1rem] font-extrabold text-pagado" />
+              <span className="text-[0.72rem] font-semibold text-muted-foreground">73 %</span>
             </p>
           </div>
         </div>
-        <div className="flex h-2.5 overflow-hidden rounded-full bg-pendiente-suave">
-          <div className="h-full bg-pagado" style={ancho(26346000)} />
-          <div className={cn("h-full", GRIS_BENEFICIO)} style={ancho(1944000)} />
-          <div className="h-full bg-muted" style={{ ...ancho(1296000), ...RAYADO_EN_TERMINO }} />
-        </div>
+        <Barra pct={(cobrado / estimado) * 100} className="h-2.5" />
         <dl className="grid grid-cols-2 gap-x-2 gap-y-1.5">
           {tramos.map((t) => (
             <div key={t.label}>
@@ -667,6 +674,10 @@ export function PantallaEstimadoTesoreria() {
             </div>
           ))}
         </dl>
+        <Chico>
+          Si pagan fuera de término: hasta <Money monto={37304000} className="font-semibold text-foreground" />.
+          Beneficios ya otorgados: <Money monto={1944000} className="font-semibold text-foreground" />.
+        </Chico>
         <div className="flex items-center gap-2 border-t border-border pt-2">
           <span className="flex size-7 items-center justify-center rounded-lg bg-accent text-primary">
             <Truck className="size-3.5" strokeWidth={2} />

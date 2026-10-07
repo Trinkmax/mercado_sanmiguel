@@ -4,6 +4,7 @@ import { requireRol } from "@/lib/auth";
 import { ROLES_REPORTES } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/server";
 import {
+  centavosConBeneficio,
   fechaLocal,
   formatFecha,
   formatFechaHora,
@@ -12,6 +13,7 @@ import {
   periodoActual,
   sumarMeses,
 } from "@/lib/format";
+import { sumarEstimado, type MontosEstimado } from "@/lib/estimado";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -41,10 +43,23 @@ type FilaPreview = {
   nombre: string;
   orden: number;
   clientes: Set<string>;
-  subtotal: number;
+  /** Centavos a precio completo: Σ cantidad × precio × porcentaje (el monto de cada cargo). */
+  completoCents: number;
+  /** Centavos pagando en término: Σ monto / (1 + beneficio %), redondeado cargo por cargo. */
+  enTerminoCents: number;
   /** Fila del abono de energía que se genera sola (clientes con medidor activo). */
   automatica?: boolean;
 };
+
+/**
+ * Un cargo del preview: su monto (como lo genera generar_periodo) y lo que paga en término
+ * (private.monto_con_beneficio, redondeado igual que la base: round(monto / (1 + %), 2)).
+ */
+function sumarCargo(item: FilaPreview, monto: number, beneficioPct: number) {
+  const cents = Math.round(monto * 100);
+  item.completoCents += cents;
+  item.enTerminoCents += centavosConBeneficio(cents, beneficioPct);
+}
 
 export default async function FacturacionPage() {
   // J5: Tesorería no factura. Reportes solo el Líder (J7).
@@ -63,7 +78,7 @@ export default async function FacturacionPage() {
     supabase
       .from("cliente_conceptos")
       .select(
-        "cantidad, porcentaje, cliente_id, conceptos!inner(codigo, nombre, precio, orden_imputacion), clientes!inner(activo)"
+        "cantidad, porcentaje, cliente_id, conceptos!inner(codigo, nombre, precio, orden_imputacion, descuento_pronto_pago, segmento), clientes!inner(activo, categoria)"
       )
       .eq("org_id", perfil.org_id)
       .eq("activo", true)
@@ -78,13 +93,13 @@ export default async function FacturacionPage() {
     // I1: abono mensual de energía (ABEN) a cada cliente activo con medidor activo.
     supabase
       .from("conceptos")
-      .select("id, codigo, nombre, precio, orden_imputacion, activo")
+      .select("id, codigo, nombre, precio, orden_imputacion, activo, descuento_pronto_pago")
       .eq("org_id", perfil.org_id)
       .eq("codigo", "ABEN")
       .maybeSingle(),
     supabase
       .from("medidores")
-      .select("cliente_id, clientes!inner(activo)")
+      .select("cliente_id, clientes!inner(activo, categoria)")
       .eq("org_id", perfil.org_id)
       .eq("activo", true)
       .eq("clientes.activo", true),
@@ -115,26 +130,37 @@ export default async function FacturacionPage() {
   const diaVenc = Math.min(configRes.data?.dia_vencimiento ?? 30, ultimoDia);
   const vencimientoProximo = `${dProximo.getFullYear()}-${String(dProximo.getMonth() + 1).padStart(2, "0")}-${String(diaVenc).padStart(2, "0")}`;
 
-  // Preview del estimado: cantidad × precio actual × porcentaje, agrupado por concepto.
+  // Preview del estimado: cantidad × precio actual × porcentaje, agrupado por concepto. El
+  // estimado es pagando en término (con el beneficio de cada concepto, como el resto del
+  // sistema, src/lib/estimado.ts); el precio completo va aparte, como tope.
   const porConcepto = new Map<string, FilaPreview>();
   let cargosEstimados = 0;
   for (const fila of previewRes.data ?? []) {
-    const subtotal = montoConcepto(
+    // Misma regla que generar_periodo (0045, 0047): al ambulante solo se le genera la cochera
+    // y la quinta, aunque le haya quedado activa otra fila.
+    if (
+      fila.clientes.categoria === "ambulante" &&
+      fila.conceptos.segmento !== "cocheras" &&
+      fila.conceptos.segmento !== "quinteros"
+    )
+      continue;
+    const monto = montoConcepto(
       Number(fila.cantidad),
       Number(fila.conceptos.precio),
       Number(fila.porcentaje ?? 100)
     );
-    if (subtotal <= 0) continue;
+    if (monto <= 0) continue;
     cargosEstimados += 1;
     const item = porConcepto.get(fila.conceptos.codigo) ?? {
       codigo: fila.conceptos.codigo,
       nombre: fila.conceptos.nombre,
       orden: Number(fila.conceptos.orden_imputacion),
       clientes: new Set<string>(),
-      subtotal: 0,
+      completoCents: 0,
+      enTerminoCents: 0,
     };
     item.clientes.add(fila.cliente_id);
-    item.subtotal += subtotal;
+    sumarCargo(item, monto, Number(fila.conceptos.descuento_pronto_pago ?? 0));
     porConcepto.set(fila.conceptos.codigo, item);
   }
   // Abono de energía (se genera solo): clientes con medidor activo, salvo exentos; la
@@ -143,13 +169,19 @@ export default async function FacturacionPage() {
   let abonosEstimados = 0;
   if (aben && aben.activo && Number(aben.precio) > 0) {
     const filaAben = new Map((filasAbenRes.data ?? []).map((f) => [f.cliente_id, f]));
-    const conMedidor = new Set((medidoresRes.data ?? []).map((m) => m.cliente_id));
+    // Ambulantes y empleados no pagan abono (generar_abonos_energia, 0024 y 0040).
+    const conMedidor = new Set(
+      (medidoresRes.data ?? [])
+        .filter((m) => m.clientes.categoria !== "ambulante" && m.clientes.categoria !== "empleado")
+        .map((m) => m.cliente_id)
+    );
     const item: FilaPreview = {
       codigo: aben.codigo,
       nombre: aben.nombre,
       orden: Number(aben.orden_imputacion),
       clientes: new Set<string>(),
-      subtotal: 0,
+      completoCents: 0,
+      enTerminoCents: 0,
       automatica: true,
     };
     for (const clienteId of conMedidor) {
@@ -157,8 +189,10 @@ export default async function FacturacionPage() {
       if (fila && !fila.activo) continue; // exento
       const cantidad = fila ? Number(fila.cantidad) : 1;
       const porcentaje = fila ? Number(fila.porcentaje ?? 100) : 100;
+      const monto = montoConcepto(cantidad, Number(aben.precio), porcentaje);
+      if (monto <= 0) continue;
       item.clientes.add(clienteId);
-      item.subtotal += montoConcepto(cantidad, Number(aben.precio), porcentaje);
+      sumarCargo(item, monto, Number(aben.descuento_pronto_pago ?? 0));
     }
     if (item.clientes.size > 0) {
       abonosEstimados = item.clientes.size;
@@ -167,21 +201,23 @@ export default async function FacturacionPage() {
     }
   }
 
-  const preview = [...porConcepto.values()].sort((a, b) => a.orden - b.orden);
-  const totalEstimado = preview.reduce((acc, f) => acc + f.subtotal, 0);
+  const preview = [...porConcepto.values()]
+    .sort((a, b) => a.orden - b.orden)
+    .map((f) => ({ ...f, estimado: f.enTerminoCents / 100, completo: f.completoCents / 100 }));
+  // Total pagando en término (el principal) y a precio completo (el tope si pagan tarde).
+  const totalEstimado = preview.reduce((acc, f) => acc + f.enTerminoCents, 0) / 100;
+  const totalCompleto = preview.reduce((acc, f) => acc + f.completoCents, 0) / 100;
 
   // Estimado y cobrado de cada período generado (resumen_conceptos por período). Sin BC:
-  // el bono camioneros se cobra en la garita, no se factura.
+  // el bono camioneros se cobra en la garita, no se factura. Estimado = cobrado + falta
+  // (pagando en término, src/lib/estimado.ts); el precio completo va debajo, en chico.
   const resumenes = await Promise.all(
     historial.map((p) => supabase.rpc("resumen_conceptos", { p_periodo: p.periodo }))
   );
-  const resumenPorPeriodo = new Map<string, { estimado: number; cobrado: number }>();
+  const resumenPorPeriodo = new Map<string, MontosEstimado>();
   historial.forEach((p, i) => {
     const filas = (resumenes[i].data ?? []).filter((f) => f.codigo !== "BC");
-    resumenPorPeriodo.set(p.periodo.slice(0, 10), {
-      estimado: filas.reduce((acc, f) => acc + Number(f.estimado), 0),
-      cobrado: filas.reduce((acc, f) => acc + Number(f.cobrado), 0),
-    });
+    resumenPorPeriodo.set(p.periodo.slice(0, 10), sumarEstimado(filas));
   });
 
   // Nombre de quién generó cada período.
@@ -206,6 +242,7 @@ export default async function FacturacionPage() {
       generado: formatFechaHora(p.generado_en),
       generadoPor: p.generado_por ? (nombrePorUsuario.get(p.generado_por) ?? null) : null,
       estimado: resumen?.estimado ?? 0,
+      completo: resumen?.completo ?? 0,
       cobrado: resumen?.cobrado ?? 0,
     };
   });
@@ -260,14 +297,33 @@ export default async function FacturacionPage() {
                         {fila.clientes.size === 1 ? "cliente" : "clientes"}
                         {fila.automatica ? " con medidor · se suma solo" : ""}
                       </p>
+                      {fila.completo - fila.estimado > 0.5 ? (
+                        <p className="text-sm text-muted-foreground tabular">
+                          <span className="whitespace-nowrap">Si pagan fuera de término:</span>{" "}
+                          <span className="whitespace-nowrap">
+                            hasta <Money monto={fila.completo} />
+                          </span>
+                        </p>
+                      ) : null}
                     </div>
-                    <Money monto={fila.subtotal} className="shrink-0 text-base font-medium" />
+                    <Money monto={fila.estimado} className="shrink-0 text-base font-medium" />
                   </div>
                 ))}
               </div>
-              <div className="flex flex-wrap items-baseline justify-between gap-2 border-t pt-4">
-                <p className="font-medium">Total estimado</p>
-                <Money monto={totalEstimado} className="text-2xl font-bold" />
+              <div className="space-y-1 border-t pt-4">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                  <p className="font-medium">
+                    Total estimado{" "}
+                    <span className="font-normal whitespace-nowrap text-muted-foreground">pagando en término</span>
+                  </p>
+                  <Money monto={totalEstimado} className="text-2xl font-bold" />
+                </div>
+                {totalCompleto - totalEstimado > 0.5 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Si pagan fuera de término, a precio completo: hasta{" "}
+                    <Money monto={totalCompleto} className="font-semibold text-foreground" />.
+                  </p>
+                ) : null}
               </div>
               <p className="text-sm text-muted-foreground">
                 El consumo de luz (kWh) se suma con las lecturas del mes; el abono
@@ -278,6 +334,7 @@ export default async function FacturacionPage() {
                 label={labelPeriodo(proximo)}
                 cargosEstimados={cargosEstimados}
                 totalEstimado={totalEstimado}
+                totalCompleto={totalCompleto}
                 abonosEstimados={abonosEstimados}
               />
             </>
@@ -315,6 +372,12 @@ export default async function FacturacionPage() {
                         <dt className="text-sm text-muted-foreground">Estimado</dt>
                         <dd>
                           <Money monto={p.estimado} className="text-base font-semibold break-words" />
+                          {p.completo - p.estimado > 0.5 ? (
+                            <p className="text-sm text-muted-foreground">
+                              <span className="whitespace-nowrap">a precio completo</span>{" "}
+                              <Money monto={p.completo} className="whitespace-nowrap" />
+                            </p>
+                          ) : null}
                         </dd>
                       </div>
                       <div className="min-w-0">
@@ -367,6 +430,11 @@ export default async function FacturacionPage() {
                       </TableCell>
                       <TableCell className="text-right tabular">
                         <Money monto={p.estimado} />
+                        {p.completo - p.estimado > 0.5 ? (
+                          <p className="text-muted-foreground">
+                            a precio completo <Money monto={p.completo} />
+                          </p>
+                        ) : null}
                       </TableCell>
                       <TableCell className="text-right tabular">
                         <Money monto={p.cobrado} className="font-semibold text-pagado" />
@@ -383,14 +451,15 @@ export default async function FacturacionPage() {
                 </TableBody>
               </Table>
 
-              {/* Estimado ≠ cobrado + lo que falta: la diferencia son los beneficios. Y el de
-                  Reportes suma el bono camioneros, que acá no va porque no se factura. */}
+              {/* Estimado = cobrado + lo que falta (pagando en término), igual que en Inicio y
+                  Reportes. El de Reportes suma el bono camioneros, que acá no va porque no se factura. */}
               <p className="mt-4 border-t pt-4 text-sm text-muted-foreground">
-                Estimado es todo lo facturado en el mes, sin descontar los beneficios (los otorgados
-                y los de quienes todavía están en término): por eso da más que lo cobrado más lo que
-                falta cobrar (lo ves en
-                Inicio{veReportes ? " y en cada reporte" : ""}). No incluye el bono camioneros, que se
-                cobra en portería y no se factura.
+                Estimado es lo que se espera cobrar si los que están en término pagan en término: lo
+                cobrado más lo que falta cobrar (la misma cuenta que en Inicio
+                {veReportes ? " y en cada reporte" : ""}).
+                Debajo, en chico, el precio completo: lo que suman los cargos sin ningún beneficio, si
+                todos pagaran fuera de término. No incluye el bono camioneros, que se cobra en portería
+                y no se factura.
               </p>
             </>
           )}

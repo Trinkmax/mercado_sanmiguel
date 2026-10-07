@@ -22,11 +22,8 @@ import { Money } from "@/components/shared/money";
 import { BotonExportar } from "@/components/shared/boton-exportar";
 import { SelectorPeriodo } from "@/components/reportes/selector-periodo";
 import { MenuExportar } from "@/components/reportes/menu-exportar";
-import {
-  FilaIngreso,
-  beneficioEnTerminoDe,
-  type ResumenConcepto,
-} from "@/components/reportes/fila-ingreso";
+import { FilaIngreso, type ResumenConcepto } from "@/components/reportes/fila-ingreso";
+import { montosEstimado, sumarEstimado } from "@/lib/estimado";
 import { ChartCobranzaDiaria } from "@/components/charts/chart-cobranza-diaria";
 import { ChartGastosRubro, type GastoRubro } from "@/components/charts/chart-gastos-rubro";
 import { rangoDelPeriodo, serieDesdeTotales } from "@/components/charts/serie-cobranza";
@@ -139,24 +136,18 @@ export default async function ReportesPage({
   const gastosGrafico = [...totalesRubro.values()];
   const hayGastosConMonto = gastosGrafico.some((g) => g.total > 0);
 
-  const totIngresos = ingresos.reduce(
-    (acc, f) => ({
-      estimado: acc.estimado + Number(f.estimado),
-      cobrado: acc.cobrado + Number(f.cobrado),
-      descuentos: acc.descuentos + Number(f.descuentos),
-      pendiente: acc.pendiente + Number(f.pendiente),
-    }),
-    { estimado: 0, cobrado: 0, descuentos: 0, pendiente: 0 }
-  );
-  // Dos cifras con dos nombres, igual en todo el sistema: "Beneficios otorgados" (los
-  // descuentos ya hechos a quienes pagaron en término, como en la impresión y el Excel) y
-  // "Beneficio en término" (el de quienes todavía no pagaron, pero están a tiempo). Con los dos,
-  // estimado = cobrado + otorgados + en término + falta cobrar.
-  const beneficioEnTermino = ingresos.reduce((acc, f) => acc + beneficioEnTerminoDe(f), 0);
-  const hayEnTermino = beneficioEnTermino > 0.5;
+  // Estimado = cobrado + falta cobrar: lo que se espera cobrar si los que están en término
+  // pagan en término (src/lib/estimado.ts, igual en todo el sistema). Aparte, el tope si pagan
+  // fuera de término y los "Beneficios otorgados" (los descuentos ya hechos a quienes pagaron
+  // en término, como en la impresión y el Excel).
+  const totIngresos = sumarEstimado(ingresos);
+  const hayEnTermino = totIngresos.enTermino > 0.5;
+  const hayOtorgados = totIngresos.otorgados > 0.5;
+  const columnasTotales = 3 + (hayEnTermino ? 1 : 0) + (hayOtorgados ? 1 : 0);
   // El bono camioneros entra en el estimado de acá (se cobra en portería) pero no en el de
   // Facturación, que no lo factura: se aclara para que los dos cuadren.
-  const bonoCamioneros = Number(ingresos.find((f) => f.codigo === "BC")?.estimado ?? 0);
+  const bono = ingresos.find((f) => f.codigo === "BC");
+  const bonoCamioneros = bono ? montosEstimado(bono).estimado : 0;
 
   const subtotalGastos = (tipo: "fijo" | "variable") =>
     gastos
@@ -248,12 +239,17 @@ export default async function ReportesPage({
                 data-tour="reportes-totales"
                 className={cn(
                   "mt-4 grid grid-cols-2 gap-4 border-t pt-4",
-                  hayEnTermino ? "sm:grid-cols-3 xl:grid-cols-5" : "sm:grid-cols-4"
+                  columnasTotales === 5
+                    ? "sm:grid-cols-3 xl:grid-cols-5"
+                    : columnasTotales === 4
+                      ? "sm:grid-cols-4"
+                      : "sm:grid-cols-3"
                 )}
               >
                 <div className="min-w-0">
                   <p className="text-sm text-muted-foreground">Estimado</p>
                   <Money monto={totIngresos.estimado} className="text-lg font-semibold break-words" />
+                  <p className="text-sm text-muted-foreground">pagando en término</p>
                   {bonoCamioneros > 0 ? (
                     <p className="text-sm text-muted-foreground">
                       incluye <span className="whitespace-nowrap">{formatARS(bonoCamioneros)}</span>{" "}
@@ -269,31 +265,39 @@ export default async function ReportesPage({
                   />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm text-muted-foreground">Beneficios otorgados</p>
-                  <Money monto={totIngresos.descuentos} className="text-lg font-semibold break-words" />
-                </div>
-                {hayEnTermino ? (
-                  <div className="min-w-0">
-                    <p className="text-sm text-muted-foreground">Beneficio en término</p>
-                    <Money monto={beneficioEnTermino} className="text-lg font-semibold break-words" />
-                    <p className="text-sm text-muted-foreground">se pierde si pagan tarde</p>
-                  </div>
-                ) : null}
-                <div className="min-w-0">
                   <p className="text-sm text-muted-foreground">Falta cobrar</p>
                   <Money
-                    monto={totIngresos.pendiente}
+                    monto={totIngresos.falta}
                     className="text-lg font-bold break-words text-pendiente"
                   />
                 </div>
+                {hayEnTermino ? (
+                  <div className="min-w-0">
+                    <p className="text-sm text-muted-foreground">Si pagan fuera de término</p>
+                    <p className="text-lg font-semibold break-words">
+                      <span className="text-base font-normal text-muted-foreground">hasta </span>
+                      <Money monto={totIngresos.fueraDeTermino} />
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      <span className="whitespace-nowrap">{formatARS(totIngresos.enTermino)}</span> más
+                    </p>
+                  </div>
+                ) : null}
+                {hayOtorgados ? (
+                  <div className="min-w-0">
+                    <p className="text-sm text-muted-foreground">Beneficios otorgados</p>
+                    <Money monto={totIngresos.otorgados} className="text-lg font-semibold break-words" />
+                    <p className="text-sm text-muted-foreground">ya descontados</p>
+                  </div>
+                ) : null}
               </div>
-              {hayEnTermino ? (
-                <p className="mt-3 text-sm text-muted-foreground">
-                  Estimado = cobrado + beneficios otorgados + beneficio en término + falta cobrar.
-                  El beneficio en término es el de quienes todavía no pagaron, pero están a
-                  tiempo: si pagan después del vencimiento, pasa a “Falta cobrar”.
-                </p>
-              ) : null}
+              <p className="mt-3 text-sm text-muted-foreground">
+                Estimado = cobrado + falta cobrar: lo que se espera cobrar si los que están en
+                término pagan en término.
+                {hayEnTermino
+                  ? " Si pagan después del vencimiento, pierden el beneficio y se cobra más, hasta lo que dice «Si pagan fuera de término»."
+                  : ""}
+              </p>
             </>
           )}
         </CardContent>

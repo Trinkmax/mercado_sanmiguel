@@ -93,7 +93,7 @@ export const FACTURACION: ContenidoCapitulo = {
         ancla: ["facturacion-conceptos", "facturacion-mes"],
         titulo: "Qué se va a cobrar",
         texto:
-          "Cada concepto dice cuántos clientes lo pagan y cuánto suma. Sale de la carpeta de cada cliente: cuántos tiene (una expensa y media, cuatro galpones) y qué porcentaje paga (el 90 %, el 110 %).",
+          "Cada concepto dice cuántos clientes lo pagan y cuánto suma si pagan en término, con el beneficio. Sale de la carpeta de cada cliente: cuántos tiene (una expensa y media, cuatro galpones) y qué porcentaje paga (el 90 %, el 110 %). En chico, hasta cuánto sería si pagan fuera de término.",
         pantalla: PantallaEstimadoMes,
         consejo: "Un cambio de precio o de cantidad rige desde el próximo mes que se genere. Lo ya generado no cambia.",
         variantes: {
@@ -105,7 +105,7 @@ export const FACTURACION: ContenidoCapitulo = {
         },
         sinAncla: {
           texto:
-            "En la tarjeta del mes aparece cada concepto con cuántos clientes lo pagan y cuánto suma, según la carpeta de cada uno. Así se ve:",
+            "En la tarjeta del mes aparece cada concepto con cuántos clientes lo pagan y cuánto suma si pagan en término, según la carpeta de cada uno. Así se ve:",
         },
       },
       {
@@ -147,7 +147,7 @@ export const FACTURACION: ContenidoCapitulo = {
           : "Cada mes generado queda en «Períodos generados», con lo estimado y lo cobrado. Así ves cómo avanza la cobranza del mes.",
         pantalla: lider ? PantallaHistorialLider : PantallaHistorial,
         consejo:
-          "El estimado da un poco más que lo cobrado más lo que falta: la diferencia son los beneficios por pagar en término.",
+          "El estimado es lo que se espera cobrar si pagan en término: lo cobrado más lo que falta. Debajo, en chico, el precio completo, sin ningún beneficio.",
         variantes: {
           "facturacion-historial": {
             texto:
@@ -301,7 +301,7 @@ export const REPORTES: ContenidoCapitulo = {
       ancla: ["reportes-conceptos", "reportes-ingresos"],
       titulo: "Estimado contra cobrado",
       texto:
-        "Cada concepto con su barra: verde lo cobrado, gris los beneficios y rojo claro lo que falta. El estimado se sabe desde el día 1, porque es lo que se generó en «Facturación».",
+        "Cada concepto con su barra: verde lo cobrado y rojo claro lo que falta, contra lo que se espera cobrar si pagan en término. El estimado se sabe desde el día 1, porque sale de lo que se generó en «Facturación».",
       pantalla: PantallaIngresosConcepto,
       variantes: {
         "reportes-ingresos": {
@@ -319,11 +319,11 @@ export const REPORTES: ContenidoCapitulo = {
       ancla: "reportes-totales",
       titulo: "La cuenta cierra",
       texto:
-        "Estimado = cobrado + beneficios otorgados + beneficio en término + falta cobrar. El «Beneficio en término» es de quienes todavía están a tiempo: si pagan tarde, pasa a «Falta cobrar».",
+        "Estimado = cobrado + falta cobrar: lo que se espera cobrar si los que están en término pagan en término. «Si pagan fuera de término» dice hasta cuánto sería si pierden el beneficio; los «Beneficios otorgados» son los que ya se descontaron.",
       pantalla: PantallaTotalesMes,
       sinAncla: {
         texto:
-          "Debajo de los conceptos van los totales del mes: estimado = cobrado + beneficios otorgados + beneficio en término + falta cobrar. Así se ve:",
+          "Debajo de los conceptos van los totales del mes: estimado = cobrado + falta cobrar, pagando en término. Así se ve:",
       },
     },
     {

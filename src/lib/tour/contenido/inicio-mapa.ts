@@ -42,8 +42,8 @@ function pasoCobranzaMes(rol: Rol): Paso {
     ancla: ["inicio-cobranza-mes", "inicio-cobranza-vacia"],
     titulo: "Cómo viene el mes",
     texto: lider
-      ? "Cada concepto tiene su barra: verde lo cobrado, rojo lo que falta y gris el beneficio por pagar a tiempo. Abajo, el total cobrado y el total por cobrar. «Ver reportes» te lleva al detalle, mes a mes."
-      : "Cada concepto tiene su barra: verde lo cobrado, rojo lo que falta y gris el beneficio por pagar a tiempo. Abajo, el total cobrado y el total por cobrar. Son los puesteros, sin quintas ni ambulantes: esos no entran acá.",
+      ? "Cada concepto tiene su barra: verde lo cobrado y rojo lo que falta, contra lo que se espera cobrar si pagan en término. Abajo, el total cobrado, el total por cobrar y el estimado del mes; en chico, hasta cuánto sería si pagan fuera de término. «Ver reportes» te lleva al detalle, mes a mes."
+      : "Cada concepto tiene su barra: verde lo cobrado y rojo lo que falta, contra lo que se espera cobrar si pagan en término. Abajo, el total cobrado, el total por cobrar y el estimado del mes. Son los puesteros, sin quintas ni ambulantes: esos no entran acá.",
     variantes: {
       "inicio-cobranza-vacia": {
         texto: lider
@@ -283,7 +283,7 @@ function pasosInicioTesoreria(): Paso[] {
       ancla: ["inicio-estimado", "inicio-estimado-vacio"],
       titulo: "Estimado y cobrado",
       texto:
-        "Lo que se tendría que cobrar en el mes y lo que ya entró, con el porcentaje. La barra suma lo cobrado, los beneficios y lo que falta cobrar.",
+        "Lo que se tendría que cobrar en el mes si pagan en término y lo que ya entró, con el porcentaje. La barra es lo cobrado y lo que falta cobrar; abajo, en chico, hasta cuánto sería si pagan fuera de término.",
       consejo: "El bono camioneros va aparte, abajo: se cobra en portería en el momento.",
       variantes: {
         "inicio-estimado-vacio": {
@@ -292,7 +292,7 @@ function pasosInicioTesoreria(): Paso[] {
         },
       },
       sinAncla: {
-        texto: "Acá ves lo que se tendría que cobrar en el mes y lo que ya entró. Así se ve:",
+        texto: "Acá ves lo que se tendría que cobrar en el mes si pagan en término y lo que ya entró. Así se ve:",
         pantalla: PantallaEstimadoTesoreria,
       },
     },

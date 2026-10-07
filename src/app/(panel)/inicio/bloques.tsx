@@ -6,23 +6,19 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Codigo } from "@/components/shared/codigo";
 import { Money } from "@/components/shared/money";
-import {
-  BarraIngreso,
-  GRIS_BENEFICIO,
-  MontosIngreso,
-  MuestraBeneficio,
-  RAYADO_EN_TERMINO,
-} from "@/components/reportes/fila-ingreso";
+import { BarraIngreso, MontosIngreso } from "@/components/reportes/fila-ingreso";
+import { montosEstimado, porcentajeCobrado, type MontosEstimado } from "@/lib/estimado";
 import type { ResumenConcepto } from "./datos";
 
 /**
- * Un concepto contra su estimado (el mismo de Facturación y Reportes), con la misma barra y
- * los mismos nombres que Reportes: verde lo cobrado, gris los beneficios otorgados, rayado el
- * beneficio en término y la pista roja lo que falta. Debajo, "$ cobrado de $ estimado" (bajo
- * el verde), cada beneficio con su monto y "Faltan $X" a la derecha (bajo el rojo): la cuenta
- * cierra en el renglón (cobrado + otorgados + en término + faltan = estimado).
+ * Un concepto contra su estimado pagando en término (el mismo de Facturación y Reportes), con
+ * la misma barra y los mismos nombres que Reportes: verde lo cobrado y la pista roja lo que
+ * falta. Debajo, "$ cobrado de $ estimado" (bajo el verde), en chico el tope si pagan fuera de
+ * término y los beneficios otorgados, y "Faltan $X" a la derecha (bajo el rojo): la cuenta
+ * cierra en el renglón (cobrado + faltan = estimado).
  */
 export function BarraConcepto({ fila }: { fila: ResumenConcepto }) {
+  const { cobrado, estimado } = montosEstimado(fila);
   return (
     // Todos los anchos: código a la izquierda; el nombre entero, la barra a lo ancho y
     // debajo los montos. Si no entran en un renglón, cada uno baja entero.
@@ -35,8 +31,8 @@ export function BarraConcepto({ fila }: { fila: ResumenConcepto }) {
           fila={fila}
           antes={
             <span>
-              <span className="font-semibold whitespace-nowrap text-pagado">{formatARS(Number(fila.cobrado))}</span>{" "}
-              <span className="whitespace-nowrap">de {formatARS(Number(fila.estimado))}</span>
+              <span className="font-semibold whitespace-nowrap text-pagado">{formatARS(cobrado)}</span>{" "}
+              <span className="whitespace-nowrap">de {formatARS(estimado)}</span>
             </span>
           }
         />
@@ -180,54 +176,26 @@ export function DesgloseCajaPorteria({
 }
 
 /**
- * El estimado del mes en cuatro tramos, con los mismos nombres que Reportes, la impresión y
- * el Excel: cobrado (verde) · beneficios otorgados (gris) · beneficio en término (gris
- * rayado) · falta cobrar (rojo suave, lo que se debe hoy). Los cuatro suman el estimado.
+ * El estimado del mes (pagando en término, src/lib/estimado.ts) en dos tramos, con los
+ * mismos nombres que Reportes, la impresión y el Excel: cobrado (verde) y falta cobrar (rojo
+ * suave, lo que se debe hoy). Los dos suman el estimado: la barra no muestra plata que no va a
+ * entrar. Debajo, en chico, el tope si los que están en término pagan tarde y los beneficios
+ * ya otorgados.
  */
-export function BarraEstimado({
-  cobrado,
-  otorgados,
-  enTermino,
-  falta,
-  etiqueta,
-}: {
-  cobrado: number;
-  /** Beneficios ya descontados a quienes pagaron en término. */
-  otorgados: number;
-  /** Beneficio de quienes todavía no pagaron y siguen en término (si pagan tarde, pasa a falta). */
-  enTermino: number;
-  /** Lo que se debe hoy. */
-  falta: number;
-  etiqueta: string;
-}) {
-  const total = Math.max(cobrado + otorgados + enTermino + falta, 0.01);
-  const pc = (cobrado / total) * 100;
-  const po = (otorgados / total) * 100;
-  const pt = (enTermino / total) * 100;
-  const tramos: { clave: string; label: string; monto: number; muestra: React.ReactNode; fuerte?: string }[] = [
+export function BarraEstimado({ montos, etiqueta }: { montos: MontosEstimado; etiqueta: string }) {
+  const pc = porcentajeCobrado(montos);
+  const tramos: { clave: string; label: string; monto: number; muestra: React.ReactNode; fuerte: string }[] = [
     {
       clave: "cobrado",
       label: "Cobrado",
-      monto: cobrado,
+      monto: montos.cobrado,
       muestra: <span className="size-3 rounded-full bg-pagado" />,
       fuerte: "text-pagado",
     },
     {
-      clave: "otorgados",
-      label: "Beneficios otorgados",
-      monto: otorgados,
-      muestra: <MuestraBeneficio tipo="otorgados" className="size-3" />,
-    },
-    {
-      clave: "en-termino",
-      label: "Beneficio en término",
-      monto: enTermino,
-      muestra: <MuestraBeneficio tipo="en-termino" className="size-3" />,
-    },
-    {
       clave: "falta",
       label: "Falta cobrar",
-      monto: falta,
+      monto: montos.falta,
       muestra: <span className="size-3 rounded-full bg-pendiente-suave ring-1 ring-pendiente/40" />,
       fuerte: "text-pendiente",
     },
@@ -239,27 +207,23 @@ export function BarraEstimado({
         role="img"
         aria-label={etiqueta}
       >
-        <div className="h-full bg-pagado" style={{ width: `${pc}%` }} />
-        {po > 0 ? <div className={cn("h-full", GRIS_BENEFICIO)} style={{ width: `${po}%` }} /> : null}
-        {pt > 0 ? <div className="h-full bg-muted" style={{ width: `${pt}%`, ...RAYADO_EN_TERMINO }} /> : null}
+        <div className="h-full rounded-full bg-pagado" style={{ width: `${pc}%` }} />
       </div>
       {/* Cada tramo: su muestra de color y su nombre arriba, el monto debajo (nunca se parte). */}
       <dl className="grid grid-cols-2 gap-x-4 gap-y-3 sm:flex sm:flex-wrap sm:gap-x-8">
-        {tramos
-          .filter((t) => t.clave === "cobrado" || t.clave === "falta" || t.monto > 0.5)
-          .map((t) => (
-            <div key={t.clave} className="min-w-0">
-              <dt className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span aria-hidden className="flex shrink-0">
-                  {t.muestra}
-                </span>
-                {t.label}
-              </dt>
-              <dd>
-                <Money monto={t.monto} className={cn("text-base font-semibold", t.fuerte)} />
-              </dd>
-            </div>
-          ))}
+        {tramos.map((t) => (
+          <div key={t.clave} className="min-w-0">
+            <dt className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span aria-hidden className="flex shrink-0">
+                {t.muestra}
+              </span>
+              {t.label}
+            </dt>
+            <dd>
+              <Money monto={t.monto} className={cn("text-base font-semibold", t.fuerte)} />
+            </dd>
+          </div>
+        ))}
       </dl>
     </div>
   );
