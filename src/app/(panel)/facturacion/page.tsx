@@ -1,11 +1,12 @@
 import Link from "next/link";
-import { ArrowRight, CalendarRange, Store, Zap } from "lucide-react";
+import { ArrowRight, CalendarRange, Store, Truck, Zap } from "lucide-react";
 import { requireRol } from "@/lib/auth";
 import { ROLES_REPORTES } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/server";
 import {
   centavosConBeneficio,
   fechaLocal,
+  formatARS,
   formatFecha,
   formatFechaHora,
   labelPeriodo,
@@ -13,7 +14,7 @@ import {
   periodoActual,
   sumarMeses,
 } from "@/lib/format";
-import { sumarEstimado, type MontosEstimado } from "@/lib/estimado";
+import { montosEstimado, sumarEstimado, type MontosEstimado } from "@/lib/estimado";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -60,6 +61,16 @@ function sumarCargo(item: FilaPreview, monto: number, beneficioPct: number) {
   item.completoCents += cents;
   item.enTerminoCents += centavosConBeneficio(cents, beneficioPct);
 }
+
+/** Una fila de `resumen_conceptos`: lo estimado y lo cobrado de un concepto en un mes. */
+type FilaResumen = {
+  codigo: string;
+  nombre: string;
+  estimado: number;
+  cobrado: number;
+  descuentos: number;
+  pendiente: number;
+};
 
 export default async function FacturacionPage() {
   // J5: Tesorería no factura. Reportes solo el Líder (J7).
@@ -208,17 +219,71 @@ export default async function FacturacionPage() {
   const totalEstimado = preview.reduce((acc, f) => acc + f.enTerminoCents, 0) / 100;
   const totalCompleto = preview.reduce((acc, f) => acc + f.completoCents, 0) / 100;
 
-  // Estimado y cobrado de cada período generado (resumen_conceptos por período). Sin BC:
-  // el bono camioneros se cobra en la garita, no se factura. Estimado = cobrado + falta
-  // (pagando en término, src/lib/estimado.ts); el precio completo va debajo, en chico.
-  const resumenes = await Promise.all(
-    historial.map((p) => supabase.rpc("resumen_conceptos", { p_periodo: p.periodo }))
-  );
+  // Estimado y cobrado de cada período generado (resumen_conceptos por período), con todo lo
+  // que entra en el mes: los conceptos generados, el recupero de energía (los cargos que
+  // dejan las lecturas) y el bono camioneros (no tiene estimado: suma lo que se cobra cada
+  // día en portería). Estimado = cobrado + falta (pagando en término, src/lib/estimado.ts);
+  // el precio completo va debajo, en chico.
+  const mesActual = periodoActual();
+  const mesGenerado = generados.has(mesActual);
+  const [resumenes, resumenMesRes, otrosRes] = await Promise.all([
+    Promise.all(historial.map((p) => supabase.rpc("resumen_conceptos", { p_periodo: p.periodo }))),
+    // El mes en curso sin generar igual tiene ingresos (el canon de cada día, lecturas ya cargadas).
+    mesGenerado
+      ? Promise.resolve({ data: null })
+      : supabase.rpc("resumen_conceptos", { p_periodo: mesActual }),
+    // Energía y canon van siempre en los ingresos del mes, aunque todavía estén en cero.
+    supabase
+      .from("conceptos")
+      .select("codigo, nombre, activo")
+      .eq("org_id", perfil.org_id)
+      .in("codigo", ["ENER", "BC"]),
+  ]);
   const resumenPorPeriodo = new Map<string, MontosEstimado>();
+  const filasPorPeriodo = new Map<string, FilaResumen[]>();
   historial.forEach((p, i) => {
-    const filas = (resumenes[i].data ?? []).filter((f) => f.codigo !== "BC");
+    const filas = (resumenes[i].data ?? []) as FilaResumen[];
+    filasPorPeriodo.set(p.periodo.slice(0, 10), filas);
     resumenPorPeriodo.set(p.periodo.slice(0, 10), sumarEstimado(filas));
   });
+
+  // Ingresos del mes en curso, concepto por concepto. El recupero de energía y el canon de
+  // camiones aparecen siempre: uno se suma con las lecturas de luz y el otro con lo que se
+  // cobra cada día (resumen_conceptos solo los trae cuando ya tienen algo).
+  const filasDelMes = (
+    mesGenerado ? (filasPorPeriodo.get(mesActual) ?? []) : ((resumenMesRes.data ?? []) as FilaResumen[])
+  ).map((f) => ({ ...f }));
+  const otros = new Map((otrosRes.data ?? []).map((c) => [c.codigo, c]));
+  const filaVacia = (codigo: "ENER" | "BC"): FilaResumen | null => {
+    const c = otros.get(codigo);
+    return c?.activo
+      ? { codigo, nombre: c.nombre, estimado: 0, cobrado: 0, descuentos: 0, pendiente: 0 }
+      : null;
+  };
+  const energiaDelMes = filasDelMes.find((f) => f.codigo === "ENER") ?? filaVacia("ENER");
+  const canonDelMes = filasDelMes.find((f) => f.codigo === "BC") ?? filaVacia("BC");
+  const ingresosDelMes = [
+    ...filasDelMes.filter((f) => f.codigo !== "ENER" && f.codigo !== "BC"),
+    ...(energiaDelMes ? [energiaDelMes] : []),
+    ...(canonDelMes ? [canonDelMes] : []),
+  ].map((f) => {
+    const m = montosEstimado(f);
+    const nota =
+      f.codigo === "BC"
+        ? "Sin estimado: se suma lo que se cobra cada día en portería."
+        : f.codigo === "ENER"
+          ? Number(f.estimado) > 0
+            ? "Según las lecturas de luz cargadas este mes."
+            : "Se suma cuando se cargan las lecturas de luz del mes."
+          : null;
+    return { codigo: f.codigo, nombre: f.nombre, estimado: m.estimado, cobrado: m.cobrado, nota };
+  });
+  const totalDelMes = sumarEstimado([
+    ...filasDelMes.filter((f) => f.codigo !== "ENER" && f.codigo !== "BC"),
+    ...(energiaDelMes ? [energiaDelMes] : []),
+    ...(canonDelMes ? [canonDelMes] : []),
+  ]);
+  const canonCobrado = canonDelMes ? Number(canonDelMes.cobrado) : 0;
 
   // Nombre de quién generó cada período.
   const idsGeneradores = [
@@ -247,12 +312,114 @@ export default async function FacturacionPage() {
     };
   });
 
+  // Ingresos del mes en curso: lo generado, el recupero de energía y el canon de camiones.
+  const tarjetaIngresos = (
+    <Card data-tour="facturacion-ingresos">
+      <CardHeader>
+        <CardTitle className="font-display text-2xl font-bold tracking-tight">
+          Ingresos de {labelPeriodo(mesActual)}
+        </CardTitle>
+        <CardDescription className="text-sm/relaxed">
+          Lo que se espera cobrar este mes y lo que ya entró, concepto por concepto. El recupero de
+          energía se suma con las lecturas de luz y el canon de camiones con lo que se cobra cada día.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {!mesGenerado ? (
+          <p className="text-sm text-muted-foreground">
+            Todavía no se generó {labelPeriodo(mesActual)}: los conceptos mensuales aparecen acá
+            cuando lo generes.
+          </p>
+        ) : null}
+        {ingresosDelMes.length > 0 ? (
+          <div className="divide-y" data-tour="facturacion-ingresos-conceptos">
+            {ingresosDelMes.map((fila) => (
+              <div key={fila.codigo} className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3">
+                <Codigo codigo={fila.codigo} className="shrink-0" />
+                <div className="min-w-40 flex-1">
+                  <p className="text-sm font-medium break-words">
+                    {fila.codigo === "ENER" ? (
+                      <Zap
+                        className="mr-1.5 inline size-4 align-[-0.15em] text-primary"
+                        strokeWidth={2}
+                        aria-hidden
+                      />
+                    ) : fila.codigo === "BC" ? (
+                      <Truck
+                        className="mr-1.5 inline size-4 align-[-0.15em] text-primary"
+                        strokeWidth={2}
+                        aria-hidden
+                      />
+                    ) : null}
+                    {fila.nombre}
+                  </p>
+                  {fila.nota ? <p className="text-sm text-muted-foreground">{fila.nota}</p> : null}
+                </div>
+                <dl className="grid w-full grid-cols-2 gap-x-6 sm:w-auto sm:grid-cols-[8.5rem_8.5rem] sm:text-right">
+                  <div className="min-w-0">
+                    <dt className="text-xs text-muted-foreground">Estimado</dt>
+                    <dd>
+                      {fila.codigo === "BC" ? (
+                        <span className="text-sm text-muted-foreground">sin estimado</span>
+                      ) : (
+                        <Money monto={fila.estimado} className="text-base font-medium break-words" />
+                      )}
+                    </dd>
+                  </div>
+                  <div className="min-w-0">
+                    <dt className="text-xs text-muted-foreground">Cobrado</dt>
+                    <dd>
+                      <Money monto={fila.cobrado} className="text-base font-semibold break-words text-pagado" />
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+            ))}
+          </div>
+        ) : null}
+        <div className="grid grid-cols-2 gap-4 border-t pt-4 sm:grid-cols-3" data-tour="facturacion-ingresos-total">
+          <div className="col-span-2 min-w-0 sm:col-span-1">
+            <p className="text-sm text-muted-foreground">Estimado del mes</p>
+            <Money monto={totalDelMes.estimado} className="text-2xl font-bold break-words" />
+            <p className="text-sm text-muted-foreground">
+              pagando en término
+              {canonCobrado > 0 ? (
+                <>
+                  {" "}
+                  · incluye <span className="whitespace-nowrap">{formatARS(canonCobrado)}</span> de canon
+                </>
+              ) : null}
+            </p>
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm text-muted-foreground">Cobrado</p>
+            <Money monto={totalDelMes.cobrado} className="text-2xl font-bold break-words text-pagado" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-sm text-muted-foreground">Falta cobrar</p>
+            <Money monto={totalDelMes.falta} className="text-2xl font-bold break-words text-pendiente" />
+          </div>
+        </div>
+        {totalDelMes.enTermino > 0.5 ? (
+          <p className="text-sm text-muted-foreground">
+            Si pagan fuera de término, a precio completo: hasta{" "}
+            <Money monto={totalDelMes.fueraDeTermino} className="font-semibold text-foreground" />.
+          </p>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+
   return (
     <div className="space-y-8">
       <PageHeader
         titulo="Facturación"
         descripcion="A principio de mes se generan los cargos de cada cliente según sus conceptos. Los cambios de precios y cantidades rigen desde la próxima generación."
       />
+
+      {/* Con el mes en curso ya generado, lo primero son sus ingresos; si falta generarlo,
+          primero la tarjeta para generarlo. */}
+      {mesGenerado ? tarjetaIngresos : null}
 
       {/* Tarjeta protagonista: el período que toca generar */}
       <Card data-tour="facturacion-mes">
@@ -326,8 +493,9 @@ export default async function FacturacionPage() {
                 ) : null}
               </div>
               <p className="text-sm text-muted-foreground">
-                El consumo de luz (kWh) se suma con las lecturas del mes; el abono
-                mensual de energía ya está incluido.
+                El consumo de luz (kWh) se suma con las lecturas del mes y el canon de camiones con
+                lo que se cobra cada día: los dos se ven en los ingresos del mes. El abono mensual
+                de energía ya está incluido.
               </p>
               <GenerarPeriodoBoton
                 periodo={proximo}
@@ -341,6 +509,8 @@ export default async function FacturacionPage() {
           )}
         </CardContent>
       </Card>
+
+      {mesGenerado ? null : tarjetaIngresos}
 
       {/* Historial de períodos generados */}
       <Card data-tour="facturacion-historial">
@@ -452,14 +622,14 @@ export default async function FacturacionPage() {
               </Table>
 
               {/* Estimado = cobrado + lo que falta (pagando en término), igual que en Inicio y
-                  Reportes. El de Reportes suma el bono camioneros, que acá no va porque no se factura. */}
+                  Reportes, con el recupero de energía y el bono camioneros adentro. */}
               <p className="mt-4 border-t pt-4 text-sm text-muted-foreground">
                 Estimado es lo que se espera cobrar si los que están en término pagan en término: lo
                 cobrado más lo que falta cobrar (la misma cuenta que en Inicio
                 {veReportes ? " y en cada reporte" : ""}).
                 Debajo, en chico, el precio completo: lo que suman los cargos sin ningún beneficio, si
-                todos pagaran fuera de término. No incluye el bono camioneros, que se cobra en portería
-                y no se factura.
+                todos pagaran fuera de término. Incluye el recupero de energía (según las lecturas
+                cargadas) y el canon de camiones (lo que se cobró cada día en portería).
               </p>
             </>
           )}

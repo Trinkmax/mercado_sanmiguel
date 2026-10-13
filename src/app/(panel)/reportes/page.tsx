@@ -144,8 +144,8 @@ export default async function ReportesPage({
   const hayEnTermino = totIngresos.enTermino > 0.5;
   const hayOtorgados = totIngresos.otorgados > 0.5;
   const columnasTotales = 3 + (hayEnTermino ? 1 : 0) + (hayOtorgados ? 1 : 0);
-  // El bono camioneros entra en el estimado de acá (se cobra en portería) pero no en el de
-  // Facturación, que no lo factura: se aclara para que los dos cuadren.
+  // El bono camioneros entra en el estimado (se cobra en portería, sin estimado propio: suma
+  // lo cobrado), igual que en Facturación: se aclara cuánto es.
   const bono = ingresos.find((f) => f.codigo === "BC");
   const bonoCamioneros = bono ? montosEstimado(bono).estimado : 0;
 

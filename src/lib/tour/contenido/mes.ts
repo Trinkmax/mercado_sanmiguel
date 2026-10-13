@@ -139,6 +139,15 @@ export const FACTURACION: ContenidoCapitulo = {
         consejo: "En «Cobrar» y en el portal, a cada uno se le avisa cuánto se ahorra pagando a tiempo.",
       },
       {
+        id: "ingresos",
+        ancla: "facturacion-ingresos",
+        titulo: "Lo que entra en el mes",
+        texto:
+          "«Ingresos» muestra el mes en curso, concepto por concepto: lo estimado y lo que ya se cobró. El recupero de energía aparece cuando se cargan las lecturas de luz.",
+        consejo:
+          "El canon de camiones no tiene estimado: va sumando lo que se cobra cada día en portería.",
+      },
+      {
         id: "historial",
         ancla: ["facturacion-periodo", "facturacion-historial"],
         titulo: "Cómo viene cada mes",
