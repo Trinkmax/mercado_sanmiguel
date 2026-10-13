@@ -1345,6 +1345,9 @@ export type Database = {
           automatico: boolean
           caja_id: string | null
           comprobante_validado: boolean
+          conciliado: boolean
+          conciliado_en: string | null
+          conciliado_por: string | null
           creado_en: string
           creado_por: string | null
           descripcion: string | null
@@ -1375,6 +1378,9 @@ export type Database = {
           automatico?: boolean
           caja_id?: string | null
           comprobante_validado?: boolean
+          conciliado?: boolean
+          conciliado_en?: string | null
+          conciliado_por?: string | null
           creado_en?: string
           creado_por?: string | null
           descripcion?: string | null
@@ -1405,6 +1411,9 @@ export type Database = {
           automatico?: boolean
           caja_id?: string | null
           comprobante_validado?: boolean
+          conciliado?: boolean
+          conciliado_en?: string | null
+          conciliado_por?: string | null
           creado_en?: string
           creado_por?: string | null
           descripcion?: string | null
@@ -3085,6 +3094,7 @@ export type Database = {
         Returns: Json
       }
       conciliar_canon:{ Args: { p_ids: string[] }; Returns: Json }
+      conciliar_gastos: { Args: { p_ids: string[] }; Returns: Json }
       configurar_rubro_gasto: {
         Args: {
           p_cargar_este_mes?: boolean
@@ -3101,6 +3111,7 @@ export type Database = {
         Returns: undefined
       }
       desconciliar_canon: { Args: { p_id: string }; Returns: undefined }
+      desconciliar_gasto: { Args: { p_id: string }; Returns: undefined }
       deshacer_acreditacion_cheque: {
         Args: { p_cheque: string; p_motivo: string }
         Returns: Json

@@ -61,6 +61,30 @@ export type GastoCaja = {
   despuesDelCierre: boolean;
 };
 
+/**
+ * Una transferencia de la caja para chequear contra el banco (0049): las que entraron
+ * (cobros y bono camioneros, también los de las cajas de portería recibidas acá) y las
+ * que salieron (gastos pagados por banco ese día). Es la misma marca que usa
+ * Tesorería → Conciliar.
+ */
+export type TransferenciaCaja = {
+  clase: "cobro" | "canon" | "gasto";
+  id: string;
+  sentido: "entra" | "sale";
+  /** Vino en una caja de portería recibida en esta: la fecha de esa caja. */
+  porteriaFecha: string | null;
+  /** El cliente, el ingreso de transporte o el gasto. */
+  titulo: string;
+  /** "Recibo N° 12 · Titular: Juan Pérez". */
+  detalle: string | null;
+  monto: number;
+  conciliada: boolean;
+  conciliadaPorNombre: string | null;
+  conciliadaEn: string | null;
+  /** URL firmada (1 h) del comprobante; solo para quien concilia. */
+  comprobanteUrl: string | null;
+};
+
 /** Ajuste de tesorería sobre la caja (movimientos_tesoreria con caja_id). */
 export type AjusteCaja = {
   id: string;
@@ -118,6 +142,8 @@ export type DatosCaja = {
   /** Nombre e ícono de las tarifas (para dibujar cada ingreso de transporte). */
   tarifas: { nombre: string; icono: IconoTarifa }[];
   gastos: GastoCaja[];
+  /** Transferencias de la caja (y de las cajas de portería recibidas) para chequear con el banco. */
+  transferencias: TransferenciaCaja[];
   ajustes: AjusteCaja[];
   previas: CajaPrevia[];
   eventos: EventoCaja[];
@@ -195,6 +221,7 @@ async function armarDatos(
     pagosRes,
     canonRes,
     gastosRes,
+    gastosBancoRes,
     ajustesRes,
     previasRes,
     eventosRes,
@@ -208,7 +235,7 @@ async function armarDatos(
       ? supabase
           .from("pagos")
           .select(
-            "id, numero, lote_id, linea, monto, medio, fecha, anulado, motivo_anulacion, titular_transferencia, recibido_por, cliente:clientes(nombre, codigo, categoria), cheque:cheques(numero, cuit, recibido_de, fecha_cobro, estado, proveedor, entregado_en_cobro)"
+            "id, numero, lote_id, linea, monto, medio, fecha, anulado, motivo_anulacion, titular_transferencia, recibido_por, comprobante_path, conciliado, conciliado_por, conciliado_en, cliente:clientes(nombre, codigo, categoria), cheque:cheques(numero, cuit, recibido_de, fecha_cobro, estado, proveedor, entregado_en_cobro)"
           )
           .eq("caja_id", caja.id)
           .order("fecha", { ascending: true })
@@ -218,7 +245,7 @@ async function armarDatos(
       ? supabase
           .from("canon_camiones")
           .select(
-            "id, numero, creado_en, creado_por, tarifa_nombre, unidad, cantidad, precio_unitario, monto, medio, patente, destino, destino_detalle, anulado, motivo_anulacion"
+            "id, numero, creado_en, creado_por, tarifa_nombre, unidad, cantidad, precio_unitario, monto, medio, patente, destino, destino_detalle, anulado, motivo_anulacion, conciliado, conciliado_por, conciliado_en"
           )
           .eq("caja_id", caja.id)
           .order("creado_en", { ascending: true })
@@ -231,6 +258,19 @@ async function armarDatos(
           .eq("caja_id", caja.id)
           .eq("estado", "pagado")
           .eq("pagado_desde", "caja")
+          .order("pagado_en", { ascending: true })
+      : Promise.resolve({ data: null }),
+    // Gastos pagados por banco ese día: no tocan el cajón, pero Tesorería los chequea acá (0049).
+    caja && tipo === "administracion" && perfil.rol !== "guardia"
+      ? supabase
+          .from("gastos")
+          .select(
+            "id, descripcion, monto, pagado_por, conciliado, conciliado_por, conciliado_en, rubro:rubros_gasto(codigo, nombre)"
+          )
+          .eq("org_id", perfil.org_id)
+          .eq("estado", "pagado")
+          .eq("medio_pago", "transferencia")
+          .eq("fecha_pago", caja.fecha)
           .order("pagado_en", { ascending: true })
       : Promise.resolve({ data: null }),
     caja
@@ -299,8 +339,52 @@ async function armarDatos(
   const pagos = pagosRes.data ?? [];
   const canonFilas = canonRes.data ?? [];
   const gastosFilas = gastosRes.data ?? [];
+  const gastosBancoFilas = gastosBancoRes.data ?? [];
   const ajustesFilas = ajustesRes.data ?? [];
   const eventosFilas = eventosRes.data ?? [];
+
+  // Las transferencias de las cajas de portería recibidas acá también están en el "Banco"
+  // de esta caja: Tesorería las chequea en el mismo lugar.
+  const fechaRendida = new Map((rendidasRes.data ?? []).map((r) => [r.id, r.fecha]));
+  const idsRendidas = [...fechaRendida.keys()];
+  const [pagosPorteriaRes, canonPorteriaRes] =
+    idsRendidas.length > 0
+      ? await Promise.all([
+          supabase
+            .from("pagos")
+            .select(
+              "id, numero, caja_id, monto, fecha, titular_transferencia, comprobante_path, conciliado, conciliado_por, conciliado_en, cliente:clientes(nombre, codigo)"
+            )
+            .in("caja_id", idsRendidas)
+            .eq("medio", "transferencia")
+            .eq("anulado", false)
+            .order("fecha", { ascending: true }),
+          supabase
+            .from("canon_camiones")
+            .select(
+              "id, numero, caja_id, creado_en, tarifa_nombre, cantidad, monto, patente, conciliado, conciliado_por, conciliado_en"
+            )
+            .in("caja_id", idsRendidas)
+            .eq("medio", "transferencia")
+            .eq("anulado", false)
+            .order("creado_en", { ascending: true }),
+        ])
+      : [{ data: null }, { data: null }];
+  const pagosPorteria = pagosPorteriaRes.data ?? [];
+  const canonPorteria = canonPorteriaRes.data ?? [];
+
+  // Los comprobantes solo se firman para quien concilia, y no en el imprimible.
+  const concilia = conPrevias && (perfil.rol === "tesoreria" || perfil.rol === "lider");
+  const comprobantes = new Map<string, string>();
+  if (concilia) {
+    const paths = [...pagos, ...pagosPorteria]
+      .filter((p) => !p.conciliado && p.comprobante_path)
+      .map((p) => p.comprobante_path as string);
+    if (paths.length > 0) {
+      const { data: firmadas } = await supabase.storage.from("documentos").createSignedUrls(paths, 3600);
+      for (const f of firmadas ?? []) if (f.path && f.signedUrl) comprobantes.set(f.path, f.signedUrl);
+    }
+  }
 
   const nombres = await nombresPorUsuario(supabase, [
     caja?.abierta_por,
@@ -311,6 +395,11 @@ async function armarDatos(
     ...pagos.map((p) => p.recibido_por),
     ...canonFilas.map((c) => c.creado_por),
     ...gastosFilas.map((g) => g.pagado_por),
+    ...gastosBancoFilas.flatMap((g) => [g.pagado_por, g.conciliado_por]),
+    ...pagos.map((p) => p.conciliado_por),
+    ...canonFilas.map((c) => c.conciliado_por),
+    ...pagosPorteria.map((p) => p.conciliado_por),
+    ...canonPorteria.map((c) => c.conciliado_por),
     ...ajustesFilas.map((a) => a.creado_por),
     ...eventosFilas.map((e) => e.usuario_id),
   ]);
@@ -412,6 +501,92 @@ async function armarDatos(
       cerradaEn !== null && g.pagado_en !== null && new Date(g.pagado_en).getTime() > cerradaEn,
   }));
 
+  const partes = (...p: (string | null | false | undefined)[]) => p.filter(Boolean).join(" · ") || null;
+  const cobroATransferencia = (
+    p: {
+      id: string;
+      numero: number;
+      monto: number;
+      titular_transferencia: string | null;
+      comprobante_path: string | null;
+      conciliado: boolean;
+      conciliado_por: string | null;
+      conciliado_en: string | null;
+      cliente: { nombre: string; codigo: number } | null;
+    },
+    porteriaFecha: string | null
+  ): TransferenciaCaja => ({
+    clase: "cobro",
+    id: p.id,
+    sentido: "entra",
+    porteriaFecha,
+    titulo: p.cliente?.nombre ?? "—",
+    detalle: partes(
+      p.cliente ? `Carpeta ${p.cliente.codigo}` : null,
+      `Recibo N° ${p.numero}`,
+      p.titular_transferencia ? `Titular: ${p.titular_transferencia}` : null
+    ),
+    monto: Number(p.monto),
+    conciliada: p.conciliado,
+    conciliadaPorNombre: nombre(p.conciliado_por),
+    conciliadaEn: p.conciliado_en,
+    comprobanteUrl: p.comprobante_path ? (comprobantes.get(p.comprobante_path) ?? null) : null,
+  });
+  const canonATransferencia = (
+    c: {
+      id: string;
+      numero: number;
+      tarifa_nombre: string | null;
+      cantidad: number;
+      monto: number;
+      patente: string | null;
+      conciliado: boolean;
+      conciliado_por: string | null;
+      conciliado_en: string | null;
+    },
+    porteriaFecha: string | null
+  ): TransferenciaCaja => ({
+    clase: "canon",
+    id: c.id,
+    sentido: "entra",
+    porteriaFecha,
+    titulo: `${c.tarifa_nombre ?? "Bono camioneros"}${Number(c.cantidad) > 1 ? ` × ${Number(c.cantidad)}` : ""}`,
+    detalle: partes(`Bono camioneros N° ${c.numero}`, c.patente ? `Patente ${c.patente}` : null),
+    monto: Number(c.monto),
+    conciliada: c.conciliado,
+    conciliadaPorNombre: nombre(c.conciliado_por),
+    conciliadaEn: c.conciliado_en,
+    comprobanteUrl: null,
+  });
+  const transferencias: TransferenciaCaja[] = [
+    ...pagos
+      .filter((p) => p.medio === "transferencia" && !p.anulado)
+      .map((p) => cobroATransferencia(p, null)),
+    ...canonFilas
+      .filter((c) => c.medio === "transferencia" && !c.anulado)
+      .map((c) => canonATransferencia(c, null)),
+    ...pagosPorteria.map((p) => cobroATransferencia(p, fechaRendida.get(p.caja_id ?? "") ?? null)),
+    ...canonPorteria.map((c) => canonATransferencia(c, fechaRendida.get(c.caja_id ?? "") ?? null)),
+    ...gastosBancoFilas.map(
+      (g): TransferenciaCaja => ({
+        clase: "gasto",
+        id: g.id,
+        sentido: "sale",
+        porteriaFecha: null,
+        titulo: g.descripcion?.trim() || g.rubro?.nombre || "Gasto",
+        detalle: partes(
+          g.rubro && g.descripcion?.trim() ? g.rubro.nombre : null,
+          nombre(g.pagado_por) ? `Lo pagó ${nombre(g.pagado_por)}` : null
+        ),
+        monto: Number(g.monto),
+        conciliada: g.conciliado,
+        conciliadaPorNombre: nombre(g.conciliado_por),
+        conciliadaEn: g.conciliado_en,
+        comprobanteUrl: null,
+      })
+    ),
+  ];
+
   const ajustes: AjusteCaja[] = ajustesFilas.map((a) => ({
     id: a.id,
     cuenta: a.cuenta === "efectivo" ? "efectivo" : "banco",
@@ -456,6 +631,7 @@ async function armarDatos(
       .filter((t) => ICONOS.has(t.icono))
       .map((t) => ({ nombre: t.nombre, icono: t.icono as IconoTarifa })),
     gastos,
+    transferencias,
     ajustes,
     previas,
     eventos,

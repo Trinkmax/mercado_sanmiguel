@@ -425,6 +425,18 @@ function pasosCajaTesoreria(): Paso[] {
     },
     pasoAjustes,
     {
+      id: "transferencias",
+      ancla: ["caja-transferencia", "caja-transferencias"],
+      titulo: "Chequeá las transferencias",
+      texto:
+        "Acá están, una por una, las transferencias de esta caja: las que entraron y los gastos que se pagaron por banco ese día. Buscá cada una en el resumen del banco y tocá «Está en el banco».",
+      consejo: "Es lo mismo que Tesorería → Conciliar: lo que marques acá queda marcado allá.",
+      sinAncla: {
+        texto:
+          "Cuando una caja tiene transferencias, aparecen una por una arriba de «Contar y validar»: las buscás en el resumen del banco y tocás «Está en el banco». También están los gastos pagados por banco ese día.",
+      },
+    },
+    {
       id: "validar",
       ancla: ["caja-validar", "caja-cerrar"],
       titulo: "Contá y validá",

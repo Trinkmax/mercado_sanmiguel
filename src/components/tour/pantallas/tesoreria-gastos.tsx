@@ -765,7 +765,7 @@ function OrigenPlata({ caja }: { caja: boolean }) {
         >
           <Landmark className="size-4 text-primary" strokeWidth={1.9} />
           <p className="text-[0.8rem] font-semibold">Tesorería</p>
-          <p className="text-[0.72rem] leading-snug text-muted-foreground">Efectivo o banco</p>
+          <p className="text-[0.72rem] leading-snug text-muted-foreground">Por banco o efectivo</p>
         </div>
       </div>
     </div>

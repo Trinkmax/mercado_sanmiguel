@@ -99,7 +99,8 @@ export function textoBotonPago(v: OrigenPago, monto: number, hoy: string): strin
 
 /**
  * "¿De dónde sale la plata?" (E4): Caja del día (eligiendo el día; siempre
- * efectivo) o Tesorería (efectivo o banco, con fecha). Muestra cómo queda la
+ * efectivo) o Tesorería (efectivo o banco, con fecha; lo pagado por banco se ve en la
+ * caja de ese día para chequearlo, 0049). Muestra cómo queda la
  * caja y avisa si ya se cerró o si no alcanza.
  */
 export function SelectorOrigen({
@@ -160,7 +161,9 @@ export function SelectorOrigen({
           <button
             type="button"
             aria-pressed={valor.origen === "tesoreria"}
-            onClick={() => onCambiar({ ...valor, origen: "tesoreria", caja: null })}
+            onClick={() =>
+              onCambiar({ ...valor, origen: "tesoreria", caja: null, fecha: valor.caja?.fecha ?? valor.fecha })
+            }
             className={cn(
               "flex min-h-24 flex-col items-start gap-1.5 rounded-xl border-2 p-4 text-left transition-colors",
               "focus-visible:ring-2 focus-visible:ring-ring/40 focus-visible:outline-none",
@@ -171,7 +174,7 @@ export function SelectorOrigen({
           >
             <Landmark className="size-7 text-primary" strokeWidth={1.9} />
             <span className="text-base font-semibold">Tesorería</span>
-            <span className="text-sm text-muted-foreground">Efectivo o banco</span>
+            <span className="text-sm text-muted-foreground">Por banco (transferencia) o efectivo</span>
           </button>
         </div>
       </fieldset>
@@ -268,9 +271,15 @@ export function SelectorOrigen({
                 onClick={() => onCambiar({ ...valor, medio: "transferencia" })}
                 className="text-center"
               >
-                Banco
+                Banco (transferencia)
               </Chip>
             </div>
+            {valor.medio === "transferencia" ? (
+              <p className="flex items-start gap-2 text-sm text-muted-foreground">
+                <Landmark className="mt-0.5 size-4 shrink-0" strokeWidth={1.9} />
+                Aparece en la caja de ese día, en «Transferencias», para que Tesorería lo chequee con el banco.
+              </p>
+            ) : null}
           </div>
           <div className="space-y-2">
             <p className="text-base font-medium">¿Qué día se pagó?</p>

@@ -18,6 +18,7 @@ import { CobrosDia } from "@/components/caja/cobros-dia";
 import { GastosCaja } from "@/components/caja/gastos-caja";
 import { HistorialCaja } from "@/components/caja/historial-caja";
 import { RecibirCajaPorteria } from "@/components/caja/integrar-rendicion";
+import { TransferenciasCaja } from "@/components/caja/transferencias-caja";
 import { UltimosDias } from "@/components/caja/ultimos-dias";
 import { permisosCaja } from "@/components/caja/permisos";
 import type { DatosCaja } from "@/components/caja/datos";
@@ -29,8 +30,8 @@ export const TITULO_TIPO = {
 
 /**
  * La caja completa de un tipo: lo juntado (o el arqueo), la acción del momento
- * (cerrar / recibir / contar y validar), cobros, bono camioneros, gastos, ajustes,
- * historial y últimos días. `conEncabezado` = vista en pestañas (Tesorería y Líder).
+ * (cerrar / recibir / contar y validar), las transferencias para chequear con el banco,
+ * cobros, bono camioneros, gastos, ajustes, historial y últimos días. `conEncabezado` = vista en pestañas (Tesorería y Líder).
  *
  * Las acciones con estado de éxito (cerrar, recibir) se montan siempre que el rol
  * puede usarlas, con `key` estable: así el éxito sobrevive a la recarga de la página.
@@ -108,6 +109,17 @@ export function VistaCaja({
   const cobraAca =
     (rol === "admin" && !porteria) || (rol === "guardia" && porteria) || (rol === "lider" && !porteria);
   const cargaCanon = rol === "lider" && porteria;
+  // Quien concilia las tiene arriba, antes de "Contar y validar": es lo que revisa cuando
+  // Administración le pasa la caja. El resto las ve más abajo, después de los cobros.
+  const sinConciliar = datos.transferencias.filter((t) => !t.conciliada).length;
+  const transferencias = (
+    <TransferenciasCaja
+      key="transferencias"
+      transferencias={datos.transferencias}
+      puedeConciliar={permisos.conciliar}
+      porteria={porteria}
+    />
+  );
 
   return (
     <div className="space-y-8">
@@ -194,6 +206,8 @@ export function VistaCaja({
         />
       ) : null}
 
+      {permisos.conciliar ? transferencias : null}
+
       {permisos.validar ? (
         <div
           key="accion-validar"
@@ -208,6 +222,14 @@ export function VistaCaja({
             <p className="text-sm text-muted-foreground">
               Contá el efectivo y validá la caja. Si no coincide, el faltante o sobrante queda anotado en el mismo paso.
             </p>
+            {sinConciliar > 0 ? (
+              <p className="mt-1 text-sm font-medium text-parcial">
+                {sinConciliar === 1
+                  ? "Queda 1 transferencia sin chequear con el banco (arriba)."
+                  : `Quedan ${sinConciliar} transferencias sin chequear con el banco (arriba).`}{" "}
+                Podés validar igual y marcarlas cuando se acrediten.
+              </p>
+            ) : null}
           </div>
           <ValidarCajaDialog
             caja={{ id: caja.id, tipo: caja.tipo, fecha: caja.fecha, estado: caja.estado }}
@@ -245,6 +267,8 @@ export function VistaCaja({
           />
         </section>
       ) : null}
+
+      {permisos.conciliar ? null : transferencias}
 
       {!porteria && rol !== "guardia" ? (
         <GastosCaja

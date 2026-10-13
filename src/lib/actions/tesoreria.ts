@@ -14,6 +14,12 @@ function revalidarTesoreria() {
   revalidatePath("/inicio");
 }
 
+/** Las transferencias también se chequean desde la caja del día (0049). */
+function revalidarConciliacion() {
+  revalidarTesoreria();
+  revalidatePath("/caja");
+}
+
 /* ---------------- Validar caja (cuenta, ajuste y OK en un paso) ---------------- */
 
 const validarSchema = z.object({
@@ -265,7 +271,7 @@ export async function conciliarTransferencias(
   if (!data || data.length === 0)
     return fallo("Esas transferencias ya estaban conciliadas. Actualizá la página.");
 
-  revalidarTesoreria();
+  revalidarConciliacion();
   return ok({ conciliadas: data.length });
 }
 
@@ -289,7 +295,7 @@ export async function desconciliarTransferencia(id: string): Promise<ActionResul
   if (!data || data.length === 0)
     return fallo("Esa transferencia ya no figura como conciliada. Actualizá la página.");
 
-  revalidarTesoreria();
+  revalidarConciliacion();
   return ok(undefined);
 }
 
@@ -310,7 +316,7 @@ export async function conciliarCanon(ids: string[]): Promise<ActionResult<{ conc
   const { data, error } = await supabase.rpc("conciliar_canon", { p_ids: parsed.data });
   if (error) return fallo(error);
 
-  revalidarTesoreria();
+  revalidarConciliacion();
   return ok({ conciliadas: Number((data as { conciliados?: number } | null)?.conciliados ?? 0) });
 }
 
@@ -324,7 +330,39 @@ export async function desconciliarCanon(id: string): Promise<ActionResult> {
   const { error } = await supabase.rpc("desconciliar_canon", { p_id: parsed.data });
   if (error) return fallo(error);
 
-  revalidarTesoreria();
+  revalidarConciliacion();
+  return ok(undefined);
+}
+
+/* ---------------- Conciliación: gastos pagados por banco (0049) ---------------- */
+
+/** Marca como conciliados los gastos pagados por transferencia que ya se vieron salir en el banco. */
+export async function conciliarGastos(ids: string[]): Promise<ActionResult<{ conciliadas: number }>> {
+  await requireRol("tesoreria", "lider");
+  const parsed = idsCanonSchema.safeParse(ids);
+  if (!parsed.success) return fallo(parsed.error.issues[0].message);
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("conciliar_gastos", { p_ids: parsed.data });
+  if (error) return fallo(error);
+
+  revalidarConciliacion();
+  revalidatePath("/gastos");
+  return ok({ conciliadas: Number((data as { conciliados?: number } | null)?.conciliados ?? 0) });
+}
+
+/** Deshace la conciliación de un gasto pagado por banco marcada por error. */
+export async function desconciliarGasto(id: string): Promise<ActionResult> {
+  await requireRol("tesoreria", "lider");
+  const parsed = z.uuid("La transferencia no se reconoce. Actualizá la página.").safeParse(id);
+  if (!parsed.success) return fallo(parsed.error.issues[0].message);
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("desconciliar_gasto", { p_id: parsed.data });
+  if (error) return fallo(error);
+
+  revalidarConciliacion();
+  revalidatePath("/gastos");
   return ok(undefined);
 }
 

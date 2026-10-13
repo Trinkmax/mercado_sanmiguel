@@ -20,8 +20,16 @@ export async function InicioTesoreria({ perfil, supabase }: { perfil: Perfil; su
   const periodo = periodoActual();
   const hoy = hoyISO();
 
-  const [resumen, serie, cajasValidar, transferenciasCobros, chequesListos, gastosVencidos, transferenciasBono] =
-    await Promise.all([
+  const [
+    resumen,
+    serie,
+    cajasValidar,
+    transferenciasCobros,
+    chequesListos,
+    gastosVencidos,
+    transferenciasBono,
+    transferenciasGastos,
+  ] = await Promise.all([
       resumenDelMes(supabase, periodo),
       serieUltimos14(supabase),
       cajasParaValidar(supabase, org),
@@ -60,16 +68,33 @@ export async function InicioTesoreria({ perfil, supabase }: { perfil: Perfil; su
           .eq("anulado", false)
           .eq("conciliado", false)
       ),
+      // Gastos pagados por banco: Tesorería también los busca en el resumen (0049).
+      contar(
+        supabase
+          .from("gastos")
+          .select("id", { count: "exact", head: true })
+          .eq("org_id", org)
+          .eq("estado", "pagado")
+          .eq("medio_pago", "transferencia")
+          .eq("conciliado", false)
+      ),
     ]);
-  // En Tesorería → Conciliar van en dos listas (cobros y bono camioneros): el aviso dice cuántas
-  // de cada una, así los números de las dos pantallas cuadran.
-  const transferencias = transferenciasCobros + transferenciasBono;
+  // En Tesorería → Conciliar van en listas separadas (cobros, bono camioneros y gastos por
+  // banco): el aviso dice cuántas de cada una, así los números de las dos pantallas cuadran.
+  const transferencias = transferenciasCobros + transferenciasBono + transferenciasGastos;
+  const partesTransferencias = [
+    transferenciasCobros > 0 ? `${transferenciasCobros} de clientes` : null,
+    transferenciasBono > 0 ? `${transferenciasBono} del bono camioneros` : null,
+    transferenciasGastos > 0 ? `${transferenciasGastos} de gastos pagados por banco` : null,
+  ].filter((t): t is string => t !== null);
   const detalleTransferencias =
-    transferenciasCobros > 0 && transferenciasBono > 0
-      ? `${transferenciasCobros} de ${transferenciasCobros === 1 ? "un cliente" : "clientes"} y ${transferenciasBono} del bono camioneros. `
+    partesTransferencias.length > 1
+      ? `${partesTransferencias.slice(0, -1).join(", ")} y ${partesTransferencias.at(-1)}. `
       : transferenciasBono > 0
         ? "Del bono camioneros. "
-        : "";
+        : transferenciasGastos > 0
+          ? "De gastos pagados por banco. "
+          : "";
 
   // El bono camioneros (BC) no tiene "estimado": se cobra en el momento. Va aparte.
   // Estimado = cobrado + falta cobrar: lo que se espera cobrar si los que están en término

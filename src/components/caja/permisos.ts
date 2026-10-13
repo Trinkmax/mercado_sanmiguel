@@ -26,6 +26,8 @@ export type PermisosCaja = {
   ajustar: boolean;
   /** "Contar y validar". */
   validar: boolean;
+  /** Marcar cada transferencia de la caja como vista en el banco (también ya validada). */
+  conciliar: boolean;
   /** Link "Pagar un gasto desde esta caja" (M6). */
   pagarGasto: boolean;
   /** Modo de <CanonDelDia> (M3). */
@@ -63,6 +65,7 @@ export function permisosCaja(
     validar:
       (tesoreria || lider) &&
       ((estado === "cerrada" && tipo === "administracion") || estado === "integrada"),
+    conciliar: (tesoreria || lider) && estado !== null,
     pagarGasto: tipo === "administracion" && noValidada && (rol === "admin" || tesoreria || lider),
     modoCanon:
       (rol === "guardia" && estado === "abierta") || ((lider || tesoreria) && noValidada) ? "jefe" : "lectura",

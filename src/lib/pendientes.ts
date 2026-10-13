@@ -146,8 +146,15 @@ export const pendientesNav = cache(async (perfil: Perfil): Promise<BadgesNav> =>
   }
 
   if (perfil.rol === "tesoreria") {
-    const [cajas, transferencias, chequesListos, entregadosSinGasto, gastosVencidos, bonoSinConciliar] =
-      await Promise.all([
+    const [
+      cajas,
+      transferencias,
+      chequesListos,
+      entregadosSinGasto,
+      gastosVencidos,
+      bonoSinConciliar,
+      gastosBancoSinConciliar,
+    ] = await Promise.all([
         // Solo lo que Tesorería puede validar: la caja de Administración cerrada (la de
         // portería se valida junto con ella; sin recibir, validar_caja la rechaza).
         cuenta(
@@ -201,10 +208,20 @@ export const pendientesNav = cache(async (perfil: Perfil): Promise<BadgesNav> =>
             .eq("anulado", false)
             .eq("conciliado", false)
         ),
+        // Gastos pagados por banco que Tesorería todavía no vio salir en el resumen (0049).
+        cuenta(
+          supabase
+            .from("gastos")
+            .select("id", { count: "exact", head: true })
+            .eq("org_id", org)
+            .eq("estado", "pagado")
+            .eq("medio_pago", "transferencia")
+            .eq("conciliado", false)
+        ),
       ]);
     // La lista de cajas para validar (de cualquier día) está en Tesorería → Hoy;
     // "Cajas del día" (/caja) abre en la de hoy, donde no están las pendientes.
-    sumar("/tesoreria", cajas + transferencias + bonoSinConciliar);
+    sumar("/tesoreria", cajas + transferencias + bonoSinConciliar + gastosBancoSinConciliar);
     sumar("/cheques", chequesListos + entregadosSinGasto);
     sumar("/gastos", gastosVencidos);
   }
