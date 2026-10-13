@@ -3,7 +3,8 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, UserX } from "lucide-react";
 import { requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { centavosConBeneficio, formatARS, hoyISO, labelPeriodo, periodoActual, saldoCargo } from "@/lib/format";
+import { centavosConBeneficio, formatARS, formatFecha, hoyISO, labelPeriodo, saldoCargo } from "@/lib/format";
+import { diaAnteriorValido } from "@/lib/dia-caja";
 import {
   LABEL_CATEGORIA,
   categoriasDeRol,
@@ -23,7 +24,10 @@ import { OtrasDeudas } from "@/components/cobranza/otras-deudas";
 import { DescripcionCargo } from "@/components/cobranza/descripcion-cargo";
 import {
   AvisoCajaCerrada,
+  AvisoDiaAnterior,
+  cajaAnteriorNoDejaCobrar,
   cajaNoDejaCobrar,
+  hrefCajaDelDia,
   type CajaDeHoy,
 } from "@/components/cobranza/aviso-caja";
 import { sumarDias, type MedioPago } from "@/components/cobranza/tipos";
@@ -79,15 +83,28 @@ function CobroAjeno({ mensaje, volverA }: { mensaje: string; volverA: string }) 
   );
 }
 
+/**
+ * /cobranza/{cliente}            → se cobra en la caja de hoy.
+ * /cobranza/{cliente}?fecha=…    → carga atrasada: en la caja de ese día anterior.
+ */
 export default async function CobrarClientePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ clienteId: string }>;
+  searchParams: Promise<{ fecha?: string | string[] }>;
 }) {
   const { clienteId } = await params;
+  const { fecha: fechaParam } = await searchParams;
   const perfil = await requireRol("admin", "guardia", "lider");
   const supabase = await createClient();
   const esJefe = perfil.rol === "guardia";
+  // Carga atrasada: el día anterior en cuya caja entra el cobro (null = la de hoy). Todo lo
+  // que la pantalla calcula "a hoy" (deuda, beneficio, vencidos) se calcula a ESE día, igual
+  // que la base al imputar.
+  const diaCaja = diaAnteriorValido(Array.isArray(fechaParam) ? fechaParam[0] : fechaParam);
+  const sufijoFecha = diaCaja ? `&fecha=${diaCaja}` : "";
+  const listaHref = diaCaja ? `/cobranza?fecha=${diaCaja}` : "/cobranza";
 
   const { data: cliente } = await supabase
     .from("clientes")
@@ -97,7 +114,7 @@ export default async function CobrarClientePage({
 
   // El Jefe no ve puesteros (RLS): si no lo encuentra, es de Administración.
   if (!cliente) {
-    if (esJefe) return <CobroAjeno mensaje="A este cliente lo cobra Administración" volverA="/cobranza" />;
+    if (esJefe) return <CobroAjeno mensaje="A este cliente lo cobra Administración" volverA={listaHref} />;
     notFound();
   }
   const categoria = cliente.categoria as CategoriaCliente;
@@ -109,13 +126,13 @@ export default async function CobrarClientePage({
             ? "A este cliente lo cobra Administración"
             : "A este cliente lo cobra el Jefe de Portería"
         }
-        volverA="/cobranza"
+        volverA={listaHref}
       />
     );
   }
 
-  const hoy = hoyISO();
-  const periodo = periodoActual();
+  const hoy = diaCaja ?? hoyISO();
+  const periodo = `${hoy.slice(0, 7)}-01`;
   const esAmbulante = categoria === "ambulante";
   const recibeCheques = !esJefe;
   const conPlan = !esAmbulante && cliente.cuotas_mes > 1;
@@ -202,7 +219,7 @@ export default async function CobrarClientePage({
     desde: c.desde,
     hasta: c.hasta,
     orden: Number(c.conceptos?.orden_imputacion ?? 0),
-    saldo: saldoCargo(c),
+    saldo: saldoCargo(c, hoy),
     monto: Number(c.monto),
     descuento: Number(c.descuento_pronto_pago ?? 0),
     vencido: c.vencimiento < hoy,
@@ -274,10 +291,14 @@ export default async function CobrarClientePage({
         reaperturaPedida: Boolean(cajaRes.data.reapertura_solicitada_en),
       }
     : null;
-  const cajaCerrada = cajaNoDejaCobrar(cajaHoy);
-  const irACaja = perfil.rol === "lider" ? "/caja?tipo=administracion" : "/caja";
+  const cajaCerrada = diaCaja ? cajaAnteriorNoDejaCobrar(cajaHoy) : cajaNoDejaCobrar(cajaHoy);
+  const irACaja = diaCaja
+    ? hrefCajaDelDia(diaCaja, perfil.rol)
+    : perfil.rol === "lider"
+      ? "/caja?tipo=administracion"
+      : "/caja";
 
-  const volverA = `/cobranza?cat=${categoria}`;
+  const volverA = `/cobranza?cat=${categoria}${sufijoFecha}`;
   const descripcion = [
     `Carpeta N° ${cliente.codigo}`,
     LABEL_CATEGORIA[categoria],
@@ -291,7 +312,7 @@ export default async function CobrarClientePage({
     <section data-tour="cobranza-deuda" className="rounded-lg border bg-card">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b p-5">
         <div>
-          <p className="text-sm text-muted-foreground">Debe hoy</p>
+          <p className="text-sm text-muted-foreground">{diaCaja ? `Debe al ${formatFecha(diaCaja)}` : "Debe hoy"}</p>
           {deudaTotal > 0 ? (
             <p className="text-3xl font-bold tabular text-pendiente">{formatARS(deudaTotal)}</p>
           ) : (
@@ -338,7 +359,7 @@ export default async function CobrarClientePage({
           </div>
           {deudaTotal > 0 ? (
             <div className="flex flex-wrap items-baseline justify-between gap-3">
-              <p className="font-medium">Tiene que pagar hoy</p>
+              <p className="font-medium">{diaCaja ? "Tiene que pagar" : "Tiene que pagar hoy"}</p>
               <p className="text-2xl font-bold tabular">{formatARS(deudaNeta)}</p>
             </div>
           ) : null}
@@ -363,6 +384,7 @@ export default async function CobrarClientePage({
       volverA={volverA}
       cajaCerrada={cajaCerrada}
       irACaja={irACaja}
+      fechaCaja={diaCaja ?? undefined}
     />
   );
 
@@ -404,7 +426,16 @@ export default async function CobrarClientePage({
         <PageHeader titulo={cliente.nombre} descripcion={descripcion} className="pb-0" />
       </div>
 
-      <AvisoCajaCerrada caja={cajaHoy} rol={perfil.rol} />
+      {diaCaja ? (
+        <AvisoDiaAnterior
+          fecha={diaCaja}
+          caja={cajaHoy}
+          rol={perfil.rol}
+          volverAHoy={`/cobranza/${cliente.id}`}
+        />
+      ) : (
+        <AvisoCajaCerrada caja={cajaHoy} rol={perfil.rol} />
+      )}
 
       {esAmbulante ? (
         <>
@@ -432,6 +463,7 @@ export default async function CobrarClientePage({
               volverA={volverA}
               cajaCerrada={cajaCerrada}
               irACaja={irACaja}
+              fechaCaja={diaCaja ?? undefined}
             />
           )}
           {tieneOtrosCargos || deudaTotal > 0 ? (

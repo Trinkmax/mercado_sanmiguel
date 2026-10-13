@@ -73,6 +73,7 @@ export function BuscadorClientes({
   etiqueta,
   buscaPuestos,
   hoy,
+  fechaCaja,
 }: {
   clientes: FilaCliente[];
   categorias: CategoriaCliente[];
@@ -84,6 +85,8 @@ export function BuscadorClientes({
   /** Quien cobra puesteros también busca por N° de puesto (el Jefe, no). */
   buscaPuestos: boolean;
   hoy: string;
+  /** Carga atrasada: los cobros entran en la caja de este día anterior (se pasa en el link). */
+  fechaCaja?: string;
 }) {
   const [busqueda, setBusqueda] = useState("");
   const [categoria, setCategoria] = useState<CategoriaCliente>(categoriaInicial);
@@ -186,7 +189,7 @@ export function BuscadorClientes({
             return (
               <li key={c.id}>
                 <Link
-                  href={`/cobranza/${c.id}`}
+                  href={`/cobranza/${c.id}${fechaCaja ? `?fecha=${fechaCaja}` : ""}`}
                   data-tour="cobranza-fila"
                   className="flex min-h-16 items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/50 active:bg-muted sm:items-center sm:py-2.5"
                 >

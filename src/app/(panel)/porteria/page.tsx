@@ -4,6 +4,7 @@ import { requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { pendientesNav } from "@/lib/pendientes";
 import { formatARS, formatFecha, formatFechaLarga, hoyISO } from "@/lib/format";
+import { diaAnteriorValido } from "@/lib/dia-caja";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -80,6 +81,9 @@ export default async function PorteriaPage({ searchParams }: Props) {
   const hoy = hoyISO();
   const fecha = esLider && esFechaISO(fechaParam) && fechaParam <= hoy ? fechaParam : hoy;
   const esHoy = fecha === hoy;
+  // Carga atrasada (0048): el Líder carga el canon de un día anterior en la caja de portería
+  // de ese día (abierta desde Caja).
+  const cargaAtrasada = !esHoy && esLider && diaAnteriorValido(fecha, hoy) !== null;
   const { inicio, fin } = rangoDiaAR(fecha);
   // Solicitudes del portero con respuesta nueva (mismo cálculo, cacheado, que la navegación).
   const pendientesPromesa = perfil.rol === "porteria" ? pendientesNav(perfil) : null;
@@ -115,7 +119,7 @@ export default async function PorteriaPage({ searchParams }: Props) {
       .eq("org_id", perfil.org_id)
       .order("orden", { ascending: true }),
     esHoy ? supabase.rpc("estado_caja_porteria") : Promise.resolve({ data: null }),
-    esHoy ? supabase.rpc("espacios_del_plano") : Promise.resolve({ data: [] }),
+    esHoy || cargaAtrasada ? supabase.rpc("espacios_del_plano") : Promise.resolve({ data: [] }),
     // Otro día (solo el Líder, que lee cajas): el estado de esa caja de portería.
     !esHoy
       ? supabase
@@ -151,6 +155,8 @@ export default async function PorteriaPage({ searchParams }: Props) {
     : aEstado((cajaDiaRes.data as { estado?: unknown } | null)?.estado);
   const reaperturaPedida = esHoy && estadoHoy?.reapertura_pedida === true;
   const cajaRendida = estadoCaja !== null && estadoCaja !== "abierta";
+  const cargandoDiaAnterior = cargaAtrasada && estadoCaja === "abierta";
+  const irACajaDelDia = { href: `/caja?fecha=${fecha}&tipo=guardia`, label: "Ir a esa caja" };
 
   const puestos: PuestoPlano[] = ((planoRes.data ?? []) as { tipo: string; numero: string | null; medio: boolean }[])
     .filter((e) => e.tipo === "puesto" && e.numero)
@@ -182,7 +188,7 @@ export default async function PorteriaPage({ searchParams }: Props) {
     <div
       className={cn(
         "grid gap-8",
-        esHoy && "xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] xl:items-start"
+        (esHoy || cargaAtrasada) && "xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] xl:items-start"
       )}
     >
       {esHoy ? (
@@ -198,6 +204,28 @@ export default async function PorteriaPage({ searchParams }: Props) {
                     : undefined,
                 }
               : null
+          }
+        />
+      ) : cargaAtrasada ? (
+        <CanonTransporte
+          key={fecha}
+          tarifas={tarifasActivas}
+          puestos={puestos}
+          fecha={fecha}
+          bloqueo={
+            estadoCaja === null
+              ? {
+                  titulo: `No hay caja de portería del ${formatFecha(fecha)}`,
+                  detalle: "Abrila desde Caja para cargar el canon de ese día.",
+                  accion: irACajaDelDia,
+                }
+              : cajaRendida
+                ? {
+                    titulo: `La caja de portería del ${formatFecha(fecha)} ya está cerrada`,
+                    detalle: "Reabrila desde Caja para seguir cargando el canon de ese día.",
+                    accion: irACajaDelDia,
+                  }
+                : null
           }
         />
       ) : null}
@@ -296,7 +324,9 @@ export default async function PorteriaPage({ searchParams }: Props) {
         descripcion={
           esHoy
             ? "Cobrá el canon de transporte y registrá el ingreso del personal."
-            : `Estás viendo el ${formatFecha(fecha)}. Para cobrar, volvé a hoy.`
+            : cargandoDiaAnterior
+              ? `Estás cargando el canon del ${formatFecha(fecha)}: entra en la caja de portería de ese día, con esa fecha.`
+              : `Estás viendo el ${formatFecha(fecha)}. Para cobrar, volvé a hoy.`
         }
       >
         {esLider ? (

@@ -180,8 +180,9 @@ export type LineaForm = {
   cheque: ChequeForm;
 };
 
-export function chequeVacio(): ChequeForm {
-  const hoy = hoyISO();
+/** `dia`: el día del cobro (hoy o, en una carga atrasada, el día de esa caja). */
+export function chequeVacio(dia: string = hoyISO()): ChequeForm {
+  const hoy = dia;
   return {
     numero: "",
     cuit: "",
@@ -195,14 +196,19 @@ export function chequeVacio(): ChequeForm {
   };
 }
 
-export function nuevaLinea(medio: MedioPago, monto = 0, id: string = nuevoId()): LineaForm {
+export function nuevaLinea(
+  medio: MedioPago,
+  monto = 0,
+  id: string = nuevoId(),
+  dia?: string
+): LineaForm {
   return {
     id,
     medio,
     monto: montoConMiles(monto),
     titular: "",
     comprobante: null,
-    cheque: chequeVacio(),
+    cheque: chequeVacio(dia),
   };
 }
 

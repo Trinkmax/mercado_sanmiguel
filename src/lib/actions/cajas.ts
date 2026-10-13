@@ -7,6 +7,8 @@ import { requireRol } from "@/lib/auth";
 import { ok, fallo, type ActionResult } from "@/lib/actions/result";
 import type { Enums } from "@/lib/database.types";
 import { parsearArqueo, type Arqueo } from "@/components/caja/arqueo-tipos";
+import { diaAnteriorValido } from "@/lib/dia-caja";
+import { hoyISO } from "@/lib/format";
 
 /** El tipo vive en components/caja/arqueo-tipos.ts (contrato §6.10); se re-expone por compatibilidad. */
 export type { Arqueo } from "@/components/caja/arqueo-tipos";
@@ -46,17 +48,27 @@ function revalidarCajas() {
   revalidatePath("/gastos");
 }
 
-/** Abre (o recupera) la caja de hoy del tipo dado. Tesorería no abre cajas (la RPC lo rechaza). */
+/**
+ * Abre (o recupera) la caja del tipo dado: la de hoy o, con `fecha`, la de un día anterior
+ * (para cargar lo que se cobró ese día y no se registró). Tesorería no abre cajas (la RPC lo rechaza).
+ */
 export async function abrirCaja(
-  tipo: Enums<"tipo_caja">
+  tipo: Enums<"tipo_caja">,
+  fecha?: string
 ): Promise<ActionResult<{ cajaId: string }>> {
   await requireRol("admin", "guardia", "lider");
   const parsed = tipoCajaSchema.safeParse(tipo);
   if (!parsed.success) return fallo("El tipo de caja no es válido.");
+  const hoy = hoyISO();
+  const dia = fecha === undefined || fecha === hoy ? null : diaAnteriorValido(fecha, hoy);
+  if (fecha !== undefined && fecha !== hoy && !dia) {
+    return fallo("Ese día no se puede abrir: elegí uno de los últimos dos meses.");
+  }
 
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("abrir_caja", {
     p_tipo: parsed.data,
+    ...(dia ? { p_fecha: dia } : {}),
   });
   if (error) return fallo(error);
 
@@ -94,11 +106,14 @@ const efectivoRecibidoSchema = z
  * de la caja de administración de hoy. `efectivoRecibido` = lo que contó al recibirla: si no
  * coincide con lo rendido, la base anota la diferencia como ajuste de la CAJA DE PORTERÍA
  * (con las observaciones como motivo, obligatorias en ese caso).
+ * `fechaDestino` (carga atrasada): entra en la caja de administración de ESE día anterior,
+ * que tiene que estar abierta desde Caja.
  */
 export async function integrarCajaPorteria(
   cajaId: string,
   observaciones?: string,
-  efectivoRecibido?: number
+  efectivoRecibido?: number,
+  fechaDestino?: string
 ): Promise<ActionResult<ResultadoIntegracion>> {
   await requireRol("admin", "tesoreria", "lider");
   const parsedId = uuidSchema.safeParse(cajaId);
@@ -107,6 +122,12 @@ export async function integrarCajaPorteria(
   if (!parsedObs.success) return fallo(parsedObs.error.issues[0].message);
   const parsedEfectivo = efectivoRecibidoSchema.safeParse(efectivoRecibido);
   if (!parsedEfectivo.success) return fallo(parsedEfectivo.error.issues[0].message);
+  const hoy = hoyISO();
+  const diaDestino =
+    fechaDestino === undefined || fechaDestino === hoy ? null : diaAnteriorValido(fechaDestino, hoy);
+  if (fechaDestino !== undefined && fechaDestino !== hoy && !diaDestino) {
+    return fallo("La caja de administración elegida no es válida. Actualizá la página.");
+  }
 
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("integrar_caja_porteria", {
@@ -114,6 +135,7 @@ export async function integrarCajaPorteria(
     p_observaciones: parsedObs.data || undefined,
     p_efectivo_recibido:
       parsedEfectivo.data === undefined ? undefined : Math.round(parsedEfectivo.data * 100) / 100,
+    ...(diaDestino ? { p_fecha_destino: diaDestino } : {}),
   });
   if (error) return fallo(error);
 

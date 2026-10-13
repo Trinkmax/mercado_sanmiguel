@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { formatARS, hoyISO } from "@/lib/format";
+import { formatARS, formatFecha, hoyISO } from "@/lib/format";
 import {
   cobrarDiario,
   type InputCobroDiario,
@@ -83,6 +83,7 @@ export function CobroAmbulante({
   volverA = "/cobranza",
   cajaCerrada = false,
   irACaja = "/caja",
+  fechaCaja,
 }: {
   clienteId: string;
   clienteNombre: string;
@@ -97,9 +98,14 @@ export function CobroAmbulante({
   cajaCerrada?: boolean;
   /** Dónde se reabre / pide la reapertura de la caja. */
   irACaja?: string;
+  /** Carga atrasada: el cobro entra en la caja de este día anterior (no en la de hoy). */
+  fechaCaja?: string;
 }) {
   const router = useRouter();
-  const hoy = hoyISO();
+  // El día de referencia es el de la caja: hoy o, en una carga atrasada, ese día anterior
+  // (los días que paga se cuentan desde ahí, igual que cobrar_diario).
+  const hoy = fechaCaja ?? hoyISO();
+  const diaAnterior = Boolean(fechaCaja);
   const pagoHasta = pagados.reduce<string | null>(
     (max, p) => (!max || p.hasta > max ? p.hasta : max),
     ultimoPagoHasta
@@ -244,6 +250,7 @@ export function CobroAmbulante({
       dias,
       desde,
       lineas,
+      fechaCaja,
     };
     const fd = new FormData();
     fd.set("datos", JSON.stringify(datos));
@@ -433,7 +440,7 @@ export function CobroAmbulante({
         </div>
         <div className="flex flex-wrap justify-center gap-2">
           {ATAJOS.map((a) => {
-            const label = a.dias === 1 && hoyPagado ? "1 día" : a.label;
+            const label = a.dias === 1 && (hoyPagado || diaAnterior) ? "1 día" : a.label;
             return (
               <Chip
                 key={a.dias}
@@ -489,7 +496,7 @@ export function CobroAmbulante({
                     disabled={pagado && !elegido}
                     onClick={() => elegirDesde(d)}
                     aria-pressed={elegido}
-                    aria-label={`${diaCorto(d)}${pagado ? ", ya pagado" : ""}${esHoy ? ", hoy" : ""}`}
+                    aria-label={`${diaCorto(d)}${pagado ? ", ya pagado" : ""}${esHoy ? (diaAnterior ? ", el día de la caja" : ", hoy") : ""}`}
                     className={cn(
                       "flex h-16 w-12 flex-col items-center justify-center rounded-lg border-2 text-xs font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/30",
                       elegido && pagado && "border-pendiente bg-pendiente-suave text-pendiente",
@@ -499,7 +506,7 @@ export function CobroAmbulante({
                       esHoy && !elegido && !pagado && "border-primary/50"
                     )}
                   >
-                    <span>{esHoy ? "Hoy" : diaSemanaCorto(d)}</span>
+                    <span>{esHoy && !diaAnterior ? "Hoy" : diaSemanaCorto(d)}</span>
                     <span className="text-base font-bold tabular">{diaMes(d).slice(0, 2)}</span>
                     {pagado && !elegido ? <Check className="size-3" strokeWidth={3} /> : null}
                   </button>
@@ -514,7 +521,9 @@ export function CobroAmbulante({
             empezar ahí.
           </p>
         ) : fueraDeRango ? (
-          <p className="text-sm font-medium text-destructive">Elegí un día cercano a hoy.</p>
+          <p className="text-sm font-medium text-destructive">
+            {diaAnterior ? "Elegí un día cercano al de la caja." : "Elegí un día cercano a hoy."}
+          </p>
         ) : (
           <p className="text-sm text-muted-foreground">Tocá un día libre para empezar ahí. En verde, lo ya pagado.</p>
         )}
@@ -665,7 +674,8 @@ export function CobroAmbulante({
       {cajaCerrada ? (
         <p className="flex items-start gap-2 text-sm font-medium text-parcial">
           <Lock className="mt-0.5 size-4 shrink-0" strokeWidth={2} />
-          No se puede cobrar: la caja de hoy no está abierta (mirá el aviso de arriba).
+          No se puede cobrar: la caja {fechaCaja ? `del ${formatFecha(fechaCaja)}` : "de hoy"} no está abierta
+          (mirá el aviso de arriba).
         </p>
       ) : null}
 

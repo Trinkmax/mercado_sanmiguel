@@ -40,7 +40,12 @@ export function AlertaError({
   );
 }
 
-/** El error dice que la caja no está abierta (registrar_cobro / cobrar_diario, 0023). */
+/**
+ * El error dice que la caja no está abierta (registrar_cobro / cobrar_diario, 0023) o que la
+ * caja del día anterior que se está cargando todavía no se abrió: las dos se resuelven en Caja.
+ */
 export function esErrorDeCajaCerrada(error: string | null): boolean {
-  return Boolean(error && error.startsWith("La caja ya está cerrada"));
+  return Boolean(
+    error && (error.startsWith("La caja ya está cerrada") || error.startsWith("No hay caja abierta del"))
+  );
 }

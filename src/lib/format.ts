@@ -248,16 +248,21 @@ export function centavosConBeneficio(montoCents: number, porcentaje: number): nu
  * en la DB la columna sigue llamándose descuento_pronto_pago).
  * Calcula en centavos enteros con redondeo half-up para dar EXACTAMENTE lo
  * mismo que `round(numeric, 2)` en Postgres — nunca recalcular con floats.
+ * `dia`: el día del cobro cuando se carga en la caja de un día anterior (el beneficio se
+ * mide con ese día, igual que private.imputar_pago).
  */
-export function saldoCargo(cargo: {
-  estado: string;
-  monto: number;
-  monto_pagado: number;
-  descuento_pronto_pago: number;
-  vencimiento: string;
-}): number {
+export function saldoCargo(
+  cargo: {
+    estado: string;
+    monto: number;
+    monto_pagado: number;
+    descuento_pronto_pago: number;
+    vencimiento: string;
+  },
+  dia: string = hoyISO()
+): number {
   if (cargo.estado === "pagado" || cargo.estado === "anulado") return 0;
-  const enTermino = hoyISO() <= cargo.vencimiento;
+  const enTermino = dia <= cargo.vencimiento;
   const montoCents = Math.round(cargo.monto * 100);
   const objetivoCents = enTermino
     ? centavosConBeneficio(montoCents, Number(cargo.descuento_pronto_pago))

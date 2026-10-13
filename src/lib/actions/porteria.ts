@@ -6,7 +6,8 @@ import { createClient } from "@/lib/supabase/server";
 import { requireRol } from "@/lib/auth";
 import { ok, fallo, type ActionResult } from "@/lib/actions/result";
 import { rutaFirmaIngreso } from "@/lib/storage";
-import { TZ_AR } from "@/lib/format";
+import { TZ_AR, hoyISO } from "@/lib/format";
+import { diaAnteriorValido } from "@/lib/dia-caja";
 
 /** Ingresos del personal en la garita: Portería y el Líder (A4, G10: ni Administración ni el Jefe). */
 const ROLES_INGRESOS = ["porteria", "lider"] as const;
@@ -431,6 +432,11 @@ const schemaCanon = z.object({
     .optional()
     .transform((v) => (v ? v : null)),
   ref: z.uuid("Recargá la página y probá de nuevo."),
+  /** Carga atrasada (solo el Líder): el canon entra en la caja de portería de ESE día anterior. */
+  fecha: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Elegí una fecha válida")
+    .optional(),
 });
 
 export type CanonRegistrado = {
@@ -459,9 +465,15 @@ export async function registrarCanon(
   const d = parsed.data;
   if (d.puesto && d.destino !== "puesto")
     return fallo("El número de puesto va solo si viene a un puesto");
+  const hoy = hoyISO();
+  const dia = d.fecha === undefined || d.fecha === hoy ? null : diaAnteriorValido(d.fecha, hoy);
+  if (d.fecha !== undefined && d.fecha !== hoy && !dia) {
+    return fallo("Ese día ya no se puede cargar. Elegí otro.");
+  }
 
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("registrar_canon", {
+    ...(dia ? { p_fecha: dia } : {}),
     p_tarifa: d.tarifaId,
     p_cantidad: d.cantidad,
     p_medio: d.medio,

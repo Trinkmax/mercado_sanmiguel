@@ -7,7 +7,7 @@ import { ArrowDownToLine, Check, Footprints, Printer, Tractor, Truck } from "luc
 import { toast } from "sonner";
 import { integrarCajaPorteria, type ResultadoIntegracion } from "@/lib/actions/cajas";
 import { cn } from "@/lib/utils";
-import { formatARS, formatFecha } from "@/lib/format";
+import { formatARS, formatFecha, hoyISO } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -37,9 +37,21 @@ export type RendicionARecibir = {
   ambulantes: number;
   canon: number;
   ajustes: number;
+  /**
+   * Caja de portería de un día anterior: estado de la caja de administración de ESE mismo día,
+   * si existe y no está validada. Con eso se puede elegir que la rendición entre ahí (carga
+   * atrasada) en vez de en la caja de hoy.
+   */
+  adminMismoDia?: "abierta" | "cerrada" | null;
 };
 
-export type Recibida = { cajaId: string; fecha: string; resultado: ResultadoIntegracion };
+export type Recibida = {
+  cajaId: string;
+  fecha: string;
+  resultado: ResultadoIntegracion;
+  /** Día de la caja de administración donde entró, si no fue la de hoy. */
+  destinoFecha: string | null;
+};
 
 /** "Quintas $A · Ambulantes $B · Bono camioneros $C" con íconos. */
 export function DesglosePorteria({
@@ -109,6 +121,12 @@ export function BotonIntegrarRendicion({
   const [enviando, startTransition] = useTransition();
   const idObs = useId();
   const idContado = useId();
+  // Carga atrasada: la rendición de un día anterior puede entrar en la caja de administración
+  // de ese mismo día. Si esa caja está abierta (se está cargando ese día), es lo que se ofrece.
+  const puedeMismoDia = Boolean(r.adminMismoDia) && r.fecha < hoyISO();
+  const destinoInicial = puedeMismoDia && r.adminMismoDia === "abierta" ? "mismo" : "hoy";
+  const [destino, setDestino] = useState<"mismo" | "hoy">(destinoInicial);
+  const enMismoDia = puedeMismoDia && destino === "mismo";
 
   const hayContado = contado.trim() !== "";
   const recibido = redondear2(parseMonto(contado));
@@ -120,6 +138,7 @@ export function BotonIntegrarRendicion({
     setObservaciones("");
     setFaltaMotivo(false);
     setError(null);
+    setDestino(destinoInicial);
     setAbierto(true);
   }
 
@@ -136,7 +155,12 @@ export function BotonIntegrarRendicion({
     setError(null);
     startTransition(async () => {
       const res = await llamarAccion(() =>
-        integrarCajaPorteria(r.cajaId, observaciones.trim() || undefined, recibido)
+        integrarCajaPorteria(
+          r.cajaId,
+          observaciones.trim() || undefined,
+          recibido,
+          enMismoDia ? r.fecha : undefined
+        )
       );
       if (!res.ok) {
         // El diálogo queda abierto con lo cargado; reintentar es seguro (la base no la integra dos veces).
@@ -153,7 +177,12 @@ export function BotonIntegrarRendicion({
       if (res.data.repetido) toast.info("Esa caja de portería ya la habías recibido.");
       setAbierto(false);
       setObservaciones("");
-      onRecibida({ cajaId: r.cajaId, fecha: r.fecha, resultado: res.data });
+      onRecibida({
+        cajaId: r.cajaId,
+        fecha: r.fecha,
+        resultado: res.data,
+        destinoFecha: enMismoDia ? r.fecha : null,
+      });
     });
   }
 
@@ -179,10 +208,46 @@ export function BotonIntegrarRendicion({
           <DialogHeader>
             <DialogTitle className="text-xl">Recibir la caja de portería del {formatFecha(r.fecha)}</DialogTitle>
             <DialogDescription className="text-base">
-              Contá el efectivo que te entrega el Jefe de Portería y confirmá. Entra en tu caja de hoy y
-              Tesorería lo valida todo junto.
+              Contá el efectivo que te entrega el Jefe de Portería y confirmá.{" "}
+              {enMismoDia
+                ? `Entra en la caja de administración del ${formatFecha(r.fecha)}`
+                : "Entra en tu caja de hoy"}{" "}
+              y Tesorería lo valida todo junto.
             </DialogDescription>
           </DialogHeader>
+
+          {puedeMismoDia ? (
+            <fieldset className="space-y-2">
+              <legend className="text-base font-medium">¿En qué caja de administración entra?</legend>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant={destino === "mismo" ? "default" : "outline"}
+                  aria-pressed={destino === "mismo"}
+                  className="h-auto min-h-12 px-3 py-2 text-sm font-semibold whitespace-normal"
+                  onClick={() => setDestino("mismo")}
+                >
+                  La del {formatFecha(r.fecha)}
+                </Button>
+                <Button
+                  type="button"
+                  variant={destino === "hoy" ? "default" : "outline"}
+                  aria-pressed={destino === "hoy"}
+                  className="h-auto min-h-12 px-3 py-2 text-sm font-semibold whitespace-normal"
+                  onClick={() => setDestino("hoy")}
+                >
+                  La de hoy
+                </Button>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                {destino === "mismo"
+                  ? r.adminMismoDia === "cerrada"
+                    ? "Esa caja ya está cerrada: su cuenta se recalcula sola."
+                    : "Queda como si se hubiera recibido ese mismo día."
+                  : "Se suma a lo juntado hoy."}
+              </p>
+            </fieldset>
+          ) : null}
 
           <dl className="divide-y rounded-md border text-base">
             <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4 py-3">
@@ -312,7 +377,11 @@ export function ExitoRecepcion({ recibida, onCerrar }: { recibida: Recibida | nu
             <DialogHeader>
               <DialogTitle className="text-xl">Caja de portería recibida</DialogTitle>
               <DialogDescription className="text-base">
-                La caja del {formatFecha(recibida.fecha)} ya está dentro de tu caja de hoy.
+                La caja del {formatFecha(recibida.fecha)} ya está dentro de{" "}
+                {recibida.destinoFecha
+                  ? `la caja de administración del ${formatFecha(recibida.destinoFecha)}`
+                  : "tu caja de hoy"}
+                .
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-2 rounded-lg bg-muted/60 px-4 py-4 text-center">

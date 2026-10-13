@@ -2991,7 +2991,10 @@ export type Database = {
     }
     Functions: {
       abrir_caja: {
-        Args: { p_tipo: Database["public"]["Enums"]["tipo_caja"] }
+        Args: {
+          p_fecha?: string
+          p_tipo: Database["public"]["Enums"]["tipo_caja"]
+        }
         Returns: string
       }
       anular_canon: {
@@ -3191,6 +3194,7 @@ export type Database = {
         Args: {
           p_caja: string
           p_efectivo_recibido?: number
+          p_fecha_destino?: string
           p_observaciones?: string
         }
         Returns: Json
@@ -3262,6 +3266,7 @@ export type Database = {
           p_cantidad?: number
           p_destino?: string
           p_destino_detalle?: string
+          p_fecha?: string
           p_medio?: Database["public"]["Enums"]["medio_pago"]
           p_notas?: string
           p_patente?: string

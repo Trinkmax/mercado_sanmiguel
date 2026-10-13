@@ -13,6 +13,7 @@ import {
 import { BandejaAdministracion } from "@/components/caja/bandeja-admin";
 import { BannerOtroDia } from "@/components/caja/banner-otro-dia";
 import { BotonImprimirCaja } from "@/components/caja/boton-imprimir-caja";
+import { SelectorDiaCaja } from "@/components/caja/selector-dia";
 import { VistaCaja } from "@/components/caja/vista-caja";
 
 export const metadata = { title: "Caja del día" };
@@ -41,7 +42,8 @@ const PESTANIA =
 
 /**
  * /caja                    → la caja de hoy.
- * /caja?fecha=…            → la caja de otro día (por ejemplo, una reabierta).
+ * /caja?fecha=…            → la caja de otro día (una reabierta, o un día anterior que se
+ *                            abre ahora para cargar lo que no se registró: carga atrasada).
  * /caja?fecha=…&tipo=…     → Tesorería / Líder: abre esa pestaña (lo usan /tesoreria y la bandeja).
  *
  * Administración: su caja + la bandeja (cajas de portería para recibir, pedidos de reapertura).
@@ -86,6 +88,7 @@ export default async function CajaPage({
               : "Podés hacer todas las acciones de caja: queda firmado a tu nombre."
           }`}
         >
+          <SelectorDiaCaja fecha={fecha} tipo={tipoPedido} />
           {exportar}
         </PageHeader>
         <BannerOtroDia
@@ -139,6 +142,7 @@ export default async function CajaPage({
             <BotonImprimirCaja cajaId={datos.caja.id} abierta={datos.caja.estado === "abierta"} />
           </>
         ) : null}
+        <SelectorDiaCaja fecha={fecha} />
         {exportar}
       </PageHeader>
       <BannerOtroDia esHoy={datos.esHoy} fecha={fecha} cajaAbiertaOtroDia={datos.cajaAbiertaOtroDia} />

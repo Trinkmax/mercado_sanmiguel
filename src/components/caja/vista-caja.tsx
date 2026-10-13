@@ -1,7 +1,10 @@
-import { CalendarX2, Stamp, TriangleAlert, Truck } from "lucide-react";
+import Link from "next/link";
+import { ArrowRight, CalendarClock, CalendarX2, Stamp, TriangleAlert, Truck } from "lucide-react";
 import { CajaRegistradora } from "@/components/shared/iconos";
 import type { Rol } from "@/lib/auth";
 import { formatFecha, hoyISO } from "@/lib/format";
+import { diaAnteriorValido } from "@/lib/dia-caja";
+import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/shared/empty-state";
 import { CanonDelDia } from "@/components/porteria/canon-del-dia";
 import { ValidarCajaDialog } from "@/components/tesoreria/validar-caja-dialog";
@@ -46,6 +49,8 @@ export function VistaCaja({
   const { caja, tipo, esHoy, fecha, arqueo } = datos;
   const porteria = tipo === "guardia";
   const permisos = permisosCaja(rol, tipo, caja, hoyISO());
+  // Carga atrasada (0048): la caja de un día anterior se puede abrir y cargar después.
+  const diaCargable = !esHoy && diaAnteriorValido(fecha) !== null;
 
   // Sin sello acá: el estado ya lo dice la pestaña y, con la caja cerrada, el sello grande del
   // arqueo (tres "CERRADA" seguidos no suman nada).
@@ -81,8 +86,14 @@ export function VistaCaja({
             <EmptyState
               icono={CalendarX2}
               titulo={`No hubo ${porteria ? "caja de portería" : "caja"} el ${formatFecha(fecha)}`}
-              descripcion="Ese día no se abrió esta caja. Elegí otro día de la lista de abajo."
-            />
+              descripcion={
+                permisos.abrir && diaCargable
+                  ? "Ese día no se abrió esta caja. Si se cobró y quedó sin registrar, abrila ahora y cargalo: todo queda con la fecha de ese día."
+                  : "Ese día no se abrió esta caja. Elegí otro día de la lista de abajo."
+              }
+            >
+              {permisos.abrir && diaCargable ? <BotonAbrirCaja tipo={tipo} fecha={fecha} /> : null}
+            </EmptyState>
           )}
         </div>
         <UltimosDias previas={datos.previas} tipo={tipo} />
@@ -92,6 +103,11 @@ export function VistaCaja({
 
   const abierta = caja.estado === "abierta";
   const pideReapertura = Boolean(caja.reapertura_solicitada_en);
+  // Quién carga qué en una caja de un día anterior: los cobros, quien cobra en esta caja (el
+  // Líder cobra en la de administración, §1.3); el canon de portería, el Líder.
+  const cobraAca =
+    (rol === "admin" && !porteria) || (rol === "guardia" && porteria) || (rol === "lider" && !porteria);
+  const cargaCanon = rol === "lider" && porteria;
 
   return (
     <div className="space-y-8">
@@ -121,6 +137,33 @@ export function VistaCaja({
         />
       )}
 
+      {abierta && !esHoy && (cobraAca || cargaCanon) ? (
+        <div
+          key="carga-atrasada"
+          className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-primary/30 bg-card p-5 sm:p-6"
+          data-tour="caja-carga-atrasada"
+        >
+          <div className="min-w-0 flex-1 basis-64 space-y-1">
+            <p className="flex items-center gap-2 text-lg font-semibold">
+              <CalendarClock className="size-5 shrink-0 text-primary" strokeWidth={2} />
+              Cargá lo del {formatFecha(caja.fecha)}
+            </p>
+            <p className="text-sm text-muted-foreground">
+              {cargaCanon
+                ? "El canon que cargues entra en esta caja con la fecha de ese día. Los cobros a quinteros y ambulantes los carga el Jefe de Portería."
+                : "Los cobros que cargues entran en esta caja y el recibo sale con la fecha de ese día."}{" "}
+              Cuando termines, cerrala.
+            </p>
+          </div>
+          <Button asChild size="lg" className="h-12 px-5 text-base font-semibold">
+            <Link href={cargaCanon ? `/porteria?fecha=${caja.fecha}` : `/cobranza?fecha=${caja.fecha}`}>
+              {cargaCanon ? "Cargar el canon de ese día" : "Cobrar en esta caja"}
+              <ArrowRight className="size-5" strokeWidth={2} />
+            </Link>
+          </Button>
+        </div>
+      ) : null}
+
       {permisos.cerrarTipo ? (
         <BotonCerrarCaja
           key="accion-cerrar"
@@ -146,6 +189,7 @@ export function VistaCaja({
             ambulantes: arqueo.ambulantes,
             canon: arqueo.canon,
             ajustes: arqueo.ajustes,
+            adminMismoDia: datos.adminMismoDia,
           }}
         />
       ) : null}

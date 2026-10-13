@@ -11,7 +11,8 @@ import {
   TAMANO_MAX_BYTES,
   rutaComprobanteTransferencia,
 } from "@/lib/storage";
-import { cuitTieneOnceDigitos, hoyISO, limpiarCuit } from "@/lib/format";
+import { cuitTieneOnceDigitos, formatFecha, hoyISO, limpiarCuit } from "@/lib/format";
+import { diaAnteriorValido } from "@/lib/dia-caja";
 import type { Json } from "@/lib/database.types";
 
 // ---------------------------------------------------------------------------
@@ -146,6 +147,8 @@ const cobroSchema = z.object({
     .max(6, "Un mismo cobro admite hasta 6 medios de pago"),
   notas,
   permitirSaldoFavor: z.boolean().optional(),
+  /** Carga atrasada: el cobro entra en la caja de ESE día anterior (ya abierta desde Caja). */
+  fechaCaja: fechaISO.optional(),
 });
 
 /** Precio por día del ambulante: lo pone quien cobra en cada cobro (no hay precio fijo). */
@@ -167,6 +170,8 @@ const diarioSchema = z.object({
   desde: fechaISO.optional(),
   lineas: z.array(lineaSinCheque).min(1, "Elegí cómo te paga").max(3, "Elegí cómo te paga"),
   notas,
+  /** Carga atrasada: el cobro entra en la caja de ESE día anterior (ya abierta desde Caja). */
+  fechaCaja: fechaISO.optional(),
 });
 
 export type InputCobro = z.input<typeof cobroSchema>;
@@ -242,14 +247,41 @@ async function borrarComprobantes(supabase: Supabase, rutas: string[]) {
   await supabase.storage.from("documentos").remove(rutas);
 }
 
-/** La caja de hoy de quien cobra (la abre si hace falta). El Líder cobra en la de administración (§1.3). */
-async function cajaDeHoy(
+/**
+ * La caja donde entra el cobro. Sin `fechaCaja`: la de hoy de quien cobra (la abre si hace
+ * falta). Con `fechaCaja` (carga atrasada): la de ese día anterior, que NO se abre sola: se
+ * abre desde Caja. El Líder cobra en la de administración (§1.3).
+ */
+async function cajaParaCobrar(
   supabase: Supabase,
-  rol: Rol
+  rol: Rol,
+  orgId: string,
+  fechaCaja: string | undefined
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
-  const { data, error } = await supabase.rpc("abrir_caja", {
-    p_tipo: rol === "guardia" ? "guardia" : "administracion",
-  });
+  const tipo = rol === "guardia" ? "guardia" : "administracion";
+  const hoy = hoyISO();
+  if (fechaCaja !== undefined && fechaCaja !== hoy) {
+    const dia = diaAnteriorValido(fechaCaja, hoy);
+    if (!dia) return { ok: false, error: "Ese día ya no se puede cargar. Volvé a Caja y elegí otro." };
+    const { data, error } = await supabase
+      .from("cajas")
+      .select("id")
+      .eq("org_id", orgId)
+      .eq("tipo", tipo)
+      .eq("fecha", dia)
+      .maybeSingle();
+    if (error) return { ok: false, error: "No pudimos leer la caja de ese día. Probá de nuevo." };
+    if (!data) {
+      return {
+        ok: false,
+        error: `No hay caja abierta del ${formatFecha(dia)}: abrila desde Caja para cargar cobros de ese día.`,
+      };
+    }
+    // Si está cerrada, la RPC lo dice con el mensaje de siempre (reabrila desde Caja).
+    return { ok: true, id: data.id };
+  }
+
+  const { data, error } = await supabase.rpc("abrir_caja", { p_tipo: tipo });
   if (error) return { ok: false, error: error.message };
   if (!data) return { ok: false, error: "No se pudo abrir la caja de hoy. Probá de nuevo." };
   return { ok: true, id: data };
@@ -346,7 +378,7 @@ export async function registrarCobro(
 
   const parsed = cobroSchema.safeParse(leerDatos(formData));
   if (!parsed.success) return fallo(parsed.error.issues[0].message);
-  const { clienteId, loteId, lineas, notas: nota, permitirSaldoFavor } = parsed.data;
+  const { clienteId, loteId, lineas, notas: nota, permitirSaldoFavor, fechaCaja } = parsed.data;
 
   if (new Set(lineas.map((l) => l.id)).size !== lineas.length) {
     return fallo("No pudimos leer el cobro. Probá de nuevo.");
@@ -359,7 +391,7 @@ export async function registrarCobro(
   if (!comprobantes.ok) return fallo(comprobantes.error);
 
   const supabase = await createClient();
-  const caja = await cajaDeHoy(supabase, perfil.rol);
+  const caja = await cajaParaCobrar(supabase, perfil.rol, perfil.org_id, fechaCaja);
   if (!caja.ok) return fallo(caja.error);
 
   const subida = await subirComprobantes(supabase, perfil.org_id, comprobantes.archivos);
@@ -400,7 +432,7 @@ export async function cobrarDiario(
 
   const parsed = diarioSchema.safeParse(leerDatos(formData));
   if (!parsed.success) return fallo(parsed.error.issues[0].message);
-  const { clienteId, loteId, precio, dias, desde, lineas, notas: nota } = parsed.data;
+  const { clienteId, loteId, precio, dias, desde, lineas, notas: nota, fechaCaja } = parsed.data;
 
   if (new Set(lineas.map((l) => l.id)).size !== lineas.length) {
     return fallo("No pudimos leer el cobro. Probá de nuevo.");
@@ -410,7 +442,7 @@ export async function cobrarDiario(
   if (!comprobantes.ok) return fallo(comprobantes.error);
 
   const supabase = await createClient();
-  const caja = await cajaDeHoy(supabase, perfil.rol);
+  const caja = await cajaParaCobrar(supabase, perfil.rol, perfil.org_id, fechaCaja);
   if (!caja.ok) return fallo(caja.error);
 
   const subida = await subirComprobantes(supabase, perfil.org_id, comprobantes.archivos);

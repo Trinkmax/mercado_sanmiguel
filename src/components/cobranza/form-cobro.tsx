@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { cuitTieneOnceDigitos, formatARS, hoyISO, limpiarCuit } from "@/lib/format";
+import { cuitTieneOnceDigitos, formatARS, formatFecha, hoyISO, limpiarCuit } from "@/lib/format";
 import type { AvanceMes } from "@/lib/segmentos";
 import {
   registrarCobro,
@@ -138,6 +138,7 @@ export function FormCobro({
   volverA = "/cobranza",
   cajaCerrada = false,
   irACaja = "/caja",
+  fechaCaja,
 }: {
   clienteId: string;
   clienteNombre: string;
@@ -160,9 +161,13 @@ export function FormCobro({
   cajaCerrada?: boolean;
   /** Dónde se reabre / pide la reapertura de la caja (link del error "La caja ya está cerrada…"). */
   irACaja?: string;
+  /** Carga atrasada: el cobro entra en la caja de este día anterior (no en la de hoy). */
+  fechaCaja?: string;
 }) {
   const router = useRouter();
-  const [lineas, setLineas] = useState<LineaForm[]>(() => [nuevaLinea(medios[0] ?? "efectivo", 0, "l1")]);
+  const [lineas, setLineas] = useState<LineaForm[]>(() => [
+    nuevaLinea(medios[0] ?? "efectivo", 0, "l1", fechaCaja),
+  ]);
   const [errores, setErrores] = useState<Record<string, ErroresLinea>>({});
   const [confirmarCuitEn, setConfirmarCuitEn] = useState<string | null>(null);
   const [notas, setNotas] = useState("");
@@ -219,7 +224,7 @@ export function FormCobro({
     if (lineas.length >= MAX_LINEAS) return;
     const usados = new Set(lineas.map((l) => l.medio));
     const medio = medios.find((m) => !usados.has(m)) ?? medios[medios.length > 1 ? 1 : 0];
-    setLineas((prev) => [...prev, nuevaLinea(medio, resto)]);
+    setLineas((prev) => [...prev, nuevaLinea(medio, resto, undefined, fechaCaja)]);
   }
   function quitarLinea(id: string) {
     setLineas((prev) => (prev.length > 1 ? prev.filter((l) => l.id !== id) : prev));
@@ -244,7 +249,7 @@ export function FormCobro({
   }
 
   function reset() {
-    setLineas([nuevaLinea(medios[0] ?? "efectivo")]);
+    setLineas([nuevaLinea(medios[0] ?? "efectivo", 0, undefined, fechaCaja)]);
     setErrores({});
     setConfirmarCuitEn(null);
     setNotas("");
@@ -292,7 +297,7 @@ export function FormCobro({
               cuit: limpiarCuit(c.cuit),
               recibido_de: c.otraPersona ? c.recibidoDe.trim() : undefined,
               fecha_recepcion: c.fechaRecepcion || undefined,
-              fecha_cobro: c.fechaCobro || hoyISO(),
+              fecha_cobro: c.fechaCobro || fechaCaja || hoyISO(),
               estado: c.estado,
               proveedor: c.estado === "entregado" ? c.proveedor.trim() : undefined,
             },
@@ -302,6 +307,7 @@ export function FormCobro({
       }),
       notas: notas.trim() || undefined,
       permitirSaldoFavor,
+      fechaCaja,
     };
     const fd = new FormData();
     fd.set("datos", JSON.stringify(datos));
@@ -779,7 +785,8 @@ export function FormCobro({
       {cajaCerrada ? (
         <p className="flex items-start gap-2 text-sm font-medium text-parcial">
           <Lock className="mt-0.5 size-4 shrink-0" strokeWidth={2} />
-          No se puede cobrar: la caja de hoy no está abierta (mirá el aviso de arriba).
+          No se puede cobrar: la caja {fechaCaja ? `del ${formatFecha(fechaCaja)}` : "de hoy"} no está abierta
+          (mirá el aviso de arriba).
         </p>
       ) : null}
 

@@ -131,7 +131,19 @@ export type DatosCaja = {
   };
   /** Caja de este tipo de otro día que sigue abierta (reabierta o que se olvidaron de cerrar). */
   cajaAbiertaOtroDia: { id: string; fecha: string; reaperturas: number } | null;
+  /**
+   * Caja de portería de un día anterior: el estado de la caja de administración de ESE mismo
+   * día, si existe y no está validada (la rendición puede entrar ahí en vez de en la de hoy).
+   */
+  adminMismoDia: AdminMismoDia;
 };
+
+/** Estado de la caja de administración del mismo día que una caja de portería (o null). */
+export type AdminMismoDia = "abierta" | "cerrada" | null;
+
+function aAdminMismoDia(estado: string | null | undefined): AdminMismoDia {
+  return estado === "abierta" || estado === "cerrada" ? estado : null;
+}
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
 
@@ -189,6 +201,7 @@ async function armarDatos(
     rendidasRes,
     otroDiaRes,
     tarifasRes,
+    adminMismoDiaRes,
   ] = await Promise.all([
     caja ? supabase.rpc("arqueo_caja", { p_caja: caja.id }) : Promise.resolve({ data: null, error: null }),
     caja
@@ -270,6 +283,16 @@ async function armarDatos(
       : Promise.resolve({ data: null }),
     caja && tipo === "guardia"
       ? supabase.from("tarifas_transporte").select("nombre, icono").eq("org_id", perfil.org_id)
+      : Promise.resolve({ data: null }),
+    // El Jefe no recibe cajas (ni lee la de administración): no hace falta.
+    caja && tipo === "guardia" && caja.fecha < hoy && perfil.rol !== "guardia"
+      ? supabase
+          .from("cajas")
+          .select("estado")
+          .eq("org_id", perfil.org_id)
+          .eq("tipo", "administracion")
+          .eq("fecha", caja.fecha)
+          .maybeSingle()
       : Promise.resolve({ data: null }),
   ]);
 
@@ -451,6 +474,7 @@ async function armarDatos(
           reaperturas: Number(otroDiaRes.data.reaperturas ?? 0),
         }
       : null,
+    adminMismoDia: aAdminMismoDia(adminMismoDiaRes.data?.estado),
   };
 }
 
@@ -504,6 +528,8 @@ export type RendicionPendiente = {
   total_ajustes: number;
   reapertura_solicitada_en: string | null;
   reapertura_motivo: string | null;
+  /** La caja de administración de ese mismo día (anterior a hoy), si existe y no está validada. */
+  adminMismoDia: AdminMismoDia;
 };
 
 export type PedidoReapertura = {
@@ -543,10 +569,28 @@ export async function cargarBandejaAdmin(perfil: Perfil): Promise<BandejaAdmin> 
       .order("reapertura_solicitada_en", { ascending: true }),
   ]);
 
-  const nombres = await nombresPorUsuario(supabase, [
-    ...(rendicionesRes.data ?? []).map((r) => r.cerrada_por),
-    ...(pedidosRes.data ?? []).map((p) => p.reapertura_solicitada_por),
+  // Carga atrasada: una caja de portería de un día anterior puede entrar en la caja de
+  // administración de ese mismo día (si está abierta o cerrada sin validar).
+  const hoy = hoyISO();
+  const diasAnteriores = [
+    ...new Set((rendicionesRes.data ?? []).map((r) => r.fecha).filter((f) => f < hoy)),
+  ];
+  const [nombres, adminRes] = await Promise.all([
+    nombresPorUsuario(supabase, [
+      ...(rendicionesRes.data ?? []).map((r) => r.cerrada_por),
+      ...(pedidosRes.data ?? []).map((p) => p.reapertura_solicitada_por),
+    ]),
+    diasAnteriores.length > 0
+      ? supabase
+          .from("cajas")
+          .select("fecha, estado")
+          .eq("org_id", perfil.org_id)
+          .eq("tipo", "administracion")
+          .in("fecha", diasAnteriores)
+      : Promise.resolve({ data: null }),
   ]);
+  const adminPorDia = new Map<string, AdminMismoDia>();
+  for (const c of adminRes.data ?? []) adminPorDia.set(c.fecha, aAdminMismoDia(c.estado));
 
   return {
     rendiciones: (rendicionesRes.data ?? []).map((r) => ({
@@ -562,6 +606,7 @@ export async function cargarBandejaAdmin(perfil: Perfil): Promise<BandejaAdmin> 
       total_ajustes: Number(r.total_ajustes ?? 0),
       reapertura_solicitada_en: r.reapertura_solicitada_en,
       reapertura_motivo: r.reapertura_motivo,
+      adminMismoDia: adminPorDia.get(r.fecha) ?? null,
     })),
     pedidos: (pedidosRes.data ?? [])
       .filter((p) => p.reapertura_solicitada_en)

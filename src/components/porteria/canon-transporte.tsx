@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 import { CircleAlert, CircleCheck, Minus, Plus, TriangleAlert, Truck } from "lucide-react";
 import { anularCanon, registrarCanon } from "@/lib/actions/porteria";
@@ -52,13 +53,16 @@ export function CanonTransporte({
   tarifas,
   puestos,
   bloqueo,
+  fecha,
 }: {
   /** Tarifas ACTIVAS, en el orden de la tabla. */
   tarifas: TarifaTransporte[];
   /** Puestos del plano para validar "Puesto 58 ✓" al instante. */
   puestos: PuestoPlano[];
   /** Caja de portería rendida: el formulario queda bloqueado con este aviso. */
-  bloqueo: { titulo: string; detalle?: string } | null;
+  bloqueo: { titulo: string; detalle?: string; accion?: { href: string; label: string } } | null;
+  /** Carga atrasada (el Líder): el canon entra en la caja de portería de este día anterior. */
+  fecha?: string;
 }) {
   const primeraConPrecio = tarifas.find((t) => t.precio > 0) ?? null;
   const [tarifaId, setTarifaId] = useState<string | null>(primeraConPrecio?.id ?? null);
@@ -159,6 +163,7 @@ export function CanonTransporte({
         destino,
         puesto: destino === "puesto" && puestoNorm ? puestoNorm : undefined,
         ref,
+        fecha,
       }));
       if (!res.ok) {
         // Se conserva TODO y el MISMO ref (también si se cortó la red: si el primer intento sí
@@ -214,6 +219,11 @@ export function CanonTransporte({
             <div className="space-y-1">
               <p className="text-base font-semibold">{bloqueo.titulo}</p>
               {bloqueo.detalle ? <p className="text-sm text-muted-foreground">{bloqueo.detalle}</p> : null}
+              {bloqueo.accion ? (
+                <Button asChild variant="outline" className="mt-1 h-11 bg-card px-4 text-sm font-semibold">
+                  <Link href={bloqueo.accion.href}>{bloqueo.accion.label}</Link>
+                </Button>
+              ) : null}
             </div>
           </div>
         ) : null}

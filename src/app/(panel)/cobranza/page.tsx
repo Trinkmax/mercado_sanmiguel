@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { Footprints, Users } from "lucide-react";
 import { requireRol } from "@/lib/auth";
-import { hoyISO, nivelDeuda, periodoActual } from "@/lib/format";
+import { formatFecha, hoyISO, nivelDeuda, periodoActual } from "@/lib/format";
+import { diaAnteriorValido, primerDiaCaja } from "@/lib/dia-caja";
 import {
   categoriasDeRol,
   type AvanceMes,
@@ -22,15 +23,29 @@ import {
   type ConceptoDeCliente,
   type EspacioDeCliente,
 } from "@/components/clientes/segmentos-cliente";
-import { AvisoCajaCerrada, type CajaDeHoy } from "@/components/cobranza/aviso-caja";
+import {
+  AvisoCajaCerrada,
+  AvisoDiaAnterior,
+  CajasAnterioresAbiertas,
+  type CajaDeHoy,
+} from "@/components/cobranza/aviso-caja";
 
 export const metadata = { title: "Cobrar" };
 
-type Sp = Promise<{ cat?: string }>;
+type Sp = Promise<{ cat?: string | string[]; fecha?: string | string[] }>;
 
+function primero(v: string | string[] | undefined): string | undefined {
+  return Array.isArray(v) ? v[0] : v;
+}
+
+/**
+ * /cobranza            → se cobra en la caja de hoy.
+ * /cobranza?fecha=…    → carga atrasada: se cobra en la caja de ese día anterior (abierta desde Caja).
+ */
 export default async function CobranzaPage({ searchParams }: { searchParams: Sp }) {
   const perfil = await requireRol("admin", "guardia", "lider");
-  const { cat } = await searchParams;
+  const params = await searchParams;
+  const cat = primero(params.cat);
   const supabase = await createClient();
 
   const esJefe = perfil.rol === "guardia";
@@ -40,8 +55,12 @@ export default async function CobranzaPage({ searchParams }: { searchParams: Sp 
   const cobraAmbulantes = categorias.includes("ambulante");
   const hoy = hoyISO();
   const periodo = periodoActual();
+  // Carga atrasada: el día anterior en cuya caja entran los cobros (null = la de hoy).
+  const diaCaja = diaAnteriorValido(primero(params.fecha), hoy);
+  const fechaCaja = diaCaja ?? hoy;
+  const tipoCaja = esJefe ? "guardia" : "administracion";
 
-  const [clientesRes, deudaRes, saldoRes, espaciosRes, itemsRes, avanceRes, diariosRes, cajaRes] =
+  const [clientesRes, deudaRes, saldoRes, espaciosRes, itemsRes, avanceRes, diariosRes, cajaRes, anterioresRes] =
     await Promise.all([
       supabase
         .from("clientes")
@@ -80,12 +99,24 @@ export default async function CobranzaPage({ searchParams }: { searchParams: Sp 
       supabase
         .from("cajas")
         .select("id, estado, reapertura_solicitada_en")
-        .eq("tipo", esJefe ? "guardia" : "administracion")
-        .eq("fecha", hoy)
+        .eq("tipo", tipoCaja)
+        .eq("fecha", fechaCaja)
         .maybeSingle(),
+      // Viendo hoy: cajas de días anteriores que están abiertas (se puede cobrar en ellas).
+      diaCaja
+        ? Promise.resolve({ data: null })
+        : supabase
+            .from("cajas")
+            .select("fecha")
+            .eq("tipo", tipoCaja)
+            .eq("estado", "abierta")
+            .lt("fecha", hoy)
+            .gte("fecha", primerDiaCaja(hoy))
+            .order("fecha", { ascending: true })
+            .limit(31),
     ]);
 
-  // Lo que cobró HOY quien está mirando (su caja del día).
+  // Lo que cobró HOY quien está mirando (su caja del día; en una carga atrasada, la de ese día).
   let hoyTotal = 0;
   const recibosHoy = new Set<string>();
   const quinterosHoy = new Set<string>();
@@ -231,14 +262,32 @@ export default async function CobranzaPage({ searchParams }: { searchParams: Sp 
         ) : null}
       </PageHeader>
 
-      <AvisoCajaCerrada caja={cajaHoy} rol={perfil.rol} className="-mt-4" />
+      {diaCaja ? (
+        <AvisoDiaAnterior
+          fecha={diaCaja}
+          caja={cajaHoy}
+          rol={perfil.rol}
+          volverAHoy={cat ? `/cobranza?cat=${encodeURIComponent(cat)}` : "/cobranza"}
+          className="-mt-4"
+        />
+      ) : (
+        <>
+          <AvisoCajaCerrada caja={cajaHoy} rol={perfil.rol} className="-mt-4" />
+          <CajasAnterioresAbiertas
+            fechas={(anterioresRes.data ?? []).map((c) => c.fecha)}
+            className="-mt-4"
+          />
+        </>
+      )}
 
       {esJefe || hoyTotal > 0 ? (
         <div data-tour="cobranza-hoy" className="-mt-4 space-y-1 rounded-lg border bg-card px-4 py-3">
           <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
             {hoyTotal > 0 ? (
               <>
-                <span className="text-muted-foreground">Hoy cobraste</span>
+                <span className="text-muted-foreground">
+                  {diaCaja ? `En la caja del ${formatFecha(diaCaja)} cargaste` : "Hoy cobraste"}
+                </span>
                 <Money monto={hoyTotal} className="text-xl font-bold" />
                 <span className="text-sm text-muted-foreground">
                   {esJefe
@@ -247,7 +296,11 @@ export default async function CobranzaPage({ searchParams }: { searchParams: Sp 
                 </span>
               </>
             ) : (
-              <span className="text-muted-foreground">Hoy todavía no cobraste nada.</span>
+              <span className="text-muted-foreground">
+                {diaCaja
+                  ? `Todavía no cargaste cobros en la caja del ${formatFecha(diaCaja)}.`
+                  : "Hoy todavía no cobraste nada."}
+              </span>
             )}
           </p>
           {porteriaRecibida > 0.009 ? (
@@ -258,7 +311,7 @@ export default async function CobranzaPage({ searchParams }: { searchParams: Sp 
                 ).
               </span>
               <Link
-                href="/caja"
+                href={diaCaja ? `/caja?fecha=${diaCaja}&tipo=${tipoCaja}` : "/caja"}
                 className="inline-flex items-center font-medium text-primary underline-offset-4 hover:underline pointer-coarse:min-h-[44px]"
               >
                 Ver la caja del día
@@ -295,6 +348,7 @@ export default async function CobranzaPage({ searchParams }: { searchParams: Sp 
           categorias={categorias}
           categoriaInicial={categoriaInicial}
           hoy={hoy}
+          fechaCaja={diaCaja ?? undefined}
           // Corto para que entre entero en un celular de 360 px; el aria-label dice todo.
           placeholder={esJefe ? "Nombre, apodo, N° de carpeta o DNI" : "Nombre, apodo, N° de puesto o DNI"}
           etiqueta={

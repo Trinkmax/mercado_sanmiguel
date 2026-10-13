@@ -41,6 +41,7 @@ export function BandejaAdministracion({ bandeja, rol }: { bandeja: BandejaAdmin;
           cerradaPorNombre: r.cerradaPorNombre,
           reaperturaSolicitada: Boolean(r.reapertura_solicitada_en),
           reaperturaMotivo: r.reapertura_motivo,
+          adminMismoDia: r.adminMismoDia,
         }))}
       />
 
