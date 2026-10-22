@@ -45,14 +45,14 @@ export function PlanillaMes({
   puedeRevisar,
   miUserId,
   hastaHoy,
-  esLider,
+  verFicha,
   agrupar,
 }: {
   filas: FilaPlanilla[];
   puedeRevisar: boolean;
   miUserId: string;
   hastaHoy: boolean;
-  esLider: boolean;
+  verFicha: boolean;
   /** Con varios sectores a la vista, un subtítulo por sector. */
   agrupar: boolean;
 }) {
@@ -81,7 +81,7 @@ export function PlanillaMes({
                 puedeRevisar={puedeRevisar}
                 miUserId={miUserId}
                 hastaHoy={hastaHoy}
-                esLider={esLider}
+                verFicha={verFicha}
               />
             ))}
           </div>
@@ -96,13 +96,13 @@ function FilaEmpleado({
   puedeRevisar,
   miUserId,
   hastaHoy,
-  esLider,
+  verFicha,
 }: {
   f: FilaPlanilla;
   puedeRevisar: boolean;
   miUserId: string;
   hastaHoy: boolean;
-  esLider: boolean;
+  verFicha: boolean;
 }) {
   const [abierta, setAbierta] = useState(false);
   const nombre = nombrePila(f);
@@ -191,7 +191,7 @@ function FilaEmpleado({
                 <span className="min-w-0 break-words">Cargar novedad para {f.nombre}</span>
               </Link>
             </Button>
-            {esLider ? (
+            {verFicha ? (
               <Button asChild variant="ghost" className="h-12 px-4 text-sm">
                 <Link href={`/personal/${f.empleado_id}`}>
                   <IdCard className="size-4" strokeWidth={2} />

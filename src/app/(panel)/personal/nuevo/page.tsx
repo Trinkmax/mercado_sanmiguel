@@ -7,7 +7,7 @@ import { FormEmpleado } from "@/components/personal/form-empleado";
 export const metadata = { title: "Nuevo empleado" };
 
 export default async function NuevoEmpleadoPage() {
-  await requireRol("lider");
+  await requireRol("admin", "lider");
 
   return (
     <div className="space-y-8">

@@ -312,7 +312,7 @@ export const PORTERIA: ContenidoCapitulo = {
 };
 
 // ---------------------------------------------------------------------------------------
-// Personal (/personal y la ficha /personal/[id]): solo el Líder.
+// Personal (/personal y la ficha /personal/[id]): Administración y el Líder.
 // ---------------------------------------------------------------------------------------
 
 /** Pasos en la ficha de un empleado: se entra por el primer renglón de la lista. */

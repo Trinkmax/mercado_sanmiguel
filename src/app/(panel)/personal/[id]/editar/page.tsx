@@ -13,7 +13,7 @@ export const metadata = { title: "Editar empleado" };
 type Props = { params: Promise<{ id: string }> };
 
 export default async function EditarEmpleadoPage({ params }: Props) {
-  const perfil = await requireRol("lider");
+  const perfil = await requireRol("admin", "lider");
   const { id } = await params;
   const supabase = await createClient();
 

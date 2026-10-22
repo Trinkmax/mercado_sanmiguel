@@ -202,10 +202,14 @@ export default async function NovedadesPage({ searchParams }: Props) {
         </div>
 
         {todas.length === 0 ? (
-          perfil.rol === "lider" ? (
+          perfil.rol === "lider" || perfil.rol === "admin" ? (
             <EmptyState
               icono={ClipboardList}
-              titulo={`No hay empleados vigentes en ${labelPeriodo(periodo)}`}
+              titulo={
+                perfil.rol === "lider"
+                  ? `No hay empleados vigentes en ${labelPeriodo(periodo)}`
+                  : `No hay empleados de ${listaSectores(alcance)} en ${labelPeriodo(periodo)}`
+              }
               descripcion="Cargá el personal en Personal, con su sector y sus horas de contrato: acá aparece solo."
             >
               <Button asChild size="lg" className="mt-2 h-12 px-5 font-semibold">
@@ -234,7 +238,7 @@ export default async function NovedadesPage({ searchParams }: Props) {
             puedeRevisar={puedeRevisar}
             miUserId={perfil.user_id}
             hastaHoy={esMesActual}
-            esLider={perfil.rol === "lider"}
+            verFicha={perfil.rol === "admin" || perfil.rol === "lider"}
             agrupar={!sector && new Set(filas.map((f) => f.sector)).size > 1}
           />
         )}

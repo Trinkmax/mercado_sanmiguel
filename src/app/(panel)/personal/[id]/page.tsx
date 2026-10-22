@@ -55,7 +55,7 @@ function Dato({ label, valor }: { label: string; valor: React.ReactNode }) {
 }
 
 export default async function FichaEmpleadoPage({ params }: Props) {
-  const perfil = await requireRol("lider");
+  const perfil = await requireRol("admin", "lider");
   const { id } = await params;
   const supabase = await createClient();
 

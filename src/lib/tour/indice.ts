@@ -166,7 +166,7 @@ export const CAPITULOS_META: Record<IdCapitulo, MetaCapitulo> = {
   personal: {
     id: "personal",
     ruta: "/personal",
-    roles: ["lider"],
+    roles: ["admin", "lider"],
     icono: Users,
     titulo: () => "Personal",
     resumen: () => "Los empleados, sus contratos y sus horarios",

@@ -36,7 +36,7 @@ const FILTROS = [
 ] as const;
 
 export default async function PersonalPage({ searchParams }: Props) {
-  const perfil = await requireRol("lider");
+  const perfil = await requireRol("admin", "lider");
   const sp = await searchParams;
   const q = Array.isArray(sp.q) ? (sp.q[0] ?? "") : (sp.q ?? "");
   const filtroParam = Array.isArray(sp.filtro) ? sp.filtro[0] : sp.filtro;

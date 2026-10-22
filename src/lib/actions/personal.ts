@@ -143,7 +143,7 @@ function mensajeDniDuplicado(e: { apellido: string; nombre: string; activo: bool
 export async function crearEmpleado(
   formData: FormData
 ): Promise<ActionResult<{ id: string }>> {
-  const perfil = await requireRol("lider");
+  const perfil = await requireRol("admin", "lider");
   const parsed = leerDatos(formData);
   if (!parsed.success) return fallo(parsed.error.issues[0].message);
   const contrato = leerContrato(formData);
@@ -226,7 +226,7 @@ export async function crearEmpleado(
 export async function editarEmpleado(
   formData: FormData
 ): Promise<ActionResult<{ id: string }>> {
-  const perfil = await requireRol("lider");
+  const perfil = await requireRol("admin", "lider");
   const id = formData.get("id");
   if (typeof id !== "string" || !id) return fallo("Empleado inexistente.");
   const parsed = leerDatos(formData);
@@ -334,7 +334,7 @@ const NOMBRE_DIA = ["", "lunes", "martes", "miércoles", "jueves", "viernes", "s
 export async function guardarHorarios(
   input: unknown
 ): Promise<ActionResult<{ cantidad: number }>> {
-  const perfil = await requireRol("lider");
+  const perfil = await requireRol("admin", "lider");
   const parsed = schemaHorarios.safeParse(input);
   if (!parsed.success) return fallo(parsed.error.issues[0].message);
   const { empleadoId, franjas } = parsed.data;
@@ -387,7 +387,7 @@ export async function guardarHorarios(
 
 /** Baja lógica: deja de figurar como activo y registra la fecha de egreso. */
 export async function darDeBaja(input: unknown): Promise<ActionResult<void>> {
-  const perfil = await requireRol("lider");
+  const perfil = await requireRol("admin", "lider");
   const parsed = z
     .object({
       id: z.string().min(1),
@@ -444,7 +444,7 @@ export async function darDeBaja(input: unknown): Promise<ActionResult<void>> {
  * Si ya estaba activo (reintento tras un corte), no hace nada.
  */
 export async function reincorporar(input: unknown): Promise<ActionResult<void>> {
-  await requireRol("lider");
+  await requireRol("admin", "lider");
   const parsed = z
     .object({
       id: z.string().min(1),
