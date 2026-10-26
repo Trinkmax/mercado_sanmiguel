@@ -68,6 +68,7 @@ export default async function CajaPage({
       <>
         <BotonExportar dataset="cajas" periodo={periodo} label="Cajas del mes (.xlsx)" />
         <BotonExportar dataset="canon" periodo={periodo} label="Bono camioneros del mes (.xlsx)" />
+        <BotonExportar dataset="ingresos_varios" periodo={periodo} label="Ventas sin cliente del mes (.xlsx)" />
       </>
     ) : null;
 

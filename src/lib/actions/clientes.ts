@@ -724,6 +724,59 @@ export async function anularCargoManual(
   return ok({ repetido: Boolean(r.repetido), creditoDevuelto: Number(r.credito_devuelto ?? 0) });
 }
 
+/** Lo que pasó al corregir un cargo del mes (corregir_cargo, 0054). */
+export type CargoCorregido = {
+  /** null = ya no correspondía: quedó anulado sin reemplazo. */
+  montoNuevo: number | null;
+  montoAnterior: number;
+  /** Lo que ya estaba pagado y pasó al cargo corregido. */
+  pagado: number;
+  /** Lo que sobró y volvió a ser saldo a favor (y lo que de eso fue a otras deudas). */
+  liberado: number;
+  aplicado: number;
+};
+
+/**
+ * Rehace un cargo del mes que se generó mal con lo que dice HOY la carpeta (cantidad,
+ * porcentaje y precio), o lo anula si ya no corresponde (RPC corregir_cargo, 0054): el viejo
+ * queda anulado con su rastro, lo pagado pasa al corregido y lo que sobra vuelve a saldo a
+ * favor. Quien gestiona al cliente: Administración, el Jefe de Portería y el Líder.
+ */
+export async function corregirCargo(
+  input: unknown
+): Promise<ActionResult<CargoCorregido>> {
+  await requireRol("admin", "guardia", "lider");
+  const parsed = z
+    .object({
+      cargoId: z.uuid("No encontramos ese cargo. Recargá la página."),
+      clienteId: z.uuid("No encontramos el cliente. Recargá la página."),
+      motivo: z.string().trim().max(300, "El motivo es demasiado largo (hasta 300 letras)").optional(),
+    })
+    .safeParse(input);
+  if (!parsed.success) return fallo(parsed.error.issues[0].message);
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("corregir_cargo", {
+    p_cargo: parsed.data.cargoId,
+    p_motivo: parsed.data.motivo || undefined,
+  });
+  if (error) return fallo(error.message);
+
+  const r = (data ?? {}) as Record<string, unknown>;
+  revalidatePath(`/clientes/${parsed.data.clienteId}`);
+  revalidatePath("/clientes");
+  revalidatePath("/cobranza", "layout");
+  revalidatePath("/facturacion");
+  revalidatePath("/inicio");
+  return ok({
+    montoNuevo: r.monto_nuevo === null || r.monto_nuevo === undefined ? null : Number(r.monto_nuevo),
+    montoAnterior: Number(r.monto_anterior ?? 0),
+    pagado: Number(r.pagado ?? 0),
+    liberado: Number(r.liberado ?? 0),
+    aplicado: Number(r.aplicado ?? 0),
+  });
+}
+
 /** Aplica el saldo a favor del cliente a sus cargos pendientes (RPC). */
 export async function aplicarSaldoFavor(
   input: unknown

@@ -19,6 +19,7 @@ export const LABEL_EVENTO: Record<string, string> = {
   ajuste: "Ajuste de tesorería",
   ajuste_borrado: "Ajuste borrado",
   canon_anulado: "Ingreso de transporte anulado",
+  ingreso_anulado: "Venta sin cliente anulada",
   arqueo_recalculado: "Arqueo recalculado",
 };
 
@@ -29,6 +30,7 @@ const CORRECCIONES = new Set([
   "ajuste",
   "ajuste_borrado",
   "canon_anulado",
+  "ingreso_anulado",
   "arqueo_recalculado",
   "cierre_forzado",
 ]);

@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { Check, CheckCheck, Undo2 } from "lucide-react";
-import { conciliarCanon, desconciliarCanon } from "@/lib/actions/tesoreria";
+import { conciliarCanon, conciliarIngresos, desconciliarCanon, desconciliarIngreso } from "@/lib/actions/tesoreria";
 import { formatARS, formatFecha } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -24,11 +24,39 @@ export type FilaCanon = {
   monto: number;
 };
 
+/** Lo que cambia entre el bono camioneros y las ventas sin cliente (0053): la acción y los textos. */
+const CLASES = {
+  canon: {
+    conciliar: conciliarCanon,
+    desconciliar: desconciliarCanon,
+    nombre: (n: number) => `bono N° ${n}`,
+    hecho: (n: number) => (n === 1 ? "Bono camioneros conciliado." : `${n} cobros de bono camioneros conciliados.`),
+    todos: "Seleccionar todos los cobros de bono camioneros",
+    deshecho: (n: number) => `El bono N° ${n} vuelve a "sin conciliar".`,
+  },
+  ingreso: {
+    conciliar: conciliarIngresos,
+    desconciliar: desconciliarIngreso,
+    nombre: (n: number) => `venta N° ${n}`,
+    hecho: (n: number) => (n === 1 ? "Venta conciliada." : `${n} ventas conciliadas.`),
+    todos: "Seleccionar todas las ventas",
+    deshecho: (n: number) => `La venta N° ${n} vuelve a "sin conciliar".`,
+  },
+} as const;
+
 /**
- * Bono camioneros cobrado por transferencia (J2): Tesorería marca cada uno cuando lo
- * ve acreditado en el resumen del banco (de a uno o varios con los casilleros).
+ * Bono camioneros cobrado por transferencia (J2) — o una venta sin cliente (0053): Tesorería
+ * marca cada uno cuando lo ve acreditado en el resumen del banco (de a uno o varios con los
+ * casilleros).
  */
-export function ConciliacionCanon({ filas }: { filas: FilaCanon[] }) {
+export function ConciliacionCanon({
+  filas,
+  clase = "canon",
+}: {
+  filas: FilaCanon[];
+  clase?: keyof typeof CLASES;
+}) {
+  const textos = CLASES[clase];
   const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
   const [enCurso, setEnCurso] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -54,14 +82,13 @@ export function ConciliacionCanon({ filas }: { filas: FilaCanon[] }) {
     setError(null);
     setEnCurso(ids);
     startTransition(async () => {
-      const res = await llamarAccion(() => conciliarCanon(ids));
+      const res = await llamarAccion(() => textos.conciliar(ids));
       setEnCurso([]);
       if (!res.ok) {
         setError(res.error);
         return;
       }
-      const n = res.data.conciliadas;
-      toast.success(n === 1 ? "Bono camioneros conciliado." : `${n} cobros de bono camioneros conciliados.`);
+      toast.success(textos.hecho(res.data.conciliadas));
       setSeleccion((prev) => {
         const next = new Set(prev);
         for (const id of ids) next.delete(id);
@@ -82,7 +109,7 @@ export function ConciliacionCanon({ filas }: { filas: FilaCanon[] }) {
                 <Checkbox
                   checked={todas}
                   onCheckedChange={(v) => setSeleccion(v === true ? new Set(filas.map((f) => f.id)) : new Set())}
-                  aria-label="Seleccionar todos los cobros de bono camioneros"
+                  aria-label={textos.todos}
                   className="size-6 [&_svg]:size-4"
                   disabled={pendiente}
                 />
@@ -125,7 +152,7 @@ export function ConciliacionCanon({ filas }: { filas: FilaCanon[] }) {
                     <Checkbox
                       checked={marcada}
                       onCheckedChange={(v) => alternar(f.id, v === true)}
-                      aria-label={`Seleccionar bono N° ${f.numero}`}
+                      aria-label={`Seleccionar ${textos.nombre(f.numero)}`}
                       className="size-6 [&_svg]:size-4"
                       disabled={pendiente}
                     />
@@ -153,7 +180,7 @@ export function ConciliacionCanon({ filas }: { filas: FilaCanon[] }) {
                     className="h-11 px-4 text-sm font-semibold"
                     disabled={pendiente}
                     onClick={() => conciliar([f.id])}
-                    aria-label={`Conciliar bono N° ${f.numero}`}
+                    aria-label={`Conciliar ${textos.nombre(f.numero)}`}
                   >
                     {enCurso.length === 1 && enCurso[0] === f.id ? (
                       <Spinner className="size-4" />
@@ -172,18 +199,27 @@ export function ConciliacionCanon({ filas }: { filas: FilaCanon[] }) {
   );
 }
 
-/** "Deshacer" de un bono camioneros conciliado por error. */
-export function BotonDesconciliarCanon({ id, numero }: { id: string; numero: number }) {
+/** "Deshacer" de un bono camioneros (o una venta sin cliente) conciliado por error. */
+export function BotonDesconciliarCanon({
+  id,
+  numero,
+  clase = "canon",
+}: {
+  id: string;
+  numero: number;
+  clase?: keyof typeof CLASES;
+}) {
   const [pendiente, startTransition] = useTransition();
+  const textos = CLASES[clase];
 
   function deshacer() {
     startTransition(async () => {
-      const res = await llamarAccion(() => desconciliarCanon(id));
+      const res = await llamarAccion(() => textos.desconciliar(id));
       if (!res.ok) {
         toast.error(res.error);
         return;
       }
-      toast.success(`El bono N° ${numero} vuelve a "sin conciliar".`);
+      toast.success(textos.deshecho(numero));
     });
   }
 
@@ -193,7 +229,7 @@ export function BotonDesconciliarCanon({ id, numero }: { id: string; numero: num
       className="h-11 px-3 text-sm text-muted-foreground hover:text-foreground"
       disabled={pendiente}
       onClick={deshacer}
-      aria-label={`Deshacer conciliación del bono N° ${numero}`}
+      aria-label={`Deshacer conciliación: ${textos.nombre(numero)}`}
     >
       {pendiente ? <Spinner className="size-4" /> : <Undo2 className="size-4" strokeWidth={2} />}
       Deshacer

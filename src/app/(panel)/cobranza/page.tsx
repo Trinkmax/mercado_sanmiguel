@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { Footprints, Users } from "lucide-react";
+import { Footprints, PackageOpen, Truck, Users } from "lucide-react";
 import { requireRol } from "@/lib/auth";
 import { formatFecha, hoyISO, nivelDeuda, periodoActual } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { diaAnteriorValido, primerDiaCaja } from "@/lib/dia-caja";
 import {
   categoriasDeRol,
@@ -60,7 +61,19 @@ export default async function CobranzaPage({ searchParams }: { searchParams: Sp 
   const fechaCaja = diaCaja ?? hoy;
   const tipoCaja = esJefe ? "guardia" : "administracion";
 
-  const [clientesRes, deudaRes, saldoRes, espaciosRes, itemsRes, avanceRes, diariosRes, cajaRes, anterioresRes] =
+  const [
+    clientesRes,
+    deudaRes,
+    saldoRes,
+    espaciosRes,
+    itemsRes,
+    avanceRes,
+    diariosRes,
+    cajaRes,
+    anterioresRes,
+    cocherasRes,
+    ingresosRes,
+  ] =
     await Promise.all([
       supabase
         .from("clientes")
@@ -114,6 +127,19 @@ export default async function CobranzaPage({ searchParams }: { searchParams: Sp 
             .gte("fecha", primerDiaCaja(hoy))
             .order("fecha", { ascending: true })
             .limit(31),
+      // 0052: el Jefe cobra la cochera de cualquier cliente que tenga una (lo que debe DE COCHERA).
+      esJefe ? supabase.rpc("cocheras_para_cobrar") : Promise.resolve({ data: null }),
+      // 0053: lo que se cobra sin cliente (venta de vacíos y tarimas…): Administración y el Líder.
+      esJefe
+        ? Promise.resolve({ data: null })
+        : supabase
+            .from("conceptos")
+            .select("id, codigo, nombre")
+            .eq("org_id", perfil.org_id)
+            .eq("tipo", "ingreso")
+            .eq("activo", true)
+            .order("orden_imputacion")
+            .order("nombre"),
     ]);
 
   // Lo que cobró HOY quien está mirando (su caja del día; en una carga atrasada, la de ese día).
@@ -121,6 +147,8 @@ export default async function CobranzaPage({ searchParams }: { searchParams: Sp 
   const recibosHoy = new Set<string>();
   const quinterosHoy = new Set<string>();
   const ambulantesHoy = new Set<string>();
+  // Jefe: cocheras de puesteros y empleados (no los lee: su cliente viene vacío).
+  const cocherasHoy = new Set<string>();
   // Caja de portería ya recibida en la caja de Administración: el "Juntaste hoy" de Inicio y de
   // Caja la suma; "Hoy cobraste" no (son tus cobros), y la fila lo aclara para que no parezca
   // que falta plata. Misma cuenta que calcular_arqueo (efectivo + transferencia rendidos).
@@ -148,7 +176,8 @@ export default async function CobranzaPage({ searchParams }: { searchParams: Sp 
       hoyTotal += Number(p.monto);
       recibosHoy.add(p.lote_id);
       if (p.clientes?.categoria === "quintero") quinterosHoy.add(p.cliente_id);
-      if (p.clientes?.categoria === "ambulante") ambulantesHoy.add(p.cliente_id);
+      else if (p.clientes?.categoria === "ambulante") ambulantesHoy.add(p.cliente_id);
+      else if (esJefe) cocherasHoy.add(p.cliente_id);
     }
   }
 
@@ -235,13 +264,41 @@ export default async function CobranzaPage({ searchParams }: { searchParams: Sp 
         : f.deuda;
   filas.sort((a, b) => peso(b) - peso(a) || a.codigo - b.codigo);
 
-  const categoriaInicial: CategoriaCliente =
-    cat && categorias.includes(cat as CategoriaCliente)
-      ? (cat as CategoriaCliente)
-      : categorias[0];
+  // Pestaña «Cocheras» del Jefe: cualquier cliente con cochera y lo que debe de cochera.
+  const filasCocheras: FilaCliente[] | undefined = esJefe
+    ? (cocherasRes.data ?? [])
+        .map((c) => {
+          const deuda = Number(c.deuda ?? 0);
+          const vencida = Number(c.deuda_vencida ?? 0);
+          return {
+            id: c.cliente_id,
+            codigo: c.codigo,
+            nombre: c.nombre,
+            apodo: c.apodo,
+            categoria: c.categoria as CategoriaCliente,
+            cuit: c.cuit,
+            deuda,
+            nivel: nivelDeuda({ deuda, deudaVencida: vencida, saldoFavor: 0 }),
+            // "Cochera 12 · 14" → se busca también por el número de la cochera.
+            numerosPlano: (c.cocheras ?? "").split(" · ").map((t) => t.replace(/^Cochera /, "")).filter(Boolean),
+            lugares: c.cocheras ? [c.cocheras.replace(/ · Cochera /g, " · ")] : ["Cochera sin número"],
+            avance: null,
+            pagoHasta: null,
+          };
+        })
+        .sort((a, b) => b.deuda - a.deuda || a.codigo - b.codigo)
+    : undefined;
+  const conceptosIngreso = ingresosRes.data ?? [];
+
+  const categoriaInicial: CategoriaCliente | "cocheras" =
+    cat === "cocheras" && filasCocheras
+      ? "cocheras"
+      : cat && categorias.includes(cat as CategoriaCliente)
+        ? (cat as CategoriaCliente)
+        : categorias[0];
 
   const descripcion = esJefe
-    ? "Buscá al quintero o ambulante y cobrá en tres toques."
+    ? "Buscá al quintero, al ambulante o la cochera y cobrá en tres toques."
     : perfil.rol === "lider"
       ? "Puesteros, quinteros, ambulantes y empleados. Lo que cobres va a la caja de Administración."
       : "Buscá el puesto y cobrá en tres toques.";
@@ -291,7 +348,11 @@ export default async function CobranzaPage({ searchParams }: { searchParams: Sp 
                 <Money monto={hoyTotal} className="text-xl font-bold" />
                 <span className="text-sm text-muted-foreground">
                   {esJefe
-                    ? `· ${ambulantesHoy.size} ${ambulantesHoy.size === 1 ? "ambulante" : "ambulantes"} · ${quinterosHoy.size} ${quinterosHoy.size === 1 ? "quintero" : "quinteros"}`
+                    ? `· ${ambulantesHoy.size} ${ambulantesHoy.size === 1 ? "ambulante" : "ambulantes"} · ${quinterosHoy.size} ${quinterosHoy.size === 1 ? "quintero" : "quinteros"}${
+                        cocherasHoy.size > 0
+                          ? ` · ${cocherasHoy.size} ${cocherasHoy.size === 1 ? "cochera" : "cocheras"}`
+                          : ""
+                      }`
                     : `· ${recibosHoy.size} ${recibosHoy.size === 1 ? "recibo" : "recibos"}`}
                 </span>
               </>
@@ -321,7 +382,18 @@ export default async function CobranzaPage({ searchParams }: { searchParams: Sp 
         </div>
       ) : null}
 
-      {filas.length === 0 ? (
+      {!esJefe ? (
+        <CobrosSinCliente
+          bono={perfil.rol === "admin" ? `/cobranza/bono${diaCaja ? `?fecha=${diaCaja}` : ""}` : "/porteria"}
+          bonoAclaracion={perfil.rol === "admin" ? "va a tu caja" : "en Portería"}
+          conceptos={conceptosIngreso.map((c) => ({
+            nombre: c.nombre,
+            href: `/cobranza/ingreso?concepto=${encodeURIComponent(c.codigo)}${diaCaja ? `&fecha=${diaCaja}` : ""}`,
+          }))}
+        />
+      ) : null}
+
+      {filas.length === 0 && !filasCocheras?.length ? (
         <EmptyState
           icono={Users}
           titulo={
@@ -347,18 +419,70 @@ export default async function CobranzaPage({ searchParams }: { searchParams: Sp 
           clientes={filas}
           categorias={categorias}
           categoriaInicial={categoriaInicial}
+          cocheras={filasCocheras}
           hoy={hoy}
           fechaCaja={diaCaja ?? undefined}
           // Corto para que entre entero en un celular de 360 px; el aria-label dice todo.
           placeholder={esJefe ? "Nombre, apodo, N° de carpeta o DNI" : "Nombre, apodo, N° de puesto o DNI"}
           etiqueta={
             esJefe
-              ? "Buscá al quintero o ambulante por nombre, apodo, N° de carpeta o DNI"
+              ? "Buscá al quintero, ambulante o al de la cochera por nombre, apodo, N° de carpeta, N° de cochera o DNI"
               : "Buscá por nombre, apodo, N° de puesto, N° de carpeta o DNI/CUIT"
           }
           buscaPuestos={cobraPuesteros}
         />
       )}
     </div>
+  );
+}
+
+/**
+ * Lo que Administración (y el Líder) cobra sin cliente: el bono camioneros (0052; el Líder lo
+ * cobra en Portería) y los conceptos de ingreso, como la venta de vacíos y tarimas (0053).
+ * Botones grandes arriba de la lista: no hace falta buscar a nadie.
+ */
+function CobrosSinCliente({
+  bono,
+  bonoAclaracion,
+  conceptos,
+}: {
+  bono: string;
+  bonoAclaracion: string;
+  conceptos: { nombre: string; href: string }[];
+}) {
+  const boton =
+    "h-auto min-h-14 justify-start gap-3 px-4 py-2 text-left text-base font-semibold whitespace-normal";
+  return (
+    <section
+      aria-labelledby="titulo-sin-cliente"
+      className="-mt-4 space-y-2 rounded-lg border bg-card px-4 py-3"
+      data-tour="cobranza-sin-cliente"
+    >
+      <p id="titulo-sin-cliente" className="text-sm font-medium text-muted-foreground">
+        Sin cliente (no se le carga a nadie):
+      </p>
+      <div className={cn("grid gap-2", conceptos.length > 0 ? "sm:grid-cols-2" : "")}>
+        <Button asChild variant="outline" className={boton}>
+          <Link href={bono}>
+            <Truck className="size-6 shrink-0 text-primary" strokeWidth={1.9} />
+            <span className="min-w-0">
+              <span className="block">Bono camioneros</span>
+              <span className="block text-sm font-normal text-muted-foreground">{bonoAclaracion}</span>
+            </span>
+          </Link>
+        </Button>
+        {conceptos.map((c) => (
+          <Button key={c.href} asChild variant="outline" className={boton}>
+            <Link href={c.href}>
+              <PackageOpen className="size-6 shrink-0 text-primary" strokeWidth={1.9} />
+              <span className="min-w-0">
+                <span className="block">{c.nombre}</span>
+                <span className="block text-sm font-normal text-muted-foreground">escribís el monto</span>
+              </span>
+            </Link>
+          </Button>
+        ))}
+      </div>
+    </section>
   );
 }

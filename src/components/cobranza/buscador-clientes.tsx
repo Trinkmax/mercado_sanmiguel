@@ -6,6 +6,7 @@ import { ChevronRight, Search, SearchX } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { coincideDni, dniBuscado, SELLO_NIVEL_DEUDA, textoDniCliente, type NivelDeuda } from "@/lib/format";
 import {
+  LABEL_CATEGORIA,
   LABEL_CATEGORIA_PLURAL,
   textoAvance,
   type AvanceMes,
@@ -41,6 +42,14 @@ export type FilaCliente = {
   pagoHasta: string | null;
 };
 
+/** Los grupos del control segmentado: las categorías que cobra el rol y, para el Jefe de
+ * Portería, «Cocheras» (la cochera de cualquier cliente, 0052). */
+type Grupo = CategoriaCliente | "cocheras";
+
+function etiquetaGrupo(g: Grupo): string {
+  return g === "cocheras" ? "Cocheras" : LABEL_CATEGORIA_PLURAL[g];
+}
+
 function normalizar(texto: string): string {
   return texto
     .toLowerCase()
@@ -69,6 +78,7 @@ export function BuscadorClientes({
   clientes,
   categorias,
   categoriaInicial,
+  cocheras,
   placeholder,
   etiqueta,
   buscaPuestos,
@@ -77,7 +87,9 @@ export function BuscadorClientes({
 }: {
   clientes: FilaCliente[];
   categorias: CategoriaCliente[];
-  categoriaInicial: CategoriaCliente;
+  categoriaInicial: Grupo;
+  /** Jefe de Portería: quienes tienen cochera (cualquier categoría) con lo que deben DE COCHERA. */
+  cocheras?: FilaCliente[];
   /** Corto: tiene que entrar entero en un celular de 360 px. */
   placeholder: string;
   /** Lo que se lee en voz alta: puede ser más completo que el placeholder. */
@@ -89,31 +101,34 @@ export function BuscadorClientes({
   fechaCaja?: string;
 }) {
   const [busqueda, setBusqueda] = useState("");
-  const [categoria, setCategoria] = useState<CategoriaCliente>(categoriaInicial);
+  const [categoria, setCategoria] = useState<Grupo>(categoriaInicial);
+  const grupos: Grupo[] = cocheras ? [...categorias, "cocheras"] : categorias;
+  const filasDe = (g: Grupo) => (g === "cocheras" ? (cocheras ?? []) : clientes.filter((c) => c.categoria === g));
+  const enCocheras = categoria === "cocheras";
 
   function elegirCategoria(v: string) {
     if (!v) return;
-    const c = v as CategoriaCliente;
+    const c = v as Grupo;
     setCategoria(c);
-    // Se recuerda en la URL: al volver de un cobro queda en el mismo grupo.
-    window.history.replaceState(null, "", `?cat=${c}`);
+    // Se recuerda en la URL: al volver de un cobro queda en el mismo grupo (y en la caja del día).
+    window.history.replaceState(null, "", `?cat=${c}${fechaCaja ? `&fecha=${fechaCaja}` : ""}`);
   }
 
   const q = normalizar(busqueda.trim());
   const dni = dniBuscado(busqueda);
-  const deLaCategoria = clientes.filter((c) => c.categoria === categoria);
+  const deLaCategoria = filasDe(categoria);
   const filtrados = deLaCategoria.filter((c) => coincide(c, q, dni));
   const enOtras =
     q !== "" && filtrados.length === 0
-      ? categorias
+      ? grupos
           .filter((cat) => cat !== categoria)
-          .map((cat) => ({ cat, n: clientes.filter((c) => c.categoria === cat && coincide(c, q, dni)).length }))
+          .map((cat) => ({ cat, n: filasDe(cat).filter((c) => coincide(c, q, dni)).length }))
           .filter((x) => x.n > 0)
       : [];
 
   return (
     <div className="space-y-4">
-      {categorias.length > 1 ? (
+      {grupos.length > 1 ? (
         <ToggleGroup
           type="single"
           variant="outline"
@@ -123,16 +138,15 @@ export function BuscadorClientes({
           data-tour="cobranza-categorias"
           className="w-full"
         >
-          {categorias.map((cat) => (
+          {grupos.map((cat) => (
             <ToggleGroupItem
               key={cat}
               value={cat}
+              data-tour={cat === "cocheras" ? "cobranza-cocheras" : undefined}
               className="h-14 flex-col gap-0 px-2 text-sm font-semibold sm:flex-row sm:gap-1.5 sm:text-base"
             >
-              <span>{LABEL_CATEGORIA_PLURAL[cat]}</span>
-              <span className="text-xs font-medium tabular opacity-80 sm:text-sm">
-                ({clientes.filter((c) => c.categoria === cat).length})
-              </span>
+              <span>{etiquetaGrupo(cat)}</span>
+              <span className="text-xs font-medium tabular opacity-80 sm:text-sm">({filasDe(cat).length})</span>
             </ToggleGroupItem>
           ))}
         </ToggleGroup>
@@ -154,12 +168,21 @@ export function BuscadorClientes({
         />
       </div>
 
+      {enCocheras ? (
+        <p className="text-sm text-muted-foreground">
+          Quien alquila cochera, sea de la categoría que sea, y lo que debe de cochera. A puesteros y
+          empleados les cobrás solo la cochera: lo demás se lo cobra Administración.
+        </p>
+      ) : null}
+
       {filtrados.length === 0 ? (
         <EmptyState
           icono={SearchX}
           titulo={
             q === ""
-              ? `Todavía no hay ${LABEL_CATEGORIA_PLURAL[categoria].toLowerCase()} activos`
+              ? enCocheras
+                ? "Nadie tiene cochera todavía"
+                : `Todavía no hay ${etiquetaGrupo(categoria).toLowerCase()} activos`
               : "No encontramos a nadie con eso"
           }
           descripcion={
@@ -178,18 +201,21 @@ export function BuscadorClientes({
               className="h-11 px-4 text-sm font-semibold"
               onClick={() => elegirCategoria(x.cat)}
             >
-              Ver {x.n} en {LABEL_CATEGORIA_PLURAL[x.cat]}
+              Ver {x.n} en {etiquetaGrupo(x.cat)}
             </Button>
           ))}
         </EmptyState>
       ) : (
         <ul className="divide-y overflow-hidden rounded-lg border bg-card">
           {filtrados.map((c) => {
-            const muestraDeuda = c.categoria !== "ambulante" || c.deuda > 0;
+            const muestraDeuda = enCocheras || c.categoria !== "ambulante" || c.deuda > 0;
+            const consulta = [enCocheras ? "cochera=1" : null, fechaCaja ? `fecha=${fechaCaja}` : null]
+              .filter(Boolean)
+              .join("&");
             return (
               <li key={c.id}>
                 <Link
-                  href={`/cobranza/${c.id}${fechaCaja ? `?fecha=${fechaCaja}` : ""}`}
+                  href={`/cobranza/${c.id}${consulta ? `?${consulta}` : ""}`}
                   data-tour="cobranza-fila"
                   className="flex min-h-16 items-start gap-3 px-4 py-3 transition-colors hover:bg-muted/50 active:bg-muted sm:items-center sm:py-2.5"
                 >
@@ -204,7 +230,7 @@ export function BuscadorClientes({
                       <span title={c.nombre} className="block text-base leading-snug font-medium break-words">
                         {c.nombre}
                       </span>
-                      <DetalleFila c={c} hoy={hoy} />
+                      {enCocheras ? <DetalleCochera c={c} /> : <DetalleFila c={c} hoy={hoy} />}
                       {/* Encontrado por DNI/CUIT: se muestra, así se ve que es la persona buscada. */}
                       {c.cuit && coincideDni(c.cuit, dni) ? (
                         <span className="block text-sm text-muted-foreground tabular">
@@ -234,6 +260,14 @@ export function BuscadorClientes({
       )}
     </div>
   );
+}
+
+/** Pestaña «Cocheras» del Jefe: qué cochera tiene y de qué categoría es ("Cochera 12 · Puestero"). */
+function DetalleCochera({ c }: { c: FilaCliente }) {
+  const detalle = [c.apodo ? `“${c.apodo}”` : null, ...c.lugares, LABEL_CATEGORIA[c.categoria]]
+    .filter(Boolean)
+    .join(" · ");
+  return <span className="block text-sm leading-snug break-words text-muted-foreground tabular">{detalle}</span>;
 }
 
 /** El apodo con el que lo conocen, entre comillas, antes de lo demás. */

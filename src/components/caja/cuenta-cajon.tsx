@@ -1,8 +1,8 @@
-import { Footprints, Tractor, Truck, type LucideIcon } from "lucide-react";
+import { Car, Footprints, PackageOpen, Tractor, Truck, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatARS } from "@/lib/format";
 import { Money } from "@/components/shared/money";
-import { otrosCobrosPorteria, totalTenesQueTener, type Arqueo } from "@/components/caja/arqueo-tipos";
+import { ajustesDeRendido, cocherasPorteria, totalTenesQueTener, type Arqueo } from "@/components/caja/arqueo-tipos";
 
 type Variante = "pantalla" | "compacta" | "papel";
 
@@ -125,8 +125,8 @@ export function CuentaCajon({
   tituloResultado?: string;
 }) {
   const porteria = tipo === "guardia";
-  const otros = porteria ? otrosCobrosPorteria(a) : 0;
-  const ajustesPorteria = a.rendido - a.rendido_quintas - a.rendido_ambulantes - a.rendido_canon;
+  const cocheras = porteria ? cocherasPorteria(a) : 0;
+  const ajustesPorteria = ajustesDeRendido(a);
   const hayRendido = Math.abs(a.rendido) > CENTAVO;
   const hayCheques = Math.abs(a.cobros_cheques) > CENTAVO || Math.abs(a.cheques) > CENTAVO;
   const total = totalTenesQueTener(a);
@@ -137,10 +137,10 @@ export function CuentaCajon({
     <>
       <Parte icono={Tractor} etiqueta="Quintas" monto={a.quintas} variante={variante} />
       <Parte icono={Footprints} etiqueta="Ambulantes" monto={a.ambulantes} variante={variante} />
-      <Parte icono={Truck} etiqueta="Bono camioneros" monto={a.canon} variante={variante} />
-      {Math.abs(otros) > CENTAVO ? (
-        <Parte etiqueta="Otros cobros" monto={otros} variante={variante} />
+      {Math.abs(cocheras) > CENTAVO ? (
+        <Parte icono={Car} etiqueta="Cocheras" monto={cocheras} variante={variante} />
       ) : null}
+      <Parte icono={Truck} etiqueta="Bono camioneros" monto={a.canon} variante={variante} />
     </>
   ) : (
     <>
@@ -160,7 +160,9 @@ export function CuentaCajon({
           monto={a.rendido}
           variante={variante}
           nota={[
-            `Quintas ${formatARS(a.rendido_quintas)} · Ambulantes ${formatARS(a.rendido_ambulantes)} · Bono camioneros ${formatARS(a.rendido_canon)}`,
+            `Quintas ${formatARS(a.rendido_quintas)} · Ambulantes ${formatARS(a.rendido_ambulantes)}`,
+            Math.abs(a.rendido_cocheras) > CENTAVO ? ` · Cocheras ${formatARS(a.rendido_cocheras)}` : "",
+            ` · Bono camioneros ${formatARS(a.rendido_canon)}`,
             Math.abs(ajustesPorteria) > CENTAVO
               ? ` · Ajustes ${ajustesPorteria < 0 ? "−" : "+"}${formatARS(Math.abs(ajustesPorteria))}`
               : "",
@@ -170,6 +172,18 @@ export function CuentaCajon({
       ) : null}
       {Math.abs(a.canon) > CENTAVO ? (
         <Parte icono={Truck} etiqueta="Bono camioneros" monto={a.canon} variante={variante} />
+      ) : null}
+      {Math.abs(a.ingresos) > CENTAVO ? (
+        <Parte
+          icono={PackageOpen}
+          etiqueta="Ventas y otros ingresos"
+          monto={a.ingresos}
+          variante={variante}
+          nota={detallePorMedio([
+            ["Efectivo", a.ingresos_efectivo],
+            ["Transferencia", a.ingresos_transferencia],
+          ])}
+        />
       ) : null}
     </>
   );

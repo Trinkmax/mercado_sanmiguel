@@ -12,7 +12,6 @@ import {
   Footprints,
   Landmark,
   Lock,
-  Minus,
   Plus,
   Repeat,
   X,
@@ -30,6 +29,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Money } from "@/components/shared/money";
+import { NumeroConPasos } from "@/components/shared/numero-con-pasos";
 import { AlertaError, esErrorDeCajaCerrada } from "@/components/cobranza/alerta-error";
 import { Chip } from "@/components/cobranza/datos-cheque";
 import { DatosTransferencia } from "@/components/cobranza/datos-transferencia";
@@ -411,33 +411,20 @@ export function CobroAmbulante({
       </div>
 
       <div className="space-y-3" data-tour="cobranza-dias">
-        <Label className="text-base font-medium">¿Cuántos días paga?</Label>
-        <div className="flex items-center justify-center gap-4">
-          <Button
-            type="button"
-            variant="outline"
-            className="size-14 rounded-full"
-            onClick={() => elegirDias(dias - 1)}
-            disabled={dias <= 1}
-            aria-label="Un día menos"
-          >
-            <Minus className="size-6" strokeWidth={2.2} />
-          </Button>
-          <p className="min-w-28 text-center" aria-live="polite">
-            <span className="font-display text-3xl font-bold tabular">{dias}</span>{" "}
-            <span className="text-lg text-muted-foreground">{dias === 1 ? "día" : "días"}</span>
-          </p>
-          <Button
-            type="button"
-            variant="outline"
-            className="size-14 rounded-full"
-            onClick={() => elegirDias(dias + 1)}
-            disabled={dias >= 31}
-            aria-label="Un día más"
-          >
-            <Plus className="size-6" strokeWidth={2.2} />
-          </Button>
-        </div>
+        <Label htmlFor="dias-amb" className="text-base font-medium">
+          ¿Cuántos días paga?
+        </Label>
+        {/* Los días también se escriben directo, no solo con − / +. */}
+        <NumeroConPasos
+          id="dias-amb"
+          valor={dias}
+          onCambiar={elegirDias}
+          max={31}
+          unidad="días"
+          etiquetaMenos="Un día menos"
+          etiquetaMas="Un día más"
+          className="mx-auto max-w-sm"
+        />
         <div className="flex flex-wrap justify-center gap-2">
           {ATAJOS.map((a) => {
             const label = a.dias === 1 && (hoyPagado || diaAnterior) ? "1 día" : a.label;

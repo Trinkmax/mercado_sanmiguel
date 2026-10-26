@@ -490,7 +490,7 @@ async function cajas({ supabase, perfil, periodo }: ContextoExportacion): Promis
     supabase
       .from("cajas")
       .select(
-        "id, fecha, tipo, estado, total_cobros, total_quintas, total_ambulantes, total_canon, total_rendido_efectivo, total_rendido_transferencia, total_gastos, total_ajustes, total_efectivo, total_transferencia, total_cheques, total_cheques_entregados, cerrada_por, validada_por, integrada_por, observaciones"
+        "id, fecha, tipo, estado, total_cobros, total_quintas, total_ambulantes, total_canon, total_ingresos, total_rendido_efectivo, total_rendido_transferencia, total_gastos, total_ajustes, total_efectivo, total_transferencia, total_cheques, total_cheques_entregados, cerrada_por, validada_por, integrada_por, observaciones"
       )
       .eq("org_id", perfil.org_id)
       .gte("fecha", r.desde)
@@ -504,11 +504,20 @@ async function cajas({ supabase, perfil, periodo }: ContextoExportacion): Promis
     ...lista.map((c) => c.validada_por),
     ...lista.map((c) => c.integrada_por),
   ]);
-  // Juntado = cobros + bono camioneros + lo que rindió portería (FASE3 §4.5).
+  // Juntado = cobros + bono camioneros + ventas sin cliente + lo que rindió portería (FASE3 §4.5, 0053).
   const juntado = (c: (typeof lista)[number]) =>
     c.total_cobros === null
       ? null
-      : n(c.total_cobros) + n(c.total_canon) + n(c.total_rendido_efectivo) + n(c.total_rendido_transferencia);
+      : n(c.total_cobros) +
+        n(c.total_canon) +
+        n(c.total_ingresos) +
+        n(c.total_rendido_efectivo) +
+        n(c.total_rendido_transferencia);
+  // Caja de portería: lo que no es de quinteros ni de ambulantes es la cochera que cobró el Jefe (0052).
+  const cocheras = (c: (typeof lista)[number]) =>
+    c.tipo !== "guardia" || c.total_cobros === null
+      ? null
+      : Math.round((n(c.total_cobros) - n(c.total_quintas) - n(c.total_ambulantes)) * 100) / 100;
 
   return [
     {
@@ -520,7 +529,9 @@ async function cajas({ supabase, perfil, periodo }: ContextoExportacion): Promis
         { titulo: "Cobros", tipo: "moneda" },
         { titulo: "Quintas", tipo: "moneda" },
         { titulo: "Ambulantes", tipo: "moneda" },
+        { titulo: "Cocheras (portería)", tipo: "moneda", ancho: 18 },
         { titulo: "Bono camioneros", tipo: "moneda", ancho: 16 },
+        { titulo: "Ventas sin cliente", tipo: "moneda", ancho: 17 },
         { titulo: "Recibido de portería", tipo: "moneda", ancho: 19 },
         { titulo: "Juntado", tipo: "moneda" },
         { titulo: "Gastos pagados", tipo: "moneda" },
@@ -541,7 +552,9 @@ async function cajas({ supabase, perfil, periodo }: ContextoExportacion): Promis
         nn(c.total_cobros),
         nn(c.total_quintas),
         nn(c.total_ambulantes),
+        cocheras(c),
         nn(c.total_canon),
+        nn(c.total_ingresos),
         c.total_rendido_efectivo === null && c.total_rendido_transferencia === null
           ? null
           : n(c.total_rendido_efectivo) + n(c.total_rendido_transferencia),
@@ -559,7 +572,8 @@ async function cajas({ supabase, perfil, periodo }: ContextoExportacion): Promis
       ]),
       notas: [
         "Los totales se fijan al cerrar la caja; una caja abierta queda en blanco hasta su cierre.",
-        "Juntado = cobros + bono camioneros + lo recibido de la caja de portería. Tenía que tener = juntado en efectivo − gastos ± ajustes.",
+        "Juntado = cobros + bono camioneros + ventas sin cliente + lo recibido de la caja de portería. Tenía que tener = juntado en efectivo − gastos ± ajustes.",
+        "Cocheras (portería) = lo que el Jefe de Portería les cobró de cochera a puesteros y empleados.",
       ],
     },
   ];
@@ -571,7 +585,7 @@ async function canon({ supabase, perfil, periodo }: ContextoExportacion): Promis
     supabase
       .from("canon_camiones")
       .select(
-        "id, numero, fecha, creado_en, creado_por, tarifa_nombre, tipo, unidad, cantidad, precio_unitario, monto, medio, patente, destino, destino_detalle, anulado, motivo_anulacion, espacio:espacios(tipo, numero, medio, propio)"
+        "id, numero, fecha, creado_en, creado_por, tarifa_nombre, tipo, unidad, cantidad, precio_unitario, monto, medio, patente, destino, destino_detalle, anulado, motivo_anulacion, espacio:espacios(tipo, numero, medio, propio), caja:cajas(tipo)"
       )
       .eq("org_id", perfil.org_id)
       .gte("fecha", r.desde)
@@ -598,6 +612,7 @@ async function canon({ supabase, perfil, periodo }: ContextoExportacion): Promis
         { titulo: "Patente", ancho: 11 },
         { titulo: "A quién viene", ancho: 14 },
         { titulo: "Puesto", ancho: 16 },
+        { titulo: "Caja", ancho: 17 },
         { titulo: "Cobró", ancho: 22 },
         { titulo: "Anulado", tipo: "booleano" },
         { titulo: "Motivo de anulación", ancho: 30 },
@@ -616,13 +631,74 @@ async function canon({ supabase, perfil, periodo }: ContextoExportacion): Promis
         c.patente ?? "",
         etiqueta(LABEL_DESTINO_CANON, c.destino),
         c.espacio ? lugar(c.espacio) : c.destino_detalle ? `Puesto ${c.destino_detalle}` : "",
+        etiqueta(LABEL_TIPO_CAJA, c.caja?.tipo),
         nombres.get(c.creado_por ?? "") ?? "",
         siNo(c.anulado),
         c.motivo_anulacion ?? "",
       ]),
-      totales: [[null, null, "", "Total (sin anulados)", null, null, total, "", "", "", "", "", "", ""]],
+      totales: [[null, null, "", "Total (sin anulados)", null, null, total, "", "", "", "", "", "", "", ""]],
       notas: [
-        `Bono camioneros (canon de transporte) cobrado en portería en ${labelPeriodo(periodo)}.`,
+        `Bono camioneros (canon de transporte) cobrado en ${labelPeriodo(periodo)}: en la garita (caja de portería) y en Administración.`,
+        "Los anulados se listan con su motivo pero no suman.",
+      ],
+    },
+  ];
+}
+
+async function ingresosVarios({ supabase, perfil, periodo }: ContextoExportacion): Promise<Hoja[]> {
+  const r = rangoMes(periodo);
+  const lista = await paginar((a, b) =>
+    supabase
+      .from("ingresos_varios")
+      .select(
+        "id, numero, fecha, creado_en, creado_por, codigo, concepto_nombre, detalle, monto, medio, titular_transferencia, anulado, motivo_anulacion, conciliado"
+      )
+      .eq("org_id", perfil.org_id)
+      .gte("fecha", r.desde)
+      .lt("fecha", r.hasta)
+      .order("fecha")
+      .order("numero")
+      .range(a, b)
+  );
+  const nombres = await nombresDe(supabase, lista.map((i) => i.creado_por));
+  const total = lista.filter((i) => !i.anulado).reduce((acc, i) => acc + n(i.monto), 0);
+
+  return [
+    {
+      nombre: "Ventas sin cliente",
+      columnas: [
+        { titulo: "N°", tipo: "entero", ancho: 8 },
+        { titulo: "Fecha", tipo: "fecha" },
+        { titulo: "Hora", ancho: 8 },
+        { titulo: "Código", ancho: 9 },
+        { titulo: "Concepto", ancho: 28 },
+        { titulo: "Detalle", ancho: 32 },
+        { titulo: "Monto", tipo: "moneda" },
+        { titulo: "Medio", ancho: 14 },
+        { titulo: "Titular de la transferencia", ancho: 24 },
+        { titulo: "Conciliada", tipo: "booleano" },
+        { titulo: "Cobró", ancho: 22 },
+        { titulo: "Anulado", tipo: "booleano" },
+        { titulo: "Motivo de anulación", ancho: 30 },
+      ],
+      filas: lista.map((i) => [
+        i.numero,
+        fechaExcel(i.fecha),
+        formatSoloHora(i.creado_en),
+        i.codigo,
+        i.concepto_nombre,
+        i.detalle ?? "",
+        n(i.monto),
+        etiqueta(LABEL_MEDIO, i.medio),
+        i.titular_transferencia ?? "",
+        i.medio === "transferencia" ? siNo(i.conciliado) : null,
+        nombres.get(i.creado_por ?? "") ?? "",
+        siNo(i.anulado),
+        i.motivo_anulacion ?? "",
+      ]),
+      totales: [[null, null, "", "", "", "Total (sin anulados)", total, "", "", null, "", null, ""]],
+      notas: [
+        `Lo que se cobró sin cliente (venta de vacíos y tarimas…) en ${labelPeriodo(periodo)}, en la caja de administración.`,
         "Los anulados se listan con su motivo pero no suman.",
       ],
     },
@@ -1266,7 +1342,7 @@ async function balanceMensual({ supabase, perfil, periodo }: ContextoExportacion
       }),
       totales: [["", "Total ingresos", totI.estimado, totI.completo, totI.cobrado, totI.otorgados, totI.falta]],
       notas: [
-        `Ingresos de ${mes}. BC es el bono camioneros (canon de transporte) cobrado en portería; AMB son los ambulantes cobrados por día.`,
+        `Ingresos de ${mes}. BC es el bono camioneros (canon de transporte), cobrado en portería y en Administración; AMB son los ambulantes cobrados por día; los conceptos de ingreso sin cliente (como VVT, venta de vacíos y tarimas) suman lo cobrado.`,
         "Estimado pagando en término = cobrado + pendiente: lo que se espera cobrar si los que están en término pagan en término. Estimado a precio completo = la suma de los cargos sin ningún beneficio.",
         "EXME es la expensa de los puestos comunes y EXPP la de los puestos propios de la cooperativa; ABEN es el abono mensual de energía y MULT las multas.",
       ],
@@ -1316,6 +1392,7 @@ const CONSTRUCTORES: Record<DatasetExportable, (ctx: ContextoExportacion) => Pro
   gastos,
   cajas,
   canon,
+  ingresos_varios: ingresosVarios,
   lecturas,
   movimientos_tesoreria: movimientosTesoreria,
   solicitudes,

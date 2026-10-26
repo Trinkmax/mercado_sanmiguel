@@ -36,7 +36,8 @@ export type TipoConcepto =
   | "deuda"
   | "diario"
   | "abono_energia"
-  | "eventual";
+  | "eventual"
+  | "ingreso";
 
 export type ConceptoFila = {
   id: string;
@@ -64,6 +65,7 @@ const LABEL_TIPO: Record<TipoConcepto, string> = {
   diario: "Por día",
   abono_energia: "Abono de energía, por mes",
   eventual: "Eventual",
+  ingreso: "Ingreso sin cliente",
 };
 
 /** Unidad que acompaña al precio. */
@@ -76,12 +78,13 @@ const UNIDAD: Partial<Record<TipoConcepto, string>> = {
 
 /** Conceptos cuyo monto no sale del precio del catálogo. El ambulante (diario) paga lo que
  * se pone en cada cobro: no tiene precio fijo. */
-const SIN_PRECIO: TipoConcepto[] = ["deuda", "eventual", "canon_diario", "diario"];
+const SIN_PRECIO: TipoConcepto[] = ["deuda", "eventual", "canon_diario", "diario", "ingreso"];
 const TEXTO_SIN_PRECIO: Partial<Record<TipoConcepto, string>> = {
   deuda: "Según cada deuda",
   eventual: "Según cada registro",
   canon_diario: "Por tarifa",
   diario: "El precio por día se pone en cada cobro",
+  ingreso: "El monto se escribe en cada cobro",
 };
 
 type Grupo = { clave: string; titulo: string; ayuda: string };
@@ -89,7 +92,7 @@ const GRUPOS: Grupo[] = [
   { clave: "puestos", titulo: "Puestos y espacios", ayuda: "Lo que paga cada mes quien ocupa un puesto, local, galpón, contéiner o cochera." },
   { clave: "quintas", titulo: "Quintas y ambulantes", ayuda: "Los propone el Jefe de Portería." },
   { clave: "energia", titulo: "Energía", ayuda: "Abono mensual a quien tiene medidor, más el consumo." },
-  { clave: "otros", titulo: "Otros", ayuda: "Montos que no salen de esta lista: deudas, multas y el bono camioneros." },
+  { clave: "otros", titulo: "Otros", ayuda: "Montos que no salen de esta lista: deudas, multas, el bono camioneros y lo que se cobra sin cliente (venta de vacíos y tarimas)." },
 ];
 
 function grupoDe(c: ConceptoFila): string {

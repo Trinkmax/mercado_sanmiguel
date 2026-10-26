@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.15"
   }
   public: {
     Tables: {
@@ -142,6 +142,7 @@ export type Database = {
           total_cobros: number | null
           total_efectivo: number | null
           total_gastos: number | null
+          total_ingresos: number | null
           total_quintas: number | null
           total_rendido_ambulantes: number | null
           total_rendido_canon: number | null
@@ -178,6 +179,7 @@ export type Database = {
           total_cobros?: number | null
           total_efectivo?: number | null
           total_gastos?: number | null
+          total_ingresos?: number | null
           total_quintas?: number | null
           total_rendido_ambulantes?: number | null
           total_rendido_canon?: number | null
@@ -214,6 +216,7 @@ export type Database = {
           total_cobros?: number | null
           total_efectivo?: number | null
           total_gastos?: number | null
+          total_ingresos?: number | null
           total_quintas?: number | null
           total_rendido_ambulantes?: number | null
           total_rendido_canon?: number | null
@@ -1576,6 +1579,106 @@ export type Database = {
           },
           {
             foreignKeyName: "ingresos_personal_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizaciones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ingresos_varios: {
+        Row: {
+          anulado: boolean
+          anulado_en: string | null
+          anulado_por: string | null
+          caja_id: string
+          codigo: string
+          comprobante_path: string | null
+          concepto_id: string
+          concepto_nombre: string
+          conciliado: boolean
+          conciliado_en: string | null
+          conciliado_por: string | null
+          creado_en: string
+          creado_por: string | null
+          detalle: string | null
+          fecha: string
+          id: string
+          medio: Database["public"]["Enums"]["medio_pago"]
+          monto: number
+          motivo_anulacion: string | null
+          numero: number
+          org_id: string
+          ref: string | null
+          titular_transferencia: string | null
+        }
+        Insert: {
+          anulado?: boolean
+          anulado_en?: string | null
+          anulado_por?: string | null
+          caja_id: string
+          codigo: string
+          comprobante_path?: string | null
+          concepto_id: string
+          concepto_nombre: string
+          conciliado?: boolean
+          conciliado_en?: string | null
+          conciliado_por?: string | null
+          creado_en?: string
+          creado_por?: string | null
+          detalle?: string | null
+          fecha: string
+          id?: string
+          medio: Database["public"]["Enums"]["medio_pago"]
+          monto: number
+          motivo_anulacion?: string | null
+          numero?: never
+          org_id: string
+          ref?: string | null
+          titular_transferencia?: string | null
+        }
+        Update: {
+          anulado?: boolean
+          anulado_en?: string | null
+          anulado_por?: string | null
+          caja_id?: string
+          codigo?: string
+          comprobante_path?: string | null
+          concepto_id?: string
+          concepto_nombre?: string
+          conciliado?: boolean
+          conciliado_en?: string | null
+          conciliado_por?: string | null
+          creado_en?: string
+          creado_por?: string | null
+          detalle?: string | null
+          fecha?: string
+          id?: string
+          medio?: Database["public"]["Enums"]["medio_pago"]
+          monto?: number
+          motivo_anulacion?: string | null
+          numero?: never
+          org_id?: string
+          ref?: string | null
+          titular_transferencia?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ingresos_varios_caja_id_fkey"
+            columns: ["caja_id"]
+            isOneToOne: false
+            referencedRelation: "cajas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ingresos_varios_concepto_id_fkey"
+            columns: ["concepto_id"]
+            isOneToOne: false
+            referencedRelation: "conceptos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ingresos_varios_org_id_fkey"
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizaciones"
@@ -3014,6 +3117,10 @@ export type Database = {
         Args: { p_cargo: string; p_motivo: string }
         Returns: Json
       }
+      anular_ingreso: {
+        Args: { p_id: string; p_motivo: string }
+        Returns: undefined
+      }
       anular_movimiento_tesoreria: {
         Args: { p_id: string; p_motivo: string }
         Returns: Json
@@ -3061,7 +3168,32 @@ export type Database = {
         }
         Returns: Json
       }
+      cargos_para_corregir: {
+        Args: { p_cliente: string }
+        Returns: {
+          cantidad: number
+          cantidad_nueva: number
+          cargo_id: string
+          codigo: string
+          descripcion: string
+          descripcion_nueva: string
+          existe: boolean
+          monto: number
+          monto_nuevo: number
+          monto_pagado: number
+          periodo: string
+        }[]
+      }
       cerrar_caja: { Args: { p_caja: string }; Returns: Json }
+      clientes_cobrados_en_porteria: {
+        Args: { p_clientes: string[] }
+        Returns: {
+          categoria: Database["public"]["Enums"]["categoria_cliente"]
+          codigo: number
+          id: string
+          nombre: string
+        }[]
+      }
       clientes_para_vista: {
         Args: { p_buscar?: string }
         Returns: {
@@ -3093,8 +3225,24 @@ export type Database = {
         }
         Returns: Json
       }
-      conciliar_canon:{ Args: { p_ids: string[] }; Returns: Json }
+      cocheras_para_cobrar: {
+        Args: { p_cliente?: string }
+        Returns: {
+          apodo: string
+          cargos: Json
+          categoria: Database["public"]["Enums"]["categoria_cliente"]
+          cliente_id: string
+          cocheras: string
+          codigo: number
+          cuit: string
+          deuda: number
+          deuda_vencida: number
+          nombre: string
+        }[]
+      }
+      conciliar_canon: { Args: { p_ids: string[] }; Returns: Json }
       conciliar_gastos: { Args: { p_ids: string[] }; Returns: Json }
+      conciliar_ingresos: { Args: { p_ids: string[] }; Returns: Json }
       configurar_rubro_gasto: {
         Args: {
           p_cargar_este_mes?: boolean
@@ -3105,6 +3253,10 @@ export type Database = {
         }
         Returns: Json
       }
+      corregir_cargo: {
+        Args: { p_cargo: string; p_motivo?: string }
+        Returns: Json
+      }
       datos_recibo: { Args: { p_pago: string }; Returns: Json }
       dejar_sin_efecto_multa: {
         Args: { p_motivo: string; p_registro: string }
@@ -3112,6 +3264,7 @@ export type Database = {
       }
       desconciliar_canon: { Args: { p_id: string }; Returns: undefined }
       desconciliar_gasto: { Args: { p_id: string }; Returns: undefined }
+      desconciliar_ingreso: { Args: { p_id: string }; Returns: undefined }
       deshacer_acreditacion_cheque: {
         Args: { p_cheque: string; p_motivo: string }
         Returns: Json
@@ -3300,6 +3453,19 @@ export type Database = {
       registrar_contrasena_nueva: {
         Args: { p_user: string }
         Returns: undefined
+      }
+      registrar_ingreso: {
+        Args: {
+          p_comprobante?: string
+          p_concepto: string
+          p_detalle?: string
+          p_fecha?: string
+          p_medio?: Database["public"]["Enums"]["medio_pago"]
+          p_monto: number
+          p_ref?: string
+          p_titular?: string
+        }
+        Returns: Json
       }
       registrar_lectura: {
         Args: {
@@ -3512,6 +3678,7 @@ export type Database = {
         | "diario"
         | "abono_energia"
         | "eventual"
+        | "ingreso"
       tipo_contrato:
         | "planta_permanente"
         | "contratado"
@@ -3726,6 +3893,7 @@ export const Constants = {
         "diario",
         "abono_energia",
         "eventual",
+        "ingreso",
       ],
       tipo_contrato: [
         "planta_permanente",

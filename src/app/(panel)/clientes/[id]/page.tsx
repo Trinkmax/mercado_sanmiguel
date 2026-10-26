@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, FileCheck, HandCoins, ReceiptText, ShieldQuestion, Zap } from "lucide-react";
+import { ArrowLeft, ArrowRight, FileCheck, HandCoins, ReceiptText, ShieldQuestion, TriangleAlert, Zap } from "lucide-react";
 import { aplicaDirecto, requireRol, type Rol } from "@/lib/auth";
 import { ROLES_COBRAN } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/server";
@@ -35,6 +35,7 @@ import {
 } from "@/components/clientes/cambios-pendientes-cliente";
 import { DeudaAnterior } from "@/components/clientes/deuda-anterior";
 import { AnularDeuda } from "@/components/clientes/anular-deuda";
+import { CorregirCargo, type CargoParaCorregir } from "@/components/clientes/corregir-cargo";
 import { ConceptosCliente } from "@/components/clientes/conceptos-cliente";
 import { DocumentosCliente } from "@/components/clientes/documentos-cliente";
 import { PagosRecibidos } from "@/components/clientes/pagos-recibidos";
@@ -321,6 +322,7 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
     energia,
     lugaresJefeRes,
     medidoresJefeRes,
+    porCorregirRes,
   ] = await Promise.all([
     supabase
       .from("cargos")
@@ -395,8 +397,25 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
     esJefe && categoria === "quintero"
       ? supabase.from("medidores").select("numero").eq("cliente_id", id).eq("activo", true).order("numero")
       : Promise.resolve({ data: [] as { numero: string }[] }),
+    // 0054: cargos del mes generados con otra cosa de lo que dice hoy la carpeta (se corrigen).
+    supabase.rpc("cargos_para_corregir", { p_cliente: id }),
   ]);
 
+  const porCorregir = new Map<string, CargoParaCorregir>(
+    (porCorregirRes.data ?? []).map((c) => [
+      c.cargo_id,
+      {
+        cargoId: c.cargo_id,
+        periodo: c.periodo,
+        descripcion: c.descripcion,
+        monto: Number(c.monto),
+        montoPagado: Number(c.monto_pagado),
+        existe: c.existe,
+        descripcionNueva: c.descripcion_nueva,
+        montoNuevo: c.monto_nuevo === null ? null : Number(c.monto_nuevo),
+      },
+    ])
+  );
   const cargos = (cargosRes.data ?? []).map((c) => ({
     ...c,
     monto: Number(c.monto),
@@ -834,6 +853,11 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
                             />
                           </div>
                         ) : null}
+                        {porCorregir.has(c.id) && !anulado ? (
+                          <div className="col-span-full">
+                            <CorregirCargo clienteId={cliente.id} cargo={porCorregir.get(c.id) as CargoParaCorregir} />
+                          </div>
+                        ) : null}
                       </div>
                     );
                   })}
@@ -862,7 +886,26 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
         </TabsContent>
 
         {/* ------------------------------------------------ Qué paga */}
-        <TabsContent value="paga" className="pt-4 text-base">
+        <TabsContent value="paga" className="space-y-4 pt-4 text-base">
+          {porCorregir.size > 0 ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-parcial bg-parcial-suave px-4 py-3">
+              <p className="flex min-w-0 flex-1 basis-64 items-start gap-2 text-sm">
+                <TriangleAlert className="mt-0.5 size-4 shrink-0 text-parcial" strokeWidth={2} />
+                <span>
+                  {porCorregir.size === 1
+                    ? "Un cargo de este mes ya generado no coincide con lo que dice la carpeta."
+                    : `${porCorregir.size} cargos de este mes ya generados no coinciden con lo que dice la carpeta.`}{" "}
+                  Los cambios rigen desde el mes que viene: si se generó mal, corregilo en Cuenta.
+                </span>
+              </p>
+              <Button asChild variant="outline" className="h-11 bg-card px-4 text-sm font-semibold">
+                <Link href={`/clientes/${cliente.id}?tab=cuenta`}>
+                  Ver en Cuenta
+                  <ArrowRight className="size-4" strokeWidth={2} />
+                </Link>
+              </Button>
+            </div>
+          ) : null}
           <ConceptosCliente
             clienteId={cliente.id}
             categoria={categoria}

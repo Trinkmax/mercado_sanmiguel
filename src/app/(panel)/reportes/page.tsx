@@ -109,12 +109,13 @@ export default async function ReportesPage({
 
   const supabase = await createClient();
   const rango = rangoDelPeriodo(periodo);
-  // Cobros + bono camioneros por día argentino, sumados en SQL (cobranza_diaria, 0024):
-  // traer las filas se cortaba en 1000 y el gráfico daba menos que la tabla.
-  const [ingresosRes, gastosRes, cobranzaRes] = await Promise.all([
+  // Cobros + bono camioneros + ventas sin cliente por día argentino, sumados en SQL
+  // (cobranza_diaria, 0024 y 0053): traer las filas se cortaba en 1000 y el gráfico daba menos.
+  const [ingresosRes, gastosRes, cobranzaRes, conceptosIngresoRes] = await Promise.all([
     supabase.rpc("resumen_conceptos", { p_periodo: periodo }),
     supabase.rpc("resumen_gastos", { p_periodo: periodo }),
     supabase.rpc("cobranza_diaria", { p_desde: rango.desde, p_hasta: rango.hasta }),
+    supabase.from("conceptos").select("codigo").eq("org_id", perfil.org_id).eq("tipo", "ingreso"),
   ]);
 
   const serieCobranza = serieDesdeTotales(rango.desde, rango.hasta, cobranzaRes.data ?? []);
@@ -148,6 +149,11 @@ export default async function ReportesPage({
   // lo cobrado), igual que en Facturación: se aclara cuánto es.
   const bono = ingresos.find((f) => f.codigo === "BC");
   const bonoCamioneros = bono ? montosEstimado(bono).estimado : 0;
+  // 0053: lo que se cobra sin cliente (venta de vacíos y tarimas…), tampoco tiene estimado.
+  const codigosIngreso = new Set((conceptosIngresoRes.data ?? []).map((c) => c.codigo));
+  const ventasSinCliente = ingresos
+    .filter((f) => codigosIngreso.has(f.codigo))
+    .reduce((acc, f) => acc + montosEstimado(f).estimado, 0);
 
   const subtotalGastos = (tipo: "fijo" | "variable") =>
     gastos
@@ -254,6 +260,12 @@ export default async function ReportesPage({
                     <p className="text-sm text-muted-foreground">
                       incluye <span className="whitespace-nowrap">{formatARS(bonoCamioneros)}</span>{" "}
                       de bono camioneros
+                    </p>
+                  ) : null}
+                  {ventasSinCliente > 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      incluye <span className="whitespace-nowrap">{formatARS(ventasSinCliente)}</span>{" "}
+                      de ventas sin cliente
                     </p>
                   ) : null}
                 </div>

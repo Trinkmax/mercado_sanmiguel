@@ -7,7 +7,7 @@ import { CuentaCajon } from "@/components/caja/cuenta-cajon";
 import { BotonPedirReapertura } from "@/components/caja/pedir-reapertura";
 import { BotonReabrirCaja } from "@/components/caja/reabrir-caja";
 import { LABEL_EVENTO } from "@/components/caja/historial-caja";
-import type { Arqueo } from "@/components/caja/arqueo-tipos";
+import { cocherasPorteria, textoDesglosePorteria, type Arqueo } from "@/components/caja/arqueo-tipos";
 import type { Caja, DatosCaja, EventoCaja } from "@/components/caja/datos";
 import type { PermisosCaja } from "@/components/caja/permisos";
 import { montosSinCortar } from "@/components/caja/texto";
@@ -19,6 +19,7 @@ const TIPOS_CAMBIO = new Set([
   "ajuste",
   "ajuste_borrado",
   "canon_anulado",
+  "ingreso_anulado",
   "cobro_anulado",
   "arqueo_recalculado",
 ]);
@@ -139,8 +140,7 @@ export function ArqueoCaja({
               <Money monto={arqueo.efectivo} className="text-3xl font-bold" /> en efectivo.
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Quintas {formatARS(arqueo.quintas)} · Ambulantes {formatARS(arqueo.ambulantes)} · Bono
-              camioneros {formatARS(arqueo.canon)}
+              {textoDesglosePorteria({ ...arqueo, cocheras: cocherasPorteria(arqueo) })}
               {arqueo.transferencia > 0.009
                 ? ` (+${formatARS(arqueo.transferencia)} ya están en el banco)`
                 : ""}

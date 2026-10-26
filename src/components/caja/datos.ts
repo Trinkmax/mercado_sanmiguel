@@ -61,14 +61,30 @@ export type GastoCaja = {
   despuesDelCierre: boolean;
 };
 
+/** Un ingreso sin cliente de la caja (venta de vacíos y tarimas…, 0053). */
+export type IngresoCaja = {
+  id: string;
+  numero: number;
+  creadoEn: string;
+  creadoPor: string | null;
+  creadoPorNombre: string | null;
+  concepto: string;
+  detalle: string | null;
+  monto: number;
+  medio: "efectivo" | "transferencia";
+  titular: string | null;
+  anulado: boolean;
+  motivoAnulacion: string | null;
+};
+
 /**
  * Una transferencia de la caja para chequear contra el banco (0049): las que entraron
- * (cobros y bono camioneros, también los de las cajas de portería recibidas acá) y las
- * que salieron (gastos pagados por banco ese día). Es la misma marca que usa
- * Tesorería → Conciliar.
+ * (cobros, bono camioneros y ventas sin cliente, también los de las cajas de portería
+ * recibidas acá) y las que salieron (gastos pagados por banco ese día). Es la misma marca
+ * que usa Tesorería → Conciliar.
  */
 export type TransferenciaCaja = {
-  clase: "cobro" | "canon" | "gasto";
+  clase: "cobro" | "canon" | "ingreso" | "gasto";
   id: string;
   sentido: "entra" | "sale";
   /** Vino en una caja de portería recibida en esta: la fecha de esa caja. */
@@ -123,6 +139,8 @@ export type RendicionIntegrada = {
   total_transferencia: number;
   total_quintas: number;
   total_ambulantes: number;
+  /** La cochera que el Jefe cobró en esa caja (cobros − quintas − ambulantes, 0052). */
+  total_cocheras: number;
   total_canon: number;
   total_ajustes: number;
 };
@@ -139,6 +157,8 @@ export type DatosCaja = {
   arqueoError: string | null;
   recibos: ReciboDia[];
   canon: CanonEntrada[];
+  /** Ventas y otros ingresos sin cliente (solo la caja de administración, 0053). */
+  ingresos: IngresoCaja[];
   /** Nombre e ícono de las tarifas (para dibujar cada ingreso de transporte). */
   tarifas: { nombre: string; icono: IconoTarifa }[];
   gastos: GastoCaja[];
@@ -229,19 +249,21 @@ async function armarDatos(
     otroDiaRes,
     tarifasRes,
     adminMismoDiaRes,
+    ingresosRes,
   ] = await Promise.all([
     caja ? supabase.rpc("arqueo_caja", { p_caja: caja.id }) : Promise.resolve({ data: null, error: null }),
     caja
       ? supabase
           .from("pagos")
           .select(
-            "id, numero, lote_id, linea, monto, medio, fecha, anulado, motivo_anulacion, titular_transferencia, recibido_por, comprobante_path, conciliado, conciliado_por, conciliado_en, cliente:clientes(nombre, codigo, categoria), cheque:cheques(numero, cuit, recibido_de, fecha_cobro, estado, proveedor, entregado_en_cobro)"
+            "id, cliente_id, numero, lote_id, linea, monto, medio, fecha, anulado, motivo_anulacion, titular_transferencia, recibido_por, comprobante_path, conciliado, conciliado_por, conciliado_en, cliente:clientes(nombre, codigo, categoria), cheque:cheques(numero, cuit, recibido_de, fecha_cobro, estado, proveedor, entregado_en_cobro)"
           )
           .eq("caja_id", caja.id)
           .order("fecha", { ascending: true })
           .order("linea", { ascending: true })
       : Promise.resolve({ data: null }),
-    caja && tipo === "guardia"
+    // 0052: Administración también cobra el bono camioneros (en su caja).
+    caja
       ? supabase
           .from("canon_camiones")
           .select(
@@ -303,7 +325,7 @@ async function armarDatos(
       ? supabase
           .from("cajas")
           .select(
-            "id, fecha, estado, total_efectivo, total_transferencia, total_quintas, total_ambulantes, total_canon, total_ajustes"
+            "id, fecha, estado, total_efectivo, total_transferencia, total_cobros, total_quintas, total_ambulantes, total_canon, total_ajustes"
           )
           .eq("caja_destino_id", caja.id)
           .in("estado", ["integrada", "validada"])
@@ -321,7 +343,7 @@ async function armarDatos(
           .limit(1)
           .maybeSingle()
       : Promise.resolve({ data: null }),
-    caja && tipo === "guardia"
+    caja
       ? supabase.from("tarifas_transporte").select("nombre, icono").eq("org_id", perfil.org_id)
       : Promise.resolve({ data: null }),
     // El Jefe no recibe cajas (ni lee la de administración): no hace falta.
@@ -334,10 +356,21 @@ async function armarDatos(
           .eq("fecha", caja.fecha)
           .maybeSingle()
       : Promise.resolve({ data: null }),
+    // 0053: ventas y otros ingresos sin cliente (los cobra Administración, en su caja).
+    caja && tipo === "administracion" && perfil.rol !== "guardia"
+      ? supabase
+          .from("ingresos_varios")
+          .select(
+            "id, numero, creado_en, creado_por, concepto_nombre, detalle, monto, medio, titular_transferencia, comprobante_path, anulado, motivo_anulacion, conciliado, conciliado_por, conciliado_en"
+          )
+          .eq("caja_id", caja.id)
+          .order("creado_en", { ascending: true })
+      : Promise.resolve({ data: null }),
   ]);
 
   const pagos = pagosRes.data ?? [];
   const canonFilas = canonRes.data ?? [];
+  const ingresosFilas = ingresosRes.data ?? [];
   const gastosFilas = gastosRes.data ?? [];
   const gastosBancoFilas = gastosBancoRes.data ?? [];
   const ajustesFilas = ajustesRes.data ?? [];
@@ -377,7 +410,7 @@ async function armarDatos(
   const concilia = conPrevias && (perfil.rol === "tesoreria" || perfil.rol === "lider");
   const comprobantes = new Map<string, string>();
   if (concilia) {
-    const paths = [...pagos, ...pagosPorteria]
+    const paths = [...pagos, ...pagosPorteria, ...ingresosFilas]
       .filter((p) => !p.conciliado && p.comprobante_path)
       .map((p) => p.comprobante_path as string);
     if (paths.length > 0) {
@@ -398,12 +431,22 @@ async function armarDatos(
     ...gastosBancoFilas.flatMap((g) => [g.pagado_por, g.conciliado_por]),
     ...pagos.map((p) => p.conciliado_por),
     ...canonFilas.map((c) => c.conciliado_por),
+    ...ingresosFilas.flatMap((i) => [i.creado_por, i.conciliado_por]),
     ...pagosPorteria.map((p) => p.conciliado_por),
     ...canonPorteria.map((c) => c.conciliado_por),
     ...ajustesFilas.map((a) => a.creado_por),
     ...eventosFilas.map((e) => e.usuario_id),
   ]);
   const nombre = (id: string | null | undefined) => (id ? (nombres.get(id) ?? null) : null);
+
+  // 0052: el Jefe cobra la cochera de puesteros y empleados, que no lee (RLS): los nombra la base.
+  const sinNombre = [...new Set(pagos.filter((p) => !p.cliente).map((p) => p.cliente_id))];
+  const cobradosEnPorteria = new Map<string, { nombre: string; codigo: number; categoria: string }>();
+  if (sinNombre.length > 0 && tipo === "guardia") {
+    const { data } = await supabase.rpc("clientes_cobrados_en_porteria", { p_clientes: sinNombre });
+    for (const c of data ?? []) cobradosEnPorteria.set(c.id, c);
+  }
+  const clienteDe = (p: (typeof pagos)[number]) => p.cliente ?? cobradosEnPorteria.get(p.cliente_id) ?? null;
 
   // Recibos: las líneas de un mismo lote van juntas (cobro mixto).
   const porLote = new Map<string, ReciboDia>();
@@ -433,16 +476,17 @@ async function armarDatos(
       existente.lineas.push(linea);
       continue;
     }
-    const categoria = p.cliente?.categoria;
+    const cliente = clienteDe(p);
+    const categoria = cliente?.categoria;
     porLote.set(lote, {
       loteId: lote,
       numero: Number(p.numero),
       pagoId: p.id,
       fecha: p.fecha,
-      cliente: p.cliente
+      cliente: cliente
         ? {
-            nombre: p.cliente.nombre,
-            codigo: Number(p.cliente.codigo),
+            nombre: cliente.nombre,
+            codigo: Number(cliente.codigo),
             categoria: categoria && CATEGORIAS.has(categoria) ? (categoria as CategoriaCliente) : null,
           }
         : null,
@@ -561,12 +605,32 @@ async function armarDatos(
   const transferencias: TransferenciaCaja[] = [
     ...pagos
       .filter((p) => p.medio === "transferencia" && !p.anulado)
-      .map((p) => cobroATransferencia(p, null)),
+      .map((p) => cobroATransferencia({ ...p, cliente: clienteDe(p) }, null)),
     ...canonFilas
       .filter((c) => c.medio === "transferencia" && !c.anulado)
       .map((c) => canonATransferencia(c, null)),
     ...pagosPorteria.map((p) => cobroATransferencia(p, fechaRendida.get(p.caja_id ?? "") ?? null)),
     ...canonPorteria.map((c) => canonATransferencia(c, fechaRendida.get(c.caja_id ?? "") ?? null)),
+    ...ingresosFilas
+      .filter((i) => i.medio === "transferencia" && !i.anulado)
+      .map(
+        (i): TransferenciaCaja => ({
+          clase: "ingreso",
+          id: i.id,
+          sentido: "entra",
+          porteriaFecha: null,
+          titulo: i.detalle?.trim() ? `${i.concepto_nombre}: ${i.detalle.trim()}` : i.concepto_nombre,
+          detalle: partes(
+            `Cobro N° ${i.numero}`,
+            i.titular_transferencia ? `Titular: ${i.titular_transferencia}` : null
+          ),
+          monto: Number(i.monto),
+          conciliada: i.conciliado,
+          conciliadaPorNombre: nombre(i.conciliado_por),
+          conciliadaEn: i.conciliado_en,
+          comprobanteUrl: i.comprobante_path ? (comprobantes.get(i.comprobante_path) ?? null) : null,
+        })
+      ),
     ...gastosBancoFilas.map(
       (g): TransferenciaCaja => ({
         clase: "gasto",
@@ -586,6 +650,21 @@ async function armarDatos(
       })
     ),
   ];
+
+  const ingresos: IngresoCaja[] = ingresosFilas.map((i) => ({
+    id: i.id,
+    numero: Number(i.numero),
+    creadoEn: i.creado_en,
+    creadoPor: i.creado_por,
+    creadoPorNombre: nombre(i.creado_por),
+    concepto: i.concepto_nombre,
+    detalle: i.detalle,
+    monto: Number(i.monto),
+    medio: i.medio === "transferencia" ? "transferencia" : "efectivo",
+    titular: i.titular_transferencia,
+    anulado: i.anulado,
+    motivoAnulacion: i.motivo_anulacion,
+  }));
 
   const ajustes: AjusteCaja[] = ajustesFilas.map((a) => ({
     id: a.id,
@@ -612,6 +691,10 @@ async function armarDatos(
     total_transferencia: Number(r.total_transferencia ?? 0),
     total_quintas: Number(r.total_quintas ?? 0),
     total_ambulantes: Number(r.total_ambulantes ?? 0),
+    total_cocheras: Math.max(
+      Math.round((Number(r.total_cobros ?? 0) - Number(r.total_quintas ?? 0) - Number(r.total_ambulantes ?? 0)) * 100) / 100,
+      0
+    ),
     total_canon: Number(r.total_canon ?? 0),
     total_ajustes: Number(r.total_ajustes ?? 0),
   }));
@@ -627,6 +710,7 @@ async function armarDatos(
     arqueoError: mensajeError(arqueoRes.error),
     recibos,
     canon,
+    ingresos,
     tarifas: (tarifasRes.data ?? [])
       .filter((t) => ICONOS.has(t.icono))
       .map((t) => ({ nombre: t.nombre, icono: t.icono as IconoTarifa })),
@@ -700,6 +784,8 @@ export type RendicionPendiente = {
   total_transferencia: number;
   total_quintas: number;
   total_ambulantes: number;
+  /** La cochera que el Jefe le cobró a puesteros y empleados (cobros − quintas − ambulantes, 0052). */
+  total_cocheras: number;
   total_canon: number;
   total_ajustes: number;
   reapertura_solicitada_en: string | null;
@@ -731,7 +817,7 @@ export async function cargarBandejaAdmin(perfil: Perfil): Promise<BandejaAdmin> 
     supabase
       .from("cajas")
       .select(
-        "id, fecha, cerrada_en, cerrada_por, total_efectivo, total_transferencia, total_quintas, total_ambulantes, total_canon, total_ajustes, reapertura_solicitada_en, reapertura_motivo"
+        "id, fecha, cerrada_en, cerrada_por, total_efectivo, total_transferencia, total_cobros, total_quintas, total_ambulantes, total_canon, total_ajustes, reapertura_solicitada_en, reapertura_motivo"
       )
       .eq("org_id", perfil.org_id)
       .eq("tipo", "guardia")
@@ -778,6 +864,10 @@ export async function cargarBandejaAdmin(perfil: Perfil): Promise<BandejaAdmin> 
       total_transferencia: Number(r.total_transferencia ?? 0),
       total_quintas: Number(r.total_quintas ?? 0),
       total_ambulantes: Number(r.total_ambulantes ?? 0),
+      total_cocheras: Math.max(
+        Math.round((Number(r.total_cobros ?? 0) - Number(r.total_quintas ?? 0) - Number(r.total_ambulantes ?? 0)) * 100) / 100,
+        0
+      ),
       total_canon: Number(r.total_canon ?? 0),
       total_ajustes: Number(r.total_ajustes ?? 0),
       reapertura_solicitada_en: r.reapertura_solicitada_en,

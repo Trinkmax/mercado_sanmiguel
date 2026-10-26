@@ -66,7 +66,7 @@ export function RendicionesPorRecibir({
                       {r.reaperturaSolicitada ? <Sello estado="reapertura_pedida" /> : null}
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      <DesglosePorteria quintas={r.quintas} ambulantes={r.ambulantes} canon={r.canon} ajustes={r.ajustes} />
+                      <DesglosePorteria quintas={r.quintas} ambulantes={r.ambulantes} cocheras={r.cocheras} canon={r.canon} ajustes={r.ajustes} />
                     </p>
                     <p className="text-xs text-muted-foreground">
                       Rendida{r.cerradaEn ? ` el ${formatFechaHora(r.cerradaEn)}` : ""}

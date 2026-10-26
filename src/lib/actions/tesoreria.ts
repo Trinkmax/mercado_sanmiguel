@@ -334,6 +334,36 @@ export async function desconciliarCanon(id: string): Promise<ActionResult> {
   return ok(undefined);
 }
 
+/* ---------------- Conciliación: ventas y otros ingresos sin cliente (0053) ---------------- */
+
+/** Marca como conciliadas las ventas sin cliente cobradas por transferencia ya vistas en el banco. */
+export async function conciliarIngresos(ids: string[]): Promise<ActionResult<{ conciliadas: number }>> {
+  await requireRol("tesoreria", "lider");
+  const parsed = idsCanonSchema.safeParse(ids);
+  if (!parsed.success) return fallo(parsed.error.issues[0].message);
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("conciliar_ingresos", { p_ids: parsed.data });
+  if (error) return fallo(error);
+
+  revalidarConciliacion();
+  return ok({ conciliadas: Number((data as { conciliados?: number } | null)?.conciliados ?? 0) });
+}
+
+/** Deshace la conciliación de una venta sin cliente marcada por error. */
+export async function desconciliarIngreso(id: string): Promise<ActionResult> {
+  await requireRol("tesoreria", "lider");
+  const parsed = z.uuid("La transferencia no se reconoce. Actualizá la página.").safeParse(id);
+  if (!parsed.success) return fallo(parsed.error.issues[0].message);
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("desconciliar_ingreso", { p_id: parsed.data });
+  if (error) return fallo(error);
+
+  revalidarConciliacion();
+  return ok(undefined);
+}
+
 /* ---------------- Conciliación: gastos pagados por banco (0049) ---------------- */
 
 /** Marca como conciliados los gastos pagados por transferencia que ya se vieron salir en el banco. */

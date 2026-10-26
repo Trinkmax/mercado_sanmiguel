@@ -18,6 +18,8 @@ export type ResumenConcepto = {
   cobrado: number;
   descuentos: number;
   pendiente: number;
+  /** Concepto de ingreso sin cliente (venta de vacíos y tarimas…, 0053): sin estimado, va aparte. */
+  sinCliente: boolean;
 };
 
 /**
@@ -31,7 +33,9 @@ export type ArqueoInicio = Pick<
   | "cobros_transferencia"
   | "quintas"
   | "ambulantes"
+  | "cocheras"
   | "canon"
+  | "ingresos"
   | "rendido"
   | "rendido_quintas"
   | "rendido_ambulantes"
@@ -50,7 +54,9 @@ const CLAVES_ARQUEO: (keyof ArqueoInicio)[] = [
   "cobros_transferencia",
   "quintas",
   "ambulantes",
+  "cocheras",
   "canon",
+  "ingresos",
   "rendido",
   "rendido_quintas",
   "rendido_ambulantes",
@@ -97,18 +103,23 @@ export async function cajaDeHoy(
 
 /** Resumen por concepto del mes (estimado, cobrado, beneficios, pendiente). */
 export async function resumenDelMes(supabase: Supabase, periodo: string): Promise<ResumenConcepto[]> {
-  const { data } = await supabase.rpc("resumen_conceptos", { p_periodo: periodo });
-  return ((data ?? []) as ResumenConcepto[]).map((f) => ({
+  const [{ data }, { data: ingresos }] = await Promise.all([
+    supabase.rpc("resumen_conceptos", { p_periodo: periodo }),
+    supabase.from("conceptos").select("codigo").eq("tipo", "ingreso"),
+  ]);
+  const sinCliente = new Set((ingresos ?? []).map((c) => c.codigo));
+  return (data ?? []).map((f) => ({
     codigo: f.codigo,
     nombre: f.nombre,
     estimado: Number(f.estimado ?? 0),
     cobrado: Number(f.cobrado ?? 0),
     descuentos: Number(f.descuentos ?? 0),
     pendiente: Number(f.pendiente ?? 0),
+    sinCliente: sinCliente.has(f.codigo),
   }));
 }
 
-/** Cobranza por día de los últimos 14 días (cobros + bono camioneros, sin anulados).
+/** Cobranza por día de los últimos 14 días (cobros + bono camioneros + ventas sin cliente, sin anulados).
  * Sumada en SQL (cobranza_diaria, 0024): traer las filas se cortaba en 1000. La RPC ya
  * filtra por la organización del usuario. */
 export async function serieUltimos14(supabase: Supabase): Promise<PuntoCobranza[]> {

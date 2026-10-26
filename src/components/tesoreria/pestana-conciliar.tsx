@@ -1,4 +1,4 @@
-import { ArrowLeftRight, ArrowUpRight, FileCheck2, FileWarning, Landmark, Truck } from "lucide-react";
+import { ArrowLeftRight, ArrowUpRight, FileCheck2, FileWarning, Landmark, PackageOpen, Truck } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { formatARS, formatFecha, formatFechaHora } from "@/lib/format";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -79,9 +79,14 @@ function detalleCanon(c: { tarifa_nombre: string | null; cantidad: number; tipo:
   return c.cantidad > 1 ? `${nombre} × ${c.cantidad}` : nombre;
 }
 
+/** "Venta de vacíos y tarimas: 30 vacíos" (lo que se vendió, si lo anotaron). */
+function detalleIngreso(i: { concepto_nombre: string; detalle: string | null }): string {
+  return i.detalle?.trim() ? `${i.concepto_nombre}: ${i.detalle.trim()}` : i.concepto_nombre;
+}
+
 /**
- * Pestaña Conciliar: transferencias de cobros y de bono camioneros contra el banco
- * (J2), gastos pagados por banco (0049) y facturas de gastos pagados.
+ * Pestaña Conciliar: transferencias de cobros, de bono camioneros y de ventas sin cliente
+ * contra el banco (J2, 0053), gastos pagados por banco (0049) y facturas de gastos pagados.
  */
 export async function PestanaConciliar({ puedeOperar }: { puedeOperar: boolean }) {
   const supabase = await createClient();
@@ -94,6 +99,8 @@ export async function PestanaConciliar({ puedeOperar }: { puedeOperar: boolean }
     canonConciliadosRes,
     gastosBancoRes,
     gastosBancoConciliadosRes,
+    ingresosRes,
+    ingresosConciliadosRes,
   ] = await Promise.all([
     supabase
       .from("pagos")
@@ -148,6 +155,23 @@ export async function PestanaConciliar({ puedeOperar }: { puedeOperar: boolean }
       .eq("conciliado", true)
       .order("conciliado_en", { ascending: false })
       .limit(5),
+    // 0053: ventas y otros ingresos sin cliente cobrados por transferencia.
+    supabase
+      .from("ingresos_varios")
+      .select("id, numero, fecha, concepto_nombre, detalle, titular_transferencia, monto, creado_por")
+      .eq("medio", "transferencia")
+      .eq("anulado", false)
+      .eq("conciliado", false)
+      .order("fecha", { ascending: true })
+      .order("numero", { ascending: true }),
+    supabase
+      .from("ingresos_varios")
+      .select("id, numero, concepto_nombre, detalle, monto, conciliado_por, conciliado_en")
+      .eq("medio", "transferencia")
+      .eq("anulado", false)
+      .eq("conciliado", true)
+      .order("conciliado_en", { ascending: false })
+      .limit(5),
   ]);
 
   const transferencias = transferenciasRes.data ?? [];
@@ -188,6 +212,22 @@ export async function PestanaConciliar({ puedeOperar }: { puedeOperar: boolean }
   }));
   const totalCanon = filasCanon.reduce((acc, c) => acc + c.monto, 0);
   const canonConciliados = canonConciliadosRes.data ?? [];
+  const filasIngresos: FilaCanon[] = (ingresosRes.data ?? []).map((i) => ({
+    id: i.id,
+    numero: i.numero,
+    fecha: i.fecha,
+    detalle: detalleIngreso(i),
+    patente: null,
+    cobro: [
+      i.titular_transferencia ? `Titular: ${i.titular_transferencia}` : null,
+      i.creado_por ? `Cobró ${nombres.get(i.creado_por) ?? "—"}` : null,
+    ]
+      .filter(Boolean)
+      .join(" · ") || null,
+    monto: Number(i.monto),
+  }));
+  const totalIngresos = filasIngresos.reduce((acc, i) => acc + i.monto, 0);
+  const ingresosConciliados = ingresosConciliadosRes.data ?? [];
   const gastosBanco = gastosBancoRes.data ?? [];
   const totalGastosBanco = gastosBanco.reduce((acc, g) => acc + Number(g.monto), 0);
   const gastosBancoConciliados = gastosBancoConciliadosRes.data ?? [];
@@ -255,7 +295,7 @@ export async function PestanaConciliar({ puedeOperar }: { puedeOperar: boolean }
       <section className="space-y-4" aria-label="Bono camioneros por transferencia">
         <Titulo
           titulo="Bono camioneros por transferencia"
-          descripcion="Lo que Portería cobró por transferencia: marcalo cuando lo veas en el resumen del banco."
+          descripcion="Lo que Portería (o Administración) cobró por transferencia: marcalo cuando lo veas en el resumen del banco."
         >
           {filasCanon.length > 0 ? (
             <p className="flex items-center gap-2 rounded-lg bg-parcial-suave px-3 py-2 text-sm font-semibold text-parcial">
@@ -304,6 +344,55 @@ export async function PestanaConciliar({ puedeOperar }: { puedeOperar: boolean }
           </div>
         ) : null}
       </section>
+
+      {filasIngresos.length > 0 || ingresosConciliados.length > 0 ? (
+        <section className="space-y-4" aria-label="Ventas y otros ingresos por transferencia">
+          <Titulo
+            titulo="Ventas y otros ingresos por transferencia"
+            descripcion="Lo que Administración cobró sin cliente (venta de vacíos y tarimas…) por transferencia: marcalo cuando lo veas en el resumen del banco."
+          >
+            {filasIngresos.length > 0 ? (
+              <p className="flex items-center gap-2 rounded-lg bg-parcial-suave px-3 py-2 text-sm font-semibold text-parcial">
+                <PackageOpen className="size-4 shrink-0" strokeWidth={2} />
+                {filasIngresos.length === 1
+                  ? `1 cobro por ${formatARS(totalIngresos)} sin conciliar`
+                  : `${filasIngresos.length} cobros por ${formatARS(totalIngresos)} sin conciliar`}
+              </p>
+            ) : null}
+          </Titulo>
+          {filasIngresos.length > 0 && puedeOperar ? (
+            <ConciliacionCanon filas={filasIngresos} clase="ingreso" />
+          ) : null}
+
+          {ingresosConciliados.length > 0 ? (
+            <div className="space-y-2">
+              <h3 className="text-base font-semibold">Últimos conciliados</h3>
+              <ul className="divide-y overflow-hidden rounded-xl border bg-card">
+                {ingresosConciliados.map((i) => (
+                  <li
+                    key={i.id}
+                    className="grid gap-x-4 gap-y-2 px-4 py-2.5 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"
+                  >
+                    <div className="min-w-0 text-sm">
+                      <p className="font-medium break-words">
+                        N° {i.numero} · {detalleIngreso(i)}
+                      </p>
+                      <p className="text-muted-foreground">
+                        {formatFechaHora(i.conciliado_en)} · {(i.conciliado_por && nombres.get(i.conciliado_por)) || "—"}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3 sm:justify-end">
+                      <Money monto={i.monto} className="font-semibold" />
+                      <Sello estado="conciliado" texto="Conciliado" />
+                      {puedeOperar ? <BotonDesconciliarCanon id={i.id} numero={i.numero} clase="ingreso" /> : null}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       {gastosBanco.length > 0 || gastosBancoConciliados.length > 0 ? (
         <section className="space-y-4" aria-label="Gastos pagados por transferencia">

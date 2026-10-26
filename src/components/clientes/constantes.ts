@@ -47,14 +47,14 @@ type Categoria = "puestero" | "quintero" | "ambulante" | "empleado";
 
 /**
  * ¿Un concepto MENSUAL sigue facturándose si el cliente pasa a esta categoría?
- * Espejo de private.aplicar_cambio (0024, 0040, 0045, 0046, 0047) y de lo que la ficha ofrece
- * en "Qué paga": el ambulante paga por día y por mes solo la cochera y la quinta, si alquila
- * (0045, 0047); el quintero, solo lo de quinteros; el empleado, solo la cochera (0040); el
- * puestero, todo menos lo de ambulantes: también la quinta (EXPQ), si además del puesto
- * alquila una (0046). Energía (ABEN/ENER) no cuenta.
+ * Espejo de private.aplicar_cambio (0024, 0040, 0045, 0046, 0047, 0052) y de lo que la ficha
+ * ofrece en "Qué paga": el ambulante paga por día y por mes solo la cochera y la quinta, si
+ * alquila (0045, 0047); el quintero, lo de quinteros y la cochera, si alquila una (0052); el
+ * empleado, solo la cochera (0040); el puestero, todo menos lo de ambulantes: también la quinta
+ * (EXPQ), si además del puesto alquila una (0046). Energía (ABEN/ENER) no cuenta.
  */
 export function conceptoSigueConCategoria(segmento: string | null, categoria: Categoria): boolean {
-  if (categoria === "quintero") return segmento === "quinteros";
+  if (categoria === "quintero") return segmento === "quinteros" || segmento === "cocheras";
   if (categoria === "ambulante") return segmento === "cocheras" || segmento === "quinteros";
   if (categoria === "empleado") return segmento === "cocheras";
   return segmento !== "ambulantes";
@@ -160,8 +160,9 @@ export function grupoDeConcepto(c: { codigo: string; segmento: string | null }):
  * solicitar_cambio, §4.7, 0046 y 0047). Solo mensuales: los de energía van en Medidores; AMB,
  * MULT, RD y BC se cobran en el momento. Lo de quinteros y ambulantes es del Jefe de Portería,
  * salvo la quinta de un PUESTERO: a él la factura y la cobra Administración (0046). Al
- * ambulante, la quinta se la pide el Jefe y la cochera la carga el Líder (el Jefe no maneja
- * cocheras); Administración no gestiona ambulantes (0045, 0047). */
+ * ambulante, la quinta se la pide el Jefe y la cochera la carga el Líder (el Jefe no asigna
+ * cocheras: las cobra); lo mismo la cochera de un quintero (0052). Administración no gestiona
+ * ambulantes ni quinteros (0045, 0047). */
 export function conceptoAsignablePorRol(
   c: { tipo: string; segmento: string | null },
   rol: string,

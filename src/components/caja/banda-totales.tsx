@@ -1,8 +1,8 @@
-import { Footprints, Tractor, Truck, type LucideIcon } from "lucide-react";
+import { Car, Footprints, PackageOpen, Tractor, Truck, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatARS, formatFecha } from "@/lib/format";
 import { Money } from "@/components/shared/money";
-import { otrosCobrosPorteria, type Arqueo } from "@/components/caja/arqueo-tipos";
+import { ajustesDeRendido, cocherasPorteria, type Arqueo } from "@/components/caja/arqueo-tipos";
 
 const CENTAVO = 0.009;
 
@@ -106,8 +106,9 @@ export function BandaTotales({
   esHoy?: boolean;
 }) {
   const porteria = tipo === "guardia";
-  const juntadoEfectivo = a.cobros_efectivo + a.canon_efectivo + a.rendido_efectivo;
-  const juntadoTransferencia = a.cobros_transferencia + a.canon_transferencia + a.rendido_transferencia;
+  const juntadoEfectivo = a.cobros_efectivo + a.canon_efectivo + a.ingresos_efectivo + a.rendido_efectivo;
+  const juntadoTransferencia =
+    a.cobros_transferencia + a.canon_transferencia + a.ingresos_transferencia + a.rendido_transferencia;
   const hayRendido = Math.abs(a.rendido) > CENTAVO;
   // Cada descuento sale de SU medio (misma fórmula que calcular_arqueo): gastos y ajustes en
   // efectivo, del cajón; cheques entregados en el acto, de los cheques; ajustes del banco, del banco.
@@ -115,10 +116,11 @@ export function BandaTotales({
   const cuentaCheques = a.cheques_entregados > CENTAVO;
   const cuentaBanco = Math.abs(a.ajustes_transferencia) > CENTAVO;
   const hayDescuentos = cuentaEfectivo || cuentaCheques || cuentaBanco;
-  const otros = porteria ? otrosCobrosPorteria(a) : 0;
-  // Lo rendido ya viene neto de los ajustes de la caja de portería (faltantes al recibirla o de
-  // Tesorería); las piezas son brutas. Sin esta pieza "Caja de portería $X" no daría la suma.
-  const ajustesPorteria = a.rendido - a.rendido_quintas - a.rendido_ambulantes - a.rendido_canon;
+  const cocheras = porteria ? cocherasPorteria(a) : 0;
+  const ajustesPorteria = ajustesDeRendido(a);
+  // Caja de administración: lo que entra sin ser cobro a un cliente (0052, 0053).
+  const hayCanon = !porteria && Math.abs(a.canon) > CENTAVO;
+  const hayIngresos = !porteria && Math.abs(a.ingresos) > CENTAVO;
 
   return (
     <section
@@ -172,10 +174,20 @@ export function BandaTotales({
         <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1.5 border-t border-dashed border-foreground/30 px-4 py-3 text-sm sm:px-6">
           <Pieza icono={Tractor} etiqueta="Quintas (tus cobros)" monto={a.quintas} />
           <Pieza icono={Footprints} etiqueta="Ambulantes" monto={a.ambulantes} />
+          {Math.abs(cocheras) > CENTAVO ? <Pieza icono={Car} etiqueta="Cocheras" monto={cocheras} /> : null}
           <Pieza icono={Truck} etiqueta="Bono camioneros (Portería)" monto={a.canon} />
-          {Math.abs(otros) > CENTAVO ? <Pieza etiqueta="Otros cobros" monto={otros} /> : null}
         </div>
-      ) : hayRendido ? (
+      ) : null}
+
+      {hayCanon || hayIngresos ? (
+        <div className="flex flex-wrap items-baseline gap-x-5 gap-y-1.5 border-t border-dashed border-foreground/30 px-4 py-3 text-sm sm:px-6">
+          <Pieza etiqueta="Cobros a clientes" monto={a.cobros} />
+          {hayCanon ? <Pieza icono={Truck} etiqueta="Bono camioneros" monto={a.canon} /> : null}
+          {hayIngresos ? <Pieza icono={PackageOpen} etiqueta="Ventas y otros ingresos" monto={a.ingresos} /> : null}
+        </div>
+      ) : null}
+
+      {!porteria && hayRendido ? (
         <div className="space-y-1.5 border-t border-dashed border-foreground/30 px-4 py-3 text-sm sm:px-6">
           <p className="font-medium">
             Caja de portería <Money monto={a.rendido} className="font-bold" />
@@ -183,6 +195,9 @@ export function BandaTotales({
           <p className="flex flex-wrap items-baseline gap-x-5 gap-y-1.5">
             <Pieza icono={Tractor} etiqueta="Quintas" monto={a.rendido_quintas} />
             <Pieza icono={Footprints} etiqueta="Ambulantes" monto={a.rendido_ambulantes} />
+            {Math.abs(a.rendido_cocheras) > CENTAVO ? (
+              <Pieza icono={Car} etiqueta="Cocheras" monto={a.rendido_cocheras} />
+            ) : null}
             <Pieza icono={Truck} etiqueta="Bono camioneros" monto={a.rendido_canon} />
             {Math.abs(ajustesPorteria) > CENTAVO ? (
               <span className="inline-flex items-baseline gap-1.5 whitespace-nowrap">

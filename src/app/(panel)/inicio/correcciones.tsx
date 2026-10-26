@@ -12,6 +12,7 @@ import {
   KeyRound,
   Link2Off,
   Lock,
+  PackageOpen,
   Receipt,
   RotateCcw,
   Scale,
@@ -36,6 +37,7 @@ import { desdeHaceDias, type Supabase } from "./datos";
 const EVENTOS_CAJA = [
   "cobro_anulado",
   "canon_anulado",
+  "ingreso_anulado",
   "gasto_revertido",
   "ajuste",
   "ajuste_borrado",
@@ -47,6 +49,7 @@ type EventoCaja = (typeof EVENTOS_CAJA)[number];
 const DEF_EVENTO: Record<EventoCaja, { titulo: string; icono: LucideIcon }> = {
   cobro_anulado: { titulo: "Recibo anulado", icono: Undo2 },
   canon_anulado: { titulo: "Ingreso de transporte anulado", icono: Truck },
+  ingreso_anulado: { titulo: "Venta sin cliente anulada", icono: PackageOpen },
   gasto_revertido: { titulo: "Pago de gasto deshecho", icono: Receipt },
   ajuste: { titulo: "Ajuste de tesorería en la caja", icono: Scale },
   ajuste_borrado: { titulo: "Ajuste borrado", icono: Eraser },

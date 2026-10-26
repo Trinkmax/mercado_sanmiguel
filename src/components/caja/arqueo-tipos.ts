@@ -3,12 +3,13 @@
  * (fórmula única en SQL: private.calcular_arqueo, contrato §4.5).
  * TS puro: sirve en server y client. Lo importan M6 (ValidarCajaDialog) y M8 (inicio).
  *
- *   JUNTASTE (cobros + bono camioneros + caja de portería recibida)
+ *   JUNTASTE (cobros + bono camioneros + ventas y otros ingresos + caja de portería recibida)
  *   − gastos pagados desde la caja
  *   − cheques entregados a un proveedor en el mismo cobro
  *   ± ajustes de tesorería
  *   = TENÉS QUE TENER: efectivo (cajón) + transferencia (banco) + cheques (en cartera)
  */
+import { formatARS } from "@/lib/format";
 
 export type ChequeEntregadoEnCobro = {
   numero: string;
@@ -27,10 +28,16 @@ export type Arqueo = {
   /** Caja de portería: cobrado a quinteros / ambulantes (todos los medios). 0 en administración. */
   quintas: number;
   ambulantes: number;
+  /** Caja de portería: la cochera que el Jefe le cobró a puesteros y empleados (0052). */
+  cocheras: number;
   /** Bono camioneros (canon de transporte) vigente. */
   canon_efectivo: number;
   canon_transferencia: number;
   canon: number;
+  /** Ingresos sin cliente vigentes: venta de vacíos y tarimas… (0053). */
+  ingresos_efectivo: number;
+  ingresos_transferencia: number;
+  ingresos: number;
   /** Cajas de portería recibidas e integradas en esta caja (solo administración). */
   rendido_efectivo: number;
   rendido_transferencia: number;
@@ -38,7 +45,8 @@ export type Arqueo = {
   rendido_quintas: number;
   rendido_ambulantes: number;
   rendido_canon: number;
-  /** cobros + canon + rendido. */
+  rendido_cocheras: number;
+  /** cobros + canon + ingresos + rendido. */
   juntado: number;
   gastos_pagados: number;
   /** Ajustes de tesorería sobre la caja, con signo (+ sobrante, − faltante). */
@@ -67,15 +75,20 @@ const CLAVES_NUMERICAS = [
   "cheques_entregados",
   "quintas",
   "ambulantes",
+  "cocheras",
   "canon_efectivo",
   "canon_transferencia",
   "canon",
+  "ingresos_efectivo",
+  "ingresos_transferencia",
+  "ingresos",
   "rendido_efectivo",
   "rendido_transferencia",
   "rendido",
   "rendido_quintas",
   "rendido_ambulantes",
   "rendido_canon",
+  "rendido_cocheras",
   "juntado",
   "gastos_pagados",
   "ajustes_efectivo",
@@ -125,13 +138,41 @@ export function parsearArqueo(data: unknown): Arqueo {
   };
 }
 
+/** "Quintas $ 92.500 · Ambulantes $ 30.000 · Cocheras $ 34.000 · Bono camioneros $ 276.000":
+ * lo que rinde la caja de portería (las cocheras, solo si el Jefe cobró alguna). */
+export function textoDesglosePorteria(p: {
+  quintas: number;
+  ambulantes: number;
+  cocheras: number;
+  canon: number;
+}): string {
+  return [
+    `Quintas ${formatARS(p.quintas)}`,
+    `Ambulantes ${formatARS(p.ambulantes)}`,
+    Math.abs(p.cocheras) > 0.009 ? `Cocheras ${formatARS(p.cocheras)}` : null,
+    `Bono camioneros ${formatARS(p.canon)}`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
 /** Lo que tiene que haber en total (cajón + banco + cheques en cartera). */
 export function totalTenesQueTener(a: Arqueo): number {
   return a.efectivo + a.transferencia + a.cheques;
 }
 
-/** Cobros de la caja de portería que no son de quinteros ni ambulantes (no debería haber). */
-export function otrosCobrosPorteria(a: Arqueo): number {
-  const resto = a.cobros - a.quintas - a.ambulantes;
+/** Cobros de la caja de portería que no son de quinteros ni ambulantes: la cochera que el Jefe
+ * le cobró a puesteros y empleados (0052). La base la manda como `cocheras`; una caja vieja sin
+ * ese dato la calcula igual. */
+export function cocherasPorteria(a: Arqueo): number {
+  const resto = a.cocheras || a.cobros - a.quintas - a.ambulantes;
+  return Math.abs(resto) < 0.01 ? 0 : resto;
+}
+
+/** Lo rendido ya viene neto de los ajustes de la caja de portería (faltantes al recibirla o de
+ * Tesorería); las piezas (quintas, ambulantes, cocheras, bono) son brutas. La diferencia son
+ * esos ajustes: sin esta pieza el desglose no daría la suma. */
+export function ajustesDeRendido(a: Arqueo): number {
+  const resto = a.rendido - a.rendido_quintas - a.rendido_ambulantes - a.rendido_cocheras - a.rendido_canon;
   return Math.abs(resto) < 0.01 ? 0 : resto;
 }

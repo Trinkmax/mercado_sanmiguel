@@ -95,7 +95,7 @@ function pasosPorteria(): Paso[] {
       ancla: "porteria-cantidad-medio",
       titulo: "¿Cuántos y cómo paga?",
       texto:
-        "Si entran varios iguales, o la estadía es de varios días, sumalos con «+». Después tocá «Efectivo» o «Transferencia», según cómo te pague.",
+        "Si entran varios iguales, o la estadía es de varios días, tocá el número y escribilo (por ejemplo 23 días), o sumá con «+». Después tocá «Efectivo» o «Transferencia», según cómo te pague.",
       consejo: "La patente y «¿A quién viene?» son opcionales: completalos solo si querés.",
       sinAncla: { pantalla: PantallaCanonCuantos },
     }),

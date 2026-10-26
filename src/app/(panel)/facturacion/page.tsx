@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, CalendarRange, Store, Truck, Zap } from "lucide-react";
+import { ArrowRight, CalendarRange, PackageOpen, Store, Truck, Zap } from "lucide-react";
 import { requireRol } from "@/lib/auth";
 import { ROLES_REPORTES } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/server";
@@ -232,12 +232,13 @@ export default async function FacturacionPage() {
     mesGenerado
       ? Promise.resolve({ data: null })
       : supabase.rpc("resumen_conceptos", { p_periodo: mesActual }),
-    // Energía y canon van siempre en los ingresos del mes, aunque todavía estén en cero.
+    // Energía, canon y lo que se cobra sin cliente (0053: venta de vacíos y tarimas…) van
+    // siempre en los ingresos del mes, aunque todavía estén en cero.
     supabase
       .from("conceptos")
-      .select("codigo, nombre, activo")
+      .select("codigo, nombre, activo, tipo")
       .eq("org_id", perfil.org_id)
-      .in("codigo", ["ENER", "BC"]),
+      .or("codigo.in.(ENER,BC),tipo.eq.ingreso"),
   ]);
   const resumenPorPeriodo = new Map<string, MontosEstimado>();
   const filasPorPeriodo = new Map<string, FilaResumen[]>();
@@ -254,7 +255,10 @@ export default async function FacturacionPage() {
     mesGenerado ? (filasPorPeriodo.get(mesActual) ?? []) : ((resumenMesRes.data ?? []) as FilaResumen[])
   ).map((f) => ({ ...f }));
   const otros = new Map((otrosRes.data ?? []).map((c) => [c.codigo, c]));
-  const filaVacia = (codigo: "ENER" | "BC"): FilaResumen | null => {
+  // Conceptos de ingreso sin cliente (0053): como el canon, sin estimado (suman lo cobrado).
+  const codigosIngreso = new Set((otrosRes.data ?? []).filter((c) => c.tipo === "ingreso").map((c) => c.codigo));
+  const sinEstimado = (codigo: string) => codigo === "BC" || codigosIngreso.has(codigo);
+  const filaVacia = (codigo: string): FilaResumen | null => {
     const c = otros.get(codigo);
     return c?.activo
       ? { codigo, nombre: c.nombre, estimado: 0, cobrado: 0, descuentos: 0, pendiente: 0 }
@@ -262,28 +266,32 @@ export default async function FacturacionPage() {
   };
   const energiaDelMes = filasDelMes.find((f) => f.codigo === "ENER") ?? filaVacia("ENER");
   const canonDelMes = filasDelMes.find((f) => f.codigo === "BC") ?? filaVacia("BC");
-  const ingresosDelMes = [
-    ...filasDelMes.filter((f) => f.codigo !== "ENER" && f.codigo !== "BC"),
+  const ventasDelMes = [...codigosIngreso]
+    .map((codigo) => filasDelMes.find((f) => f.codigo === codigo) ?? filaVacia(codigo))
+    .filter((f): f is FilaResumen => f !== null);
+  const filasIngresosMes = [
+    ...filasDelMes.filter((f) => f.codigo !== "ENER" && !sinEstimado(f.codigo)),
     ...(energiaDelMes ? [energiaDelMes] : []),
     ...(canonDelMes ? [canonDelMes] : []),
-  ].map((f) => {
+    ...ventasDelMes,
+  ];
+  const ingresosDelMes = filasIngresosMes.map((f) => {
     const m = montosEstimado(f);
     const nota =
       f.codigo === "BC"
-        ? "Sin estimado: se suma lo que se cobra cada día en portería."
-        : f.codigo === "ENER"
-          ? Number(f.estimado) > 0
-            ? "Según las lecturas de luz cargadas este mes."
-            : "Se suma cuando se cargan las lecturas de luz del mes."
-          : null;
+        ? "Sin estimado: se suma lo que se cobra cada día (en portería y en Administración)."
+        : codigosIngreso.has(f.codigo)
+          ? "Sin estimado: se suma lo que se cobra sin cliente, venta por venta."
+          : f.codigo === "ENER"
+            ? Number(f.estimado) > 0
+              ? "Según las lecturas de luz cargadas este mes."
+              : "Se suma cuando se cargan las lecturas de luz del mes."
+            : null;
     return { codigo: f.codigo, nombre: f.nombre, estimado: m.estimado, cobrado: m.cobrado, nota };
   });
-  const totalDelMes = sumarEstimado([
-    ...filasDelMes.filter((f) => f.codigo !== "ENER" && f.codigo !== "BC"),
-    ...(energiaDelMes ? [energiaDelMes] : []),
-    ...(canonDelMes ? [canonDelMes] : []),
-  ]);
+  const totalDelMes = sumarEstimado(filasIngresosMes);
   const canonCobrado = canonDelMes ? Number(canonDelMes.cobrado) : 0;
+  const ventasCobrado = ventasDelMes.reduce((acc, f) => acc + Number(f.cobrado), 0);
 
   // Nombre de quién generó cada período.
   const idsGeneradores = [
@@ -321,7 +329,8 @@ export default async function FacturacionPage() {
         </CardTitle>
         <CardDescription className="text-sm/relaxed">
           Lo que se espera cobrar este mes y lo que ya entró, concepto por concepto. El recupero de
-          energía se suma con las lecturas de luz y el canon de camiones con lo que se cobra cada día.
+          energía se suma con las lecturas de luz; el canon de camiones y las ventas sin cliente, con lo
+          que se cobra cada día.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -350,6 +359,12 @@ export default async function FacturacionPage() {
                         strokeWidth={2}
                         aria-hidden
                       />
+                    ) : codigosIngreso.has(fila.codigo) ? (
+                      <PackageOpen
+                        className="mr-1.5 inline size-4 align-[-0.15em] text-primary"
+                        strokeWidth={2}
+                        aria-hidden
+                      />
                     ) : null}
                     {fila.nombre}
                   </p>
@@ -359,7 +374,7 @@ export default async function FacturacionPage() {
                   <div className="min-w-0">
                     <dt className="text-xs text-muted-foreground">Estimado</dt>
                     <dd>
-                      {fila.codigo === "BC" ? (
+                      {sinEstimado(fila.codigo) ? (
                         <span className="text-sm text-muted-foreground">sin estimado</span>
                       ) : (
                         <Money monto={fila.estimado} className="text-base font-medium break-words" />
@@ -383,10 +398,17 @@ export default async function FacturacionPage() {
             <Money monto={totalDelMes.estimado} className="text-2xl font-bold break-words" />
             <p className="text-sm text-muted-foreground">
               pagando en término
-              {canonCobrado > 0 ? (
+              {canonCobrado > 0 || ventasCobrado > 0 ? (
                 <>
                   {" "}
-                  · incluye <span className="whitespace-nowrap">{formatARS(canonCobrado)}</span> de canon
+                  · incluye{" "}
+                  {canonCobrado > 0 ? (
+                    <span className="whitespace-nowrap">{formatARS(canonCobrado)} de canon</span>
+                  ) : null}
+                  {canonCobrado > 0 && ventasCobrado > 0 ? " y " : null}
+                  {ventasCobrado > 0 ? (
+                    <span className="whitespace-nowrap">{formatARS(ventasCobrado)} de ventas sin cliente</span>
+                  ) : null}
                 </>
               ) : null}
             </p>

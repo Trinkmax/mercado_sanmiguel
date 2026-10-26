@@ -19,8 +19,9 @@ export async function PlataDeHoy({ org, supabase }: { org: string; supabase: Sup
     cajaDeHoy(supabase, org, "guardia"),
   ]);
 
-  // Administración: lo que cobró ella (lo rendido por portería ya se cuenta en portería).
-  const cobradoAdmin = admin?.arqueo?.cobros ?? 0;
+  // Administración: lo que cobró ella (lo rendido por portería ya se cuenta en portería): los
+  // cobros, el bono camioneros que cobre ella (0052) y las ventas sin cliente (0053).
+  const cobradoAdmin = (admin?.arqueo?.cobros ?? 0) + (admin?.arqueo?.canon ?? 0) + (admin?.arqueo?.ingresos ?? 0);
   const juntadoPorteria = (porteria?.arqueo?.cobros ?? 0) + (porteria?.arqueo?.canon ?? 0);
   const gastos = (admin?.arqueo?.gastos_pagados ?? 0) + (porteria?.arqueo?.gastos_pagados ?? 0);
   const entro = cobradoAdmin + juntadoPorteria;
@@ -53,6 +54,7 @@ export async function PlataDeHoy({ org, supabase }: { org: string; supabase: Sup
               <DesgloseCajaPorteria
                 quintas={porteria.arqueo.quintas}
                 ambulantes={porteria.arqueo.ambulantes}
+                cocheras={porteria.arqueo.cocheras}
                 canon={porteria.arqueo.canon}
                 className="mt-2"
               />

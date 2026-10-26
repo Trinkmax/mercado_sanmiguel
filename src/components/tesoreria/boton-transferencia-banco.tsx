@@ -6,31 +6,35 @@ import { Check, Undo2 } from "lucide-react";
 import {
   conciliarCanon,
   conciliarGastos,
+  conciliarIngresos,
   conciliarTransferencias,
   desconciliarCanon,
   desconciliarGasto,
+  desconciliarIngreso,
   desconciliarTransferencia,
 } from "@/lib/actions/tesoreria";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { llamarAccion } from "@/lib/llamar-accion";
 
-export type ClaseTransferencia = "cobro" | "canon" | "gasto";
+export type ClaseTransferencia = "cobro" | "canon" | "ingreso" | "gasto";
 
 const CONCILIAR = {
   cobro: conciliarTransferencias,
   canon: conciliarCanon,
+  ingreso: conciliarIngresos,
   gasto: conciliarGastos,
 } as const;
 
 const DESCONCILIAR = {
   cobro: desconciliarTransferencia,
   canon: desconciliarCanon,
+  ingreso: desconciliarIngreso,
   gasto: desconciliarGasto,
 } as const;
 
 /**
- * "Está en el banco" de UNA transferencia (un cobro, un bono camioneros o un gasto pagado
+ * "Está en el banco" de UNA transferencia (un cobro, un bono camioneros, una venta sin cliente o un gasto pagado
  * por banco), o "Deshacer" si ya estaba marcada. Es la misma marca de Tesorería →
  * Conciliar: se usa también en la caja del día (Tesorería y el Líder).
  */

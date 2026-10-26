@@ -44,6 +44,7 @@ export function CanonDelDia({
   esHoy = true,
   tarifas,
   sinResumen = false,
+  textoVacio,
 }: {
   entradas: CanonEntrada[];
   modo: "porteria" | "jefe" | "lectura";
@@ -58,6 +59,8 @@ export function CanonDelDia({
   tarifas?: Pick<TarifaTransporte, "nombre" | "icono">[];
   /** La pantalla ya muestra el resumen en otro lado. */
   sinResumen?: boolean;
+  /** Lista vacía: el texto de abajo (Administración cobra el bono en su caja, 0052). */
+  textoVacio?: string;
 }) {
   if (entradas.length === 0) {
     return (
@@ -65,9 +68,10 @@ export function CanonDelDia({
         icono={Truck}
         titulo={esHoy ? "Todavía no entró ningún vehículo hoy" : "Ese día no entró ningún vehículo"}
         descripcion={
-          modo === "porteria" && esHoy
+          textoVacio ??
+          (modo === "porteria" && esHoy
             ? "Cuando cobres el primero, aparece acá con su número."
-            : "Los cobros del canon de transporte los hace Portería en la garita."
+            : "Los cobros del canon de transporte los hace Portería en la garita.")
         }
       />
     );

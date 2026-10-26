@@ -15,9 +15,10 @@ export const LABEL_ROL: Record<Rol, string> = {
 
 /** Qué hace cada rol, en una línea (alta de usuarios). */
 export const DESCRIPCION_ROL: Record<Rol, string> = {
-  admin: "Cobra a los puesteros, integra la caja de portería y da acceso a los socios",
+  admin:
+    "Cobra a los puesteros, el bono camioneros y las ventas sin cliente, integra la caja de portería y da acceso a los socios",
   guardia:
-    "Cobra a quinteros y ambulantes, rinde la caja de portería y gestiona los usuarios de Portería",
+    "Cobra a quinteros, ambulantes y las cocheras, rinde la caja de portería y gestiona los usuarios de Portería",
   porteria: "Cobra el canon de transporte, registra el ingreso del personal y genera solicitudes",
   tesoreria: "Valida cajas, concilia el banco y maneja cheques, gastos y el flujo de fondos",
   consejo: "Ya no se usa: lo que resuelve el Consejo lo registra el Líder de Procesos",

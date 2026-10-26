@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { CircleAlert, CircleCheck, Minus, Plus, TriangleAlert, Truck } from "lucide-react";
+import { CircleAlert, CircleCheck, TriangleAlert, Truck } from "lucide-react";
 import { anularCanon, registrarCanon } from "@/lib/actions/porteria";
 import { formatARS } from "@/lib/format";
 import { cn, uuidV4 } from "@/lib/utils";
@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Money } from "@/components/shared/money";
+import { NumeroConPasos } from "@/components/shared/numero-con-pasos";
 import { Sello } from "@/components/shared/sello";
 import { EmptyState } from "@/components/shared/empty-state";
 import { AlertaError } from "@/components/cobranza/alerta-error";
@@ -67,7 +68,6 @@ export function CanonTransporte({
   const primeraConPrecio = tarifas.find((t) => t.precio > 0) ?? null;
   const [tarifaId, setTarifaId] = useState<string | null>(primeraConPrecio?.id ?? null);
   const [cantidad, setCantidad] = useState(1);
-  const [cantidadTexto, setCantidadTexto] = useState("1");
   const [medio, setMedio] = useState<MedioCanon>("efectivo");
   const [patente, setPatente] = useState("");
   const [destino, setDestino] = useState<DestinoCanon | null>(null);
@@ -118,9 +118,7 @@ export function CanonTransporte({
   }, [exito]);
 
   function cambiarCantidad(n: number) {
-    const v = Math.min(99, Math.max(1, Math.round(n)));
-    setCantidad(v);
-    setCantidadTexto(String(v));
+    setCantidad(Math.min(99, Math.max(1, Math.round(n))));
     setError(null);
   }
 
@@ -189,7 +187,6 @@ export function CanonTransporte({
       }
       // Conserva tarifa y medio; limpia lo del vehículo que ya pasó.
       setCantidad(1);
-      setCantidadTexto("1");
       setPatente("");
       setDestino(null);
       setPuesto("");
@@ -302,45 +299,16 @@ export function CanonTransporte({
               <Label htmlFor="canon-cantidad" className="text-base">
                 {tarifa ? preguntaCantidad(tarifa.unidad) : "¿Cuántos?"}
               </Label>
-              <div className="flex items-center gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="size-14 shrink-0 rounded-lg"
-                  onClick={() => cambiarCantidad(cantidad - 1)}
-                  disabled={cantidad <= 1}
-                  aria-label="Uno menos"
-                >
-                  <Minus className="size-6" strokeWidth={2.2} />
-                </Button>
-                <Input
-                  id="canon-cantidad"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  value={cantidadTexto}
-                  onChange={(e) => {
-                    const limpio = e.target.value.replace(/\D/g, "").slice(0, 2);
-                    setCantidadTexto(limpio);
-                    if (limpio) {
-                      setCantidad(Math.max(1, Number(limpio)));
-                      setError(null);
-                    }
-                  }}
-                  onBlur={() => cambiarCantidad(Number(cantidadTexto || 1))}
-                  onFocus={(e) => e.target.select()}
-                  className="h-14 min-w-0 flex-1 text-center font-display text-3xl font-bold tabular md:text-3xl"
-                />
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="size-14 shrink-0 rounded-lg"
-                  onClick={() => cambiarCantidad(cantidad + 1)}
-                  disabled={cantidad >= 99}
-                  aria-label="Uno más"
-                >
-                  <Plus className="size-6" strokeWidth={2.2} />
-                </Button>
-              </div>
+              {/* El número se escribe directo (23 días no son 22 toques de "+"). */}
+              <NumeroConPasos
+                id="canon-cantidad"
+                valor={cantidad}
+                onCambiar={cambiarCantidad}
+                max={99}
+                unidad={tarifa?.unidad === "dia" ? "días" : "vehículos"}
+                etiquetaMenos={tarifa?.unidad === "dia" ? "Un día menos" : "Un vehículo menos"}
+                etiquetaMas={tarifa?.unidad === "dia" ? "Un día más" : "Un vehículo más"}
+              />
             </div>
 
             <div className="space-y-2">

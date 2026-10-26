@@ -211,6 +211,7 @@ export async function InicioJefe({ perfil, supabase }: { perfil: Perfil; supabas
                     <DesgloseCajaPorteria
                       quintas={caja.arqueo.quintas}
                       ambulantes={caja.arqueo.ambulantes}
+                      cocheras={caja.arqueo.cocheras}
                       canon={caja.arqueo.canon}
                       className="rounded-lg border px-3 py-2.5"
                     />

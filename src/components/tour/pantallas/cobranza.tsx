@@ -156,6 +156,7 @@ function ListaEjemplo({ quien, resaltar }: { quien: Quien; resaltar: ParteLista 
     ? [
         { label: "Quinteros", n: 14, activa: true },
         { label: "Ambulantes", n: 23 },
+        { label: "Cocheras", n: 41 },
       ]
     : quien === "lider"
       ? [

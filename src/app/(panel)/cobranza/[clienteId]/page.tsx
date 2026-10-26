@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, UserX } from "lucide-react";
+import { ArrowLeft, Car, UserX } from "lucide-react";
 import { requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { centavosConBeneficio, formatARS, formatFecha, hoyISO, labelPeriodo, saldoCargo } from "@/lib/format";
@@ -112,9 +112,23 @@ export default async function CobrarClientePage({
     .eq("id", clienteId)
     .maybeSingle();
 
-  // El Jefe no ve puesteros (RLS): si no lo encuentra, es de Administración.
+  // El Jefe no ve puesteros ni empleados (RLS). 0052: si tiene cochera, se la cobra él (solo
+  // la cochera); si no, lo cobra Administración.
   if (!cliente) {
-    if (esJefe) return <CobroAjeno mensaje="A este cliente lo cobra Administración" volverA={listaHref} />;
+    if (esJefe) {
+      const { data: cocheras } = await supabase.rpc("cocheras_para_cobrar", { p_cliente: clienteId });
+      const fila = cocheras?.[0];
+      if (fila) {
+        return (
+          <CobroCochera
+            fila={fila}
+            diaCaja={diaCaja}
+            volverA={`/cobranza?cat=cocheras${sufijoFecha}`}
+          />
+        );
+      }
+      return <CobroAjeno mensaje="A este cliente lo cobra Administración" volverA={listaHref} />;
+    }
     notFound();
   }
   const categoria = cliente.categoria as CategoriaCliente;
@@ -487,6 +501,155 @@ export default async function CobrarClientePage({
           {formCobro}
         </>
       )}
+    </div>
+  );
+}
+
+type FilaCochera = {
+  cliente_id: string;
+  codigo: number;
+  nombre: string;
+  apodo: string | null;
+  categoria: string;
+  cocheras: string | null;
+  deuda: number;
+  cargos: unknown;
+};
+
+type CargoCochera = {
+  id: string;
+  codigo: string;
+  descripcion: string;
+  periodo: string;
+  vencimiento: string;
+  estado: string;
+  monto: number;
+  monto_pagado: number;
+  descuento_pronto_pago: number;
+};
+
+/**
+ * 0052 · El Jefe de Portería le cobra la cochera a un puestero o a un empleado: SOLO la
+ * cochera (lo demás se lo cobra Administración), en la caja de portería y sin saldo a favor.
+ * Los datos salen de cocheras_para_cobrar (el Jefe no lee a esos clientes).
+ */
+async function CobroCochera({
+  fila,
+  diaCaja,
+  volverA,
+}: {
+  fila: FilaCochera;
+  diaCaja: string | null;
+  volverA: string;
+}) {
+  // Solo el Jefe de Portería llega acá (los demás leen al cliente y cobran todo).
+  const rol = "guardia" as const;
+  const supabase = await createClient();
+  const hoy = diaCaja ?? hoyISO();
+  const { data: caja } = await supabase
+    .from("cajas")
+    .select("estado, reapertura_solicitada_en")
+    .eq("tipo", "guardia")
+    .eq("fecha", hoy)
+    .maybeSingle();
+  const cajaHoy: CajaDeHoy = caja
+    ? { estado: caja.estado, reaperturaPedida: Boolean(caja.reapertura_solicitada_en) }
+    : null;
+  const cajaCerrada = diaCaja ? cajaAnteriorNoDejaCobrar(cajaHoy) : cajaNoDejaCobrar(cajaHoy);
+
+  const cargos = (Array.isArray(fila.cargos) ? (fila.cargos as CargoCochera[]) : []).map((c) => ({
+    ...c,
+    monto: Number(c.monto),
+    monto_pagado: Number(c.monto_pagado),
+    descuento_pronto_pago: Number(c.descuento_pronto_pago),
+  }));
+  const items = cargos
+    .map((c) => ({ ...c, saldo: saldoCargo(c, hoy), vencido: c.vencimiento < hoy }))
+    .filter((c) => c.saldo > 0);
+  const deuda = redondear2(items.reduce((acc, c) => acc + c.saldo, 0));
+  const categoria = fila.categoria as CategoriaCliente;
+  const descripcion = [
+    `Carpeta N° ${fila.codigo}`,
+    LABEL_CATEGORIA[categoria] ?? null,
+    fila.cocheras ? fila.cocheras.replace(/ · Cochera /g, " · ") : "Cochera sin número",
+    fila.apodo ? `“${fila.apodo}”` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <div className="mx-auto w-full max-w-2xl space-y-8">
+      <div>
+        <Link
+          href={volverA}
+          className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="size-4" strokeWidth={2} />
+          Volver a la lista
+        </Link>
+        <PageHeader titulo={fila.nombre} descripcion={descripcion} className="pb-0" />
+      </div>
+
+      {diaCaja ? (
+        <AvisoDiaAnterior fecha={diaCaja} caja={cajaHoy} rol={rol} volverAHoy={`/cobranza/${fila.cliente_id}?cochera=1`} />
+      ) : (
+        <AvisoCajaCerrada caja={cajaHoy} rol={rol} />
+      )}
+
+      <div className="flex items-start gap-3 rounded-lg border border-accent-foreground/20 bg-accent px-4 py-3" role="note">
+        <Car className="mt-0.5 size-5 shrink-0" strokeWidth={2} />
+        <p className="text-sm">
+          <span className="font-semibold">Le cobrás solo la cochera.</span> Lo demás (expensas, energía…) se
+          lo cobra Administración. Entra en la caja de portería, como tus otros cobros.
+        </p>
+      </div>
+
+      <section data-tour="cobranza-deuda" className="rounded-lg border bg-card">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b p-5">
+          <div>
+            <p className="text-sm text-muted-foreground">
+              {diaCaja ? `Debe de cochera al ${formatFecha(diaCaja)}` : "Debe de cochera hoy"}
+            </p>
+            {deuda > 0 ? (
+              <p className="text-3xl font-bold tabular text-pendiente">{formatARS(deuda)}</p>
+            ) : (
+              <p className="text-3xl font-bold tabular text-pagado">$ 0 — Al día</p>
+            )}
+          </div>
+          <Sello grande estado={deuda <= 0 ? "al_dia" : items.some((c) => c.vencido) ? "vencido" : "en_termino"} />
+        </div>
+        {items.length > 0 ? (
+          <div className="divide-y px-5">
+            {items.map((c) => (
+              <div key={c.id} className="flex items-start gap-3 py-3">
+                <Codigo codigo={c.codigo} className="mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium break-words">
+                    <DescripcionCargo texto={c.descripcion} />
+                  </p>
+                  <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+                    {labelPeriodo(c.periodo)}
+                    {c.vencido ? <Sello estado="vencido" /> : null}
+                  </p>
+                </div>
+                <Money monto={c.saldo} className="shrink-0 pt-px font-semibold" />
+              </div>
+            ))}
+          </div>
+        ) : null}
+      </section>
+
+      <FormCobro
+        clienteId={fila.cliente_id}
+        clienteNombre={fila.nombre}
+        deudaTotal={deuda}
+        medios={["efectivo", "transferencia"]}
+        volverA={volverA}
+        cajaCerrada={cajaCerrada}
+        irACaja={diaCaja ? hrefCajaDelDia(diaCaja, rol) : "/caja"}
+        fechaCaja={diaCaja ?? undefined}
+        sinSaldoFavor={`A ${fila.nombre} le cobrás solo la cochera: hasta ${formatARS(deuda)}. Lo demás lo cobra Administración.`}
+      />
     </div>
   );
 }

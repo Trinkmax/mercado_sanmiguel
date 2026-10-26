@@ -1,4 +1,4 @@
-import { Banknote, Landmark, Receipt, Truck } from "lucide-react";
+import { Banknote, Landmark, PackageOpen, Receipt, Truck } from "lucide-react";
 import type { Perfil } from "@/lib/auth";
 import { formatARS, hoyISO, labelPeriodo, periodoActual } from "@/lib/format";
 import { CajaRegistradora } from "@/components/shared/iconos";
@@ -29,6 +29,7 @@ export async function InicioTesoreria({ perfil, supabase }: { perfil: Perfil; su
     gastosVencidos,
     transferenciasBono,
     transferenciasGastos,
+    transferenciasVentas,
   ] = await Promise.all([
       resumenDelMes(supabase, periodo),
       serieUltimos14(supabase),
@@ -78,13 +79,24 @@ export async function InicioTesoreria({ perfil, supabase }: { perfil: Perfil; su
           .eq("medio_pago", "transferencia")
           .eq("conciliado", false)
       ),
+      // Ventas sin cliente cobradas por transferencia (0053).
+      contar(
+        supabase
+          .from("ingresos_varios")
+          .select("id", { count: "exact", head: true })
+          .eq("org_id", org)
+          .eq("medio", "transferencia")
+          .eq("anulado", false)
+          .eq("conciliado", false)
+      ),
     ]);
   // En Tesorería → Conciliar van en listas separadas (cobros, bono camioneros y gastos por
   // banco): el aviso dice cuántas de cada una, así los números de las dos pantallas cuadran.
-  const transferencias = transferenciasCobros + transferenciasBono + transferenciasGastos;
+  const transferencias = transferenciasCobros + transferenciasBono + transferenciasGastos + transferenciasVentas;
   const partesTransferencias = [
     transferenciasCobros > 0 ? `${transferenciasCobros} de clientes` : null,
     transferenciasBono > 0 ? `${transferenciasBono} del bono camioneros` : null,
+    transferenciasVentas > 0 ? `${transferenciasVentas} de ventas sin cliente` : null,
     transferenciasGastos > 0 ? `${transferenciasGastos} de gastos pagados por banco` : null,
   ].filter((t): t is string => t !== null);
   const detalleTransferencias =
@@ -92,15 +104,19 @@ export async function InicioTesoreria({ perfil, supabase }: { perfil: Perfil; su
       ? `${partesTransferencias.slice(0, -1).join(", ")} y ${partesTransferencias.at(-1)}. `
       : transferenciasBono > 0
         ? "Del bono camioneros. "
-        : transferenciasGastos > 0
-          ? "De gastos pagados por banco. "
-          : "";
+        : transferenciasVentas > 0
+          ? "De ventas sin cliente. "
+          : transferenciasGastos > 0
+            ? "De gastos pagados por banco. "
+            : "";
 
   // El bono camioneros (BC) no tiene "estimado": se cobra en el momento. Va aparte.
   // Estimado = cobrado + falta cobrar: lo que se espera cobrar si los que están en término
   // pagan en término (src/lib/estimado.ts, la misma cuenta que Reportes y Facturación).
-  const conceptos = resumen.filter((f) => f.codigo !== "BC");
+  const conceptos = resumen.filter((f) => f.codigo !== "BC" && !f.sinCliente);
   const bono = resumen.find((f) => f.codigo === "BC");
+  // 0053: lo que se cobra sin cliente (venta de vacíos y tarimas…), también aparte.
+  const ventas = resumen.filter((f) => f.sinCliente).reduce((acc, f) => acc + f.cobrado, 0);
   const montos = sumarEstimado(conceptos);
   const pct = Math.round(porcentajeCobrado(montos));
 
@@ -224,10 +240,21 @@ export async function InicioTesoreria({ perfil, supabase }: { perfil: Perfil; su
                 <Truck className="size-5" strokeWidth={2} />
               </span>
               <div>
-                <p className="text-sm text-muted-foreground">Bono camioneros del mes (cobrado en portería)</p>
+                <p className="text-sm text-muted-foreground">Bono camioneros del mes</p>
                 <Money monto={Number(bono?.cobrado ?? 0)} className="font-display text-2xl font-bold" />
               </div>
             </div>
+            {ventas > 0 ? (
+              <div className="flex items-center gap-3">
+                <span className="flex size-11 items-center justify-center rounded-xl bg-accent text-primary">
+                  <PackageOpen className="size-5" strokeWidth={2} />
+                </span>
+                <div>
+                  <p className="text-sm text-muted-foreground">Ventas sin cliente del mes</p>
+                  <Money monto={ventas} className="font-display text-2xl font-bold" />
+                </div>
+              </div>
+            ) : null}
           </div>
         </CardContent>
       </Card>
@@ -247,7 +274,7 @@ export async function InicioTesoreria({ perfil, supabase }: { perfil: Perfil; su
         <Card data-tour="inicio-ultimos-14">
           <CardHeader>
             <CardTitle className="text-base">Últimos 14 días</CardTitle>
-            <CardDescription>Lo que entró por día (cobros y bono camioneros)</CardDescription>
+            <CardDescription>Lo que entró por día (cobros, bono camioneros y ventas sin cliente)</CardDescription>
           </CardHeader>
           <CardContent>
             <ChartCobranzaDiaria data={serie} mini />

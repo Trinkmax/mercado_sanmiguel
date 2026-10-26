@@ -12,6 +12,7 @@ export type DatasetExportable =
   | "gastos"
   | "cajas"
   | "canon"
+  | "ingresos_varios"
   | "lecturas"
   | "movimientos_tesoreria"
   | "solicitudes"

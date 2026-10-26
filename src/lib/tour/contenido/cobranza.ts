@@ -71,7 +71,7 @@ const pasoHoyJefe: Paso = {
   ancla: "cobranza-hoy",
   titulo: "Lo que llevás cobrado",
   texto:
-    "Acá ves cuánto cobraste hoy y a cuántos ambulantes y quinteros. Es la plata que después le rendís a Administración.",
+    "Acá ves cuánto cobraste hoy y a cuántos ambulantes, quinteros y cocheras. Es la plata que después le rendís a Administración.",
 };
 
 function pasoCategorias(rol: Rol): Paso {
@@ -80,17 +80,34 @@ function pasoCategorias(rol: Rol): Paso {
     id: "categorias",
     ancla: "cobranza-categorias",
     accion: "tocar",
-    titulo: jefe ? "¿Quintero o ambulante?" : "Elegí a quién cobrarle",
+    titulo: jefe ? "¿Quintero, ambulante o cochera?" : "Elegí a quién cobrarle",
     texto: jefe
-      ? "Arriba elegís qué lista ver: «Quinteros» o «Ambulantes». El número entre paréntesis dice cuántos hay."
+      ? "Arriba elegís qué lista ver: «Quinteros», «Ambulantes» o «Cocheras». En «Cocheras» está todo el que alquila cochera, sea puestero, empleado, quintero o ambulante, con lo que debe de cochera. El número entre paréntesis dice cuántos hay."
       : "Arriba elegís qué lista ver: «Puesteros», «Quinteros» o «Ambulantes». El número entre paréntesis dice cuántos hay.",
-    consejo: "Cuando volvés de un cobro, la lista queda en el mismo grupo.",
+    consejo: jefe
+      ? "A un puestero o a un empleado le cobrás solo la cochera: lo demás se lo cobra Administración."
+      : "Cuando volvés de un cobro, la lista queda en el mismo grupo.",
     sinAncla: {
       texto: jefe
         ? "Cuando haya quinteros y ambulantes cargados, arriba de la lista elegís cuál de los dos ver. Así se ve:"
         : "Cuando haya clientes cargados, arriba de la lista elegís qué grupo ver. Así se ve:",
       pantalla: jefe ? PantallaCategoriasJefe : PantallaCategoriasLider,
     },
+  };
+}
+
+/** Administración y el Líder: lo que se cobra sin cliente (0052, 0053). */
+function pasoSinCliente(rol: Rol): Paso {
+  const admin = rol === "admin";
+  return {
+    id: "sin-cliente",
+    ancla: "cobranza-sin-cliente",
+    titulo: "Lo que se cobra sin cliente",
+    texto: admin
+      ? "Arriba de la lista están «Bono camioneros», si un camionero paga acá el canon de transporte, y «Venta de vacíos y tarimas», cuando la cooperativa vende algo. No se le carga a nadie: entra directo en tu caja."
+      : "Arriba de la lista está «Venta de vacíos y tarimas», cuando la cooperativa vende algo: no se le carga a nadie y entra en la caja de Administración. «Bono camioneros» te lleva a Portería.",
+    consejo: "En la venta escribís el monto y, si querés, qué se vendió y a quién.",
+    opcional: true,
   };
 }
 
@@ -104,7 +121,7 @@ function pasoBuscar(rol: Rol): Paso {
     accion: "tocar",
     titulo: "Buscá al cliente",
     texto: jefe
-      ? "Escribí el nombre, el apodo, el número de carpeta o el DNI: la lista se achica mientras escribís. Probalo ahora si querés, no se guarda nada."
+      ? "Escribí el nombre, el apodo, el número de carpeta o el DNI (en «Cocheras», también el número de la cochera): la lista se achica mientras escribís. Probalo ahora si querés, no se guarda nada."
       : "Escribí el nombre, el apodo, el número de puesto o el DNI: la lista se achica mientras escribís. Probalo ahora si querés, no se guarda nada.",
     consejo: jefe
       ? "Si es un ambulante nuevo, tocá «Nuevo ambulante», arriba: lo cargás y le cobrás enseguida."
@@ -235,7 +252,7 @@ function pasoMonto(rol: Rol): Paso {
       "cobranza-dias": {
         titulo: "¿Cuántos días paga?",
         texto:
-          "Al ambulante se le cobra por día. Arriba escribís cuánto te paga por día y acá elegís «Solo hoy», «2 días», «3 días» o «Semana (7)», o sumás y restás con los botones redondos. Abajo, en verde, los días que ya pagó.",
+          "Al ambulante se le cobra por día. Arriba escribís cuánto te paga por día y acá elegís «Solo hoy», «2 días», «3 días» o «Semana (7)», o tocás el número y escribís los días (también podés sumar y restar con «+» y «−»). Abajo, en verde, los días que ya pagó.",
         consejo: "El total se calcula solo: los días por el precio que escribiste.",
       },
       ...SIN_NADA_QUE_COBRAR,
@@ -286,7 +303,7 @@ const pasoAmbulanteJefe: Paso = {
     "cobranza-dias": {
       titulo: "Al ambulante, por día",
       texto:
-        "Al ambulante se le cobra por día. Arriba escribís cuánto te paga por día y acá elegís «Solo hoy», «2 días», «3 días» o «Semana (7)», o sumás y restás con los botones redondos.",
+        "Al ambulante se le cobra por día. Arriba escribís cuánto te paga por día y acá elegís «Solo hoy», «2 días», «3 días» o «Semana (7)», o tocás el número y escribís los días.",
       consejo: "El total se calcula solo: los días por el precio que escribiste.",
     },
   },
@@ -304,7 +321,7 @@ const pasoDiasAmbulanteJefe: Paso = {
   ancla: "cobranza-dias",
   titulo: "¿Cuántos días paga?",
   texto:
-    "Elegís «Solo hoy», «2 días», «3 días» o «Semana (7)», o sumás y restás con los botones redondos. Abajo, en verde, los días que ya pagó.",
+    "Elegís «Solo hoy», «2 días», «3 días» o «Semana (7)», o tocás el número y escribís los días (también con «+» y «−»). Abajo, en verde, los días que ya pagó.",
   consejo: "El total se calcula solo: los días por el precio que escribiste. Por ejemplo, 3 días × $ 8.000 = $ 24.000.",
   opcional: true,
 };
@@ -400,6 +417,7 @@ export const COBRAR: ContenidoCapitulo = {
     if (rol === "lider") {
       return [
         pasoQueEs(rol),
+        pasoSinCliente(rol),
         pasoCategorias(rol),
         pasoBuscar(rol),
         pasoFila(rol),
@@ -413,6 +431,7 @@ export const COBRAR: ContenidoCapitulo = {
     if (rol === "admin") {
       return [
         pasoQueEs(rol),
+        pasoSinCliente(rol),
         pasoBuscar(rol),
         pasoFila(rol),
         pasoDeuda,

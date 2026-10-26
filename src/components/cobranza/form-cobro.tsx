@@ -10,6 +10,7 @@ import {
   PiggyBank,
   Plus,
   Repeat,
+  TriangleAlert,
   Users,
   X,
 } from "lucide-react";
@@ -139,6 +140,7 @@ export function FormCobro({
   cajaCerrada = false,
   irACaja = "/caja",
   fechaCaja,
+  sinSaldoFavor,
 }: {
   clienteId: string;
   clienteNombre: string;
@@ -163,6 +165,11 @@ export function FormCobro({
   irACaja?: string;
   /** Carga atrasada: el cobro entra en la caja de este día anterior (no en la de hoy). */
   fechaCaja?: string;
+  /**
+   * No se puede dejar saldo a favor (el Jefe cobrándole la cochera a un puestero o un empleado,
+   * 0052): es lo que se avisa si se pasa de la deuda; no hay "adelantar plata".
+   */
+  sinSaldoFavor?: string;
 }) {
   const router = useRouter();
   const [lineas, setLineas] = useState<LineaForm[]>(() => [
@@ -351,6 +358,12 @@ export function FormCobro({
     setConfirmarCuitEn(null);
     const t = redondear2(lineasActuales.reduce((acc, l) => acc + parseMonto(l.monto), 0));
     if (t - deudaTotal > 0.009) {
+      if (sinSaldoFavor) {
+        // Con una sola línea el aviso ya está debajo del monto: el cursor va ahí, no se repite.
+        if (lineasActuales.length > 1) setErrorRpc(sinSaldoFavor);
+        else requestAnimationFrame(() => document.getElementById("monto-cobro")?.focus());
+        return;
+      }
       setConfirmarSaldo(true);
       return;
     }
@@ -373,7 +386,7 @@ export function FormCobro({
   }
 
   // La RPC avisa si sobra plata y no se autorizó (p. ej. la deuda cambió mientras se cargaba).
-  const errorPideSaldoFavor = Boolean(errorRpc && /saldo a favor/i.test(errorRpc));
+  const errorPideSaldoFavor = !sinSaldoFavor && Boolean(errorRpc && /saldo a favor/i.test(errorRpc));
 
   // ---------- trayendo la deuda nueva después de "Cobrar otra vez" ----------
   if (refrescando) {
@@ -450,7 +463,7 @@ export function FormCobro({
             Cobrar a otro cliente
           </Link>
         </Button>
-        {!cubreConSaldo ? (
+        {!cubreConSaldo && !sinSaldoFavor ? (
           <Button
             type="button"
             variant="ghost"
@@ -614,11 +627,22 @@ export function FormCobro({
             </div>
             {sobrante > 0 ? (
               <div className="flex items-start gap-2.5 rounded-lg border border-parcial bg-parcial-suave px-4 py-3 text-sm">
-                <PiggyBank className="mt-0.5 size-5 shrink-0 text-parcial" strokeWidth={2} />
-                <p>
-                  Sobran <strong className="tabular">{formatARS(sobrante)}</strong>: quedan como
-                  saldo a favor de {clienteNombre} y se aplican solos a lo próximo que deba.
-                </p>
+                {sinSaldoFavor ? (
+                  <>
+                    <TriangleAlert className="mt-0.5 size-5 shrink-0 text-parcial" strokeWidth={2} />
+                    <p>
+                      Sobran <strong className="tabular">{formatARS(sobrante)}</strong>. {sinSaldoFavor}
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <PiggyBank className="mt-0.5 size-5 shrink-0 text-parcial" strokeWidth={2} />
+                    <p>
+                      Sobran <strong className="tabular">{formatARS(sobrante)}</strong>: quedan como
+                      saldo a favor de {clienteNombre} y se aplican solos a lo próximo que deba.
+                    </p>
+                  </>
+                )}
               </div>
             ) : null}
           </div>

@@ -21,7 +21,7 @@ import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
 import { CuentaCajon } from "@/components/caja/cuenta-cajon";
 import { AlertaError } from "@/components/cobranza/alerta-error";
-import type { Arqueo } from "@/components/caja/arqueo-tipos";
+import { cocherasPorteria, textoDesglosePorteria, type Arqueo } from "@/components/caja/arqueo-tipos";
 import { llamarAccion, SIN_RESPUESTA } from "@/lib/llamar-accion";
 
 /**
@@ -162,8 +162,7 @@ export function BotonCerrarCaja({
                     <p className="text-base">Entregá en Administración</p>
                     <Money monto={a.efectivo} className="block text-3xl font-bold" />
                     <p className="text-sm text-muted-foreground">
-                      en efectivo — Quintas {formatARS(a.quintas)} · Ambulantes {formatARS(a.ambulantes)} · Bono
-                      camioneros {formatARS(a.canon)}
+                      en efectivo — {textoDesglosePorteria({ ...a, cocheras: cocherasPorteria(a) })}
                       {a.transferencia > 0.009 ? ` (+${formatARS(a.transferencia)} ya están en el banco)` : ""}
                     </p>
                   </>
@@ -214,8 +213,7 @@ export function BotonCerrarCaja({
                     Entregás <Money monto={a.efectivo} className="text-2xl font-bold" /> en efectivo
                   </p>
                   <p className="mt-1 text-sm text-muted-foreground">
-                    Quintas {formatARS(a.quintas)} · Ambulantes {formatARS(a.ambulantes)} · Bono camioneros{" "}
-                    {formatARS(a.canon)}
+                    {textoDesglosePorteria({ ...a, cocheras: cocherasPorteria(a) })}
                     {a.transferencia > 0.009 ? ` · ${formatARS(a.transferencia)} por transferencia` : ""}
                   </p>
                 </div>

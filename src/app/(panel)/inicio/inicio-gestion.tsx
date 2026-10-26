@@ -6,6 +6,7 @@ import {
   Footprints,
   Landmark,
   MessagesSquare,
+  PackageOpen,
   Truck,
 } from "lucide-react";
 import type { Perfil } from "@/lib/auth";
@@ -160,10 +161,12 @@ export async function InicioGestion({ perfil, supabase }: { perfil: Perfil; supa
   const solAsignadas = porEstado.get("asignada") ?? 0;
   const solPorRevisar = solNuevas + solEnRevision + solResueltas;
 
-  // BC (bono camioneros) va aparte; para Administración tampoco quintas ni ambulantes.
+  // BC (bono camioneros) y las ventas sin cliente (0053) van aparte: no tienen estimado. Para
+  // Administración tampoco quintas ni ambulantes.
   const deOtraCaja = new Set(["BC", ...(conceptosPorteriaRes.data ?? []).map((c) => c.codigo)]);
-  const conceptos = resumen.filter((f) => !deOtraCaja.has(f.codigo));
+  const conceptos = resumen.filter((f) => !deOtraCaja.has(f.codigo) && !f.sinCliente);
   const bono = resumen.find((f) => f.codigo === "BC");
+  const ventas = resumen.filter((f) => f.sinCliente).reduce((acc, f) => acc + f.cobrado, 0);
   // Estimado = cobrado + por cobrar: lo que se espera cobrar si los que están en término
   // pagan en término (src/lib/estimado.ts, la misma cuenta que Tesorería, Reportes y
   // Facturación). Aparte, el tope si pagan fuera de término y los beneficios ya otorgados.
@@ -407,12 +410,23 @@ export async function InicioGestion({ perfil, supabase }: { perfil: Perfil; supa
                 </div>
               </>
             )}
-            {bono && bono.cobrado > 0 ? (
-              <p className="mt-4 flex items-center gap-2 border-t pt-4 text-sm text-muted-foreground">
-                <Truck className="size-4" strokeWidth={2} />
-                Bono camioneros del mes (portería):{" "}
-                <Money monto={bono.cobrado} className="font-semibold text-foreground" />
-              </p>
+            {(bono && bono.cobrado > 0) || ventas > 0 ? (
+              <div className="mt-4 space-y-1 border-t pt-4 text-sm text-muted-foreground">
+                {bono && bono.cobrado > 0 ? (
+                  <p className="flex items-center gap-2">
+                    <Truck className="size-4" strokeWidth={2} />
+                    Bono camioneros del mes:{" "}
+                    <Money monto={bono.cobrado} className="font-semibold text-foreground" />
+                  </p>
+                ) : null}
+                {ventas > 0 ? (
+                  <p className="flex items-center gap-2">
+                    <PackageOpen className="size-4" strokeWidth={2} />
+                    Ventas sin cliente del mes:{" "}
+                    <Money monto={ventas} className="font-semibold text-foreground" />
+                  </p>
+                ) : null}
+              </div>
             ) : null}
           </CardContent>
         </Card>

@@ -35,6 +35,7 @@ export function BandejaAdministracion({ bandeja, rol }: { bandeja: BandejaAdmin;
           transferencia: r.total_transferencia,
           quintas: r.total_quintas,
           ambulantes: r.total_ambulantes,
+          cocheras: r.total_cocheras,
           canon: r.total_canon,
           ajustes: r.total_ajustes,
           cerradaEn: r.cerrada_en,

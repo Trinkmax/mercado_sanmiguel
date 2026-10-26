@@ -152,6 +152,10 @@ export default async function CierreCajaPage({ params, searchParams }: Props) {
   }
   const tarifas = [...porTarifa.values()].sort((a, b) => b.efectivo + b.transferencia - (a.efectivo + a.transferencia));
   const canonAnulados = datos.canon.filter((e) => e.anulado);
+  // 0053: ventas y otros ingresos sin cliente (solo la caja de administración).
+  const ingresosVigentes = datos.ingresos.filter((i) => !i.anulado);
+  const ingresosAnulados = datos.ingresos.filter((i) => i.anulado);
+  const hayCocherasRendidas = datos.rendidas.some((r) => r.total_cocheras > 0.009);
 
   return (
     <>
@@ -392,8 +396,8 @@ export default async function CierreCajaPage({ params, searchParams }: Props) {
             </section>
           ) : null}
 
-          {/* Bono camioneros por tarifa */}
-          {porteria ? (
+          {/* Bono camioneros por tarifa (también el que cobró Administración en su caja, 0052) */}
+          {porteria || datos.canon.length > 0 ? (
             <section className="break-inside-avoid space-y-2">
               <Titulo>Bono camioneros (canon de transporte)</Titulo>
               {tarifas.length === 0 ? (
@@ -443,6 +447,52 @@ export default async function CierreCajaPage({ params, searchParams }: Props) {
             </section>
           ) : null}
 
+          {/* Ventas y otros ingresos sin cliente (0053) */}
+          {datos.ingresos.length > 0 ? (
+            <section className="break-inside-avoid space-y-2">
+              <Titulo>Ventas y otros ingresos sin cliente</Titulo>
+              {ingresosVigentes.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Todos anulados.</p>
+              ) : (
+                <table className={TABLA}>
+                  <thead>
+                    <tr className="border-b text-left text-muted-foreground">
+                      <th>Concepto</th>
+                      <th className={SOLO_ANCHO}>Medio</th>
+                      <th className="text-right">Monto</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ingresosVigentes.map((i) => (
+                      <tr key={i.id} className="border-b border-dashed">
+                        <td className="break-words">
+                          N° {i.numero} · {i.detalle?.trim() ? `${i.concepto}: ${i.detalle.trim()}` : i.concepto}
+                          <span className={SOLO_CELULAR}>
+                            {i.medio === "efectivo" ? "Efectivo" : `Transferencia${i.titular ? ` · ${i.titular}` : ""}`}
+                          </span>
+                        </td>
+                        <td className={SOLO_ANCHO}>
+                          {i.medio === "efectivo" ? "Efectivo" : `Transferencia${i.titular ? ` · ${i.titular}` : ""}`}
+                        </td>
+                        <td className="text-right whitespace-nowrap tabular">{formatARS(i.monto)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              {ingresosAnulados.length > 0 ? (
+                <ul className="space-y-0.5 text-xs text-muted-foreground">
+                  {ingresosAnulados.map((i) => (
+                    <li key={i.id} className="break-words">
+                      N° {i.numero} anulado ({i.concepto} · {formatARS(i.monto)})
+                      {i.motivoAnulacion ? `: ${i.motivoAnulacion}` : ""}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </section>
+          ) : null}
+
           {/* Cajas de portería recibidas */}
           {datos.rendidas.length > 0 ? (
             <section className="break-inside-avoid space-y-2">
@@ -453,6 +503,7 @@ export default async function CierreCajaPage({ params, searchParams }: Props) {
                     <th>Día</th>
                     <th className={`${SOLO_ANCHO} text-right`}>Quintas</th>
                     <th className={`${SOLO_ANCHO} text-right`}>Ambulantes</th>
+                    {hayCocherasRendidas ? <th className={`${SOLO_ANCHO} text-right`}>Cocheras</th> : null}
                     <th className={`${SOLO_ANCHO} text-right`}>Bono camioneros</th>
                     <th className="text-right">En mano</th>
                     <th className="text-right">Transferencia</th>
@@ -466,11 +517,19 @@ export default async function CierreCajaPage({ params, searchParams }: Props) {
                         <span className={SOLO_CELULAR}>
                           <span className="whitespace-nowrap">Quintas {formatARS(r.total_quintas)}</span> ·{" "}
                           <span className="whitespace-nowrap">Ambulantes {formatARS(r.total_ambulantes)}</span> ·{" "}
+                          {r.total_cocheras > 0.009 ? (
+                            <>
+                              <span className="whitespace-nowrap">Cocheras {formatARS(r.total_cocheras)}</span> ·{" "}
+                            </>
+                          ) : null}
                           <span className="whitespace-nowrap">Bono camioneros {formatARS(r.total_canon)}</span>
                         </span>
                       </td>
                       <td className={`${SOLO_ANCHO} text-right whitespace-nowrap tabular`}>{formatARS(r.total_quintas)}</td>
                       <td className={`${SOLO_ANCHO} text-right whitespace-nowrap tabular`}>{formatARS(r.total_ambulantes)}</td>
+                      {hayCocherasRendidas ? (
+                        <td className={`${SOLO_ANCHO} text-right whitespace-nowrap tabular`}>{formatARS(r.total_cocheras)}</td>
+                      ) : null}
                       <td className={`${SOLO_ANCHO} text-right whitespace-nowrap tabular`}>{formatARS(r.total_canon)}</td>
                       <td className="text-right whitespace-nowrap tabular">{formatARS(r.total_efectivo)}</td>
                       <td className="text-right whitespace-nowrap tabular">{formatARS(r.total_transferencia)}</td>

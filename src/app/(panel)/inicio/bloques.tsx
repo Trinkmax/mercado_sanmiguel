@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Footprints, Tractor, Truck, type LucideIcon } from "lucide-react";
+import { Car, Footprints, Tractor, Truck, type LucideIcon } from "lucide-react";
 import { formatARS } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -141,23 +141,26 @@ export function FilaEscritorio({
 }
 
 /**
- * Desglose de la caja de portería (A3): Quintas · Ambulantes · Bono camioneros,
- * con el ícono de cada uno (tractor, pisadas, camión).
+ * Desglose de la caja de portería (A3): Quintas · Ambulantes · Bono camioneros, con el ícono
+ * de cada uno (tractor, pisadas, camión) y, si el Jefe cobró alguna, las cocheras (0052).
  */
 export function DesgloseCajaPorteria({
   quintas,
   ambulantes,
+  cocheras = 0,
   canon,
   className,
 }: {
   quintas: number;
   ambulantes: number;
+  cocheras?: number;
   canon: number;
   className?: string;
 }) {
   const partes: { icono: LucideIcon; label: string; monto: number }[] = [
     { icono: Tractor, label: "Quintas", monto: quintas },
     { icono: Footprints, label: "Ambulantes", monto: ambulantes },
+    ...(cocheras > 0.009 ? [{ icono: Car, label: "Cocheras", monto: cocheras }] : []),
     { icono: Truck, label: "Bono camioneros", monto: canon },
   ];
   return (

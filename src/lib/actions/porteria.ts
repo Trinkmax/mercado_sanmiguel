@@ -11,10 +11,10 @@ import { diaAnteriorValido } from "@/lib/dia-caja";
 
 /** Ingresos del personal en la garita: Portería y el Líder (A4, G10: ni Administración ni el Jefe). */
 const ROLES_INGRESOS = ["porteria", "lider"] as const;
-/** Canon de transporte: Portería y el Líder (§1.3 D-P2: el Líder opera todo). */
-const ROLES_CANON = ["porteria", "lider"] as const;
-/** Anular canon: Portería (lo suyo, 15 min), el Jefe (caja abierta), Tesorería y el Líder. */
-const ROLES_ANULAR_CANON = ["porteria", "guardia", "tesoreria", "lider"] as const;
+/** Canon de transporte: Portería y el Líder (§1.3 D-P2: el Líder opera todo); 0052: también Administración, en su caja. */
+const ROLES_CANON = ["porteria", "lider", "admin"] as const;
+/** Anular canon: Portería (lo suyo, 15 min), el Jefe y Administración (su caja, abierta), Tesorería y el Líder. */
+const ROLES_ANULAR_CANON = ["porteria", "guardia", "tesoreria", "lider", "admin"] as const;
 
 /** Una firma dibujada en el canvas no debería pesar más que esto. */
 const TAMANO_MAX_FIRMA = 2 * 1024 * 1024; // 2 MB
@@ -487,6 +487,7 @@ export async function registrarCanon(
 
   const r = (data ?? {}) as Record<string, unknown>;
   revalidatePath("/porteria");
+  revalidatePath("/cobranza", "layout");
   revalidatePath("/caja");
   revalidatePath("/inicio");
   return ok({
@@ -525,6 +526,7 @@ export async function anularCanon(input: unknown): Promise<ActionResult> {
   if (error) return fallo(mensajeBase(error));
 
   revalidatePath("/porteria");
+  revalidatePath("/cobranza", "layout");
   revalidatePath("/caja");
   revalidatePath("/inicio");
   return ok(undefined);

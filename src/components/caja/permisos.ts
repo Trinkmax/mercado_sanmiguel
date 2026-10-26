@@ -34,6 +34,8 @@ export type PermisosCaja = {
   modoCanon: "jefe" | "lectura";
   /** Tesorería y el Líder anulan canon también con la caja rendida (anular_canon lo permite). */
   anularCanonConCajaCerrada: boolean;
+  /** Anular ventas y otros ingresos sin cliente (anular_ingreso, 0053). */
+  anularIngresos: boolean;
 };
 
 export function permisosCaja(
@@ -67,8 +69,13 @@ export function permisosCaja(
       ((estado === "cerrada" && tipo === "administracion") || estado === "integrada"),
     conciliar: (tesoreria || lider) && estado !== null,
     pagarGasto: tipo === "administracion" && noValidada && (rol === "admin" || tesoreria || lider),
+    // 0052: Administración anula el bono que cobró en su caja mientras está abierta.
     modoCanon:
-      (rol === "guardia" && estado === "abierta") || ((lider || tesoreria) && noValidada) ? "jefe" : "lectura",
+      (duenia && estado === "abierta") || ((lider || tesoreria) && noValidada) ? "jefe" : "lectura",
     anularCanonConCajaCerrada: lider || tesoreria,
+    anularIngresos:
+      tipo === "administracion" &&
+      noValidada &&
+      ((rol === "admin" && estado === "abierta") || lider || tesoreria),
   };
 }

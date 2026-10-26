@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ArrowRight, CalendarClock, CalendarX2, Stamp, TriangleAlert, Truck } from "lucide-react";
+import { ArrowRight, CalendarClock, CalendarX2, PackageOpen, Stamp, TriangleAlert, Truck } from "lucide-react";
 import { CajaRegistradora } from "@/components/shared/iconos";
 import type { Rol } from "@/lib/auth";
 import { formatFecha, hoyISO } from "@/lib/format";
@@ -17,10 +17,12 @@ import { BotonImprimirCaja } from "@/components/caja/boton-imprimir-caja";
 import { CobrosDia } from "@/components/caja/cobros-dia";
 import { GastosCaja } from "@/components/caja/gastos-caja";
 import { HistorialCaja } from "@/components/caja/historial-caja";
+import { IngresosDelDia } from "@/components/caja/ingresos-caja";
 import { RecibirCajaPorteria } from "@/components/caja/integrar-rendicion";
 import { TransferenciasCaja } from "@/components/caja/transferencias-caja";
 import { UltimosDias } from "@/components/caja/ultimos-dias";
 import { permisosCaja } from "@/components/caja/permisos";
+import { cocherasPorteria } from "@/components/caja/arqueo-tipos";
 import type { DatosCaja } from "@/components/caja/datos";
 
 export const TITULO_TIPO = {
@@ -199,6 +201,7 @@ export function VistaCaja({
             transferencia: arqueo.transferencia,
             quintas: arqueo.quintas,
             ambulantes: arqueo.ambulantes,
+            cocheras: cocherasPorteria(arqueo),
             canon: arqueo.canon,
             ajustes: arqueo.ajustes,
             adminMismoDia: datos.adminMismoDia,
@@ -246,14 +249,18 @@ export function VistaCaja({
 
       <CobrosDia key="cobros" recibos={datos.recibos} puedeAnular={permisos.anularCobros} porteria={porteria} esHoy={esHoy} />
 
-      {porteria ? (
+      {/* 0052: Administración también cobra el bono camioneros (en su caja): la sección aparece
+          en la caja de administración cuando hay alguno. */}
+      {porteria || datos.canon.length > 0 ? (
         <section key="canon" aria-labelledby={`canon-${caja.id}`} className="space-y-3" data-tour="caja-canon">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <h2 id={`canon-${caja.id}`} className="flex items-center gap-2 font-display text-lg font-bold tracking-tight">
               <Truck className="size-5 text-muted-foreground" strokeWidth={2} />
               Bono camioneros — canon de transporte
             </h2>
-            <p className="text-sm text-muted-foreground">Lo cobra Portería en la garita.</p>
+            <p className="text-sm text-muted-foreground">
+              {porteria ? "Lo cobra Portería en la garita." : "Lo cobró Administración en esta caja."}
+            </p>
           </div>
           <CanonDelDia
             entradas={datos.canon}
@@ -264,6 +271,24 @@ export function VistaCaja({
             anularConCajaCerrada={permisos.anularCanonConCajaCerrada}
             esHoy={esHoy}
             tarifas={datos.tarifas}
+          />
+        </section>
+      ) : null}
+
+      {/* 0053: ventas y otros ingresos sin cliente (venta de vacíos y tarimas…). */}
+      {!porteria && datos.ingresos.length > 0 ? (
+        <section key="ingresos" aria-labelledby={`ingresos-${caja.id}`} className="space-y-3" data-tour="caja-ingresos">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h2 id={`ingresos-${caja.id}`} className="flex items-center gap-2 font-display text-lg font-bold tracking-tight">
+              <PackageOpen className="size-5 text-muted-foreground" strokeWidth={2} />
+              Ventas y otros ingresos sin cliente
+            </h2>
+            <p className="text-sm text-muted-foreground">Lo cobró Administración sin cargárselo a nadie.</p>
+          </div>
+          <IngresosDelDia
+            ingresos={datos.ingresos}
+            puedeAnular={permisos.anularIngresos}
+            esHoy={esHoy}
           />
         </section>
       ) : null}

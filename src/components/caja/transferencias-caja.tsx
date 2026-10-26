@@ -19,6 +19,7 @@ function agrupar(transferencias: TransferenciaCaja[], porteria: boolean): Grupo[
   const propias = transferencias.filter((t) => t.sentido === "entra" && !t.porteriaFecha);
   const cobros = propias.filter((t) => t.clase === "cobro");
   const canon = propias.filter((t) => t.clase === "canon");
+  const ingresos = propias.filter((t) => t.clase === "ingreso");
   const fechasPorteria = [
     ...new Set(transferencias.map((t) => t.porteriaFecha).filter((f): f is string => Boolean(f))),
   ].sort();
@@ -27,11 +28,12 @@ function agrupar(transferencias: TransferenciaCaja[], porteria: boolean): Grupo[
   return [
     {
       clave: "cobros",
-      titulo: porteria ? "Cobros a quinteros y ambulantes" : "Cobros por transferencia",
+      titulo: porteria ? "Cobros a quinteros, ambulantes y cocheras" : "Cobros por transferencia",
       icono: ArrowDownLeft,
       filas: cobros,
     },
     { clave: "canon", titulo: "Bono camioneros por transferencia", icono: ArrowDownLeft, filas: canon },
+    { clave: "ingresos", titulo: "Ventas y otros ingresos por transferencia", icono: ArrowDownLeft, filas: ingresos },
     ...fechasPorteria.map((f) => ({
       clave: `porteria-${f}`,
       titulo: `Caja de portería del ${formatFecha(f).slice(0, 5)}`,
@@ -42,7 +44,7 @@ function agrupar(transferencias: TransferenciaCaja[], porteria: boolean): Grupo[
   ].filter((g) => g.filas.length > 0);
 }
 
-/** "Recibo N° 12" · "Bono camioneros N° 4" · la descripción del gasto. */
+/** "Recibo N° 12" · "Bono camioneros N° 4" · "Cobro N° 3" · la descripción del gasto. */
 function nombreCorto(t: TransferenciaCaja): string {
   if (t.clase === "gasto") return t.titulo;
   return t.detalle?.split(" · ").find((p) => p.includes("N°")) ?? t.titulo;
@@ -50,7 +52,7 @@ function nombreCorto(t: TransferenciaCaja): string {
 
 /**
  * Las transferencias de la caja, una por una, para chequearlas contra el banco (0049):
- * lo que entró (cobros, bono camioneros y lo de las cajas de portería recibidas) y lo que
+ * lo que entró (cobros, bono camioneros, ventas y lo de las cajas de portería recibidas) y lo que
  * salió (gastos pagados por banco ese día). Tesorería y el Líder marcan cada una con
  * "Está en el banco"; el resto ve cómo está. Es la misma marca de Tesorería → Conciliar.
  */

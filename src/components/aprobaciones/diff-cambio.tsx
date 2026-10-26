@@ -60,6 +60,7 @@ const LABEL_TIPO_CONCEPTO: Record<string, string> = {
   diario: "Por día",
   abono_energia: "Abono de energía",
   eventual: "Eventual",
+  ingreso: "Ingreso sin cliente",
 };
 
 /** Claves internas que no se muestran como "campo" del diff. */

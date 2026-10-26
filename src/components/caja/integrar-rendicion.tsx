@@ -3,7 +3,7 @@
 import { useId, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowDownToLine, Check, Footprints, Printer, Tractor, Truck } from "lucide-react";
+import { ArrowDownToLine, Car, Check, Footprints, Printer, Tractor, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { integrarCajaPorteria, type ResultadoIntegracion } from "@/lib/actions/cajas";
 import { cn } from "@/lib/utils";
@@ -35,6 +35,8 @@ export type RendicionARecibir = {
   transferencia: number;
   quintas: number;
   ambulantes: number;
+  /** La cochera que el Jefe le cobró a puesteros y empleados (0052). */
+  cocheras: number;
   canon: number;
   ajustes: number;
   /**
@@ -51,17 +53,21 @@ export type Recibida = {
   resultado: ResultadoIntegracion;
   /** Día de la caja de administración donde entró, si no fue la de hoy. */
   destinoFecha: string | null;
+  /** La cochera que el Jefe cobró en esa caja (la recepción no la devuelve: sale de lo rendido). */
+  cocheras: number;
 };
 
-/** "Quintas $A · Ambulantes $B · Bono camioneros $C" con íconos. */
+/** "Quintas $A · Ambulantes $B · Cocheras $D · Bono camioneros $C" con íconos (las cocheras, si hubo). */
 export function DesglosePorteria({
   quintas,
   ambulantes,
+  cocheras = 0,
   canon,
   ajustes = 0,
 }: {
   quintas: number;
   ambulantes: number;
+  cocheras?: number;
   canon: number;
   ajustes?: number;
 }) {
@@ -75,6 +81,12 @@ export function DesglosePorteria({
         <Footprints className="size-4 shrink-0 translate-y-0.5 text-muted-foreground" strokeWidth={2} />
         Ambulantes <Money monto={ambulantes} className="font-semibold text-foreground" />
       </span>
+      {Math.abs(cocheras) > 0.009 ? (
+        <span className="inline-flex items-baseline gap-1.5 whitespace-nowrap">
+          <Car className="size-4 shrink-0 translate-y-0.5 text-muted-foreground" strokeWidth={2} />
+          Cocheras <Money monto={cocheras} className="font-semibold text-foreground" />
+        </span>
+      ) : null}
       <span className="inline-flex items-baseline gap-1.5 whitespace-nowrap">
         <Truck className="size-4 shrink-0 translate-y-0.5 text-muted-foreground" strokeWidth={2} />
         Bono camioneros <Money monto={canon} className="font-semibold text-foreground" />
@@ -182,6 +194,7 @@ export function BotonIntegrarRendicion({
         fecha: r.fecha,
         resultado: res.data,
         destinoFecha: enMismoDia ? r.fecha : null,
+        cocheras: r.cocheras,
       });
     });
   }
@@ -263,7 +276,7 @@ export function BotonIntegrarRendicion({
               </dd>
             </div>
             <div className="px-4 py-2.5 text-sm text-muted-foreground">
-              <DesglosePorteria quintas={r.quintas} ambulantes={r.ambulantes} canon={r.canon} ajustes={r.ajustes} />
+              <DesglosePorteria quintas={r.quintas} ambulantes={r.ambulantes} cocheras={r.cocheras} canon={r.canon} ajustes={r.ajustes} />
             </div>
           </dl>
 
@@ -398,7 +411,13 @@ export function ExitoRecepcion({ recibida, onCerrar }: { recibida: Recibida | nu
                 </p>
               ) : null}
               <p className="text-sm text-muted-foreground">
-                <DesglosePorteria quintas={r.quintas} ambulantes={r.ambulantes} canon={r.canon} ajustes={r.ajustes} />
+                <DesglosePorteria
+                  quintas={r.quintas}
+                  ambulantes={r.ambulantes}
+                  cocheras={recibida.cocheras}
+                  canon={r.canon}
+                  ajustes={r.ajustes}
+                />
               </p>
             </div>
             <DialogFooter className="gap-2 sm:gap-2">
@@ -445,6 +464,7 @@ export function RecibirCajaPorteria({ rendicion, mostrar }: { rendicion: Rendici
               <DesglosePorteria
                 quintas={rendicion.quintas}
                 ambulantes={rendicion.ambulantes}
+                cocheras={rendicion.cocheras}
                 canon={rendicion.canon}
                 ajustes={rendicion.ajustes}
               />
