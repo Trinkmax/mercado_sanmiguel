@@ -6,6 +6,7 @@ import {
   ClipboardClock,
   FolderOpen,
   HandCoins,
+  History,
   Info,
   Minus,
   Pencil,
@@ -424,6 +425,12 @@ function FichaArriba({ jefe = false }: { jefe?: boolean }) {
           <p className={cn(CHICO, "text-muted-foreground")}>Saldo a favor</p>
           <Money monto={0} className="block text-[1.15rem] font-bold text-muted-foreground/60" />
         </div>
+        {/* Administración y el Líder: lo que debía antes del sistema (el Jefe no la carga). */}
+        {jefe ? null : (
+          <BotonEjemplo variante="contorno" className="min-h-7 px-2">
+            <History /> Deuda pasada
+          </BotonEjemplo>
+        )}
       </Resaltado>
     </MarcoPantalla>
   );

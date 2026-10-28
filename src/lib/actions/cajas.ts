@@ -247,6 +247,9 @@ export async function anularCobro(
 
   revalidarCajas();
   revalidatePath("/cobranza");
+  // También se anula desde «Pagos recibidos» de la ficha: su deuda y su saldo a favor cambian.
+  revalidatePath("/clientes");
+  revalidatePath("/clientes/[id]", "page");
   return ok(undefined);
 }
 

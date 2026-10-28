@@ -9,11 +9,11 @@ import { ok, fallo, type ActionResult } from "@/lib/actions/result";
 import {
   CUOTAS_TODOS_LOS_DIAS,
   formatFraccion,
-  hoyISO,
   OPCIONES_CUOTAS_MES,
   PASO_CANTIDAD,
   formatPorcentaje,
 } from "@/lib/format";
+import { mesDeudaPasada, primerMesDelSistema, TEXTO_DEUDA_PASADA } from "@/lib/deuda-pasada";
 import {
   categoriasDeRol,
   LABEL_CATEGORIA,
@@ -621,70 +621,104 @@ export async function reactivarCliente(
 }
 
 /* ------------------------------------------------------------------ */
-/* Deuda anterior (RD) y saldo a favor                                 */
+/* Deuda pasada (RD) y saldo a favor                                   */
 /* ------------------------------------------------------------------ */
 
-const schemaDeudaAnterior = z.object({
-  clienteId: z.uuid(),
+const schemaDeudaPasada = z.object({
+  clienteId: z.uuid("No encontramos el cliente. Recargá la página."),
   monto: z
-    .number("Poné el monto de la deuda.")
-    .positive("El monto debe ser mayor a cero."),
-  detalle: z.string().min(3, "Contá de qué es la deuda (ej.: expensas 2025)."),
-  fecha: z
-    .string("Poné de qué fecha es la deuda")
-    .trim()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "Poné de qué fecha es la deuda")
-    .refine((v) => v <= hoyISO(), "La fecha de la deuda no puede ser futura."),
+    .number("Poné cuánto debía.")
+    .positive("Poné cuánto debía.")
+    .max(10_000_000_000, "Revisá el monto: es demasiado grande."),
+  detalle: z.string().trim().max(120, "El detalle es muy largo: resumilo en una línea.").optional(),
 });
 
+/** Lo que pasó al cargar la deuda pasada. */
+export type DeudaPasadaCargada = {
+  /**
+   * Lo que se cubrió en el acto con el saldo a favor que tenía. null: la deuda quedó cargada
+   * pero el saldo a favor no se pudo usar (en la ficha queda «Aplicar saldo a favor»).
+   */
+  aplicado: number | null;
+  /** Ya se había cargado igual hace un momento (doble toque o corte de red): no se repitió. */
+  repetido: boolean;
+};
+
 /**
- * Reconocimiento de deuda (RD): deuda anterior al sistema que se carga a mano.
- * Queda en el período del mes de la fecha indicada y vence ese mismo día (si
- * la fecha ya pasó, nace vencida), cobrable desde Cobranza como cualquier cargo.
- * Administración (sobre puesteros) y el Líder (§7.3).
+ * Deuda pasada (RD): lo que el cliente debía antes de empezar con el sistema, con el monto que
+ * diga Administración (pedido del 28/10/2026, ver @/lib/deuda-pasada). Queda vencida en el mes
+ * anterior al primero del sistema y se cubre en el acto con su saldo a favor: los pagos que
+ * habían quedado "a favor" en realidad eran para esta deuda. Después se cobra desde Cobranza
+ * como cualquier cargo; si se cargó mal, se anula desde la cuenta.
+ * Administración (sobre sus clientes) y el Líder, como la RD de siempre (§7.3).
  */
-export async function registrarDeudaAnterior(
+export async function registrarDeudaPasada(
   input: unknown
-): Promise<ActionResult<void>> {
+): Promise<ActionResult<DeudaPasadaCargada>> {
   const perfil = await requireRol("admin", "lider");
-  const parsed = schemaDeudaAnterior.safeParse(input);
+  const parsed = schemaDeudaPasada.safeParse(input);
   if (!parsed.success) return fallo(parsed.error.issues[0].message);
+  const { clienteId } = parsed.data;
+  const monto = Math.round(parsed.data.monto * 100) / 100;
+  const detalle = (parsed.data.detalle ?? "").replace(/\s+/g, " ");
+  const descripcion = detalle ? `${TEXTO_DEUDA_PASADA} · ${detalle}` : TEXTO_DEUDA_PASADA;
 
   const supabase = await createClient();
-  const cliente = await clienteGestionable(supabase, parsed.data.clienteId, perfil);
+  const cliente = await clienteGestionable(supabase, clienteId, perfil);
   if (!cliente.ok) return fallo(cliente.error);
 
-  const { data: rd } = await supabase
-    .from("conceptos")
+  // Doble toque, o reintento después de un corte de red: la misma deuda cargada por la misma
+  // persona hace un rato no se carga dos veces.
+  const { data: igual } = await supabase
+    .from("cargos")
     .select("id")
-    .eq("org_id", perfil.org_id)
-    .eq("codigo", "RD")
+    .eq("cliente_id", clienteId)
+    .eq("origen", "deuda")
+    .eq("monto", monto)
+    .eq("descripcion", descripcion)
+    .eq("creado_por", perfil.user_id)
+    .neq("estado", "anulado")
+    .gte("creado_en", new Date(Date.now() - 10 * 60_000).toISOString())
+    .limit(1)
     .maybeSingle();
-  if (!rd) {
-    return fallo("Falta el concepto RD (Reconocimiento de Deuda) en Configuración.");
+
+  if (!igual) {
+    const { data: rd } = await supabase
+      .from("conceptos")
+      .select("id")
+      .eq("org_id", perfil.org_id)
+      .eq("codigo", "RD")
+      .maybeSingle();
+    if (!rd) {
+      return fallo("Falta el concepto RD (Reconocimiento de Deuda) en Configuración.");
+    }
+
+    const { periodo, vencimiento } = mesDeudaPasada(await primerMesDelSistema(supabase, perfil.org_id));
+    const { error } = await supabase.from("cargos").insert({
+      org_id: perfil.org_id,
+      periodo,
+      cliente_id: clienteId,
+      concepto_id: rd.id,
+      codigo: "RD",
+      descripcion,
+      cantidad: 1,
+      precio_unitario: monto,
+      monto,
+      descuento_pronto_pago: 0,
+      vencimiento,
+      origen: "deuda",
+    });
+    if (error) return fallo(error);
   }
 
-  const fecha = parsed.data.fecha;
-  const { error } = await supabase.from("cargos").insert({
-    org_id: perfil.org_id,
-    periodo: `${fecha.slice(0, 7)}-01`,
-    cliente_id: parsed.data.clienteId,
-    concepto_id: rd.id,
-    codigo: "RD",
-    descripcion: `Reconocimiento de deuda · ${parsed.data.detalle.trim()}`,
-    cantidad: 1,
-    precio_unitario: parsed.data.monto,
-    monto: parsed.data.monto,
-    descuento_pronto_pago: 0,
-    vencimiento: fecha,
-    origen: "deuda",
+  // Es la deuda más vieja de su cuenta: el saldo a favor la cubre primero (la misma RPC del
+  // botón «Aplicar saldo a favor»; no mueve plata de ninguna caja).
+  const { data: aplicado, error: errorSaldo } = await supabase.rpc("aplicar_saldo_favor_cliente", {
+    p_cliente: clienteId,
   });
-  if (error) return fallo(error.message);
 
-  revalidatePath(`/clientes/${parsed.data.clienteId}`);
-  revalidatePath("/clientes");
-  revalidatePath("/cobranza");
-  return ok(undefined);
+  revalidarCliente(clienteId);
+  return ok({ aplicado: errorSaldo ? null : Number(aplicado ?? 0), repetido: Boolean(igual) });
 }
 
 /**

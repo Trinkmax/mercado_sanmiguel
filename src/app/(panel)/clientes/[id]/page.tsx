@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ArrowRight, FileCheck, HandCoins, ReceiptText, ShieldQuestion, TriangleAlert, Zap } from "lucide-react";
+import { ArrowLeft, ArrowRight, FileCheck, HandCoins, Info, ReceiptText, ShieldQuestion, TriangleAlert, Zap } from "lucide-react";
 import { aplicaDirecto, requireRol, type Rol } from "@/lib/auth";
 import { ROLES_COBRAN } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/server";
@@ -15,6 +15,7 @@ import {
   SELLO_NIVEL_DEUDA,
 } from "@/lib/format";
 import { categoriasDeRol, type CategoriaCliente } from "@/lib/segmentos";
+import { primerMesDelSistema, textoPrimerMes } from "@/lib/deuda-pasada";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -33,7 +34,7 @@ import {
   CambiosPendientesCliente,
   type CambioDeCliente,
 } from "@/components/clientes/cambios-pendientes-cliente";
-import { DeudaAnterior } from "@/components/clientes/deuda-anterior";
+import { DeudaPasada } from "@/components/clientes/deuda-pasada";
 import { AnularDeuda } from "@/components/clientes/anular-deuda";
 import { CorregirCargo, type CargoParaCorregir } from "@/components/clientes/corregir-cargo";
 import { ConceptosCliente } from "@/components/clientes/conceptos-cliente";
@@ -113,6 +114,9 @@ function FueraDeAlcance({ titulo, descripcion }: { titulo: string; descripcion: 
 
 /** "Rechazados hace poco" = revisados en los últimos 15 días. */
 const DIAS_RECHAZADOS = 15;
+
+/** Clave del grupo «Deuda pasada» en Cuenta (los demás grupos son períodos "YYYY-MM-01"). */
+const GRUPO_DEUDA_PASADA = "deuda-pasada";
 
 function desdeRechazados(): string {
   return new Date(Date.now() - DIAS_RECHAZADOS * 86_400_000).toISOString();
@@ -323,6 +327,7 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
     lugaresJefeRes,
     medidoresJefeRes,
     porCorregirRes,
+    primerMes,
   ] = await Promise.all([
     supabase
       .from("cargos")
@@ -335,7 +340,7 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
     supabase
       .from("pagos")
       .select(
-        "id, numero, lote_id, linea, fecha, medio, monto, recibido_por, anulado, motivo_anulacion, titular_transferencia, imputaciones(monto)"
+        "id, numero, lote_id, linea, fecha, medio, monto, recibido_por, anulado, motivo_anulacion, titular_transferencia, imputaciones(monto), caja:cajas(tipo, estado, fecha, reapertura_solicitada_en)"
       )
       .eq("cliente_id", id)
       .order("fecha", { ascending: false })
@@ -399,6 +404,8 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
       : Promise.resolve({ data: [] as { numero: string }[] }),
     // 0054: cargos del mes generados con otra cosa de lo que dice hoy la carpeta (se corrigen).
     supabase.rpc("cargos_para_corregir", { p_cliente: id }),
+    // La deuda pasada es "de antes de octubre de 2026": el primer mes que facturó el sistema.
+    primerMesDelSistema(supabase, perfil.org_id),
   ]);
 
   const porCorregir = new Map<string, CargoParaCorregir>(
@@ -539,13 +546,21 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
     ...new Set((categoriasUsadasRes.data ?? []).map((d) => labelCategoria(d.categoria)).filter((c) => c !== "Otro")),
   ].sort((a, b) => a.localeCompare(b, "es"));
 
-  // Cargos agrupados por período (más nuevo arriba: ya vienen ordenados).
+  // Cargos agrupados por período (más nuevo arriba: ya vienen ordenados). La deuda pasada va en
+  // su propio grupo, al final: es de antes del sistema, no de un mes.
   const cargosPorPeriodo = new Map<string, typeof cargos>();
+  const cargosDeudaPasada = cargos.filter((c) => c.origen === "deuda");
   for (const c of cargos) {
+    if (c.origen === "deuda") continue;
     const lista = cargosPorPeriodo.get(c.periodo);
     if (lista) lista.push(c);
     else cargosPorPeriodo.set(c.periodo, [c]);
   }
+  if (cargosDeudaPasada.length > 0) cargosPorPeriodo.set(GRUPO_DEUDA_PASADA, cargosDeudaPasada);
+  // La que ya tiene cargada (sin las anuladas): el diálogo avisa antes de cargar otra.
+  const deudaPasadaCargada = cargosDeudaPasada
+    .filter((c) => c.estado !== "anulado")
+    .reduce((acc, c) => acc + c.monto, 0);
 
   const contacto = [
     cliente.apodo ? `Le dicen “${cliente.apodo}”` : null,
@@ -622,7 +637,8 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
 
   const puedeCobrar = ROLES_COBRAN.includes(perfil.rol);
   const puedeRegistrar = perfil.rol === "admin" || perfil.rol === "lider";
-  const puedeDeudaAnterior = perfil.rol === "admin" || perfil.rol === "lider";
+  // Deuda pasada (RD): Administración sobre sus clientes y el Líder (§7.3, pedido del 28/10/2026).
+  const puedeDeudaPasada = perfil.rol === "admin" || perfil.rol === "lider";
 
   const solapas = [
     { valor: "cuenta", label: "Cuenta" },
@@ -701,36 +717,64 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
           ) : null}
         </div>
 
-        {/* Debe hoy + Saldo a favor: el número que importa, grande */}
-        <div className="flex flex-wrap items-end gap-x-10 gap-y-4" data-tour="clientes-deuda">
-          <div>
-            <p className="text-sm text-muted-foreground">Debe hoy</p>
-            <p
-              className={cn(
-                "text-3xl font-bold tabular",
-                nivel === "vencido" ? "text-pendiente" : nivel === "en_termino" ? "text-parcial" : "text-pagado"
-              )}
-            >
-              {formatARS(deuda)}
-            </p>
-            {deudaVencida > 0.009 && vencidoDesde ? (
-              <p className="text-sm font-medium text-pendiente">
-                <Money monto={deudaVencida} /> vencido desde el {formatFecha(vencidoDesde)}
+        {/* Debe hoy + Saldo a favor: el número que importa, grande. Al lado, cómo se ajusta: el
+            saldo a favor a la deuda y la deuda pasada (lo que debía antes del sistema). */}
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-end gap-x-10 gap-y-4" data-tour="clientes-deuda">
+            <div>
+              <p className="text-sm text-muted-foreground">Debe hoy</p>
+              <p
+                className={cn(
+                  "text-3xl font-bold tabular",
+                  nivel === "vencido" ? "text-pendiente" : nivel === "en_termino" ? "text-parcial" : "text-pagado"
+                )}
+              >
+                {formatARS(deuda)}
               </p>
+              {deudaVencida > 0.009 && vencidoDesde ? (
+                <p className="text-sm font-medium text-pendiente">
+                  <Money monto={deudaVencida} /> vencido desde el {formatFecha(vencidoDesde)}
+                </p>
+              ) : null}
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Saldo a favor</p>
+              <Money
+                monto={saldoFavor}
+                className={cn(
+                  "block text-3xl font-bold",
+                  tieneSaldoFavor ? "text-pagado" : "text-muted-foreground/60"
+                )}
+              />
+            </div>
+            {(tieneSaldoFavor && debe) || puedeDeudaPasada ? (
+              <div className="flex flex-wrap items-center gap-2">
+                {tieneSaldoFavor && debe ? (
+                  <AplicarSaldoFavor clienteId={cliente.id} saldoFavor={saldoFavor} deuda={deuda} />
+                ) : null}
+                {puedeDeudaPasada ? (
+                  <DeudaPasada
+                    clienteId={cliente.id}
+                    nombre={cliente.nombre}
+                    deuda={deuda}
+                    saldoFavor={saldoFavor}
+                    primerMes={textoPrimerMes(primerMes)}
+                    cargada={deudaPasadaCargada}
+                  />
+                ) : null}
+              </div>
             ) : null}
           </div>
-          <div>
-            <p className="text-sm text-muted-foreground">Saldo a favor</p>
-            <Money
-              monto={saldoFavor}
-              className={cn(
-                "block text-3xl font-bold",
-                tieneSaldoFavor ? "text-pagado" : "text-muted-foreground/60"
-              )}
-            />
-          </div>
-          {tieneSaldoFavor && debe ? (
-            <AplicarSaldoFavor clienteId={cliente.id} saldoFavor={saldoFavor} deuda={deuda} />
+          {/* Pedido del 28/10/2026: pagos de una deuda de antes del sistema quedaban "a favor".
+              Mientras no tenga deuda pasada cargada, se dice cómo se arregla. */}
+          {puedeDeudaPasada && tieneSaldoFavor && deudaPasadaCargada < 0.01 ? (
+            <p className="flex max-w-2xl items-start gap-2 text-sm text-muted-foreground">
+              <Info className="mt-0.5 size-4 shrink-0" strokeWidth={2} />
+              <span>
+                ¿Ese saldo a favor era para pagar una deuda de antes del sistema? Cargá esa deuda en «Deuda pasada»:
+                el saldo a favor se usa solo para pagarla.
+              </span>
+            </p>
           ) : null}
         </div>
 
@@ -766,7 +810,6 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
               extra={{ cliente: cliente.id }}
               label="Cuenta corriente de la carpeta (.xlsx)"
             />
-            {puedeDeudaAnterior ? <DeudaAnterior clienteId={cliente.id} fechaHoy={hoy} /> : null}
           </div>
           {cargos.length === 0 ? (
             <EmptyState
@@ -782,10 +825,14 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
             Array.from(cargosPorPeriodo.entries()).map(([periodo, lista]) => (
               <Card key={periodo} className="text-base">
                 <CardHeader>
-                  <CardTitle className="text-lg">{labelPeriodo(periodo)}</CardTitle>
+                  <CardTitle className="text-lg">
+                    {periodo === GRUPO_DEUDA_PASADA ? "Deuda pasada" : labelPeriodo(periodo)}
+                  </CardTitle>
                   <CardAction>
                     <p className="text-sm text-muted-foreground">
-                      Vence el {formatFecha(lista[0].vencimiento)}
+                      {periodo === GRUPO_DEUDA_PASADA
+                        ? `De antes de ${textoPrimerMes(primerMes)}`
+                        : `Vence el ${formatFecha(lista[0].vencimiento)}`}
                     </p>
                   </CardAction>
                 </CardHeader>
@@ -843,7 +890,7 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
                           </p>
                           <Sello estado={estadoCargo(c, hoy)} />
                         </div>
-                        {puedeDeudaAnterior && cargadoAMano && !anulado ? (
+                        {puedeDeudaPasada && cargadoAMano && !anulado ? (
                           <div className="col-span-full flex justify-end">
                             <AnularDeuda
                               cargoId={c.id}
@@ -880,8 +927,13 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
               motivo_anulacion: p.motivo_anulacion,
               titular_transferencia: p.titular_transferencia,
               imputado: (p.imputaciones ?? []).reduce((acc, i) => acc + Number(i.monto), 0),
+              caja: p.caja,
             }))}
             nombreUsuario={nombreUsuario}
+            cliente={cliente.nombre}
+            rol={perfil.rol}
+            hoy={hoy}
+            puedeDeudaPasada={puedeDeudaPasada}
           />
         </TabsContent>
 

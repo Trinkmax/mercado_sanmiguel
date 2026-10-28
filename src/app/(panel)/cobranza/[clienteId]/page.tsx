@@ -350,9 +350,10 @@ export default async function CobrarClientePage({
                 <p className="font-medium break-words">
                   <DescripcionCargo texto={c.descripcion} />
                 </p>
-                {/* El sello va debajo, junto al período: en un celular no le come el lugar al nombre. */}
+                {/* El sello va debajo, junto al período: en un celular no le come el lugar al nombre.
+                    La deuda pasada no es de un mes: es de antes del sistema (@/lib/deuda-pasada). */}
                 <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-                  {labelPeriodo(c.periodo)}
+                  {c.origen === "deuda" ? "De antes del sistema" : labelPeriodo(c.periodo)}
                   {c.vencido ? <Sello estado="vencido" /> : null}
                 </p>
               </div>

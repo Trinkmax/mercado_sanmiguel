@@ -26,7 +26,8 @@ const ATAJOS = ["Se cargó dos veces", "Monto equivocado", "Cliente equivocado",
 
 /**
  * Anula un recibo COMPLETO (todas sus líneas: efectivo + transferencia + cheque),
- * con motivo obligatorio. El cliente vuelve a deber ese monto.
+ * con motivo obligatorio. El cliente vuelve a deber lo que se había imputado; lo que había
+ * quedado a favor se le quita del saldo a favor.
  */
 export function BotonAnularCobro({
   pagoId,
@@ -34,6 +35,7 @@ export function BotonAnularCobro({
   cliente,
   total,
   medios,
+  aFavor = 0,
 }: {
   pagoId: string;
   numero: number;
@@ -41,6 +43,8 @@ export function BotonAnularCobro({
   total: number;
   /** "efectivo + transferencia" */
   medios: string;
+  /** Lo del recibo que no se imputó a ningún cargo (quedó como saldo a favor). */
+  aFavor?: number;
 }) {
   const router = useRouter();
   const [abierto, setAbierto] = useState(false);
@@ -51,6 +55,15 @@ export function BotonAnularCobro({
   // Un intento anterior se quedó sin respuesta (corte de red): si ahora la base dice que ya
   // estaba anulado, fue ese intento el que lo anuló. No es un error para quien lo pidió.
   const huboCorte = useRef(false);
+  // Qué le pasa a la cuenta: vuelve a deber lo imputado y pierde lo que había quedado a favor.
+  const sacaFavor = Math.min(Math.max(aFavor, 0), total);
+  const vuelveADeber = Math.max(Math.round((total - sacaFavor) * 100) / 100, 0);
+  const efecto =
+    sacaFavor < 0.01
+      ? `${cliente} vuelve a deber ${formatARS(total)}.`
+      : vuelveADeber < 0.01
+        ? `Lo que pagó había quedado a favor: se le quitan ${formatARS(sacaFavor)} del saldo a favor.`
+        : `${cliente} vuelve a deber ${formatARS(vuelveADeber)} y se le quitan ${formatARS(sacaFavor)} del saldo a favor.`;
 
   function terminar() {
     huboCorte.current = false;
@@ -70,7 +83,7 @@ export function BotonAnularCobro({
       const res = await llamarAccion(() => anularCobro(pagoId, limpio));
       if (!res.ok) {
         if (huboCorte.current && res.error.startsWith("El cobro ya está anulado")) {
-          toast.info(`Ya había quedado anulado: ${cliente} vuelve a deber ${formatARS(total)}.`);
+          toast.info(`Ya había quedado anulado: ${efecto}`);
           terminar();
           router.refresh();
           return;
@@ -79,7 +92,7 @@ export function BotonAnularCobro({
         setError(res.error);
         return;
       }
-      toast.success(`Recibo N° ${numero} anulado. ${cliente} vuelve a deber ${formatARS(total)}.`);
+      toast.success(`Recibo N° ${numero} anulado. ${efecto}`);
       terminar();
     });
   }
@@ -112,8 +125,7 @@ export function BotonAnularCobro({
         <DialogHeader>
           <DialogTitle className="text-xl">Anular el recibo N° {numero}</DialogTitle>
           <DialogDescription className="text-base">
-            Se anula el recibo completo N° {numero} ({medios}) por {formatARS(total)}. Se revierte lo imputado
-            y {cliente} vuelve a deber ese monto.
+            Se anula el recibo completo N° {numero} ({medios}) por {formatARS(total)}. {efecto}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
