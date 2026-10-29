@@ -159,7 +159,7 @@ export default async function CobrarClientePage({
       supabase
         .from("cargos")
         .select(
-          "id, codigo, descripcion, periodo, vencimiento, estado, monto, monto_pagado, descuento_pronto_pago, origen, desde, hasta, conceptos(orden_imputacion)"
+          "id, codigo, descripcion, periodo, vencimiento, estado, monto, monto_pagado, descuento_pronto_pago, origen, reconocimiento, desde, hasta, conceptos(orden_imputacion)"
         )
         .eq("cliente_id", clienteId)
         .neq("estado", "anulado")
@@ -222,7 +222,8 @@ export default async function CobrarClientePage({
         : Promise.resolve({ data: null }),
     ]);
 
-  // Saldo exigible hoy de cada cargo, en el orden en que la RPC imputa.
+  // Saldo exigible hoy de cada cargo, en el orden en que la RPC imputa: el reconocimiento de
+  // deuda al final (0055), sin vencerse (tiene un plan de pago acordado).
   const todos = (cargosRes.data ?? []).map((c) => ({
     id: c.id,
     codigo: c.codigo,
@@ -230,22 +231,31 @@ export default async function CobrarClientePage({
     periodo: c.periodo,
     vencimiento: c.vencimiento,
     origen: c.origen,
+    reconocimiento: c.reconocimiento,
     desde: c.desde,
     hasta: c.hasta,
     orden: Number(c.conceptos?.orden_imputacion ?? 0),
     saldo: saldoCargo(c, hoy),
     monto: Number(c.monto),
     descuento: Number(c.descuento_pronto_pago ?? 0),
-    vencido: c.vencimiento < hoy,
+    vencido: c.vencimiento < hoy && !c.reconocimiento,
     enTermino: hoy <= c.vencimiento,
   }));
   const items = todos
     .filter((c) => c.saldo > 0)
-    .sort((a, b) => a.periodo.localeCompare(b.periodo) || a.orden - b.orden);
+    .sort(
+      (a, b) =>
+        Number(a.reconocimiento) - Number(b.reconocimiento) ||
+        a.periodo.localeCompare(b.periodo) ||
+        a.orden - b.orden
+    );
 
   const deudaTotal = redondear2(items.reduce((acc, c) => acc + c.saldo, 0));
   const saldoFavor = Number(saldoFavorRes.data?.saldo_favor ?? 0);
   const deudaNeta = Math.max(redondear2(deudaTotal - saldoFavor), 0);
+  // Lo que queda del reconocimiento después de lo que cubra el saldo a favor (que va primero a lo demás).
+  const deudaReconocimiento = redondear2(items.filter((c) => c.reconocimiento).reduce((acc, c) => acc + c.saldo, 0));
+  const reconocimientoNeto = Math.min(deudaReconocimiento, deudaNeta);
 
   const enTerminoConBeneficio = items.filter((c) => c.enTermino && c.descuento > 0);
   const ahorroEnTermino = redondear2(
@@ -286,7 +296,7 @@ export default async function CobrarClientePage({
           cuota_sugerida: Number(a.cuota_sugerida ?? 0),
         }
       : null;
-    const viejos = items.filter((c) => c.periodo < periodo);
+    const viejos = items.filter((c) => c.periodo < periodo && !c.reconocimiento);
     const montoViejo = redondear2(viejos.reduce((acc, c) => acc + c.saldo, 0));
     plan = {
       avance,
@@ -353,7 +363,11 @@ export default async function CobrarClientePage({
                 {/* El sello va debajo, junto al período: en un celular no le come el lugar al nombre.
                     La deuda pasada no es de un mes: es de antes del sistema (@/lib/deuda-pasada). */}
                 <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-                  {c.origen === "deuda" ? "De antes del sistema" : labelPeriodo(c.periodo)}
+                  {c.reconocimiento
+                    ? "Con plan de pago · se paga después de lo demás"
+                    : c.origen === "deuda"
+                      ? "De antes del sistema"
+                      : labelPeriodo(c.periodo)}
                   {c.vencido ? <Sello estado="vencido" /> : null}
                 </p>
               </div>
@@ -391,6 +405,7 @@ export default async function CobrarClientePage({
       clienteNombre={cliente.nombre}
       deudaTotal={deudaNeta}
       deudaBruta={deudaTotal}
+      reconocimiento={reconocimientoNeto}
       saldoFavorPrevio={saldoFavor}
       medios={medios}
       puestos={puestos}

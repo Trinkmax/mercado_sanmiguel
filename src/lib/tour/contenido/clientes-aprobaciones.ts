@@ -109,7 +109,7 @@ function pasoArriba(jefe: boolean): Paso {
       "«Debe hoy» es lo que tiene que pagar. En verde, está al día; en ámbar, debe pero todavía no venció; en rojo, ya venció. Más arriba, «Cobrar» te lleva a cobrarle.",
     consejo: jefe
       ? "Si no debe nada, arriba aparece «Libre deuda» para darle su constancia."
-      : "¿Traía deuda de antes del sistema? Cargala con «Deuda pasada»: si tenía saldo a favor, se usa solo para pagarla. Si no debe nada, arriba aparece «Libre deuda».",
+      : "¿Traía deuda de antes del sistema? Cargala con «Deuda pasada»: si tenía saldo a favor, se usa solo para pagarla. Si la reconoció y la paga con un plan, usá «Reconocimiento de deuda»: no le hace perder el beneficio. Si no debe nada, arriba aparece «Libre deuda».",
     sinAncla: {
       titulo: "La carpeta, por arriba",
       texto:

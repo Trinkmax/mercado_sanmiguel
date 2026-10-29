@@ -53,11 +53,17 @@ type Cargo = {
   monto_pagado: number;
   descuento_pronto_pago: number;
   estado: "pendiente" | "parcial" | "pagado" | "anulado";
+  /** Reconocimiento de deuda (0055): tiene plan de pago, no se vence. */
+  reconocimiento: boolean;
 };
 
 /** Estado a mostrar: un cargo impago (pendiente o parcial) ya vencido se sella "Vencido". */
 function estadoSello(cargo: Cargo): string {
-  if ((cargo.estado === "pendiente" || cargo.estado === "parcial") && cargo.vencimiento < hoyISO())
+  if (
+    (cargo.estado === "pendiente" || cargo.estado === "parcial") &&
+    cargo.vencimiento < hoyISO() &&
+    !cargo.reconocimiento
+  )
     return "vencido";
   return cargo.estado;
 }
@@ -135,7 +141,7 @@ export default async function MiCuentaPage() {
     supabase
       .from("cargos")
       .select(
-        "id, codigo, descripcion, periodo, vencimiento, monto, monto_pagado, descuento_pronto_pago, estado"
+        "id, codigo, descripcion, periodo, vencimiento, monto, monto_pagado, descuento_pronto_pago, estado, reconocimiento"
       )
       .eq("cliente_id", cliente.id)
       .neq("estado", "anulado")

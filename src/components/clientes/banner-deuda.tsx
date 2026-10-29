@@ -8,6 +8,8 @@ type CargoBanner = {
   monto_pagado: number;
   descuento_pronto_pago: number;
   vencimiento: string;
+  /** Reconocimiento de deuda (0055): con plan de pago, no se vence ni hace perder el beneficio. */
+  reconocimiento?: boolean;
 };
 
 /** Lo que hay que decirle al cliente sobre su deuda activa y el beneficio. */
@@ -15,7 +17,7 @@ export function resumenDeudaActiva(cargos: CargoBanner[], hoy: string) {
   const pendientes = cargos.filter(
     (c) => c.estado === "pendiente" || c.estado === "parcial"
   );
-  const vencidos = pendientes.filter((c) => c.vencimiento < hoy);
+  const vencidos = pendientes.filter((c) => c.vencimiento < hoy && !c.reconocimiento);
   const enTermino = pendientes.filter((c) => c.vencimiento >= hoy);
 
   const deudaVencida = vencidos.reduce((acc, c) => acc + saldoCargo(c), 0);

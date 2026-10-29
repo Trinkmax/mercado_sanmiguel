@@ -70,9 +70,16 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 /** Los lugares del plano que se asignan a un cliente. */
 const TIPOS_LUGAR: string[] = ["puesto", "bar", "local", "contenedor", "galpon", "invernadero", "cochera", "quinta"];
 
-/** Estado que se muestra en el sello de un cargo: vencido si pasó la fecha. */
-function estadoCargo(cargo: { estado: string; vencimiento: string }, hoy: string): string {
-  if ((cargo.estado === "pendiente" || cargo.estado === "parcial") && cargo.vencimiento < hoy) {
+/**
+ * Estado que se muestra en el sello de un cargo: vencido si pasó la fecha. El reconocimiento de
+ * deuda no se vence: tiene un plan de pago acordado (0055).
+ */
+function estadoCargo(cargo: { estado: string; vencimiento: string; reconocimiento: boolean }, hoy: string): string {
+  if (
+    (cargo.estado === "pendiente" || cargo.estado === "parcial") &&
+    cargo.vencimiento < hoy &&
+    !cargo.reconocimiento
+  ) {
     return "vencido";
   }
   return cargo.estado;
@@ -115,8 +122,9 @@ function FueraDeAlcance({ titulo, descripcion }: { titulo: string; descripcion: 
 /** "Rechazados hace poco" = revisados en los últimos 15 días. */
 const DIAS_RECHAZADOS = 15;
 
-/** Clave del grupo «Deuda pasada» en Cuenta (los demás grupos son períodos "YYYY-MM-01"). */
+/** Claves de los grupos «Deuda pasada» y «Reconocimiento de deuda» en Cuenta (los demás grupos son períodos "YYYY-MM-01"). */
 const GRUPO_DEUDA_PASADA = "deuda-pasada";
+const GRUPO_RECONOCIMIENTO = "reconocimiento";
 
 function desdeRechazados(): string {
   return new Date(Date.now() - DIAS_RECHAZADOS * 86_400_000).toISOString();
@@ -332,7 +340,7 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
     supabase
       .from("cargos")
       .select(
-        "id, codigo, descripcion, periodo, vencimiento, estado, monto, monto_pagado, descuento_pronto_pago, origen, creado_por, creado_en, anulado_por, anulado_en, anulado_motivo"
+        "id, codigo, descripcion, periodo, vencimiento, estado, monto, monto_pagado, descuento_pronto_pago, origen, reconocimiento, creado_por, creado_en, anulado_por, anulado_en, anulado_motivo"
       )
       .eq("cliente_id", id)
       .order("periodo", { ascending: false })
@@ -546,10 +554,11 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
     ...new Set((categoriasUsadasRes.data ?? []).map((d) => labelCategoria(d.categoria)).filter((c) => c !== "Otro")),
   ].sort((a, b) => a.localeCompare(b, "es"));
 
-  // Cargos agrupados por período (más nuevo arriba: ya vienen ordenados). La deuda pasada va en
-  // su propio grupo, al final: es de antes del sistema, no de un mes.
+  // Cargos agrupados por período (más nuevo arriba: ya vienen ordenados). La deuda pasada y el
+  // reconocimiento de deuda van en su propio grupo, al final: son de antes del sistema, no de un mes.
   const cargosPorPeriodo = new Map<string, typeof cargos>();
-  const cargosDeudaPasada = cargos.filter((c) => c.origen === "deuda");
+  const cargosDeudaPasada = cargos.filter((c) => c.origen === "deuda" && !c.reconocimiento);
+  const cargosReconocimiento = cargos.filter((c) => c.reconocimiento);
   for (const c of cargos) {
     if (c.origen === "deuda") continue;
     const lista = cargosPorPeriodo.get(c.periodo);
@@ -557,10 +566,14 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
     else cargosPorPeriodo.set(c.periodo, [c]);
   }
   if (cargosDeudaPasada.length > 0) cargosPorPeriodo.set(GRUPO_DEUDA_PASADA, cargosDeudaPasada);
+  if (cargosReconocimiento.length > 0) cargosPorPeriodo.set(GRUPO_RECONOCIMIENTO, cargosReconocimiento);
   // La que ya tiene cargada (sin las anuladas): el diálogo avisa antes de cargar otra.
-  const deudaPasadaCargada = cargosDeudaPasada
-    .filter((c) => c.estado !== "anulado")
-    .reduce((acc, c) => acc + c.monto, 0);
+  const cargadoSinAnular = (lista: typeof cargos) =>
+    lista.filter((c) => c.estado !== "anulado").reduce((acc, c) => acc + c.monto, 0);
+  const deudaPasadaCargada = cargadoSinAnular(cargosDeudaPasada);
+  const reconocimientoCargado = cargadoSinAnular(cargosReconocimiento);
+  // Lo que le queda del reconocimiento: está dentro de «Debe hoy», se dice aparte.
+  const reconocimientoDebe = cargosReconocimiento.reduce((acc, c) => acc + saldoCargo(c), 0);
 
   const contacto = [
     cliente.apodo ? `Le dicen “${cliente.apodo}”` : null,
@@ -736,6 +749,12 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
                   <Money monto={deudaVencida} /> vencido desde el {formatFecha(vencidoDesde)}
                 </p>
               ) : null}
+              {reconocimientoDebe > 0.009 ? (
+                <p className="text-sm text-muted-foreground">
+                  Incluye <Money monto={reconocimientoDebe} className="font-medium text-foreground" /> del
+                  reconocimiento de deuda
+                </p>
+              ) : null}
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Saldo a favor</p>
@@ -762,17 +781,28 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
                     cargada={deudaPasadaCargada}
                   />
                 ) : null}
+                {puedeDeudaPasada ? (
+                  <DeudaPasada
+                    reconocimiento
+                    clienteId={cliente.id}
+                    nombre={cliente.nombre}
+                    deuda={deuda}
+                    saldoFavor={saldoFavor}
+                    primerMes={textoPrimerMes(primerMes)}
+                    cargada={reconocimientoCargado}
+                  />
+                ) : null}
               </div>
             ) : null}
           </div>
           {/* Pedido del 28/10/2026: pagos de una deuda de antes del sistema quedaban "a favor".
               Mientras no tenga deuda pasada cargada, se dice cómo se arregla. */}
-          {puedeDeudaPasada && tieneSaldoFavor && deudaPasadaCargada < 0.01 ? (
+          {puedeDeudaPasada && tieneSaldoFavor && deudaPasadaCargada + reconocimientoCargado < 0.01 ? (
             <p className="flex max-w-2xl items-start gap-2 text-sm text-muted-foreground">
               <Info className="mt-0.5 size-4 shrink-0" strokeWidth={2} />
               <span>
-                ¿Ese saldo a favor era para pagar una deuda de antes del sistema? Cargá esa deuda en «Deuda pasada»:
-                el saldo a favor se usa solo para pagarla.
+                ¿Ese saldo a favor era para pagar una deuda de antes del sistema? Cargá esa deuda en «Deuda pasada»
+                (o en «Reconocimiento de deuda», si tiene un plan de pago): el saldo a favor se usa solo para pagarla.
               </span>
             </p>
           ) : null}
@@ -826,13 +856,19 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
               <Card key={periodo} className="text-base">
                 <CardHeader>
                   <CardTitle className="text-lg">
-                    {periodo === GRUPO_DEUDA_PASADA ? "Deuda pasada" : labelPeriodo(periodo)}
+                    {periodo === GRUPO_DEUDA_PASADA
+                      ? "Deuda pasada"
+                      : periodo === GRUPO_RECONOCIMIENTO
+                        ? "Reconocimiento de deuda"
+                        : labelPeriodo(periodo)}
                   </CardTitle>
                   <CardAction>
                     <p className="text-sm text-muted-foreground">
                       {periodo === GRUPO_DEUDA_PASADA
                         ? `De antes de ${textoPrimerMes(primerMes)}`
-                        : `Vence el ${formatFecha(lista[0].vencimiento)}`}
+                        : periodo === GRUPO_RECONOCIMIENTO
+                          ? "Con plan de pago: no le hace perder el beneficio"
+                          : `Vence el ${formatFecha(lista[0].vencimiento)}`}
                     </p>
                   </CardAction>
                 </CardHeader>

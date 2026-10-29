@@ -18,6 +18,14 @@ type Supabase = Awaited<ReturnType<typeof createClient>>;
 export const TEXTO_DEUDA_PASADA = "Deuda pasada";
 
 /**
+ * Reconocimiento de deuda (pedido del 29/10/2026): una deuda de antes del sistema que el cliente
+ * reconoció y paga con un plan acordado. Se carga igual que la deuda pasada, marcada
+ * (cargos.reconocimiento, 0055): se paga después de todo lo demás, así lo que paga cubre primero
+ * su mes y no pierde el beneficio, y no cuenta como deuda vencida.
+ */
+export const TEXTO_RECONOCIMIENTO = "Reconocimiento de deuda";
+
+/**
  * El primer mes que facturó el sistema ("2026-10-01"): el de los cargos mensuales más viejos.
  * Sin ninguno todavía, el mes actual.
  */

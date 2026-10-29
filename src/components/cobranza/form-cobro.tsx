@@ -141,6 +141,7 @@ export function FormCobro({
   irACaja = "/caja",
   fechaCaja,
   sinSaldoFavor,
+  reconocimiento = 0,
 }: {
   clienteId: string;
   clienteNombre: string;
@@ -170,6 +171,12 @@ export function FormCobro({
    * 0052): es lo que se avisa si se pasa de la deuda; no hay "adelantar plata".
    */
   sinSaldoFavor?: string;
+  /**
+   * La parte de deudaTotal que es reconocimiento de deuda (0055): se paga después de todo lo
+   * demás. «Cobrar todo» no la incluye (la cuota la escribe quien cobra) y se dice cuánto del
+   * cobro va a esa deuda.
+   */
+  reconocimiento?: number;
 }) {
   const router = useRouter();
   const [lineas, setLineas] = useState<LineaForm[]>(() => [
@@ -202,6 +209,9 @@ export function FormCobro({
   const total = redondear2(lineas.reduce((acc, l) => acc + parseMonto(l.monto), 0));
   const resto = Math.max(redondear2(deudaTotal - total), 0);
   const sobrante = Math.max(redondear2(total - deudaTotal), 0);
+  // Todo menos el reconocimiento de deuda (lo que «Cobrar todo» completa) y cuánto del cobro va a él.
+  const cuenta = Math.max(redondear2(deudaTotal - reconocimiento), 0);
+  const alReconocimiento = Math.min(Math.max(redondear2(total - cuenta), 0), reconocimiento);
 
   // ---------- edición de líneas ----------
   function cambiarLinea(id: string, parcial: Partial<LineaForm>) {
@@ -589,13 +599,13 @@ export function FormCobro({
                 aria-describedby="monto-cobro-ayuda"
                 className="h-14 flex-1 text-2xl font-semibold tabular md:text-2xl"
               />
-              {deudaTotal > 0 ? (
+              {cuenta > 0 ? (
                 <Button
                   type="button"
                   variant="outline"
                   className="h-14 shrink-0 px-4 text-sm font-semibold"
                   onClick={() => {
-                    cambiarLinea(unaLinea.id, { monto: montoConMiles(deudaTotal) });
+                    cambiarLinea(unaLinea.id, { monto: montoConMiles(cuenta) });
                     limpiarError(unaLinea.id, "monto");
                   }}
                 >
@@ -610,6 +620,15 @@ export function FormCobro({
               ) : total > 0 ? (
                 <p className="text-muted-foreground tabular">
                   Vas a cobrar <span className="font-semibold text-foreground">{formatARS(total)}</span>
+                  {alReconocimiento > 0.009 ? (
+                    <>
+                      {" · "}
+                      <span className="whitespace-nowrap">
+                        {alReconocimiento < total - 0.009 ? `${formatARS(alReconocimiento)} van` : "va"} al
+                        reconocimiento de deuda
+                      </span>
+                    </>
+                  ) : null}
                   {resto > 0 ? (
                     <>
                       {" · "}
@@ -619,9 +638,13 @@ export function FormCobro({
                 </p>
               ) : (
                 <p className="text-muted-foreground">
-                  {deudaTotal > 0
-                    ? "Escribí cuánto te paga, o tocá Cobrar todo."
-                    : "Escribí cuánto te paga: queda a su favor."}
+                  {reconocimiento > 0.009
+                    ? cuenta > 0
+                      ? "Escribí cuánto te paga. «Cobrar todo» no incluye el reconocimiento de deuda: si paga una cuota, sumala."
+                      : "Debe solo el reconocimiento de deuda: escribí la cuota que te paga."
+                    : deudaTotal > 0
+                      ? "Escribí cuánto te paga, o tocá Cobrar todo."
+                      : "Escribí cuánto te paga: queda a su favor."}
                 </p>
               )}
             </div>

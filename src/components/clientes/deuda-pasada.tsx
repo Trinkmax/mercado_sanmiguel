@@ -3,7 +3,7 @@
 import { useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowRight, History, TriangleAlert } from "lucide-react";
+import { ArrowRight, Handshake, History, TriangleAlert } from "lucide-react";
 import { registrarDeudaPasada } from "@/lib/actions/clientes";
 import { formatARS, parseMonto, redondear2, sanitizarMonto } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -31,6 +31,10 @@ import { llamarAccion } from "@/lib/llamar-accion";
  * @/lib/deuda-pasada). Antes de confirmar se ve cómo queda su cuenta: si tenía saldo a favor
  * (pagos que en realidad eran para esa deuda), se usa en el acto. Si ya tiene una cargada, lo
  * avisa para no cargarla dos veces.
+ *
+ * Con `reconocimiento` (pedido del 29/10/2026) es el «Reconocimiento de deuda»: la misma carga,
+ * para una deuda de antes que el cliente reconoció y paga con un plan. Se paga después de todo
+ * lo demás (0055): lo que paga va primero a su mes y no pierde el beneficio.
  */
 export function DeudaPasada({
   clienteId,
@@ -39,6 +43,7 @@ export function DeudaPasada({
   saldoFavor,
   primerMes,
   cargada,
+  reconocimiento = false,
 }: {
   clienteId: string;
   nombre: string;
@@ -47,9 +52,12 @@ export function DeudaPasada({
   saldoFavor: number;
   /** "octubre de 2026": el primer mes del sistema. */
   primerMes: string;
-  /** La deuda pasada que ya tiene cargada (sin las anuladas); 0 si no tiene. */
+  /** La que ya tiene cargada de este tipo (sin las anuladas); 0 si no tiene. */
   cargada: number;
+  /** Reconocimiento de deuda (con plan de pago) en vez de deuda pasada. */
+  reconocimiento?: boolean;
 }) {
+  const t = reconocimiento ? TEXTOS_RECONOCIMIENTO : TEXTOS_DEUDA_PASADA;
   const router = useRouter();
   const [abierto, setAbierto] = useState(false);
   const [montoTexto, setMontoTexto] = useState("");
@@ -76,7 +84,7 @@ export function DeudaPasada({
     setError(null);
     startTransition(async () => {
       const res = await llamarAccion(() =>
-        registrarDeudaPasada({ clienteId, monto, detalle: detalle.trim() || undefined })
+        registrarDeudaPasada({ clienteId, monto, detalle: detalle.trim() || undefined, reconocimiento })
       );
       if (!res.ok) {
         // Lo cargado queda en el diálogo. Tocar de nuevo no la duplica (la acción la reconoce).
@@ -85,17 +93,17 @@ export function DeudaPasada({
       }
       const { aplicado, repetido } = res.data;
       if (repetido) {
-        toast.info("Esa deuda pasada ya estaba cargada: no se cargó dos veces.");
+        toast.info(t.repetido);
       } else if (aplicado === null) {
-        toast.warning(`Deuda pasada de ${formatARS(monto)} cargada.`, {
+        toast.warning(t.cargada(monto), {
           description: "No se pudo descontar su saldo a favor: tocá «Aplicar saldo a favor» en la ficha.",
         });
       } else {
-        toast.success(`Deuda pasada de ${formatARS(monto)} cargada.`, {
+        toast.success(t.cargada(monto), {
           description:
             aplicado > 0.009
-              ? `Se cubrieron ${formatARS(aplicado)} con su saldo a favor. Si te equivocaste, anulala desde «Cuenta».`
-              : "Ya se puede cobrar. Si te equivocaste, anulala desde «Cuenta».",
+              ? `Se cubrieron ${formatARS(aplicado)} con su saldo a favor. ${t.siTeEquivocaste}`
+              : `${t.yaSeCobra} ${t.siTeEquivocaste}`,
         });
       }
       setAbierto(false);
@@ -114,18 +122,32 @@ export function DeudaPasada({
       }}
     >
       <DialogTrigger asChild>
-        <Button variant="outline" size="lg" className="h-12 px-5 text-base" data-tour="clientes-deuda-pasada">
-          <History className="size-5" strokeWidth={1.9} />
-          Deuda pasada
+        <Button variant="outline" size="lg" className="h-12 px-5 text-base" data-tour={t.tour}>
+          {reconocimiento ? (
+            <Handshake className="size-5" strokeWidth={1.9} />
+          ) : (
+            <History className="size-5" strokeWidth={1.9} />
+          )}
+          {t.titulo}
         </Button>
       </DialogTrigger>
       {/* minmax(0,1fr): nada (ni un monto largo en el botón) ensancha el diálogo más allá de la pantalla. */}
       <DialogContent className="max-h-[92dvh] grid-cols-[minmax(0,1fr)] gap-5 overflow-y-auto p-6 sm:max-w-md">
         <DialogHeader className="pr-8">
-          <DialogTitle className="text-xl">Deuda pasada</DialogTitle>
+          <DialogTitle className="text-xl">{t.titulo}</DialogTitle>
           <DialogDescription className="text-base">
-            Lo que {nombre} debía antes de {primerMes}, cuando arrancó el sistema. Se carga una sola
-            vez: después su cuenta sigue al día mes a mes.
+            {reconocimiento ? (
+              <>
+                Una deuda de antes de {primerMes} que {nombre} reconoció y paga con un plan.{" "}
+                <strong className="font-semibold text-foreground">No le hace perder el beneficio:</strong> lo que
+                paga va primero a su mes y lo que paga de más, a esta deuda.
+              </>
+            ) : (
+              <>
+                Lo que {nombre} debía antes de {primerMes}, cuando arrancó el sistema. Se carga una sola
+                vez: después su cuenta sigue al día mes a mes.
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
 
@@ -133,23 +155,23 @@ export function DeudaPasada({
           <p className="flex items-start gap-2 rounded-lg border border-parcial bg-parcial-suave px-3 py-2.5 text-sm">
             <TriangleAlert className="mt-0.5 size-4 shrink-0 text-parcial" strokeWidth={2} />
             <span>
-              Ya tiene cargada una deuda pasada de <Money monto={cargada} className="font-semibold" />. Si es
-              otra deuda, sumala acá; si te equivocaste en el monto, anulá la anterior desde «Cuenta».
+              {t.yaTiene} <Money monto={cargada} className="font-semibold" />. Si es otra deuda, sumala
+              acá; si te equivocaste en el monto, {t.anulaAnterior} desde «Cuenta».
             </span>
           </p>
         ) : null}
 
         <div className="space-y-5">
           <div className="space-y-2">
-            <Label htmlFor="deuda-pasada-monto" className="text-base font-medium">
-              ¿Cuánto debía?
+            <Label htmlFor={`${t.tour}-monto`} className="text-base font-medium">
+              {t.preguntaMonto}
             </Label>
             <div className="relative">
               <span className="pointer-events-none absolute top-1/2 left-4 -translate-y-1/2 text-2xl font-semibold text-muted-foreground">
                 $
               </span>
               <Input
-                id="deuda-pasada-monto"
+                id={`${t.tour}-monto`}
                 inputMode="decimal"
                 placeholder="0"
                 autoComplete="off"
@@ -166,16 +188,16 @@ export function DeudaPasada({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="deuda-pasada-detalle" className="text-base font-medium">
-              ¿De qué era? <span className="font-normal text-muted-foreground">(si querés)</span>
+            <Label htmlFor={`${t.tour}-detalle`} className="text-base font-medium">
+              {t.preguntaDetalle} <span className="font-normal text-muted-foreground">(si querés)</span>
             </Label>
             <Input
-              id="deuda-pasada-detalle"
+              id={`${t.tour}-detalle`}
               value={detalle}
               maxLength={120}
               autoComplete="off"
               onChange={(e) => setDetalle(e.target.value)}
-              placeholder="Ej.: expensas de agosto y septiembre"
+              placeholder={t.ejemploDetalle}
               className="h-12 text-base md:text-base"
             />
           </div>
@@ -184,7 +206,7 @@ export function DeudaPasada({
             <div className="space-y-2 rounded-lg border bg-muted/40 px-4 py-3" aria-live="polite">
               <p className="text-sm font-medium text-muted-foreground">Cómo queda su cuenta</p>
               <dl className="space-y-1.5 text-base">
-                <Renglon etiqueta="Deuda pasada">
+                <Renglon etiqueta={t.titulo}>
                   <Money monto={monto} className="font-semibold" />
                 </Renglon>
                 {usa > 0.009 ? (
@@ -226,7 +248,7 @@ export function DeudaPasada({
             onClick={cargar}
           >
             {pendiente ? <Spinner className="size-5" /> : null}
-            {hayMonto ? `Cargar deuda pasada de ${formatARS(monto)}` : "Cargar deuda pasada"}
+            {hayMonto ? `${t.boton} de ${formatARS(monto)}` : t.boton}
           </Button>
           <Button
             variant="ghost"
@@ -242,6 +264,36 @@ export function DeudaPasada({
     </Dialog>
   );
 }
+
+const TEXTOS_DEUDA_PASADA = {
+  titulo: "Deuda pasada",
+  tour: "clientes-deuda-pasada",
+  yaTiene: "Ya tiene cargada una deuda pasada de",
+  anulaAnterior: "anulá la anterior",
+  preguntaMonto: "¿Cuánto debía?",
+  preguntaDetalle: "¿De qué era?",
+  ejemploDetalle: "Ej.: expensas de agosto y septiembre",
+  boton: "Cargar deuda pasada",
+  repetido: "Esa deuda pasada ya estaba cargada: no se cargó dos veces.",
+  cargada: (monto: number) => `Deuda pasada de ${formatARS(monto)} cargada.`,
+  yaSeCobra: "Ya se puede cobrar.",
+  siTeEquivocaste: "Si te equivocaste, anulala desde «Cuenta».",
+};
+
+const TEXTOS_RECONOCIMIENTO: typeof TEXTOS_DEUDA_PASADA = {
+  titulo: "Reconocimiento de deuda",
+  tour: "clientes-reconocimiento",
+  yaTiene: "Ya tiene cargado un reconocimiento de deuda de",
+  anulaAnterior: "anulá el anterior",
+  preguntaMonto: "¿Cuánto reconoció?",
+  preguntaDetalle: "¿Cómo la paga?",
+  ejemploDetalle: "Ej.: 10 cuotas de $ 100.000",
+  boton: "Cargar reconocimiento",
+  repetido: "Ese reconocimiento de deuda ya estaba cargado: no se cargó dos veces.",
+  cargada: (monto: number) => `Reconocimiento de deuda de ${formatARS(monto)} cargado.`,
+  yaSeCobra: "Se cobra después de su mes: no pierde el beneficio.",
+  siTeEquivocaste: "Si te equivocaste, anulalo desde «Cuenta».",
+};
 
 function Renglon({ etiqueta, children }: { etiqueta: string; children: ReactNode }) {
   return (

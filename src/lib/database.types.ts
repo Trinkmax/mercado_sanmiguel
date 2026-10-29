@@ -474,6 +474,7 @@ export type Database = {
           origen_lectura: string | null
           periodo: string
           precio_unitario: number
+          reconocimiento: boolean
           vencimiento: string
         }
         Insert: {
@@ -501,6 +502,7 @@ export type Database = {
           origen_lectura?: string | null
           periodo: string
           precio_unitario?: number
+          reconocimiento?: boolean
           vencimiento: string
         }
         Update: {
@@ -528,6 +530,7 @@ export type Database = {
           origen_lectura?: string | null
           periodo?: string
           precio_unitario?: number
+          reconocimiento?: boolean
           vencimiento?: string
         }
         Relationships: [

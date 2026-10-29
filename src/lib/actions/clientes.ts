@@ -13,7 +13,7 @@ import {
   PASO_CANTIDAD,
   formatPorcentaje,
 } from "@/lib/format";
-import { mesDeudaPasada, primerMesDelSistema, TEXTO_DEUDA_PASADA } from "@/lib/deuda-pasada";
+import { mesDeudaPasada, primerMesDelSistema, TEXTO_DEUDA_PASADA, TEXTO_RECONOCIMIENTO } from "@/lib/deuda-pasada";
 import {
   categoriasDeRol,
   LABEL_CATEGORIA,
@@ -631,6 +631,8 @@ const schemaDeudaPasada = z.object({
     .positive("Poné cuánto debía.")
     .max(10_000_000_000, "Revisá el monto: es demasiado grande."),
   detalle: z.string().trim().max(120, "El detalle es muy largo: resumilo en una línea.").optional(),
+  /** Reconocimiento de deuda: con plan de pago acordado, no le hace perder el beneficio (0055). */
+  reconocimiento: z.boolean().optional().default(false),
 });
 
 /** Lo que pasó al cargar la deuda pasada. */
@@ -650,6 +652,8 @@ export type DeudaPasadaCargada = {
  * anterior al primero del sistema y se cubre en el acto con su saldo a favor: los pagos que
  * habían quedado "a favor" en realidad eran para esta deuda. Después se cobra desde Cobranza
  * como cualquier cargo; si se cargó mal, se anula desde la cuenta.
+ * Con `reconocimiento` (pedido del 29/10/2026) es un reconocimiento de deuda: la misma RD,
+ * marcada para que se pague después de todo lo demás y no cuente como vencida (0055).
  * Administración (sobre sus clientes) y el Líder, como la RD de siempre (§7.3).
  */
 export async function registrarDeudaPasada(
@@ -658,10 +662,11 @@ export async function registrarDeudaPasada(
   const perfil = await requireRol("admin", "lider");
   const parsed = schemaDeudaPasada.safeParse(input);
   if (!parsed.success) return fallo(parsed.error.issues[0].message);
-  const { clienteId } = parsed.data;
+  const { clienteId, reconocimiento } = parsed.data;
   const monto = Math.round(parsed.data.monto * 100) / 100;
   const detalle = (parsed.data.detalle ?? "").replace(/\s+/g, " ");
-  const descripcion = detalle ? `${TEXTO_DEUDA_PASADA} · ${detalle}` : TEXTO_DEUDA_PASADA;
+  const texto = reconocimiento ? TEXTO_RECONOCIMIENTO : TEXTO_DEUDA_PASADA;
+  const descripcion = detalle ? `${texto} · ${detalle}` : texto;
 
   const supabase = await createClient();
   const cliente = await clienteGestionable(supabase, clienteId, perfil);
@@ -674,6 +679,7 @@ export async function registrarDeudaPasada(
     .select("id")
     .eq("cliente_id", clienteId)
     .eq("origen", "deuda")
+    .eq("reconocimiento", reconocimiento)
     .eq("monto", monto)
     .eq("descripcion", descripcion)
     .eq("creado_por", perfil.user_id)
@@ -707,12 +713,14 @@ export async function registrarDeudaPasada(
       descuento_pronto_pago: 0,
       vencimiento,
       origen: "deuda",
+      reconocimiento,
     });
     if (error) return fallo(error);
   }
 
-  // Es la deuda más vieja de su cuenta: el saldo a favor la cubre primero (la misma RPC del
-  // botón «Aplicar saldo a favor»; no mueve plata de ninguna caja).
+  // La deuda pasada es la más vieja de su cuenta: el saldo a favor la cubre primero; el
+  // reconocimiento, después de lo demás (la misma RPC del botón «Aplicar saldo a favor»; no
+  // mueve plata de ninguna caja).
   const { data: aplicado, error: errorSaldo } = await supabase.rpc("aplicar_saldo_favor_cliente", {
     p_cliente: clienteId,
   });
