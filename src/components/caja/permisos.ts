@@ -57,9 +57,12 @@ export function permisosCaja(
     cierreForzado: tesoreria && deDiaAnterior,
     anularCobros:
       noValidada && ((duenia && estado === "abierta") || ((tesoreria || lider) && estado !== null)),
+    // 0056: también validada (se deshace la validación y Tesorería la vuelve a contar): la de
+    // administración, quien reabre una cerrada; la de portería, Tesorería y el Líder.
     reabrir:
-      (estado === "cerrada" && ((rol === "admin" && tipo === "administracion") || tesoreria || lider)) ||
-      (estado === "integrada" && (tesoreria || lider)),
+      ((estado === "cerrada" || (estado === "validada" && tipo === "administracion")) &&
+        ((rol === "admin" && tipo === "administracion") || tesoreria || lider)) ||
+      ((estado === "integrada" || (estado === "validada" && tipo === "guardia")) && (tesoreria || lider)),
     pedirReapertura:
       duenia && (estado === "cerrada" || estado === "integrada") && !caja?.reapertura_solicitada_en,
     integrarTipo: tipo === "guardia" && (rol === "admin" || tesoreria || lider),

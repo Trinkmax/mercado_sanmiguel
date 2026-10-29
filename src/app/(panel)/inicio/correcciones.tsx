@@ -35,6 +35,7 @@ import { desdeHaceDias, type Supabase } from "./datos";
 
 /** Eventos de caja que corrigen plata (§4.0-8): cada uno deja rastro y el Líder los ve. */
 const EVENTOS_CAJA = [
+  "validacion_deshecha",
   "cobro_anulado",
   "canon_anulado",
   "ingreso_anulado",
@@ -47,6 +48,7 @@ const EVENTOS_CAJA = [
 type EventoCaja = (typeof EVENTOS_CAJA)[number];
 
 const DEF_EVENTO: Record<EventoCaja, { titulo: string; icono: LucideIcon }> = {
+  validacion_deshecha: { titulo: "Caja validada reabierta", icono: Undo2 },
   cobro_anulado: { titulo: "Recibo anulado", icono: Undo2 },
   canon_anulado: { titulo: "Ingreso de transporte anulado", icono: Truck },
   ingreso_anulado: { titulo: "Venta sin cliente anulada", icono: PackageOpen },

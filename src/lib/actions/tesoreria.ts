@@ -36,7 +36,7 @@ const validarSchema = z.object({
 });
 
 /**
- * Validar = cierre definitivo de la caja. Si se manda el efectivo contado y no
+ * Validar = cierre del día (0056: reabrir_caja la puede reabrir, deshaciendo la validación). Si se manda el efectivo contado y no
  * coincide con el arqueo, la base registra el faltante o sobrante como ajuste en
  * el mismo acto (validar_caja, M2).
  */

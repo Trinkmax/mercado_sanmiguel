@@ -177,8 +177,9 @@ export async function solicitarReaperturaCaja(
 }
 
 /**
- * Reabre una caja cerrada (Administración) o integrada (Tesorería / Líder). Si no
- * se pasa motivo, la RPC usa el del pedido de reapertura pendiente.
+ * Reabre una caja cerrada (Administración) o integrada (Tesorería / Líder). 0056: también una
+ * validada, deshaciendo la validación (la de administración, como una cerrada; la de portería,
+ * Tesorería y el Líder). Si no se pasa motivo, la RPC usa el del pedido de reapertura pendiente.
  */
 export async function reabrirCaja(
   cajaId: string,
@@ -198,6 +199,8 @@ export async function reabrirCaja(
   if (error) return fallo(error);
 
   revalidarCajas();
+  // Reabierta, sus cobros se vuelven a poder anular desde la ficha del cliente.
+  revalidatePath("/clientes/[id]", "page");
   return ok(undefined);
 }
 

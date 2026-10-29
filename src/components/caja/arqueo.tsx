@@ -154,10 +154,32 @@ export function ArqueoCaja({
 
         <div className="space-y-3 border-t pt-4">
           {caja.estado === "validada" ? (
-            <p className="text-sm text-muted-foreground">
-              Validada por {nombres.validada ?? "Tesorería"} el {formatFechaHora(caja.validada_en)}
-              {caja.observaciones ? ` · ${caja.observaciones}` : ""}. El cierre es definitivo.
-            </p>
+            <>
+              <p className="text-sm text-muted-foreground">
+                Validada por {nombres.validada ?? "Tesorería"} el {formatFechaHora(caja.validada_en)}
+                {caja.observaciones ? ` · ${caja.observaciones}` : ""}.
+              </p>
+              {/* 0056: una caja validada también se reabre, deshaciendo la validación. */}
+              {permisos.reabrir ? (
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-sm text-muted-foreground">
+                    ¿Hay que corregir algo? Reabrila: se deshace la validación y, cuando se cierre, Tesorería la
+                    vuelve a contar.
+                  </p>
+                  <BotonReabrirCaja
+                    data-tour="caja-reabrir"
+                    cajaId={caja.id}
+                    descripcion={
+                      porteria
+                        ? "Se deshace la validación: la caja de portería vuelve a quedar abierta y sale de la caja mayor. La caja de administración que la recibió vuelve a quedar cerrada, sin validar. Queda registrado en la bitácora."
+                        : "Se deshace la validación: la caja vuelve a quedar abierta para corregir cobros o gastos. Después se cierra y Tesorería la vuelve a contar y validar. Queda registrado en la bitácora."
+                    }
+                  />
+                </div>
+              ) : rol === "guardia" && porteria ? (
+                <p className="text-sm text-muted-foreground">¿Hubo un error? Pedile a Tesorería que la reabra.</p>
+              ) : null}
+            </>
           ) : caja.estado === "integrada" ? (
             <>
               <p className="font-medium">
@@ -229,9 +251,7 @@ export function ArqueoCaja({
               ) : null}
               {permisos.reabrir ? (
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <p className="text-sm text-muted-foreground">
-                    ¿Faltó cargar algo? Reabrila mientras Tesorería no la valide.
-                  </p>
+                  <p className="text-sm text-muted-foreground">¿Faltó cargar algo? Reabrila.</p>
                   <BotonReabrirCaja
                     data-tour="caja-reabrir"
                     cajaId={caja.id}

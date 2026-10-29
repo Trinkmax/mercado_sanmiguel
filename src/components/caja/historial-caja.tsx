@@ -13,6 +13,7 @@ export const LABEL_EVENTO: Record<string, string> = {
   integracion: "Integrada a la caja mayor",
   recibe_rendicion: "Recibe la caja de portería",
   validacion: "Validación de Tesorería",
+  validacion_deshecha: "Validación deshecha",
   cobro_anulado: "Recibo anulado",
   gasto_imputado: "Gasto pagado desde la caja",
   gasto_revertido: "Pago de gasto deshecho",
@@ -25,6 +26,7 @@ export const LABEL_EVENTO: Record<string, string> = {
 
 /** Correcciones de plata: se marcan en la bitácora para que salten a la vista. */
 const CORRECCIONES = new Set([
+  "validacion_deshecha",
   "cobro_anulado",
   "gasto_revertido",
   "ajuste",

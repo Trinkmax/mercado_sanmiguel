@@ -443,7 +443,7 @@ function pasosCajaTesoreria(): Paso[] {
       texto:
         "Tocá «Contar y validar», poné cuánto efectivo contaste y confirmá. Si no coincide, el faltante o sobrante queda anotado en el mismo paso.",
       pantalla: PantallaValidar,
-      consejo: "Validar es el cierre definitivo: después la caja ya no se reabre.",
+      consejo: "Validar es el cierre del día. Si después hay que corregir algo, «Reabrir caja» deshace la validación y la volvés a contar.",
       variantes: {
         "caja-cerrar": {
           titulo: "Esta caja quedó abierta",

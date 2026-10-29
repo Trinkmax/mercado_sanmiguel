@@ -911,7 +911,7 @@ export function PantallaValidar() {
     <MarcoPantalla titulo="Cajas del día" contenidoClassName={FONDO_VENTANA}>
       <Ventana
         titulo="Contar y validar la caja del 29/09"
-        descripcion="Administración · Validar es el cierre definitivo: después ya no se reabre."
+        descripcion="Administración · Validar es el cierre del día. Si después hay que corregir algo, se reabre y se vuelve a contar."
         pie={
           <Resaltado className="w-full">
             <BotonEjemplo className="w-full">

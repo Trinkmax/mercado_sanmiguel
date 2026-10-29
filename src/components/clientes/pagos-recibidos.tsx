@@ -41,7 +41,7 @@ export type PagoFicha = {
  *
  * «Anular» (pedido del 28/10/2026: "entrar a los pagos y anular") con las mismas reglas que
  * en la Caja (permisosCaja, espejo de anular_pago): mientras su caja está abierta; el Líder,
- * mientras Tesorería no la validó. Una caja validada ya está contada: ese cobro no se anula.
+ * mientras Tesorería no la validó. Una caja validada se reabre primero (0056).
  * Lo que quedó a favor porque era para una deuda de antes del sistema no se anula: se carga la
  * «Deuda pasada» y se descuenta sola.
  */
@@ -95,9 +95,9 @@ export function PagosRecibidos({
   // Por qué un recibo no tiene «Anular» (solo si alguno no lo tiene): la regla de la caja.
   const reglaAnular =
     rol === "lider"
-      ? "Si Tesorería ya validó la caja de ese día, la plata ya está contada y el cobro no se anula."
+      ? "Si Tesorería ya validó la caja de ese día, reabrila desde «Caja» para anular el cobro."
       : rol === "admin"
-        ? "Un cobro se anula mientras su caja está abierta: si la de ese día ya se cerró, reabrila desde «Caja». Si Tesorería ya la validó, la plata ya está contada y no se anula."
+        ? "Un cobro se anula mientras su caja está abierta: si la de ese día ya se cerró (o Tesorería ya la validó), reabrila desde «Caja»."
         : rol === "guardia"
           ? "Un cobro se anula mientras la caja de portería de ese día está abierta."
           : null;

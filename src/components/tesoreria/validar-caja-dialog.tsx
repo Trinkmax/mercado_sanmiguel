@@ -193,7 +193,7 @@ export function ValidarCajaDialog({
           </DialogTitle>
           <DialogDescription className="text-sm">
             {pideConteo
-              ? `${esPorteria ? "Caja de portería" : "Administración"} · Validar es el cierre definitivo: después ya no se reabre.`
+              ? `${esPorteria ? "Caja de portería" : "Administración"} · Validar es el cierre del día. Si después hay que corregir algo, se reabre y se vuelve a contar.`
               : "Ya la recibió Administración: su efectivo se cuenta en la caja de administración."}
           </DialogDescription>
         </DialogHeader>

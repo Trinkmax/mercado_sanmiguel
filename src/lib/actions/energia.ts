@@ -24,8 +24,9 @@ const lecturaSchema = z.object({
 
 /**
  * Registra (o corrige) la lectura de un medidor para un período.
- * La lógica vive en la RPC `registrar_lectura`: crea la lectura y su cargo ENER,
- * y rechaza la corrección si el cargo ya tiene cobros. No genera el abono (§1.2-11).
+ * La lógica vive en la RPC `registrar_lectura`: crea la lectura y su cargo ENER. Si el cargo ya
+ * tenía cobros, se corrige igual (0056): lo cobrado queda hasta el monto nuevo y lo que sobra
+ * pasa a saldo a favor, que va a sus otras deudas. No genera el abono (§1.2-11).
  * J5: Administración y el Líder (Tesorería ya no).
  */
 export async function registrarLectura(input: {
@@ -56,6 +57,7 @@ export async function registrarLectura(input: {
 
   revalidatePath("/energia");
   revalidatePath("/facturacion");
+  revalidatePath("/clientes/[id]", "page");
   return ok({ lecturaId: data });
 }
 
