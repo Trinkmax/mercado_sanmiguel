@@ -149,6 +149,15 @@ const cobroSchema = z.object({
   permitirSaldoFavor: z.boolean().optional(),
   /** Carga atrasada: el cobro entra en la caja de ESE día anterior (ya abierta desde Caja). */
   fechaCaja: fechaISO.optional(),
+  /**
+   * Cuánto de lo que paga es la cuota del reconocimiento de deuda (plan de pago, 0057): va
+   * primero a esa deuda; el resto, en el orden de siempre. Sale del total, no se suma aparte.
+   */
+  aReconocimiento: z
+    .number()
+    .min(0, "La cuota del reconocimiento no puede ser negativa")
+    .max(999_999_999_999, "La cuota es demasiado grande: revisala")
+    .optional(),
 });
 
 /** Precio por día del ambulante: lo pone quien cobra en cada cobro (no hay precio fijo). */
@@ -378,7 +387,7 @@ export async function registrarCobro(
 
   const parsed = cobroSchema.safeParse(leerDatos(formData));
   if (!parsed.success) return fallo(parsed.error.issues[0].message);
-  const { clienteId, loteId, lineas, notas: nota, permitirSaldoFavor, fechaCaja } = parsed.data;
+  const { clienteId, loteId, lineas, notas: nota, permitirSaldoFavor, fechaCaja, aReconocimiento } = parsed.data;
 
   if (new Set(lineas.map((l) => l.id)).size !== lineas.length) {
     return fallo("No pudimos leer el cobro. Probá de nuevo.");
@@ -405,6 +414,7 @@ export async function registrarCobro(
     p_notas: nota || undefined,
     p_permitir_saldo_favor: permitirSaldoFavor ?? false,
     p_lote: loteId,
+    ...(aReconocimiento && aReconocimiento > 0 ? { p_a_reconocimiento: aReconocimiento } : {}),
   });
   if (error) {
     await borrarComprobantes(supabase, subidos);

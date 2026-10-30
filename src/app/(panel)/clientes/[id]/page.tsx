@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ArrowRight, FileCheck, HandCoins, Info, ReceiptText, ShieldQuestion, TriangleAlert, Zap } from "lucide-react";
+import { ArrowLeft, FileCheck, HandCoins, Info, ReceiptText, ShieldQuestion, TriangleAlert, Zap } from "lucide-react";
 import { aplicaDirecto, requireRol, type Rol } from "@/lib/auth";
 import { ROLES_COBRAN } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/server";
@@ -11,6 +11,7 @@ import {
   hoyISO,
   labelPeriodo,
   nivelDeuda,
+  periodoActual,
   saldoCargo,
   SELLO_NIVEL_DEUDA,
 } from "@/lib/format";
@@ -18,7 +19,7 @@ import { categoriasDeRol, type CategoriaCliente } from "@/lib/segmentos";
 import { primerMesDelSistema, textoPrimerMes } from "@/lib/deuda-pasada";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PageHeader } from "@/components/shared/page-header";
 import { Codigo } from "@/components/shared/codigo";
@@ -336,6 +337,7 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
     medidoresJefeRes,
     porCorregirRes,
     primerMes,
+    mesGeneradoRes,
   ] = await Promise.all([
     supabase
       .from("cargos")
@@ -414,6 +416,13 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
     supabase.rpc("cargos_para_corregir", { p_cliente: id }),
     // La deuda pasada es "de antes de octubre de 2026": el primer mes que facturó el sistema.
     primerMesDelSistema(supabase, perfil.org_id),
+    // 0057: con el mes en curso ya generado, un cambio de la carpeta pregunta desde cuándo rige.
+    supabase
+      .from("periodos")
+      .select("periodo")
+      .eq("periodo", periodoActual())
+      .not("generado_en", "is", null)
+      .maybeSingle(),
   ]);
 
   const porCorregir = new Map<string, CargoParaCorregir>(
@@ -491,7 +500,14 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
     }
   }
 
-  // Qué paga: lo mensual (sin energía, que va en Medidores) y lo que el rol puede sumar.
+  // Qué paga: lo mensual (sin energía, que va en Medidores) y lo que el rol puede sumar. De cada
+  // concepto, lo que ya se le generó este mes: un cambio que lo toca pregunta desde cuándo rige.
+  const mesGenerado = mesGeneradoRes.data ? periodoActual() : null;
+  const delMesPorCodigo = new Map(
+    cargos
+      .filter((c) => c.periodo === mesGenerado && c.origen === "generacion" && c.estado !== "anulado")
+      .map((c) => [c.codigo, { descripcion: c.descripcion, monto: c.monto, pagado: c.monto_pagado }])
+  );
   const itemsConceptos = items
     .filter((i) => i.conceptos && i.conceptos.tipo === "recurrente")
     .map((i) => ({
@@ -505,6 +521,7 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
       descuentoPp: Number(i.conceptos?.descuento_pronto_pago ?? 0),
       segmento: i.conceptos?.segmento ?? null,
       pendiente: itemsConCambio.has(i.id),
+      delMes: delMesPorCodigo.get(i.conceptos?.codigo ?? "") ?? null,
     }));
   const asignados = new Set(items.map((i) => i.concepto_id));
   const catalogo = conceptosRes.data ?? [];
@@ -975,24 +992,37 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
 
         {/* ------------------------------------------------ Qué paga */}
         <TabsContent value="paga" className="space-y-4 pt-4 text-base">
+          {/* Lo de este mes que se generó con otra cosa de lo que dice hoy la carpeta: se corrige
+              acá mismo, donde se cambió (antes había que ir a Cuenta y nadie lo encontraba). */}
           {porCorregir.size > 0 ? (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-parcial bg-parcial-suave px-4 py-3">
-              <p className="flex min-w-0 flex-1 basis-64 items-start gap-2 text-sm">
-                <TriangleAlert className="mt-0.5 size-4 shrink-0 text-parcial" strokeWidth={2} />
-                <span>
+            <Card className="border-parcial text-base">
+              <CardHeader>
+                <CardTitle className="flex items-start gap-2 text-lg">
+                  <TriangleAlert className="mt-1 size-5 shrink-0 text-parcial" strokeWidth={2} />
                   {porCorregir.size === 1
-                    ? "Un cargo de este mes ya generado no coincide con lo que dice la carpeta."
-                    : `${porCorregir.size} cargos de este mes ya generados no coinciden con lo que dice la carpeta.`}{" "}
-                  Los cambios rigen desde el mes que viene: si se generó mal, corregilo en Cuenta.
-                </span>
-              </p>
-              <Button asChild variant="outline" className="h-11 bg-card px-4 text-sm font-semibold">
-                <Link href={`/clientes/${cliente.id}?tab=cuenta`}>
-                  Ver en Cuenta
-                  <ArrowRight className="size-4" strokeWidth={2} />
-                </Link>
-              </Button>
-            </div>
+                    ? "Un cargo de este mes no coincide con la carpeta"
+                    : `${porCorregir.size} cargos de este mes no coinciden con la carpeta`}
+                </CardTitle>
+                <CardDescription className="text-sm">
+                  Se generaron con lo que decía antes. Si fue un error, corregilo: lo que ya pagó pasa al cargo
+                  corregido y sus recibos no cambian.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="divide-y">
+                {[...porCorregir.values()].map((c) => (
+                  <div key={c.cargoId} className="space-y-2 py-3 first:pt-0 last:pb-0">
+                    <p className="flex flex-wrap items-baseline justify-between gap-x-3">
+                      <span className="min-w-0 font-medium break-words">
+                        <DescripcionCargo texto={c.descripcion} />
+                        <span className="font-normal text-muted-foreground"> · {labelPeriodo(c.periodo)}</span>
+                      </span>
+                      <Money monto={c.monto} className="font-semibold" />
+                    </p>
+                    <CorregirCargo clienteId={cliente.id} cargo={c} />
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
           ) : null}
           <ConceptosCliente
             clienteId={cliente.id}
@@ -1003,6 +1033,7 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
             altasPendientes={altasPendientes}
             cuotasPedidas={cuotasPedidas}
             rol={perfil.rol}
+            mesGenerado={mesGenerado}
           />
         </TabsContent>
 

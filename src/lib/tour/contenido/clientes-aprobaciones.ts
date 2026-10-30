@@ -389,7 +389,8 @@ function pasosLider(): Paso[] {
       texto:
         "Lo que vos cambiás se aplica en el acto, sin esperar a nadie. Corregís sus datos con «Editar» y lo que paga en «Qué paga» (por ejemplo, el galpón al 110 %). Apenas guardás, queda hecho.",
       pantalla: PantallaGuardarDirecto,
-      consejo: "Lo que paga rige desde la próxima facturación: el mes en curso no se toca.",
+      consejo:
+        "Si el mes ya está generado, te pregunta desde cuándo rige: desde este mes (corrige lo que ya se generó) o desde el que viene.",
       sinAncla: { pantalla: PantallaGuardarDirecto },
     },
     {

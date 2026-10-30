@@ -652,8 +652,8 @@ export function PantallaPedirCambio() {
     <MarcoPantalla titulo="Qué paga">
       <p className={cn(CHICO, "flex items-start gap-1.5 rounded-lg border border-border bg-card px-2 py-1.5")}>
         <Info className="mt-0.5 size-3 shrink-0" strokeWidth={2.2} />
-        Los cambios rigen desde la próxima facturación mensual; el mes en curso no se toca. Cada cambio lo revisa y
-        aprueba el Líder de Procesos.
+        Si el mes ya está generado, te pregunta si el cambio rige desde ya o desde el mes que viene. Cada cambio lo
+        revisa y aprueba el Líder de Procesos.
       </p>
       <div className="overflow-hidden rounded-lg border border-border bg-card">
         <ConceptoEjemplo
@@ -681,7 +681,7 @@ export function PantallaGuardarDirecto() {
     <MarcoPantalla titulo="Qué paga">
       <p className={cn(CHICO, "flex items-start gap-1.5 rounded-lg border border-border bg-card px-2 py-1.5")}>
         <Info className="mt-0.5 size-3 shrink-0" strokeWidth={2.2} />
-        Los cambios rigen desde la próxima facturación mensual; el mes en curso no se toca.
+        Si el mes ya está generado, te pregunta si el cambio rige desde ya o desde el mes que viene.
       </p>
       <div className="overflow-hidden rounded-lg border border-border bg-card">
         <ConceptoEjemplo

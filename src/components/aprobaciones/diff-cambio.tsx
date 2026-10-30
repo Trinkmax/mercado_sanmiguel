@@ -1,5 +1,5 @@
-import { ArrowRight } from "lucide-react";
-import { formatFraccion, OPCIONES_CUOTAS_MES, formatPorcentaje } from "@/lib/format";
+import { ArrowRight, CalendarCheck } from "lucide-react";
+import { formatFraccion, labelPeriodo, OPCIONES_CUOTAS_MES, formatPorcentaje, periodoActual } from "@/lib/format";
 import {
   LABEL_CATEGORIA,
   LABEL_SEGMENTO,
@@ -73,6 +73,8 @@ const CLAVES_OCULTAS = new Set([
   "creado_en",
   "conceptos",
   "ref",
+  // 0057: desde qué mes rige (se muestra aparte, con lo que pasa con lo ya generado).
+  "corregir_desde",
 ]);
 
 /** Orden de presentación de los campos (los que no están van al final). */
@@ -327,10 +329,38 @@ function ListaAlta({
 /* ---------- Diff completo según entidad + acción ---------- */
 
 /**
+ * Un cambio de la carpeta con «desde cuándo rige» (0057): si el mes ya estaba generado, al
+ * aprobarlo se corrige lo de ese mes (o se le carga); si rige desde el que viene, no se toca.
+ */
+function RigeDesde({ cambio }: { cambio: CambioFila }) {
+  const desde = cambio.entidad === "cliente_concepto" ? cambio.datos.corregir_desde : undefined;
+  if (typeof desde !== "string" || !/^\d{4}-\d{2}-01$/.test(desde)) return null;
+  const actual = periodoActual();
+  return (
+    <p className="mt-2 flex items-start gap-2 rounded-lg bg-muted/60 px-4 py-2.5 text-sm">
+      <CalendarCheck className="mt-0.5 size-4 shrink-0 text-primary" strokeWidth={2} />
+      {desde <= actual ? (
+        <span>
+          Rige desde <span className="font-semibold">{labelPeriodo(desde).toLowerCase()}</span>, que ya está
+          generado: al aprobarlo se corrige lo de este mes (lo pagado pasa al corregido; lo que sobre, a su
+          favor).
+        </span>
+      ) : (
+        <span>
+          Rige desde <span className="font-semibold">{labelPeriodo(desde).toLowerCase()}</span>: lo de{" "}
+          {labelPeriodo(actual).toLowerCase()} queda como se generó.
+        </span>
+      )}
+    </p>
+  );
+}
+
+/**
  * Muestra, en lenguaje de mostrador, qué cambia si se aprueba:
  * - modificación → tabla Campo | Antes | Después (solo las claves presentes);
  * - alta → lista de campos (+ conceptos con código × cantidad);
  * - baja → una frase.
+ * Debajo, desde cuándo rige un cambio de la carpeta (0057).
  */
 export function DiffCambio({
   cambio,
@@ -339,7 +369,23 @@ export function DiffCambio({
   cambio: CambioFila;
   conceptosPorId: Record<string, ReferenciaConcepto>;
 }) {
+  return (
+    <>
+      <CuerpoDiff cambio={cambio} conceptosPorId={conceptosPorId} />
+      <RigeDesde cambio={cambio} />
+    </>
+  );
+}
+
+function CuerpoDiff({
+  cambio,
+  conceptosPorId,
+}: {
+  cambio: CambioFila;
+  conceptosPorId: Record<string, ReferenciaConcepto>;
+}) {
   const { entidad, accion, datos, datos_anteriores } = cambio;
+  const rigeDesde = typeof datos.corregir_desde === "string" ? datos.corregir_desde : null;
 
   if (accion === "baja") {
     const quien =
@@ -354,7 +400,9 @@ export function DiffCambio({
         {entidad === "cliente"
           ? " Deja de generar cargos; su historial se conserva."
           : entidad === "cliente_concepto"
-            ? " Deja de generarse desde el próximo período."
+            ? rigeDesde
+              ? ""
+              : " Deja de generarse desde el próximo período."
             : " No se genera más para ningún cliente."}
       </p>
     );

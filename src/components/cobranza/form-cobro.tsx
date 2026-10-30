@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import {
   ArrowRight,
   FileText,
+  Handshake,
   Lock,
   PiggyBank,
   Plus,
@@ -173,8 +174,8 @@ export function FormCobro({
   sinSaldoFavor?: string;
   /**
    * La parte de deudaTotal que es reconocimiento de deuda (0055): se paga después de todo lo
-   * demás. «Cobrar todo» no la incluye (la cuota la escribe quien cobra) y se dice cuánto del
-   * cobro va a esa deuda.
+   * demás. «Cobrar todo» no la incluye, salvo la cuota que se escriba (0057: esa parte del
+   * cobro va primero al reconocimiento), y se dice cuánto del cobro va a esa deuda.
    */
   reconocimiento?: number;
 }) {
@@ -186,6 +187,8 @@ export function FormCobro({
   const [confirmarCuitEn, setConfirmarCuitEn] = useState<string | null>(null);
   const [notas, setNotas] = useState("");
   const [mostrarNotas, setMostrarNotas] = useState(false);
+  // 0057: cuánto de lo que paga es la cuota del plan del reconocimiento de deuda.
+  const [cuotaTexto, setCuotaTexto] = useState("");
   const [errorRpc, setErrorRpc] = useState<string | null>(null);
   const [confirmarSaldo, setConfirmarSaldo] = useState(false);
   // Cliente al día que quiere adelantar plata: el cobro entero queda como saldo a favor.
@@ -211,7 +214,23 @@ export function FormCobro({
   const sobrante = Math.max(redondear2(total - deudaTotal), 0);
   // Todo menos el reconocimiento de deuda (lo que «Cobrar todo» completa) y cuánto del cobro va a él.
   const cuenta = Math.max(redondear2(deudaTotal - reconocimiento), 0);
-  const alReconocimiento = Math.min(Math.max(redondear2(total - cuenta), 0), reconocimiento);
+  // La cuota del reconocimiento (0057) solo se pregunta si debe algo más: si debe solo eso, todo
+  // lo que pague va ahí igual. Sale del total: va primero al reconocimiento y el resto, a lo demás.
+  const pideCuota = reconocimiento > 0.009 && cuenta > 0;
+  const cuota = pideCuota ? redondear2(parseMonto(cuotaTexto)) : 0;
+  const cuotaEnCobro = Math.min(cuota, total);
+  const alReconocimiento = Math.min(
+    redondear2(cuotaEnCobro + Math.max(total - cuotaEnCobro - cuenta, 0)),
+    reconocimiento
+  );
+  const errorCuota =
+    cuota > reconocimiento + 0.009
+      ? `Del reconocimiento le quedan ${formatARS(reconocimiento)}: la cuota no puede ser más.`
+      : total > 0 && cuota > total + 0.009
+        ? `La cuota no puede ser más que lo que te pagan (${formatARS(total)}).`
+        : null;
+  // «Cobrar todo»: lo demás más la cuota que se haya escrito.
+  const todo = Math.min(redondear2(cuenta + (errorCuota ? 0 : cuota)), deudaTotal);
 
   // ---------- edición de líneas ----------
   function cambiarLinea(id: string, parcial: Partial<LineaForm>) {
@@ -271,6 +290,7 @@ export function FormCobro({
     setConfirmarCuitEn(null);
     setNotas("");
     setMostrarNotas(false);
+    setCuotaTexto("");
     setErrorRpc(null);
     setModoAdelanto(false);
     setResultado(null);
@@ -325,6 +345,7 @@ export function FormCobro({
       notas: notas.trim() || undefined,
       permitirSaldoFavor,
       fechaCaja,
+      aReconocimiento: cuota > 0 ? cuota : undefined,
     };
     const fd = new FormData();
     fd.set("datos", JSON.stringify(datos));
@@ -366,6 +387,10 @@ export function FormCobro({
       return;
     }
     setConfirmarCuitEn(null);
+    if (errorCuota) {
+      requestAnimationFrame(() => document.getElementById("cuota-reconocimiento")?.focus());
+      return;
+    }
     const t = redondear2(lineasActuales.reduce((acc, l) => acc + parseMonto(l.monto), 0));
     if (t - deudaTotal > 0.009) {
       if (sinSaldoFavor) {
@@ -499,6 +524,66 @@ export function FormCobro({
     ? lineas.flatMap((l, i) => (parseMonto(l.monto) > 0 ? [] : [i + 1]))
     : [];
 
+  // 0057: la cuota del plan del reconocimiento de deuda. Vacía = como siempre (el reconocimiento
+  // se paga con lo que sobre de lo demás).
+  const bloqueCuota = pideCuota ? (
+    <div className="space-y-3 rounded-lg border bg-card p-4" data-tour="cobranza-cuota-reconocimiento">
+      <div className="flex items-start gap-3">
+        <Handshake className="mt-0.5 size-5 shrink-0 text-muted-foreground" strokeWidth={1.8} />
+        <div className="min-w-0 flex-1">
+          <Label htmlFor="cuota-reconocimiento" className="text-base font-medium">
+            ¿Paga una cuota del reconocimiento de deuda?
+          </Label>
+          <p className="text-sm text-muted-foreground">
+            Le quedan <Money monto={reconocimiento} className="font-semibold text-foreground" />. Lo que pongas
+            acá sale de lo que te paga y va primero a esa deuda; el resto, a lo demás.
+          </p>
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <Input
+          id="cuota-reconocimiento"
+          inputMode="decimal"
+          autoComplete="off"
+          placeholder="Sin cuota"
+          value={cuotaTexto}
+          onChange={(e) => {
+            setCuotaTexto(sanitizarMonto(e.target.value));
+            setErrorRpc(null);
+          }}
+          onBlur={() => {
+            if (cuotaTexto) setCuotaTexto(montoConMiles(parseMonto(cuotaTexto)));
+          }}
+          aria-invalid={Boolean(errorCuota)}
+          aria-describedby="cuota-reconocimiento-ayuda"
+          className="h-12 flex-1 text-xl font-semibold tabular md:text-xl"
+        />
+        {total > 0 ? (
+          <Button
+            type="button"
+            variant="outline"
+            className="h-12 shrink-0 px-3 text-sm font-semibold"
+            onClick={() => setCuotaTexto(montoConMiles(Math.min(total, reconocimiento)))}
+          >
+            Todo es cuota
+          </Button>
+        ) : null}
+      </div>
+      <p id="cuota-reconocimiento-ayuda" className="min-h-5 text-sm">
+        {errorCuota ? (
+          <span className="font-medium text-destructive">{errorCuota}</span>
+        ) : cuota > 0 && total > 0 ? (
+          <span className="text-muted-foreground tabular">
+            {formatARS(cuota)} a la cuota
+            {total - cuota > 0.009 ? ` · ${formatARS(redondear2(total - cuota))} a lo demás` : " · nada a lo demás"}
+          </span>
+        ) : cuota > 0 ? (
+          <span className="text-muted-foreground">Tocá Cobrar todo: suma lo demás que debe y esta cuota.</span>
+        ) : null}
+      </p>
+    </div>
+  ) : null;
+
   function detalleMedio(l: LineaForm) {
     const e = errores[l.id] ?? {};
     if (l.medio === "transferencia") {
@@ -605,7 +690,7 @@ export function FormCobro({
                   variant="outline"
                   className="h-14 shrink-0 px-4 text-sm font-semibold"
                   onClick={() => {
-                    cambiarLinea(unaLinea.id, { monto: montoConMiles(cuenta) });
+                    cambiarLinea(unaLinea.id, { monto: montoConMiles(todo) });
                     limpiarError(unaLinea.id, "monto");
                   }}
                 >
@@ -640,7 +725,7 @@ export function FormCobro({
                 <p className="text-muted-foreground">
                   {reconocimiento > 0.009
                     ? cuenta > 0
-                      ? "Escribí cuánto te paga. «Cobrar todo» no incluye el reconocimiento de deuda: si paga una cuota, sumala."
+                      ? "Escribí cuánto te paga, o tocá Cobrar todo. Si paga una cuota del reconocimiento de deuda, ponela abajo."
                       : "Debe solo el reconocimiento de deuda: escribí la cuota que te paga."
                     : deudaTotal > 0
                       ? "Escribí cuánto te paga, o tocá Cobrar todo."
@@ -669,6 +754,8 @@ export function FormCobro({
               </div>
             ) : null}
           </div>
+
+          {bloqueCuota}
 
           <div className="space-y-2" data-tour="cobranza-medio">
             <Label className="text-base font-medium">¿Cómo te paga?</Label>
@@ -756,6 +843,7 @@ export function FormCobro({
               );
             })}
           </ol>
+          {bloqueCuota}
         </>
       )}
 

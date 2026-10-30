@@ -3444,6 +3444,7 @@ export type Database = {
       }
       registrar_cobro: {
         Args: {
+          p_a_reconocimiento?: number
           p_caja: string
           p_cliente: string
           p_lineas: Json

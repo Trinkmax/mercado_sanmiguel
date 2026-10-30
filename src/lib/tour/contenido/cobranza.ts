@@ -234,7 +234,8 @@ function pasoMonto(rol: Rol): Paso {
     titulo: "¿Cuánto te pagan?",
     texto:
       "Acá escribís lo que te da. Si paga todo, tocás «Cobrar todo» y se completa solo. Abajo te dice cuánto le queda debiendo.",
-    consejo: "Puede pagar una parte: lo que falta queda en su cuenta para la próxima.",
+    consejo:
+      "Puede pagar una parte: lo que falta queda en su cuenta para la próxima. Si tiene un reconocimiento de deuda con plan de pago, debajo del monto ponés la cuota que paga: va primero a esa deuda.",
     variantes: {
       "cobranza-plan": {
         titulo: "Las cuotas del mes",

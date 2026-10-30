@@ -9,9 +9,11 @@ import { ok, fallo, type ActionResult } from "@/lib/actions/result";
 import {
   CUOTAS_TODOS_LOS_DIAS,
   formatFraccion,
+  labelPeriodo,
   OPCIONES_CUOTAS_MES,
   PASO_CANTIDAD,
   formatPorcentaje,
+  periodoActual,
 } from "@/lib/format";
 import { mesDeudaPasada, primerMesDelSistema, TEXTO_DEUDA_PASADA, TEXTO_RECONOCIMIENTO } from "@/lib/deuda-pasada";
 import {
@@ -164,6 +166,14 @@ function revalidarCliente(clienteId?: string | null) {
   revalidatePath("/cobranza");
 }
 
+/** Un cambio que rige desde el mes en curso corrige cargos ya generados (0057): cambian también
+ * lo que se cobra, la facturación y el inicio. */
+function revalidarMesCorregido() {
+  revalidatePath("/cobranza", "layout");
+  revalidatePath("/facturacion");
+  revalidatePath("/inicio");
+}
+
 /** "todo junto" · "en 4 veces (semanal)" · "todos los días" · "en 17 veces" */
 function textoCuotas(cuotas: number): string {
   if (cuotas === 1) return "todo junto";
@@ -260,6 +270,23 @@ const schemaPorcentaje = z.preprocess(
     .max(1000, "El porcentaje va de 1 a 1000")
     .refine((v) => Math.round(v * 100) === v * 100, "El porcentaje admite hasta 2 decimales")
 );
+
+/**
+ * Desde qué mes rige un cambio de la carpeta (pedido del 29/10/2026): si es el mes en curso, al
+ * aplicarse corrige lo que ya se generó de ese concepto (o le carga el mes si no lo tenía); si
+ * es el que viene, el mes en curso queda como se generó (0057). Se manda solo cuando el mes en
+ * curso ya está generado: si no, el cambio entra solo al generarlo.
+ */
+const schemaRigeDesde = z
+  .string()
+  .regex(/^\d{4}-\d{2}-01$/, "Elegí desde qué mes rige el cambio")
+  .refine((v) => v >= periodoActual(), "El cambio no puede regir desde un mes que ya pasó. Recargá la página.")
+  .optional();
+
+/** " · rige desde octubre de 2026": va en el resumen del cambio (y en el motivo del cargo corregido). */
+function textoRigeDesde(periodo: string | undefined): string {
+  return periodo ? ` · rige desde ${labelPeriodo(periodo).toLowerCase()}` : "";
+}
 
 /** Conceptos que se cargan junto con el alta (cantidad 0 = no se manda). */
 const schemaConceptosAlta = z
@@ -853,6 +880,7 @@ export async function agregarConceptoCliente(
       conceptoId: z.string().min(1, "Elegí el concepto que va a pagar"),
       cantidad: schemaCantidad,
       porcentaje: schemaPorcentaje.optional(),
+      corregirDesde: schemaRigeDesde,
     })
     .safeParse(input);
   if (!parsed.success) return fallo(parsed.error.issues[0].message);
@@ -881,18 +909,20 @@ export async function agregarConceptoCliente(
       ...(parsed.data.porcentaje !== undefined && parsed.data.porcentaje !== 100
         ? { porcentaje: parsed.data.porcentaje }
         : {}),
+      ...(parsed.data.corregirDesde ? { corregir_desde: parsed.data.corregirDesde } : {}),
     },
     resumen: `Agregar ${concepto.nombre} × ${formatFraccion(parsed.data.cantidad)}${
       parsed.data.porcentaje !== undefined && parsed.data.porcentaje !== 100
         ? ` al ${formatPorcentaje(parsed.data.porcentaje)}`
         : ""
-    } a ${cliente.nombre}`,
+    } a ${cliente.nombre}${textoRigeDesde(parsed.data.corregirDesde)}`,
     clienteId: parsed.data.clienteId,
   });
   if (!res.ok) return res;
 
   revalidarCliente(parsed.data.clienteId);
   revalidatePath("/mapa");
+  if (parsed.data.corregirDesde) revalidarMesCorregido();
   return res;
 }
 
@@ -907,6 +937,7 @@ export async function editarConceptoCliente(
       cantidad: schemaCantidad.optional(),
       porcentaje: schemaPorcentaje.optional(),
       activo: z.boolean().optional(),
+      corregirDesde: schemaRigeDesde,
     })
     .safeParse(input);
   if (!parsed.success) return fallo(parsed.error.issues[0].message);
@@ -964,6 +995,10 @@ export async function editarConceptoCliente(
     resumen = `Cambiar ${concepto} de ${cliente.nombre}: ${antes.join(" ") || "sin cambios"} → ${despues.join(" ") || "sin cambios"}`;
     if (parsed.data.activo === false) resumen += " y dejar de facturarlo";
   }
+  if (parsed.data.corregirDesde) {
+    cambios.corregir_desde = parsed.data.corregirDesde;
+    resumen += textoRigeDesde(parsed.data.corregirDesde);
+  }
 
   const res = await solicitarCambio(supabase, {
     entidad: "cliente_concepto",
@@ -977,6 +1012,7 @@ export async function editarConceptoCliente(
 
   revalidarCliente(parsed.data.clienteId);
   revalidatePath("/mapa");
+  if (parsed.data.corregirDesde) revalidarMesCorregido();
   return res;
 }
 

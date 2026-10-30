@@ -32,6 +32,13 @@ import { StepperCantidad } from "@/components/clientes/stepper-cantidad";
 import { CampoPorcentaje } from "@/components/clientes/campo-porcentaje";
 import { CuotasMesPicker, textoVistaPrevia } from "@/components/clientes/cuotas-mes";
 import {
+  DialogoRigeDesde,
+  impactoDelMes,
+  textoMesCorregido,
+  type CargoDelMes,
+  type ImpactoDelMes,
+} from "@/components/clientes/rige-desde";
+import {
   AYUDA_CONCEPTO,
   GRUPOS_CONCEPTO,
   TOAST_ENVIADO_APROBACION,
@@ -59,6 +66,8 @@ export type ItemConcepto = {
   segmento: string | null;
   /** Tiene un cambio esperando la aprobación del Líder: no se toca hasta que se resuelva. */
   pendiente?: boolean;
+  /** Lo que ya se le generó de este concepto en el mes en curso (0057: «¿desde cuándo rige?»). */
+  delMes?: CargoDelMes | null;
 };
 
 /** Un concepto que se pidió agregar y espera la aprobación del Líder. */
@@ -106,6 +115,7 @@ export function ConceptosCliente({
   altasPendientes = [],
   cuotasPedidas = null,
   rol,
+  mesGenerado = null,
 }: {
   clienteId: string;
   categoria: CategoriaCliente;
@@ -117,6 +127,11 @@ export function ConceptosCliente({
   /** "En cuántas veces paga" pedido y esperando al Líder. */
   cuotasPedidas?: number | null;
   rol: Rol;
+  /**
+   * El mes en curso ("2026-10-01") si ya está generado: un cambio que toca lo de este mes
+   * pregunta si rige desde ya (y corrige lo generado) o desde el que viene (0057).
+   */
+  mesGenerado?: string | null;
 }) {
   const directo = aplicaDirectoRol(rol);
   // Lo que el rol no puede tocar (la cochera de un ambulante, para el Jefe) se ve sin controles.
@@ -153,7 +168,7 @@ export function ConceptosCliente({
               <CardDescription>
                 Aparte de lo que paga por día, en un pago por mes.
                 {puedeCambiar
-                  ? ` Los cambios rigen desde la próxima facturación mensual${directo ? "." : ": cada uno lo aprueba el Líder de Procesos."}`
+                  ? ` ${textoCuandoRige(mesGenerado)}${directo ? "" : " Cada cambio lo aprueba el Líder de Procesos."}`
                   : ""}
               </CardDescription>
             </CardHeader>
@@ -168,9 +183,16 @@ export function ConceptosCliente({
                   categoria={categoria}
                   directo={directo}
                   soloLectura={soloLectura}
+                  mesGenerado={mesGenerado}
                 />
               )}
-              <AgregarConcepto clienteId={clienteId} categoria={categoria} disponibles={disponibles} directo={directo} />
+              <AgregarConcepto
+                clienteId={clienteId}
+                categoria={categoria}
+                disponibles={disponibles}
+                directo={directo}
+                mesGenerado={mesGenerado}
+              />
             </CardContent>
           </Card>
         ) : null}
@@ -198,6 +220,7 @@ export function ConceptosCliente({
                     directo={directo}
                     soloApagar
                     soloLectura={soloLectura(item)}
+                    mesGenerado={mesGenerado}
                   />
                 ))}
               </div>
@@ -215,7 +238,7 @@ export function ConceptosCliente({
       <Alert>
         <Info className="size-4" />
         <AlertDescription>
-          Los cambios rigen desde la próxima facturación mensual; el mes en curso no se toca.
+          {textoCuandoRige(mesGenerado)}
           {!directo ? " Cada cambio lo revisa y aprueba el Líder de Procesos." : null}
         </AlertDescription>
       </Alert>
@@ -245,10 +268,17 @@ export function ConceptosCliente({
               categoria={categoria}
               directo={directo}
               soloLectura={soloLectura}
+              mesGenerado={mesGenerado}
             />
           )}
 
-          <AgregarConcepto clienteId={clienteId} categoria={categoria} disponibles={disponibles} directo={directo} />
+          <AgregarConcepto
+            clienteId={clienteId}
+            categoria={categoria}
+            disponibles={disponibles}
+            directo={directo}
+            mesGenerado={mesGenerado}
+          />
         </CardContent>
       </Card>
 
@@ -265,6 +295,12 @@ export function ConceptosCliente({
       ) : null}
     </div>
   );
+}
+
+/** Cuándo entra un cambio: con el mes ya generado, se pregunta (0057). */
+function textoCuandoRige(mesGenerado: string | null): string {
+  if (!mesGenerado) return "Los cambios rigen desde la próxima facturación mensual.";
+  return "Este mes ya está generado: al cambiar algo que toca lo de este mes, te preguntamos si rige desde ya (y se corrige lo generado) o desde el mes que viene.";
 }
 
 /** Ambulante que alquila: qué se le cobra por mes, aparte de los días ("Aparte, la quinta se
@@ -300,6 +336,7 @@ function ListaConceptos({
   categoria,
   directo,
   soloLectura,
+  mesGenerado,
 }: {
   items: ItemConcepto[];
   altasPendientes: AltaPendiente[];
@@ -308,6 +345,7 @@ function ListaConceptos({
   directo: boolean;
   /** El rol no puede tocar esta fila (se ve sin controles). */
   soloLectura: (item: ItemConcepto) => boolean;
+  mesGenerado: string | null;
 }) {
   const { total, conBeneficio } = totalMensual(items.filter((i) => i.activo));
   const grupos = GRUPOS_CONCEPTO.map((g) => ({
@@ -337,6 +375,7 @@ function ListaConceptos({
                     : LABEL_CATEGORIA[categoria].toLowerCase()
                 }
                 soloLectura={soloLectura(item)}
+                mesGenerado={mesGenerado}
               />
             ))}
           </div>
@@ -381,30 +420,47 @@ function AgregarConcepto({
   categoria,
   disponibles,
   directo,
+  mesGenerado,
 }: {
   clienteId: string;
   categoria: CategoriaCliente;
   disponibles: ConceptoDisponible[];
   directo: boolean;
+  mesGenerado: string | null;
 }) {
   const router = useRouter();
   const [pendiente, startTransition] = useTransition();
   const [elegido, setElegido] = useState<string | null>(null);
   const [cantidad, setCantidad] = useState(1);
   const [porcentaje, setPorcentaje] = useState(100);
+  const [pregunta, setPregunta] = useState<ImpactoDelMes | null>(null);
   const concepto = disponibles.find((c) => c.id === elegido) ?? null;
 
   if (disponibles.length === 0) return null;
 
   function agregar() {
     if (!concepto) return;
+    // Con el mes ya generado: ¿se le carga también este mes?
+    const impacto = impactoDelMes(mesGenerado, null, montoConcepto(cantidad, concepto.precio, porcentaje));
+    if (impacto) {
+      setPregunta(impacto);
+      return;
+    }
+    enviar();
+  }
+
+  function enviar(corregirDesde?: string) {
+    if (!concepto) return;
+    const corrige = pregunta && corregirDesde === pregunta.periodo ? pregunta : null;
     startTransition(async () => {
       const res = await llamarAccion(() => agregarConceptoCliente({
         clienteId,
         conceptoId: concepto.id,
         cantidad,
         porcentaje,
+        corregirDesde,
       }));
+      setPregunta(null);
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -413,11 +469,14 @@ function AgregarConcepto({
         toast.success(
           `Agregado: ${concepto.nombre} × ${formatFraccion(cantidad)}${
             porcentaje !== 100 ? ` al ${formatPorcentaje(porcentaje)}` : ""
-          }`
+          }`,
+          corrige ? { description: textoMesCorregido(corrige) } : undefined
         );
       } else {
         toast.success(TOAST_ENVIADO_APROBACION, {
-          description: `${concepto.nombre} se suma a la carpeta cuando lo apruebe.`,
+          description: `${concepto.nombre} se suma a la carpeta cuando lo apruebe${
+            corrige ? ", y ahí se le carga también este mes" : ""
+          }.`,
         });
       }
       setElegido(null);
@@ -516,6 +575,14 @@ function AgregarConcepto({
           </Button>
         </div>
       ) : null}
+      <DialogoRigeDesde
+        impacto={pregunta}
+        concepto={concepto?.nombre ?? "ese concepto"}
+        directo={directo}
+        pendiente={pendiente}
+        onElegir={enviar}
+        onCancelar={() => setPregunta(null)}
+      />
     </div>
   );
 }
@@ -648,10 +715,13 @@ function FilaConcepto({
   soloApagar = false,
   noCorresponde = null,
   soloLectura = false,
+  mesGenerado = null,
 }: {
   item: ItemConcepto;
   clienteId: string;
   directo: boolean;
+  /** El mes en curso si ya está generado (0057: «¿desde cuándo rige?»). */
+  mesGenerado?: string | null;
   /** Ambulante: solo el interruptor para dejar de facturarlo (sin cantidad). */
   soloApagar?: boolean;
   /** La categoría del cliente ("quintero") cuando el concepto ya no le corresponde (quedó
@@ -671,9 +741,27 @@ function FilaConcepto({
   const ayuda = AYUDA_CONCEPTO[item.codigo];
   // Ya hay un cambio de esta fila esperando al Líder: no se manda otro encima.
   const esperando = Boolean(item.pendiente) && !directo;
+  // 0057: con el mes ya generado, un cambio que toca lo de este mes pregunta desde cuándo rige.
+  const [pregunta, setPregunta] = useState<
+    { impacto: ImpactoDelMes; accion: { tipo: "cantidad" } | { tipo: "activo"; valor: boolean } } | null
+  >(null);
+  /** "Octubre: corregido a $ 34.000" si eligió que rija desde este mes. */
+  function corregido(corregirDesde?: string): ImpactoDelMes | null {
+    return pregunta && corregirDesde === pregunta.impacto.periodo ? pregunta.impacto : null;
+  }
 
   function guardarCantidad() {
     if (!sucio) return;
+    const impacto = impactoDelMes(mesGenerado, item.delMes ?? null, montoConcepto(cantidad, item.precio, porcentaje));
+    if (impacto) {
+      setPregunta({ impacto, accion: { tipo: "cantidad" } });
+      return;
+    }
+    enviarCantidad();
+  }
+
+  function enviarCantidad(corregirDesde?: string) {
+    const corrige = corregido(corregirDesde);
     startTransition(async () => {
       const res = await llamarAccion(() =>
         editarConceptoCliente({
@@ -681,8 +769,10 @@ function FilaConcepto({
           clienteId,
           ...(cambioCantidad ? { cantidad } : {}),
           ...(cambioPorcentaje ? { porcentaje } : {}),
+          corregirDesde,
         })
       );
+      setPregunta(null);
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -690,10 +780,15 @@ function FilaConcepto({
       const texto = (c: number, p: number) =>
         `${formatFraccion(c)}${p !== 100 ? ` al ${formatPorcentaje(p)}` : ""}`;
       if (res.data.estado === "aplicado") {
-        toast.success(`${item.nombre}: ahora paga ${texto(cantidad, porcentaje)}`);
+        toast.success(
+          `${item.nombre}: ahora paga ${texto(cantidad, porcentaje)}`,
+          corrige ? { description: textoMesCorregido(corrige) } : undefined
+        );
       } else {
         toast.success(TOAST_ENVIADO_APROBACION, {
-          description: `${item.nombre} sigue en ${texto(item.cantidad, item.porcentaje)} hasta que lo apruebe.`,
+          description: `${item.nombre} sigue en ${texto(item.cantidad, item.porcentaje)} hasta que lo apruebe${
+            corrige ? "; ahí se corrige también este mes" : ""
+          }.`,
         });
         setCantidad(item.cantidad);
         setPorcentaje(item.porcentaje);
@@ -703,9 +798,27 @@ function FilaConcepto({
   }
 
   function cambiarActivo(valor: boolean) {
+    const impacto = impactoDelMes(
+      mesGenerado,
+      item.delMes ?? null,
+      valor ? montoConcepto(item.cantidad, item.precio, item.porcentaje) : 0
+    );
+    if (impacto) {
+      // El interruptor no se mueve hasta que elija desde cuándo.
+      setPregunta({ impacto, accion: { tipo: "activo", valor } });
+      return;
+    }
+    enviarActivo(valor);
+  }
+
+  function enviarActivo(valor: boolean, corregirDesde?: string) {
+    const corrige = corregido(corregirDesde);
     setActivo(valor);
     startTransition(async () => {
-      const res = await llamarAccion(() => editarConceptoCliente({ id: item.id, clienteId, activo: valor }));
+      const res = await llamarAccion(() =>
+        editarConceptoCliente({ id: item.id, clienteId, activo: valor, corregirDesde })
+      );
+      setPregunta(null);
       if (!res.ok) {
         toast.error(res.error);
         setActivo(item.activo);
@@ -713,18 +826,25 @@ function FilaConcepto({
       }
       if (res.data.estado === "aplicado") {
         toast.success(
-          valor ? `${item.nombre}: se vuelve a facturar` : `${item.nombre}: no se factura más`
+          valor ? `${item.nombre}: se vuelve a facturar` : `${item.nombre}: no se factura más`,
+          corrige ? { description: textoMesCorregido(corrige) } : undefined
         );
       } else {
         toast.success(TOAST_ENVIADO_APROBACION, {
           description: valor
-            ? `${item.nombre} se vuelve a facturar cuando lo apruebe.`
-            : `${item.nombre} se sigue facturando hasta que apruebe la baja.`,
+            ? `${item.nombre} se vuelve a facturar cuando lo apruebe${corrige ? ", también este mes" : ""}.`
+            : `${item.nombre} se sigue facturando hasta que apruebe la baja${corrige ? "; ahí se anula también lo de este mes" : ""}.`,
         });
         setActivo(item.activo);
       }
       router.refresh();
     });
+  }
+
+  function elegirDesde(desde: string) {
+    if (!pregunta) return;
+    if (pregunta.accion.tipo === "cantidad") enviarCantidad(desde);
+    else enviarActivo(pregunta.accion.valor, desde);
   }
 
   return (
@@ -820,6 +940,14 @@ function FilaConcepto({
           {activo ? "Se factura" : "No se factura"}
         </Label>
       </div>
+      <DialogoRigeDesde
+        impacto={pregunta?.impacto ?? null}
+        concepto={item.nombre}
+        directo={directo}
+        pendiente={pendiente}
+        onElegir={elegirDesde}
+        onCancelar={() => setPregunta(null)}
+      />
     </div>
   );
 }
