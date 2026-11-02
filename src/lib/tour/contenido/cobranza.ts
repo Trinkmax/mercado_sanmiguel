@@ -168,7 +168,8 @@ const pasoDeuda: Paso = {
   titulo: "Lo que debe hoy",
   texto:
     "Arriba, el total que debe hoy. Abajo, cada cosa que debe con su mes. Lo vencido lleva el sello rojo.",
-  consejo: "Si tiene saldo a favor, se descuenta solo: abajo dice cuánto tiene que pagar hoy.",
+  consejo:
+    "Si tiene saldo a favor, se descuenta solo: abajo dice cuánto tiene que pagar hoy. Si un quintero no vino alguna semana, en su quinta tocá «No vino alguna semana»: esas semanas se le descuentan sin que entre plata.",
   sinAncla: {
     texto:
       "Al abrir la cuenta de un cliente, arriba ves el total que debe hoy y, abajo, cada cosa que debe con su mes. Lo vencido lleva el sello rojo. Así se ve:",

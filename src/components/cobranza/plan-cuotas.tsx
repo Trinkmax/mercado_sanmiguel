@@ -107,6 +107,7 @@ export function PlanCuotas({
   const alDia = falta <= 0.009;
   const esUltima = cuotas - cubiertas <= 1;
   const porDia = cuotas > 10;
+  const noVino = Number(avance.semanas_no_vino ?? 0);
 
   return (
     <section data-tour="cobranza-plan" className="space-y-4 rounded-lg border bg-card p-5">
@@ -127,6 +128,7 @@ export function PlanCuotas({
               : `Cubrió ${cubiertas} de ${cuotas} ${cuotas === 1 ? "cuota" : "cuotas"}`}
           </p>
           <p className="text-sm text-muted-foreground">
+            {noVino > 0 ? `No vino ${noVino === 1 ? "1 semana" : `${noVino} semanas`} · ` : null}
             Pagó <Money monto={avance.pagado} className="font-medium text-foreground" /> · Falta{" "}
             <Money
               monto={falta}

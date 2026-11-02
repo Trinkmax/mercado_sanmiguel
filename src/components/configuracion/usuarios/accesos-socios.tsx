@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import { KeyRound, Loader2, Search, Store, TriangleAlert, UserPlus } from "lucide-react";
+import Link from "next/link";
+import { KeyRound, Loader2, PencilLine, QrCode, Search, Store, TriangleAlert, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { crearAccesoSocio } from "@/lib/actions/usuarios";
 import type { Rol } from "@/lib/auth";
@@ -32,7 +33,7 @@ type Vista = "sin" | "con";
 /**
  * Acceso de los socios al portal (F2): la lista de clientes partida en "Sin acceso"
  * y "Con acceso", con buscador por carpeta, nombre, apodo o puesto. "Dar acceso" se
- * abre en la misma fila con el DNI sacado del CUIT y una contraseña lista.
+ * abre en la misma fila con el DNI de la carpeta, que es también la contraseña.
  */
 export function AccesosSocios({
   clientes,
@@ -76,13 +77,21 @@ export function AccesosSocios({
 
   return (
     <div className="space-y-5">
-      <div>
-        <h2 className="font-display text-lg font-bold">Clientes en el portal</h2>
-        <p className="text-sm text-muted-foreground">
-          Desde el portal ve su cuenta, descarga sus recibos y recibe las comunicaciones. Entra con
-          su DNI. Puede tener acceso cualquier {miRol === "lider" ? "puestero o quintero" : "puestero"},
-          sea socio de la cooperativa o no.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1 basis-80">
+          <h2 className="font-display text-lg font-bold">Clientes en el portal</h2>
+          <p className="text-sm text-muted-foreground">
+            Desde el portal ve su cuenta, descarga sus recibos y recibe las comunicaciones. Entra con
+            su DNI como usuario y como contraseña. Puede tener acceso cualquier{" "}
+            {miRol === "lider" ? "puestero o quintero" : "puestero"}, sea socio de la cooperativa o no.
+          </p>
+        </div>
+        <Button asChild variant="outline" className="min-h-11 bg-card px-4 text-sm font-semibold">
+          <Link href="/cartel-portal">
+            <QrCode className="size-4" strokeWidth={2} />
+            Cartel con el QR
+          </Link>
+        </Button>
       </div>
 
       {credencial ? (
@@ -280,7 +289,7 @@ function FilaSinAcceso({
         </Button>
       </div>
 
-      {/* El formulario se monta al abrir: la contraseña se genera en ese momento. */}
+      {/* El formulario se monta al abrir, con el DNI de la carpeta. */}
       {abierto ? <FormDarAcceso cliente={cliente} onCreado={onCreado} /> : null}
     </li>
   );
@@ -296,7 +305,10 @@ function FormDarAcceso({
   const dniCuit = cliente.tipoPersona === "fisica" ? dniDesdeCuit(cliente.cuit) : null;
   const [dni, setDni] = useState(dniCuit ?? "");
   const [nombre, setNombre] = useState(cliente.tipoPersona === "fisica" ? cliente.nombre : "");
-  const [password, setPassword] = useState(() => generarContrasena());
+  // Pedido de Franco (02/11/2026): en el portal la contraseña es el DNI, como el usuario.
+  // Se le puede dar otra igual; null = su DNI.
+  const [otraContrasena, setOtraContrasena] = useState<string | null>(null);
+  const password = otraContrasena ?? dni;
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pendiente, startTransition] = useTransition();
@@ -310,7 +322,7 @@ function FormDarAcceso({
       setError("Poné el nombre y apellido de quien va a entrar.");
       return;
     }
-    if (password.length < 8) {
+    if (otraContrasena !== null && otraContrasena.length < 8) {
       setError("La contraseña tiene que tener al menos 8 letras o números.");
       return;
     }
@@ -341,7 +353,7 @@ function FormDarAcceso({
           onCambiar={setDni}
           ayuda={
             dniCuit && dni === dniCuit
-              ? "Lo sacamos del CUIT: revisalo con el documento."
+              ? "Lo sacamos de la carpeta: revisalo con el documento."
               : "Con este DNI va a entrar al portal."
           }
         />
@@ -364,7 +376,36 @@ function FormDarAcceso({
           </p>
         </div>
       </div>
-      <CampoContrasena id={`socio-pass-${cliente.id}`} valor={password} onCambiar={setPassword} />
+      {otraContrasena === null ? (
+        <div className="space-y-2">
+          <p className="text-base font-semibold">Contraseña para entrar</p>
+          <p className="flex h-14 max-w-xs items-center rounded-md border border-dashed bg-card px-3 font-display text-2xl font-bold tracking-wide tabular">
+            {dni || "Su DNI"}
+          </p>
+          <button
+            type="button"
+            onClick={() => setOtraContrasena(generarContrasena())}
+            className="inline-flex min-h-11 items-center gap-2 rounded-md px-3 text-sm font-medium text-primary hover:bg-accent"
+          >
+            <PencilLine className="size-4" strokeWidth={2} />
+            Darle otra contraseña
+          </button>
+          <p className="text-sm text-muted-foreground">
+            Su DNI, como todos en el portal: es lo que dice el cartel con el QR.
+          </p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <CampoContrasena id={`socio-pass-${cliente.id}`} valor={otraContrasena} onCambiar={setOtraContrasena} />
+          <button
+            type="button"
+            onClick={() => setOtraContrasena(null)}
+            className="inline-flex min-h-11 items-center gap-2 rounded-md px-3 text-sm font-medium text-primary hover:bg-accent"
+          >
+            Mejor su DNI, como los demás
+          </button>
+        </div>
+      )}
       <CampoEmailOpcional id={`socio-email-${cliente.id}`} valor={email} onCambiar={setEmail} />
       {error ? (
         <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm font-medium text-destructive">

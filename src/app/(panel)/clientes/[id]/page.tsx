@@ -37,6 +37,7 @@ import {
 } from "@/components/clientes/cambios-pendientes-cliente";
 import { DeudaPasada } from "@/components/clientes/deuda-pasada";
 import { AnularDeuda } from "@/components/clientes/anular-deuda";
+import { NoVino } from "@/components/cobranza/no-vino";
 import { CorregirCargo, type CargoParaCorregir } from "@/components/clientes/corregir-cargo";
 import { ConceptosCliente } from "@/components/clientes/conceptos-cliente";
 import { DocumentosCliente } from "@/components/clientes/documentos-cliente";
@@ -342,7 +343,7 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
     supabase
       .from("cargos")
       .select(
-        "id, codigo, descripcion, periodo, vencimiento, estado, monto, monto_pagado, descuento_pronto_pago, origen, reconocimiento, creado_por, creado_en, anulado_por, anulado_en, anulado_motivo"
+        "id, codigo, descripcion, periodo, vencimiento, estado, monto, monto_pagado, descuento_pronto_pago, origen, reconocimiento, semanas_no_vino, creado_por, creado_en, anulado_por, anulado_en, anulado_motivo"
       )
       .eq("cliente_id", id)
       .order("periodo", { ascending: false })
@@ -669,6 +670,9 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
   const puedeRegistrar = perfil.rol === "admin" || perfil.rol === "lider";
   // Deuda pasada (RD): Administración sobre sus clientes y el Líder (§7.3, pedido del 28/10/2026).
   const puedeDeudaPasada = perfil.rol === "admin" || perfil.rol === "lider";
+  // Semanas de la quinta que no vino (0058): quien gestiona al cliente, si la paga por semana.
+  const puedeNoVino =
+    (perfil.rol === "admin" || perfil.rol === "guardia" || perfil.rol === "lider") && cliente.cuotas_mes > 1;
 
   const solapas = [
     { valor: "cuenta", label: "Cuenta" },
@@ -950,6 +954,21 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
                               clienteId={cliente.id}
                               descripcion={c.descripcion}
                               monto={c.monto}
+                            />
+                          </div>
+                        ) : null}
+                        {puedeNoVino && c.codigo === "EXPQ" && c.origen === "generacion" && !anulado && saldo > 0 ? (
+                          <div className="col-span-full flex justify-end">
+                            <NoVino
+                              clienteId={cliente.id}
+                              quinta={{
+                                cargoId: c.id,
+                                periodo: c.periodo,
+                                monto: Number(c.monto),
+                                pagado: Number(c.monto_pagado),
+                                cuotasMes: cliente.cuotas_mes,
+                                semanasNoVino: Number(c.semanas_no_vino ?? 0),
+                              }}
                             />
                           </div>
                         ) : null}

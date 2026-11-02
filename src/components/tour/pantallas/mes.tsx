@@ -1823,7 +1823,7 @@ export function PantallaCredencial() {
 /** La tarjeta del acceso al portal de un cliente, para imprimir y dar en mano. */
 export function PantallaCredencialPortal() {
   return (
-    <Credencial titulo="Acceso al portal creado" nombre="José Fernández" dni="20.345.678" contrasena="Durazno-3915" />
+    <Credencial titulo="Acceso al portal creado" nombre="José Fernández" dni="20.345.678" contrasena="20345678" />
   );
 }
 
@@ -1919,7 +1919,7 @@ export function PantallaPortalClientes() {
   );
 }
 
-/** «Dar acceso»: se abre en la misma fila, con el DNI sacado del CUIT. */
+/** «Dar acceso»: se abre en la misma fila, con el DNI de la carpeta, que es también la contraseña. */
 export function PantallaDarAcceso() {
   return (
     <MarcoPantalla titulo="Configuración">
@@ -1929,11 +1929,11 @@ export function PantallaDarAcceso() {
           <Resaltado className="ring-offset-card">
             <div className="space-y-1 p-1">
               <CampoEjemplo etiqueta="DNI" valor="20.345.678" />
-              <Chico>Lo sacamos del CUIT: revisalo con el documento.</Chico>
+              <Chico>Lo sacamos de la carpeta: revisalo con el documento.</Chico>
             </div>
           </Resaltado>
           <CampoEjemplo etiqueta="¿Quién va a entrar?" valor="José Fernández" />
-          <CampoEjemplo etiqueta="Contraseña para entrar" valor="Durazno-3915" />
+          <CampoEjemplo etiqueta="Contraseña para entrar" valor="20.345.678" />
           <BotonEjemplo className="w-full">
             <UserPlus /> Dar acceso a José Fernández
           </BotonEjemplo>

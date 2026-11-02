@@ -227,6 +227,8 @@ export type AvanceMes = {
   cuotas: number;
   cuotas_cubiertas: number;
   cuota_sugerida: number;
+  /** Semanas de la quinta que se le descontaron porque no vino (0058): ya no cuentan en `cuotas`. */
+  semanas_no_vino?: number;
 };
 
 /** "2 de 4 · Falta $165.000" · "Pagó 12 de 30 días · Falta $45.000" · "Al día" */

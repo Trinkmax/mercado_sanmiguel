@@ -475,6 +475,7 @@ export type Database = {
           periodo: string
           precio_unitario: number
           reconocimiento: boolean
+          semanas_no_vino: number
           vencimiento: string
         }
         Insert: {
@@ -503,6 +504,7 @@ export type Database = {
           periodo: string
           precio_unitario?: number
           reconocimiento?: boolean
+          semanas_no_vino?: number
           vencimiento: string
         }
         Update: {
@@ -531,6 +533,7 @@ export type Database = {
           periodo?: string
           precio_unitario?: number
           reconocimiento?: boolean
+          semanas_no_vino?: number
           vencimiento?: string
         }
         Relationships: [
@@ -2935,6 +2938,7 @@ export type Database = {
           org_id: string | null
           pagado: number | null
           periodo: string | null
+          semanas_no_vino: number | null
           total: number | null
         }
         Relationships: [
@@ -3264,6 +3268,10 @@ export type Database = {
       dejar_sin_efecto_multa: {
         Args: { p_motivo: string; p_registro: string }
         Returns: undefined
+      }
+      descontar_semanas: {
+        Args: { p_cargo: string; p_semanas: number }
+        Returns: Json
       }
       desconciliar_canon: { Args: { p_id: string }; Returns: undefined }
       desconciliar_gasto: { Args: { p_id: string }; Returns: undefined }

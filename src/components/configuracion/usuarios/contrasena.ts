@@ -37,10 +37,12 @@ export function dniConPuntos(valor: string): string {
 
 /**
  * DNI a partir del CUIT de una persona física ("20-12345678-3" → "12345678";
- * "20-07123456-3" → "7123456"). Null si no se puede.
+ * "20-07123456-3" → "7123456"). Casi todas las carpetas tienen cargado el DNI solo en
+ * ese campo ("12.345.678"): se devuelve tal cual. Null si no se puede.
  */
 export function dniDesdeCuit(cuit: string | null | undefined): string | null {
   const c = (cuit ?? "").replace(/\D/g, "");
+  if (c.length === 7 || c.length === 8) return c;
   if (c.length !== 11) return null;
   const dni = c.slice(2, 10).replace(/^0+/, "");
   return /^[0-9]{7,8}$/.test(dni) ? dni : null;

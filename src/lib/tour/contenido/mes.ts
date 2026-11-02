@@ -565,7 +565,7 @@ function pasosLider(): Paso[] {
         "config-dar-acceso": {
           titulo: "Tocá «Dar acceso»",
           texto:
-            "Se abre en la misma fila: el DNI sale del CUIT (revisalo con el documento) y la contraseña ya viene lista. Tocás «Dar acceso a …» y listo.",
+            "Se abre en la misma fila con el DNI de la carpeta (revisalo con el documento): entra con su DNI como usuario y como contraseña. Tocás «Dar acceso a …» y listo.",
           pantalla: PantallaDarAcceso,
         },
       },
@@ -624,18 +624,18 @@ function pasosAdmin(): Paso[] {
       ancla: "config-dar-acceso",
       titulo: "Tocá «Dar acceso»",
       texto:
-        "Se abre en la misma fila: el DNI sale del CUIT (revisalo con el documento) y la contraseña ya viene lista. Tocás «Dar acceso a …» y listo.",
+        "Se abre en la misma fila con el DNI de la carpeta (revisalo con el documento): entra con su DNI como usuario y como contraseña. Tocás «Dar acceso a …» y listo.",
       pantalla: PantallaDarAcceso,
       sinAncla: {
         texto:
-          "Cada cliente sin acceso tiene su «Dar acceso». Se abre así, con el DNI sacado del CUIT y la contraseña lista:",
+          "Cada cliente sin acceso tiene su «Dar acceso». Se abre así, con el DNI de la carpeta, que es también su contraseña:",
       },
     },
     {
       id: "credencial",
-      titulo: "Dale su contraseña en mano",
+      titulo: "Entra con su DNI",
       texto:
-        "Al terminar aparece una tarjeta con su DNI y su contraseña. Tocá «Imprimir» y dásela: después no se puede volver a ver.",
+        "Al terminar aparece una tarjeta con su DNI y su contraseña (su DNI, salvo que le hayas dado otra). Para que todos sepan cómo entrar, imprimí el «Cartel con el QR» y pegalo en el mercado.",
       pantalla: PantallaCredencialPortal,
       consejo: "Si la pierde, buscalo en «Con acceso» y tocá «Nueva contraseña».",
     },

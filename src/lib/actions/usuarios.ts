@@ -230,13 +230,20 @@ export async function crearUsuario(input: unknown): Promise<ActionResult<Usuario
 
 /* ---------- Acceso al portal para un socio (Administración: puesteros · Líder: todos) ---------- */
 
-const accesoSchema = z.object({
-  cliente_id: z.uuid("Elegí el cliente."),
-  nombre: nombreSchema,
-  dni: dniSchema,
-  password: passwordSchema,
-  email: emailOpcional,
-});
+// En el portal la contraseña es el DNI (pedido de Franco, 02/11/2026): con 7 números
+// también vale, aunque sea más corta que las 8 letras de cualquier otra.
+const accesoSchema = z
+  .object({
+    cliente_id: z.uuid("Elegí el cliente."),
+    nombre: nombreSchema,
+    dni: dniSchema,
+    password: z.string("Poné la contraseña.").max(72, "La contraseña es demasiado larga."),
+    email: emailOpcional,
+  })
+  .refine((d) => d.password === d.dni || d.password.length >= 8, {
+    message: "La contraseña tiene que tener al menos 8 letras o números.",
+    path: ["password"],
+  });
 
 export async function crearAccesoSocio(input: unknown): Promise<ActionResult<UsuarioCreado>> {
   const perfil = await requireRol("admin", "lider");

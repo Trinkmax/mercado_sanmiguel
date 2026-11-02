@@ -22,6 +22,7 @@ import { AvisoDeuda } from "@/components/cobranza/aviso-deuda";
 import { CobroAmbulante } from "@/components/cobranza/cobro-ambulante";
 import { OtrasDeudas } from "@/components/cobranza/otras-deudas";
 import { DescripcionCargo } from "@/components/cobranza/descripcion-cargo";
+import { NoVino, type QuintaDelMes } from "@/components/cobranza/no-vino";
 import {
   AvisoCajaCerrada,
   AvisoDiaAnterior,
@@ -159,7 +160,7 @@ export default async function CobrarClientePage({
       supabase
         .from("cargos")
         .select(
-          "id, codigo, descripcion, periodo, vencimiento, estado, monto, monto_pagado, descuento_pronto_pago, origen, reconocimiento, desde, hasta, conceptos(orden_imputacion)"
+          "id, codigo, descripcion, periodo, vencimiento, estado, monto, monto_pagado, descuento_pronto_pago, origen, reconocimiento, desde, hasta, semanas_no_vino, conceptos(orden_imputacion)"
         )
         .eq("cliente_id", clienteId)
         .neq("estado", "anulado")
@@ -168,7 +169,7 @@ export default async function CobrarClientePage({
       conPlan
         ? supabase
             .from("v_avance_mes")
-            .select("total, pagado, falta, cuotas, cuotas_cubiertas, cuota_sugerida")
+            .select("total, pagado, falta, cuotas, cuotas_cubiertas, cuota_sugerida, semanas_no_vino")
             .eq("cliente_id", clienteId)
             .eq("periodo", periodo)
             .maybeSingle()
@@ -240,6 +241,18 @@ export default async function CobrarClientePage({
     descuento: Number(c.descuento_pronto_pago ?? 0),
     vencido: c.vencimiento < hoy && !c.reconocimiento,
     enTermino: hoy <= c.vencimiento,
+    // La quinta del mes del que paga por semana: las semanas que no vino se descuentan (0058).
+    quinta:
+      c.codigo === "EXPQ" && c.origen === "generacion" && cliente.cuotas_mes > 1
+        ? ({
+            cargoId: c.id,
+            periodo: c.periodo,
+            monto: Number(c.monto),
+            pagado: Number(c.monto_pagado),
+            cuotasMes: cliente.cuotas_mes,
+            semanasNoVino: Number(c.semanas_no_vino ?? 0),
+          } satisfies QuintaDelMes)
+        : null,
   }));
   const items = todos
     .filter((c) => c.saldo > 0)
@@ -294,6 +307,7 @@ export default async function CobrarClientePage({
           cuotas: Number(a.cuotas ?? cliente.cuotas_mes),
           cuotas_cubiertas: Number(a.cuotas_cubiertas ?? 0),
           cuota_sugerida: Number(a.cuota_sugerida ?? 0),
+          semanas_no_vino: Number(a.semanas_no_vino ?? 0),
         }
       : null;
     const viejos = items.filter((c) => c.periodo < periodo && !c.reconocimiento);
@@ -370,6 +384,11 @@ export default async function CobrarClientePage({
                       : labelPeriodo(c.periodo)}
                   {c.vencido ? <Sello estado="vencido" /> : null}
                 </p>
+                {c.quinta ? (
+                  <div className="pt-2">
+                    <NoVino clienteId={cliente.id} quinta={c.quinta} />
+                  </div>
+                ) : null}
               </div>
               <Money monto={c.saldo} className="shrink-0 pt-px font-semibold" />
             </div>

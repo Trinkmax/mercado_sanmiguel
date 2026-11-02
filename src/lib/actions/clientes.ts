@@ -846,6 +846,50 @@ export async function corregirCargo(
   });
 }
 
+/** Lo que quedó después de descontar semanas que no vino (descontar_semanas, 0058). */
+export type SemanasDescontadas = {
+  descuento: number;
+  montoNuevo: number;
+  /** Lo que todavía debe de ese mes de quinta. */
+  debe: number;
+};
+
+/**
+ * Pedido del mercado (02/11/2026): el quintero paga la quinta por semana y las semanas que no
+ * vino no las debe. Descuenta esas semanas de la quinta de un mes que todavía debe, sin cobro:
+ * el cargo queda anulado con el rastro y se rehace por lo que corresponde (lo pagado adentro).
+ */
+export async function descontarSemanas(input: unknown): Promise<ActionResult<SemanasDescontadas>> {
+  await requireRol("admin", "guardia", "lider");
+  const parsed = z
+    .object({
+      cargoId: z.uuid("No encontramos ese cargo. Recargá la página."),
+      clienteId: z.uuid("No encontramos el cliente. Recargá la página."),
+      semanas: z.int("Elegí cuántas semanas no vino.").min(1, "Elegí cuántas semanas no vino.").max(31),
+    })
+    .safeParse(input);
+  if (!parsed.success) return fallo(parsed.error.issues[0].message);
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("descontar_semanas", {
+    p_cargo: parsed.data.cargoId,
+    p_semanas: parsed.data.semanas,
+  });
+  if (error) return fallo(error.message);
+
+  const r = (data ?? {}) as Record<string, unknown>;
+  revalidatePath(`/clientes/${parsed.data.clienteId}`);
+  revalidatePath("/clientes");
+  revalidatePath("/cobranza", "layout");
+  revalidatePath("/mapa");
+  revalidatePath("/inicio");
+  return ok({
+    descuento: Number(r.descuento ?? 0),
+    montoNuevo: Number(r.monto_nuevo ?? 0),
+    debe: Number(r.debe ?? 0),
+  });
+}
+
 /** Aplica el saldo a favor del cliente a sus cargos pendientes (RPC). */
 export async function aplicarSaldoFavor(
   input: unknown
