@@ -81,9 +81,9 @@ export async function PestanaHoy({
           <div data-tour="tesoreria-saldos-aviso" className="rounded-xl border border-primary/30 bg-accent/60 px-5 py-4">
             <h2 className="font-display text-xl font-bold tracking-tight">Antes de empezar, cargá cuánta plata había</h2>
             <p className="mt-1 max-w-prose text-base text-muted-foreground">
-              Poné el efectivo y el saldo del banco (en pesos y, si hay, en dólares) de un día. Desde ese
-              día el sistema suma los cobros y resta los gastos solo. Si alguna cuenta no tiene plata,
-              cargala en cero.
+              Poné el efectivo y el saldo del banco (en pesos y, si hay, en dólares) de un día, y lo que
+              suman los cheques en cartera. Desde ese día el sistema suma los cobros y resta los gastos
+              solo. Si alguna cuenta no tiene plata, cargala en cero.
             </p>
           </div>
           <SaldosIniciales saldos={saldos} />

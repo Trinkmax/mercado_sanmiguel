@@ -11,6 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { AlertaError } from "@/components/cobranza/alerta-error";
+import type { MedioSaldo } from "@/components/tesoreria/saldos-iniciales";
 import { llamarAccion } from "@/lib/llamar-accion";
 
 const NOMBRE: Record<string, string> = {
@@ -18,6 +19,7 @@ const NOMBRE: Record<string, string> = {
   "transferencia-ARS": "Pesos en el banco",
   "efectivo-USD": "Dólares en efectivo",
   "transferencia-USD": "Dólares en el banco",
+  "cheque-ARS": "Cheques en cartera",
 };
 
 const MOTIVOS = ["Me equivoqué al cargarlo", "El arqueo daba otro número", "Cambió el día de inicio"];
@@ -43,7 +45,7 @@ export function SaldoInicialForm({
   fechaSugerida = null,
   alGuardar,
 }: {
-  medio: "efectivo" | "transferencia";
+  medio: MedioSaldo;
   moneda: Moneda;
   monto: number | null;
   fecha: string | null;
@@ -104,7 +106,7 @@ export function SaldoInicialForm({
     <div className="space-y-4">
       <div className="space-y-2">
         <Label htmlFor={`${idBase}-monto`} className="text-base">
-          ¿Cuánto había?
+          {medio === "cheque" ? "¿Cuánto suman los cheques que había?" : "¿Cuánto había?"}
         </Label>
         <Input
           id={`${idBase}-monto`}
@@ -119,7 +121,11 @@ export function SaldoInicialForm({
           className="h-12 text-lg font-semibold tabular"
         />
         <p className="min-h-5 text-sm font-medium tabular text-muted-foreground">
-          {montoStr !== "" ? formatMoneda(montoNumero, moneda) : "Los centavos van con coma: 1234,50"}
+          {montoStr !== ""
+            ? formatMoneda(montoNumero, moneda)
+            : medio === "cheque"
+              ? "Los que tenían en cartera, sin depositar todavía"
+              : "Los centavos van con coma: 1234,50"}
         </p>
       </div>
 
@@ -148,7 +154,9 @@ export function SaldoInicialForm({
             {!esCorreccion && fechaSugerida
               ? "Es el mismo día que los otros saldos. "
               : ""}
-            Desde ese día el sistema suma y resta todo lo que entra y sale.
+            {medio === "cheque"
+              ? "Se suman a los cheques que entren por los cobros del sistema."
+              : "Desde ese día el sistema suma y resta todo lo que entra y sale."}
           </p>
         )}
       </div>

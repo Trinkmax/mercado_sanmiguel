@@ -187,7 +187,7 @@ export async function anularMovimiento(
 /* ---------------- Saldos iniciales (por cuenta y moneda) ---------------- */
 
 const saldoSchema = z.object({
-  medio: z.enum(["efectivo", "transferencia"], "Elegí efectivo o banco."),
+  medio: z.enum(["efectivo", "transferencia", "cheque"], "Elegí efectivo, banco o cheques."),
   moneda: z.enum(["ARS", "USD"], "Elegí pesos o dólares."),
   monto: z
     .number("Poné el monto que había.")
@@ -204,15 +204,16 @@ const saldoSchema = z.object({
     .optional(),
   /** Obligatorio al corregir el monto o la fecha de un saldo ya cargado (lo exige la base). */
   motivo: z.string().trim().max(300, "El motivo es muy largo (máximo 300 letras).").optional(),
-});
+}).refine((d) => d.medio !== "cheque" || d.moneda === "ARS", "Los cheques se cargan en pesos.");
 
 /**
  * Saldo al comenzar el día `fecha`: el flujo de esa cuenta cuenta desde ese día
- * inclusive. `medio` "transferencia" = banco. Corregirlo pide motivo y deja el
+ * inclusive. `medio` "transferencia" = banco; "cheque" = los cheques que ya había en cartera
+ * (se suman a la cartera, 0059). Corregirlo pide motivo y deja el
  * valor anterior → nuevo en el rastro.
  */
 export async function guardarSaldoInicial(
-  medio: "efectivo" | "transferencia",
+  medio: "efectivo" | "transferencia" | "cheque",
   moneda: "ARS" | "USD",
   monto: number,
   fecha: string,

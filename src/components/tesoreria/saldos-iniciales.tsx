@@ -9,8 +9,11 @@ import { Sello } from "@/components/shared/sello";
 import { MontoMoneda } from "@/components/tesoreria/monto";
 import { SaldoInicialForm } from "@/components/tesoreria/saldo-inicial-form";
 
+/** "cheque": los cheques que ya había en cartera al empezar (solo pesos, 0059). */
+export type MedioSaldo = "efectivo" | "transferencia" | "cheque";
+
 export type SaldoInicial = {
-  medio: "efectivo" | "transferencia";
+  medio: MedioSaldo;
   moneda: Moneda;
   monto: number;
   fecha: string;
@@ -19,11 +22,12 @@ export type SaldoInicial = {
   corregido: { por: string; en: string; motivo: string } | null;
 };
 
-const CUENTAS: { medio: "efectivo" | "transferencia"; moneda: Moneda; titulo: string }[] = [
+const CUENTAS: { medio: MedioSaldo; moneda: Moneda; titulo: string }[] = [
   { medio: "efectivo", moneda: "ARS", titulo: "Pesos en efectivo" },
   { medio: "transferencia", moneda: "ARS", titulo: "Pesos en el banco" },
   { medio: "efectivo", moneda: "USD", titulo: "Dólares en efectivo" },
   { medio: "transferencia", moneda: "USD", titulo: "Dólares en el banco" },
+  { medio: "cheque", moneda: "ARS", titulo: "Cheques en cartera" },
 ];
 
 /** El día en que arranca la mayoría de los saldos ya cargados (a igual cantidad, el más viejo). */
@@ -39,7 +43,7 @@ function diaDeInicio(saldos: SaldoInicial[]): string | null {
 }
 
 /**
- * Los 4 saldos iniciales (pesos/dólares × efectivo/banco). Los que faltan se
+ * Los saldos iniciales (pesos/dólares × efectivo/banco, y los cheques en cartera). Los que faltan se
  * muestran abiertos para cargar (proponiendo el mismo día que los ya cargados);
  * los cargados, compactos con "Corregir".
  */

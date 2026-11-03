@@ -3,7 +3,7 @@ import type { createClient } from "@/lib/supabase/server";
 import type { Moneda } from "@/lib/format";
 import { normalizarFlujo, type Cuenta, type Flujo, type Movimiento, type TipoMovimiento } from "@/components/tesoreria/tipos";
 import type { CajaPendiente } from "@/components/tesoreria/cajas-para-validar";
-import type { SaldoInicial } from "@/components/tesoreria/saldos-iniciales";
+import type { MedioSaldo, SaldoInicial } from "@/components/tesoreria/saldos-iniciales";
 import type { SaldosCuentas } from "@/components/tesoreria/nuevo-movimiento";
 
 type Supabase = Awaited<ReturnType<typeof createClient>>;
@@ -58,9 +58,9 @@ export async function cargarSaldosIniciales(supabase: Supabase): Promise<SaldoIn
       : null;
   };
   return (data ?? [])
-    .filter((s) => s.medio === "efectivo" || s.medio === "transferencia")
+    .filter((s) => s.medio === "efectivo" || s.medio === "transferencia" || s.medio === "cheque")
     .map((s) => ({
-      medio: s.medio as "efectivo" | "transferencia",
+      medio: s.medio as MedioSaldo,
       moneda: s.moneda as Moneda,
       monto: n(s.monto),
       fecha: s.fecha,
