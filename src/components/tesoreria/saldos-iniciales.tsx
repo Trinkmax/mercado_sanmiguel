@@ -48,12 +48,13 @@ function diaDeInicio(saldos: SaldoInicial[]): string | null {
  * los cargados, compactos con "Corregir".
  */
 export function SaldosIniciales({ saldos }: { saldos: SaldoInicial[] }) {
-  const fechaSugerida = diaDeInicio(saldos);
   return (
     // items-start: una tarjeta cargada no se estira hasta el alto del formulario de al lado.
     <div className="grid gap-4 md:grid-cols-2 md:items-start">
       {CUENTAS.map((c) => {
         const s = saldos.find((x) => x.medio === c.medio && x.moneda === c.moneda) ?? null;
+        // El día de los OTROS saldos: se propone para uno nuevo y avisa si al corregir queda distinto.
+        const fechaSugerida = diaDeInicio(saldos.filter((x) => x !== s));
         return (
           <section key={`${c.medio}-${c.moneda}`} className="rounded-xl border bg-card p-5" aria-label={c.titulo}>
             <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
@@ -87,6 +88,7 @@ export function SaldosIniciales({ saldos }: { saldos: SaldoInicial[] }) {
                       monto={s.monto}
                       fecha={s.fecha}
                       notas={s.notas}
+                      fechaSugerida={fechaSugerida}
                     />
                   </CollapsibleContent>
                 </Collapsible>

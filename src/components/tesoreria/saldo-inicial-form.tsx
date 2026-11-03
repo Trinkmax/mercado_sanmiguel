@@ -73,7 +73,10 @@ export function SaldoInicialForm({
   const faltaMotivo = cambiaPlata && motivo.trim().length < 3;
   // Corregir sin haber cambiado nada no guarda nada: el botón no se ofrece.
   const sinCambios = esCorreccion && !cambiaPlata && notasStr.trim() === (notas ?? "").trim();
-  const otroDia = !esCorreccion && fechaSugerida !== null && fechaStr !== "" && fechaStr !== fechaSugerida;
+  // Un día distinto al de los otros saldos suele ser un error de tipeo (el 03/10 por el 03/11):
+  // se avisa al cargar y al corregir, mientras no sea el día que ya tenía.
+  const otroDia =
+    fechaSugerida !== null && fechaStr !== "" && fechaStr !== fechaSugerida && (!esCorreccion || fechaStr !== fecha);
 
   function guardar() {
     setError(null);
@@ -124,7 +127,7 @@ export function SaldoInicialForm({
           {montoStr !== ""
             ? formatMoneda(montoNumero, moneda)
             : medio === "cheque"
-              ? "Los que tenían en cartera, sin depositar todavía"
+              ? "Todos los que había en cartera ese día, estén o no cargados en Cheques"
               : "Los centavos van con coma: 1234,50"}
         </p>
       </div>
@@ -146,8 +149,8 @@ export function SaldoInicialForm({
         />
         {otroDia ? (
           <p className="text-sm font-medium text-parcial">
-            Ojo: los otros saldos arrancan el {formatFecha(fechaSugerida)}. Si esta cuenta arranca
-            otro día, está bien.
+            Ojo: los otros saldos arrancan el {formatFecha(fechaSugerida)}. Revisá el día y el mes: si
+            esta cuenta arranca otro día, está bien.
           </p>
         ) : (
           <p className="text-sm text-muted-foreground">
@@ -155,7 +158,7 @@ export function SaldoInicialForm({
               ? "Es el mismo día que los otros saldos. "
               : ""}
             {medio === "cheque"
-              ? "Se suman a los cheques que entren por los cobros del sistema."
+              ? "Desde ese día el sistema suma los cheques que entran y resta los que se depositan o se entregan."
               : "Desde ese día el sistema suma y resta todo lo que entra y sale."}
           </p>
         )}
