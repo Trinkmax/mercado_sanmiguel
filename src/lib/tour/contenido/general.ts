@@ -28,7 +28,9 @@ function pasoSalir(socio: boolean): Paso {
     id: "salir",
     ancla: socio ? "salir" : ["salir", "nav:menu"],
     titulo: "Para salir",
-    texto: "Cuando termines, tocá «Salir». Así nadie usa el sistema con tu nombre.",
+    texto: socio
+      ? "Cuando termines, tocá «Salir», abajo de todo en «Mi carpeta». Así nadie usa el portal con tu nombre."
+      : "Cuando termines, tocá «Salir». Así nadie usa el sistema con tu nombre.",
     variantes: {
       "nav:menu": {
         texto: "Cuando termines, abrí «Menú» y tocá «Salir» (está debajo de tu nombre). Así nadie usa el sistema con tu nombre.",
@@ -71,18 +73,14 @@ export const BIENVENIDA_SOCIO: ContenidoCapitulo = {
   pasos: () => [
     pasoGuia(true),
     {
-      id: "mi-cuenta",
-      ancla: "nav:/mi-cuenta",
-      titulo: "Mi cuenta",
-      texto: "Acá ves cuánto debés, lo que ya pagaste y tus recibos. También tus pedidos a Administración.",
-    },
-    {
-      id: "comunicaciones",
-      ancla: "nav:/mi-cuenta/comunicaciones",
-      titulo: "Comunicaciones",
-      texto: "Las circulares de la cooperativa y los avisos de tu carpeta. El número te dice cuántas nuevas tenés.",
+      id: "secciones",
+      ancla: "nav:barra",
+      titulo: "Tus cuatro secciones",
+      texto:
+        "Están siempre abajo: «Mi cuenta» es cuánto debés, «Mis pagos» lo que pagaste, «Mensajes» lo que hablás con la cooperativa y «Mi carpeta» tus lugares y tus papeles.",
+      consejo: "Un número rojo sobre «Mensajes» te dice cuántas cosas nuevas tenés.",
     },
     pasoAyuda,
-    pasoSalir(true),
+    { ...pasoSalir(true), ruta: "/mi-cuenta/carpeta" },
   ],
 };

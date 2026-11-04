@@ -56,8 +56,9 @@ export function BienvenidaTour({ nombre }: { nombre: string }) {
             {primerNombre ? `¡Hola, ${primerNombre}!` : "¡Hola!"}
           </DialogTitle>
           <DialogDescription className="text-base leading-relaxed text-balance">
-            ¿Querés que te muestre cómo se usa el sistema para tu trabajo de {nombreRol(rol)}? Son {partes} partes
-            cortas: lo ves sobre la pantalla de verdad, señalando cada botón. Mientras mirás no se guarda nada.
+            {rol === "socio"
+              ? `¿Querés que te muestre cómo se usa tu portal? Son ${partes} partes cortas: lo ves sobre la pantalla de verdad, señalando cada botón. Mientras mirás no se guarda nada.`
+              : `¿Querés que te muestre cómo se usa el sistema para tu trabajo de ${nombreRol(rol)}? Son ${partes} partes cortas: lo ves sobre la pantalla de verdad, señalando cada botón. Mientras mirás no se guarda nada.`}
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-2.5">

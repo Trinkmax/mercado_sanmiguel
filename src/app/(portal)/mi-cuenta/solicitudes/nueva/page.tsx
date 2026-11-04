@@ -1,13 +1,10 @@
-import Link from "next/link";
-import { ArrowLeft, UserX } from "lucide-react";
+import { UserX } from "lucide-react";
 import { requireRol, filtroClientePortal } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { Button } from "@/components/ui/button";
-import { PageHeader } from "@/components/shared/page-header";
-import { EmptyState } from "@/components/shared/empty-state";
+import { EncabezadoDetalle } from "@/components/portal/encabezado-detalle";
 import { FormSolicitudSocio } from "@/components/portal/form-solicitud-socio";
 
-export const metadata = { title: "Nueva solicitud" };
+export const metadata = { title: "Escribirle a la cooperativa" };
 
 export default async function NuevaSolicitudSocioPage() {
   const perfil = await requireRol("socio");
@@ -19,36 +16,28 @@ export default async function NuevaSolicitudSocioPage() {
     .eq(...filtroClientePortal(perfil))
     .maybeSingle();
 
-  // Las circulares obligatorias sin confirmar las bloquea GateCirculares en el layout.
-
   return (
-    <div className="space-y-8">
-      <Button asChild variant="ghost" className="-ml-2 min-h-11">
-        <Link href="/mi-cuenta">
-          <ArrowLeft className="size-4" />
-          Volver a Mi cuenta
-        </Link>
-      </Button>
-
-      {!cliente ? (
-        <EmptyState
-          icono={UserX}
-          titulo="Tu usuario no está vinculado a un puesto"
-          descripcion="Consultá en administración para que te asocien a tu carpeta."
-        />
-      ) : (
-        <>
-          <PageHeader
-            titulo="Nueva solicitud"
-            descripcion={`Para ${cliente.nombre} · Carpeta N° ${cliente.codigo}. La recibe el Líder de Procesos y te respondemos por acá.`}
-            className="pb-0"
-          />
-          {/* Ancla del tour guiado (docs/GUIA-TOUR.md): envoltorio sin estilos. */}
-          <div data-tour="solicitudes-socio-formulario">
+    <>
+      <EncabezadoDetalle
+        volverA="/mi-cuenta/mensajes"
+        volverTexto="Mensajes"
+        titulo="Escribirle a la cooperativa"
+        bajada="Te respondemos por acá, como en un chat."
+      />
+      <div className="chat-fondo">
+        {!cliente ? (
+          <div className="m-3 hoja flex flex-col items-center gap-2 px-6 py-9 text-center">
+            <UserX aria-hidden className="size-9 text-esmalte" strokeWidth={1.8} />
+            <p className="text-[1.15rem] font-extrabold">Tu usuario no está unido a tu carpeta</p>
+            <p className="text-[1.02rem] leading-snug text-tinta-2">Pedí en Administración que te unan a tu carpeta.</p>
+          </div>
+        ) : (
+          // Ancla del tour guiado (docs/GUIA-TOUR.md).
+          <div data-tour="solicitudes-socio-formulario" className="flex flex-1 flex-col p-3">
             <FormSolicitudSocio />
           </div>
-        </>
-      )}
-    </div>
+        )}
+      </div>
+    </>
   );
 }

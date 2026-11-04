@@ -139,7 +139,7 @@ export function HiloMensajes({
 }
 
 /** "Tomó la solicitud…" → "tomó la solicitud…" para leerlo después del nombre. */
-function fraseAutomatica(texto: string): string {
+export function fraseAutomatica(texto: string): string {
   if (texto.startsWith("Resolución del Jefe de Portería:"))
     return `la resolvió: ${texto.slice("Resolución del Jefe de Portería:".length).trim()}`;
   if (texto.startsWith("Resolución:"))

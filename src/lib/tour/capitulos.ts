@@ -8,14 +8,16 @@ import { CAJA, CHEQUES } from "@/lib/tour/contenido/caja-cheques";
 import { GASTOS, TESORERIA } from "@/lib/tour/contenido/tesoreria-gastos";
 import { APROBACIONES, CLIENTES } from "@/lib/tour/contenido/clientes-aprobaciones";
 import { PERSONAL, PORTERIA } from "@/lib/tour/contenido/porteria-personal";
-import {
-  COMUNICACIONES,
-  NOVEDADES,
-  SOCIO_COMUNICACIONES,
-} from "@/lib/tour/contenido/comunicaciones-novedades";
-import { SOCIO_SOLICITUDES, SOLICITUDES } from "@/lib/tour/contenido/solicitudes";
+import { COMUNICACIONES, NOVEDADES } from "@/lib/tour/contenido/comunicaciones-novedades";
+import { SOLICITUDES } from "@/lib/tour/contenido/solicitudes";
 import { CONFIGURACION, ENERGIA, FACTURACION, REPORTES } from "@/lib/tour/contenido/mes";
-import { SOCIO_CUENTA } from "@/lib/tour/contenido/portal";
+import {
+  SOCIO_CARPETA,
+  SOCIO_COMUNICACIONES,
+  SOCIO_CUENTA,
+  SOCIO_PAGOS,
+  SOCIO_SOLICITUDES,
+} from "@/lib/tour/contenido/portal";
 
 /**
  * Registro completo del tour: metadatos + pasos + pantallas de ejemplo. Es pesado (todos
@@ -43,8 +45,10 @@ const CONTENIDO: Record<IdCapitulo, ContenidoCapitulo> = {
   reportes: REPORTES,
   configuracion: CONFIGURACION,
   "socio-cuenta": SOCIO_CUENTA,
+  "socio-pagos": SOCIO_PAGOS,
   "socio-comunicaciones": SOCIO_COMUNICACIONES,
   "socio-solicitudes": SOCIO_SOLICITUDES,
+  "socio-carpeta": SOCIO_CARPETA,
 };
 
 export function capitulo(id: IdCapitulo): Capitulo {

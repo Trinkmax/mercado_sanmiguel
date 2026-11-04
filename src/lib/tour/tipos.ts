@@ -31,8 +31,10 @@ export type IdCapitulo =
   | "reportes"
   | "configuracion"
   | "socio-cuenta"
+  | "socio-pagos"
   | "socio-comunicaciones"
-  | "socio-solicitudes";
+  | "socio-solicitudes"
+  | "socio-carpeta";
 
 /** Qué hace la persona en el paso. */
 export type AccionPaso =

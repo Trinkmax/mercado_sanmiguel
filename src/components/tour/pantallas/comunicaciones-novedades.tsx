@@ -1,13 +1,10 @@
 import {
-  ArrowLeft,
   Ban,
   Bell,
   BellOff,
   CalendarCheck,
-  Camera,
   Check,
   CheckCheck,
-  CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -15,7 +12,6 @@ import {
   Clock,
   Eye,
   FileSignature,
-  FileText,
   Gavel,
   Inbox,
   MapPin,
@@ -101,42 +97,6 @@ function PestanasStaff({ activa, rojo }: { activa: string; rojo?: { pestana: str
             {rojo && rojo.pestana === p.label ? (
               <span className="inline-flex size-4 items-center justify-center rounded-full bg-pendiente text-[0.72rem] font-bold text-primary-foreground">
                 {rojo.n}
-              </span>
-            ) : null}
-          </span>
-        );
-      })}
-    </div>
-  );
-}
-
-const PESTANAS_SOCIO = [
-  { label: "Circulares", icono: Megaphone },
-  { label: "Notificaciones", icono: Bell },
-  { label: "Apercibimientos", icono: MessageSquareWarning },
-  { label: "Sanciones", icono: Gavel },
-];
-
-/** Las pestañas del portal: 2 × 2 en el celular, con el número de nuevas. */
-function PestanasSocio({ activa, nuevas = {} }: { activa: string; nuevas?: Record<string, number> }) {
-  return (
-    <div className="grid grid-cols-2 gap-1.5">
-      {PESTANAS_SOCIO.map((p) => {
-        const Icono = p.icono;
-        const n = nuevas[p.label] ?? 0;
-        return (
-          <span
-            key={p.label}
-            className={cn(
-              "flex min-h-8 items-center gap-1.5 rounded-lg border px-2 text-[0.75rem] font-semibold",
-              p.label === activa ? "border-primary bg-accent ring-2 ring-primary/30" : "bg-card"
-            )}
-          >
-            <Icono className="size-3.5 shrink-0 text-primary" strokeWidth={2} />
-            <span className="min-w-0 flex-1 truncate">{p.label}</span>
-            {n > 0 ? (
-              <span className="inline-flex size-4.5 items-center justify-center rounded-full bg-parcial text-[0.72rem] font-bold text-primary-foreground">
-                {n}
               </span>
             ) : null}
           </span>
@@ -990,181 +950,6 @@ export function PantallaPlanillaImpresa() {
           <p className="border-t border-foreground pt-0.5 text-center text-[0.72rem]">Administración</p>
         </div>
       </div>
-    </MarcoPantalla>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Portal del socio
-// ---------------------------------------------------------------------------
-
-/** Portada de "Comunicaciones" del socio: las pestañas y sus circulares. */
-export function PortadaSocioComunicaciones() {
-  return (
-    <MarcoPantalla titulo="Comunicaciones">
-      <PestanasSocio activa="Circulares" nuevas={{ Circulares: 1 }} />
-      <div className="divide-y overflow-hidden rounded-lg border bg-card">
-        <Resaltado mano={false} className="rounded-none ring-inset ring-offset-0">
-          <div className="flex items-center gap-2 px-2.5 py-2">
-            <div className="min-w-0 flex-1">
-              <p className="leading-snug font-medium">Circular N° 12 · Horario de carga y descarga</p>
-              <p className="text-[0.72rem] text-muted-foreground tabular">29/09/2026</p>
-            </div>
-            <Sello estado="nueva_comunicacion" className={SELLO} />
-            <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
-          </div>
-        </Resaltado>
-        <div className="flex items-center gap-2 px-2.5 py-2">
-          <div className="min-w-0 flex-1">
-            <p className="leading-snug font-medium">Circular N° 11 · Corte de luz del domingo</p>
-            <p className="text-[0.72rem] text-muted-foreground tabular">18/09/2026</p>
-          </div>
-          <Sello estado="recibida" texto="Leída" className={SELLO} />
-          <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
-        </div>
-      </div>
-    </MarcoPantalla>
-  );
-}
-
-/**
- * Una circular abierta desde la lista del portal: se lee y, si trae PDF, se abre ahí.
- * Las que hay que confirmar no llegan por acá: el portal las muestra solas al entrar
- * (PantallaBloqueoCirculares).
- */
-export function PantallaCircularSocio() {
-  return (
-    <MarcoPantalla titulo="Circular N° 11">
-      <p className="flex items-center gap-1 text-[0.72rem] font-medium">
-        <ArrowLeft className="size-3.5" /> Volver a Circulares
-      </p>
-      <div className="flex items-center justify-between gap-2">
-        <p className="font-semibold">Corte de luz del domingo</p>
-        <Sello estado="circular" className={SELLO} />
-      </div>
-      <div className="space-y-2 rounded-lg border bg-card p-2.5">
-        <p className="text-[0.72rem] text-muted-foreground tabular">18/09/2026</p>
-        <p className="leading-snug">
-          El domingo 21 de 6 a 10 se corta la luz en los galpones por un arreglo de la cooperativa eléctrica. Las
-          cámaras de frío quedan con el generador.
-        </p>
-        <Resaltado>
-          <BotonEjemplo variante="contorno" className="w-full">
-            <FileText /> Abrir el PDF de la circular
-          </BotonEjemplo>
-        </Resaltado>
-      </div>
-      <p className="rounded-md bg-muted/60 px-2 py-1.5 text-[0.72rem] text-muted-foreground">
-        Las circulares no se responden. ¿Tenés una duda? <span className="font-semibold text-primary">Hacé una solicitud</span>.
-      </p>
-    </MarcoPantalla>
-  );
-}
-
-/** Lo que ve el socio al entrar si tiene una circular obligatoria sin confirmar. */
-export function PantallaBloqueoCirculares() {
-  return (
-    <MarcoPantalla titulo="Mercado San Miguel">
-      <div className="flex items-start gap-2">
-        <Megaphone className="mt-0.5 size-5 shrink-0 text-parcial" />
-        <div>
-          <p className="font-display text-[0.95rem] font-bold">Tenés una circular para leer</p>
-          <p className="text-[0.72rem] text-muted-foreground">
-            Leela y tocá <span className="font-semibold text-foreground">Confirmo que la recibí</span>. Después vas a ver
-            tu cuenta como siempre.
-          </p>
-        </div>
-      </div>
-      <div className="space-y-2 rounded-lg border-2 border-parcial bg-parcial-suave/40 p-2.5">
-        <div className="flex flex-wrap items-center justify-between gap-1">
-          <p className="leading-snug font-semibold">Circular N° 12 · Horario de carga y descarga</p>
-          <Sello estado="sin_recibir" className={SELLO} />
-        </div>
-        <p className="leading-snug">Desde el lunes 5 de octubre, los camiones descargan de 5 a 9.</p>
-        <Resaltado>
-          <BotonEjemplo className="w-full">
-            <CheckCircle2 /> Confirmo que la recibí
-          </BotonEjemplo>
-        </Resaltado>
-      </div>
-    </MarcoPantalla>
-  );
-}
-
-function FilaAvisoSocio({
-  titulo,
-  numero,
-  fecha,
-  sello,
-  texto,
-}: {
-  titulo: string;
-  numero: number;
-  fecha: string;
-  sello: string;
-  texto?: string;
-}) {
-  return (
-    <div className="flex items-center gap-2 px-2.5 py-2">
-      <div className="min-w-0 flex-1">
-        <p className="leading-snug font-medium">{titulo}</p>
-        <p className="text-[0.72rem] text-muted-foreground tabular">
-          N° {numero} · {fecha}
-        </p>
-      </div>
-      <Sello estado={sello} texto={texto} className={SELLO} />
-      <ChevronRight className="size-3.5 shrink-0 text-muted-foreground" />
-    </div>
-  );
-}
-
-/** Los avisos del socio, cada uno con el sello que le dice qué hacer. */
-export function PantallaAvisosSocio() {
-  return (
-    <MarcoPantalla titulo="Comunicaciones">
-      <PestanasSocio activa="Notificaciones" nuevas={{ Notificaciones: 2, Apercibimientos: 1 }} />
-      <div className="divide-y overflow-hidden rounded-lg border bg-card">
-        <Resaltado mano={false} className="rounded-none ring-inset ring-offset-0">
-          <FilaAvisoSocio titulo="Aviso de deuda atrasada" numero={7} fecha="29/09/2026" sello="nueva_comunicacion" />
-        </Resaltado>
-        <FilaAvisoSocio titulo="Limpieza del puesto" numero={5} fecha="15/09/2026" sello="respuesta_nueva" />
-        <FilaAvisoSocio titulo="Horario de carga y descarga" numero={2} fecha="20/08/2026" sello="respondido" />
-      </div>
-    </MarcoPantalla>
-  );
-}
-
-/** Un apercibimiento abierto en el portal: qué pasó, la multa y «Presentar mi descargo». */
-export function PantallaDescargoSocio() {
-  return (
-    <MarcoPantalla titulo="Apercibimiento N° 3">
-      <div className="flex items-center justify-between gap-2">
-        <p className="font-semibold">Mercadería en el pasillo</p>
-        <Sello estado="apercibimiento" className={SELLO} />
-      </div>
-      <div className="space-y-1.5 rounded-lg border bg-card p-2.5">
-        <LineaEstado pasos={["Te notificamos", "Tu descargo", "Te respondimos"]} actual={0} />
-        <p className="border-t pt-1.5 text-[0.72rem] text-muted-foreground">Del 28/09/2026 · Puesto 58</p>
-        <p className="leading-snug">El jueves quedaron cajones en el pasillo central toda la mañana.</p>
-      </div>
-      <div className="space-y-0.5 rounded-lg border-2 border-pendiente/30 bg-pendiente-suave p-2.5">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-[0.72rem] font-medium text-muted-foreground">Multa</p>
-          <Sello estado="multa" texto="Multa pendiente" className={SELLO} />
-        </div>
-        <Money monto={25000} className="block font-display text-[1.1rem] font-bold text-pendiente" />
-        <p className="text-[0.72rem]">Se sumó a tu cuenta · vence el 10/10/2026.</p>
-      </div>
-      <Resaltado className="space-y-1.5 rounded-lg border-2 border-primary/25 bg-card p-2.5">
-        <p className="font-display font-bold">Presentar mi descargo</p>
-        <div className="min-h-9 rounded-md border px-2 py-1 text-[0.75rem] text-muted-foreground/70">Contá tu versión…</div>
-        <span className="inline-flex min-h-6 items-center gap-1 rounded-md border bg-card px-2 text-[0.72rem] font-medium">
-          <Camera className="size-3" /> Sacar una foto o elegir archivo
-        </span>
-        <BotonEjemplo className="w-full">
-          <Send /> Enviar mi descargo
-        </BotonEjemplo>
-      </Resaltado>
     </MarcoPantalla>
   );
 }

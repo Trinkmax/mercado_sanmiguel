@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { usePathname, useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { Rol } from "@/lib/auth";
-import { LABEL_GRUPO, NAVEGACION_SOCIO, navParaRol } from "@/lib/navegacion";
+import { LABEL_GRUPO, navParaRol } from "@/lib/navegacion";
 import { CAPITULOS_META, RECORRIDOS, capituloDeRuta, capituloSiguiente } from "@/lib/tour/indice";
 import { memoria, type Retomar } from "@/lib/tour/memoria";
 import {
@@ -92,13 +92,14 @@ const ESPERA_NAVEGACION = 8000;
 /** Lo que se puede tocar dentro de un ancla "tocá acá". */
 const INTERACTIVOS = "a[href], button, [role='button'], [role='tab'], [role='link'], summary, label";
 
-/** El link del menú que lleva a esa sección para ese rol (en el portal, las solicitudes
- * están dentro de «Mi cuenta»). */
+/** El link del menú que lleva a esa sección para ese rol (en el portal, las cuatro de abajo). */
 function menuPara(rol: Rol, ruta: string): { href: string; label: string } | null {
   if (rol === "socio") {
-    if (ruta.startsWith("/mi-cuenta/comunicaciones") || ruta.startsWith("/mi-cuenta/circulares"))
-      return { href: "/mi-cuenta/comunicaciones", label: "Comunicaciones" };
-    if (ruta.startsWith("/mi-cuenta")) return { href: "/mi-cuenta", label: NAVEGACION_SOCIO[0]?.label ?? "Mi cuenta" };
+    if (ruta.startsWith("/mi-cuenta/pagos")) return { href: "/mi-cuenta/pagos", label: "Mis pagos" };
+    if (ruta.startsWith("/mi-cuenta/carpeta")) return { href: "/mi-cuenta/carpeta", label: "Mi carpeta" };
+    if (/^\/mi-cuenta\/(mensajes|comunicaciones|circulares|solicitudes)/.test(ruta))
+      return { href: "/mi-cuenta/mensajes", label: "Mensajes" };
+    if (ruta.startsWith("/mi-cuenta")) return { href: "/mi-cuenta", label: "Mi cuenta" };
     return null;
   }
   const item = navParaRol(rol).find((i) => i.href === ruta);
@@ -413,6 +414,12 @@ export function ProveedorTour({
 
     const mostrar = (r: Resolucion) => {
       const el = r.el;
+      // En el portal, el plano y «Ayuda» quedan quietos debajo del contenido: se ven arriba de todo.
+      if (el.closest(".portal-cielo") && window.innerWidth < 1024 && window.scrollY > 0) {
+        window.scrollTo({ top: 0, behavior: suave ? "smooth" : "auto" });
+        fijar("listo", r);
+        return;
+      }
       const rect = el.getBoundingClientRect();
       const alto = window.innerHeight;
       const compacto = window.innerWidth < 640;

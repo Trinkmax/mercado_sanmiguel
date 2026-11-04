@@ -91,7 +91,7 @@ export async function subirDocumentoSocio(
     return fallo(error);
   }
 
-  revalidatePath("/mi-cuenta");
+  revalidatePath("/mi-cuenta", "layout");
   revalidatePath(`/clientes/${cliente.id}`);
   return ok({ id: data.id });
 }
@@ -120,6 +120,21 @@ async function solicitudSocioConRef(
 }
 
 /**
+ * El socio escribe una sola cosa; el asunto que ven el Líder y Administración en sus listas sale
+ * de la primera frase (o de las primeras palabras, si es muy larga).
+ */
+function asuntoDe(detalle: string): string {
+  const primeraLinea = detalle.split(/\r?\n/)[0].trim();
+  const frase = /^(.{12,90}?[.!?])(\s|$)/u.exec(primeraLinea)?.[1] ?? primeraLinea;
+  // De a caracteres enteros: cortar un emoji a la mitad haría fallar el guardado.
+  const letras = Array.from(frase);
+  if (letras.length <= 90) return frase;
+  const corte = letras.slice(0, 80).join("");
+  const espacio = corte.lastIndexOf(" ");
+  return `${espacio > 40 ? corte.slice(0, espacio) : corte}…`;
+}
+
+/**
  * El socio crea una solicitud desde el portal: siempre sobre su propio puesto
  * (`cliente_id` propio) y con origen `portal` (la RLS lo exige).
  * Con `ref` (clave del formulario, uuid por intento) un reintento tras un corte devuelve la
@@ -133,17 +148,11 @@ export async function crearSolicitudSocio(
   const parsed = z
     .object({
       tipo: z.enum(TIPOS_SOLICITUD, { error: "Elegí qué tipo de solicitud es" }),
-      asunto: z
-        .string()
-        .trim()
-        .min(1, "Poné un asunto corto (ej.: Pérdida de agua en el puesto)")
-        .max(200, "El asunto es demasiado largo"),
       detalle: z
         .string()
         .trim()
-        .max(6000, "El detalle es demasiado largo")
-        .optional()
-        .transform((v) => (v ? v : null)),
+        .min(1, "Escribí lo que nos querés contar antes de enviarlo")
+        .max(6000, "Es demasiado largo: acortalo un poco"),
       ref: z
         .string()
         .trim()
@@ -153,12 +162,12 @@ export async function crearSolicitudSocio(
     })
     .safeParse({
       tipo: formData.get("tipo"),
-      asunto: formData.get("asunto"),
-      detalle: formData.get("detalle") ?? undefined,
+      detalle: formData.get("detalle") ?? "",
       ref: formData.get("ref") ?? undefined,
     });
   if (!parsed.success) return fallo(parsed.error.issues[0].message);
 
+  const asunto = asuntoDe(parsed.data.detalle);
   const supabase = await createClient();
 
   const previa = await solicitudSocioConRef(supabase, perfil.org_id, parsed.data.ref);
@@ -196,8 +205,9 @@ export async function crearSolicitudSocio(
     .insert({
       org_id: perfil.org_id,
       tipo: parsed.data.tipo,
-      asunto: parsed.data.asunto,
-      detalle: parsed.data.detalle,
+      asunto,
+      // Si el mensaje entero entró en el asunto, no se repite en el detalle.
+      detalle: asunto === parsed.data.detalle ? null : parsed.data.detalle,
       cliente_id: cliente.id,
       origen: "portal",
       adjunto_path: adjuntoPath,
@@ -218,7 +228,7 @@ export async function crearSolicitudSocio(
     return fallo(error);
   }
 
-  revalidatePath("/mi-cuenta");
+  revalidatePath("/mi-cuenta", "layout");
   revalidatePath("/solicitudes");
   return ok({ id: data.id, numero: data.numero, repetido: false });
 }

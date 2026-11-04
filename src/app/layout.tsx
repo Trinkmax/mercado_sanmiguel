@@ -77,6 +77,26 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the
 finish review, the verdict, and DESIGN.md.`,
           }}
         />
+        {/* Contrato de dirección del portal del socio (DESIGN.md → «Portal del socio»). */}
+        <script
+          type="text/x-direction-contract"
+          data-superficie="portal"
+          dangerouslySetInnerHTML={{
+            __html: `
+THESIS: la cuenta del socio es su lugar en el mercado: el plano real con su puesto
+prendido en el color de cómo está; rechaza la billetera de tarjeta y movimientos.
+OWN-WORLD: azul del logotipo como chapa enlozada a página entera, líneas de plano en
+porcelana, chapas con filete y tornillos, cartel de arco verde/ámbar/rojo con tinta,
+talones perforados, sellos de goma, letra Archivo.
+STORY: abre, ve su puesto y el color, lee cuánto y hasta cuándo; toca un concepto y
+la cámara vuela hasta ese lugar.
+FIRST VIEWPORT: un tercio de plano con su puesto y su chapa; cartel de arco con el
+monto a todo el ancho; abajo, cuatro chapas al alcance del pulgar.
+FORM: el plano del mercado, candidato 6 de 7; seed 17b94eb3.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish
+review, the verdict, and DESIGN.md`,
+          }}
+        />
         {children}
         {/* Debajo de la barra superior en tablet/celular: no tapa el menú ni "Salir". */}
         <Toaster position="top-center" richColors />

@@ -5,19 +5,12 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { CheckCircle2 } from "lucide-react";
 import { confirmarRecepcionCircular } from "@/lib/actions/circulares";
-import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { AvisoError } from "@/components/comunicaciones/aviso-error";
 import { llamarAccion } from "@/lib/llamar-accion";
 
 /** Botón grande "Confirmo que la recibí" (circulares obligatorias, portal del socio). */
-export function ConfirmarCircular({
-  circularId,
-  numero,
-}: {
-  circularId: string;
-  numero: number;
-}) {
+export function ConfirmarCircular({ circularId, numero }: { circularId: string; numero: number }) {
   const router = useRouter();
   const [pendiente, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -37,22 +30,18 @@ export function ConfirmarCircular({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-3">
       {error ? <AvisoError mensaje={error} /> : null}
-      <Button
-        size="lg"
+      <button
+        type="button"
         data-tour="socio-comunicaciones-confirmar"
-        className="h-14 w-full text-base font-semibold"
+        className="boton boton-primario min-h-[3.8rem] w-full"
         disabled={pendiente}
         onClick={confirmar}
       >
-        {pendiente ? (
-          <Spinner className="size-5" />
-        ) : (
-          <CheckCircle2 className="size-5" strokeWidth={2} />
-        )}
+        {pendiente ? <Spinner className="size-5" /> : <CheckCircle2 aria-hidden strokeWidth={2.3} />}
         Confirmo que la recibí
-      </Button>
+      </button>
     </div>
   );
 }

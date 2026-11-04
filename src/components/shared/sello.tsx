@@ -47,7 +47,7 @@ const LABELS: Record<string, { texto: string; variante: Variante }> = {
   // portal del socio (reglas en src/lib/segmentos.ts)
   a_responder: { texto: "Tenés que responder", variante: "pendiente" },
   respuesta_nueva: { texto: "Respuesta nueva", variante: "info" },
-  nueva_comunicacion: { texto: "Nueva", variante: "parcial" },
+  nueva_comunicacion: { texto: "Nueva", variante: "info" },
   // circulares: quién la vio (D1)
   la_vio: { texto: "La vio", variante: "pagado" },
   no_la_vio: { texto: "Todavía no", variante: "neutro" },

@@ -1,220 +1,211 @@
 import {
-  ArrowLeft,
   Banknote,
-  Bell,
+  Camera,
+  Car,
   CheckCircle2,
-  Download,
+  ChevronLeft,
+  ChevronRight,
+  CircleHelp,
+  FileText,
+  Flag,
+  FolderOpen,
+  Hand,
+  Megaphone,
+  MessageCircle,
+  MessageCircleWarning,
+  MessageSquareWarning,
+  MessagesSquare,
+  PenLine,
   Printer,
+  Receipt,
+  Send,
+  Share2,
+  Store,
+  Tag,
   Upload,
-  Wallet,
+  Zap,
+  type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
-import { BotonEjemplo, CampoEjemplo, MarcoPantalla, Resaltado } from "@/components/tour/pantalla";
+import { MarcoPantalla, Resaltado } from "@/components/tour/pantalla";
 
-// Tour guiado · portal: pantallas de ejemplo del capítulo "Mi cuenta" del socio
-// (docs/GUIA-TOUR.md). Dibujos quietos con datos inventados: Rosa Medina, carpeta 58, en
-// septiembre de 2026. Los números cierran entre sí: debe $ 450.000 con el beneficio;
-// si se le pasa el 30/09, pasa a deber $ 510.000. La energía, a $ 600 el kWh.
+// Tour guiado · portal: pantallas de ejemplo de los capítulos del socio (docs/GUIA-TOUR.md).
+// Dibujos quietos con datos inventados, en chico y con el mismo lenguaje que el portal: el plano
+// en azul, la chapa, el cartel de arco y las hojas de porcelana. Rosa Medina, carpeta 58, puesto
+// 54. Los números cierran entre sí: debe $ 939.130 con el beneficio; si se le pasa el 30, debe
+// $ 1.080.000. Texto mínimo 0.72rem.
 
 const SELLO = "px-1.5 py-[0.2rem] text-[0.72rem]";
 
-type Nivel = "al_dia" | "en_termino" | "vencido";
+type Tono = "al_dia" | "en_termino" | "vencido";
 
-const FONDO_NIVEL: Record<Nivel, string> = {
-  al_dia: "border-pagado/30 bg-pagado-suave",
-  en_termino: "border-parcial/40 bg-parcial-suave",
-  vencido: "border-pendiente/30 bg-pendiente-suave",
-};
+/** La franja de arriba de cada pantalla: el azul del plano. */
+function FondoPortal({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <div className={cn("-m-3 space-y-2 bg-esmalte p-3 text-porcelana", className)}>{children}</div>;
+}
 
-// ---------------------------------------------------------------------------------------
-// Piezas chicas
-// ---------------------------------------------------------------------------------------
-
-/** Las tres luces del semáforo: rojo arriba, amarillo al medio, verde abajo. */
-function Luces({ nivel }: { nivel: Nivel }) {
-  const luces: { clave: Nivel; encendida: string; apagada: string }[] = [
-    { clave: "vencido", encendida: "bg-pendiente ring-pendiente/25", apagada: "bg-pendiente/15" },
-    { clave: "en_termino", encendida: "bg-parcial ring-parcial/25", apagada: "bg-parcial/15" },
-    { clave: "al_dia", encendida: "bg-pagado ring-pagado/25", apagada: "bg-pagado/15" },
-  ];
+function ChapaMini({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex shrink-0 flex-col items-center justify-center gap-1.5 rounded-full bg-foreground/85 px-1.5 py-2">
-      {luces.map((l) => (
-        <span
-          key={l.clave}
-          className={cn("block size-4 rounded-full", l.clave === nivel ? cn("ring-2", l.encendida) : l.apagada)}
-        />
-      ))}
-    </div>
+    <span className="inline-flex items-center gap-1 rounded-[0.3rem] bg-esmalte-hondo px-1.5 py-0.5 text-[0.72rem] font-extrabold text-white shadow-[inset_0_0_0_1px_var(--esmalte-hondo),inset_0_0_0_1.6px_white]">
+      <i className="size-[3px] rounded-full bg-white/80" />
+      {children}
+      <i className="size-[3px] rounded-full bg-white/80" />
+    </span>
   );
 }
 
-/** La caja del semáforo, como arriba de «Mi cuenta». */
-function Semaforo({ nivel, children, className }: { nivel: Nivel; children: React.ReactNode; className?: string }) {
+/** El mercado desde arriba, en chico: una fila de puestos con el tuyo prendido. */
+function PlanoMini({ tono, etiqueta = "Puesto 54" }: { tono: Tono; etiqueta?: string }) {
+  const numeros = ["58", "56", "54", "52", "50", "48"];
   return (
-    <div className={cn("flex items-stretch gap-3 rounded-xl border-2 p-2.5", FONDO_NIVEL[nivel], className)}>
-      <Luces nivel={nivel} />
-      <div className="min-w-0 flex-1 space-y-1 self-center">
-        <Sello estado={nivel} className={SELLO} />
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function AlDia({ gracias = true }: { gracias?: boolean }) {
-  return (
-    <div>
-      <p className="font-display text-[1.05rem] font-bold tracking-tight text-pagado">Estás al día</p>
-      {gracias ? <p className="text-[0.75rem]">No debés nada. ¡Gracias!</p> : null}
-    </div>
-  );
-}
-
-function APagarEnTermino() {
-  return (
-    <div>
-      <Money monto={450000} className="block font-display text-[1.2rem] font-bold text-parcial" />
-      <p className="leading-snug">
-        para pagar hasta el <span className="font-semibold tabular">30/09/2026</span>
-      </p>
-    </div>
-  );
-}
-
-function APagarVencido() {
-  return (
-    <div>
-      <Money monto={510000} className="block font-display text-[1.2rem] font-bold text-pendiente" />
-      <p className="leading-snug">es lo que tenés que pagar hoy</p>
-    </div>
-  );
-}
-
-function LineaBeneficio() {
-  return (
-    <p className="border-t border-parcial/30 pt-1 text-[0.75rem] leading-snug">
-      Pagando a tiempo mantenés el beneficio de <Money monto={60000} className="font-semibold" />.
-    </p>
-  );
-}
-
-function LineaBeneficioPerdido() {
-  return (
-    <p className="border-t border-pendiente/20 pt-1 text-[0.75rem] leading-snug">
-      <Money monto={510000} className="font-semibold" /> vencido desde el <span className="tabular">30/09/2026</span>:
-      perdiste el beneficio.
-    </p>
-  );
-}
-
-/** "Hola, Rosa" y los dos botones grandes del portal. */
-function CabeceraPortal() {
-  return (
-    <div className="space-y-2">
-      <div className="grid grid-cols-2 gap-1.5">
-        <span className="flex min-h-8 items-center justify-center gap-1.5 rounded-lg border border-primary bg-primary px-2 text-[0.75rem] font-semibold text-primary-foreground">
-          <Wallet className="size-3.5 shrink-0" strokeWidth={2} />
-          Mi cuenta
-        </span>
-        <span className="flex min-h-8 items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-2 text-[0.75rem] font-semibold">
-          <Bell className="size-3.5 shrink-0" strokeWidth={2} />
-          Comunicaciones
-          <span className="inline-flex size-4.5 items-center justify-center rounded-full bg-parcial text-[0.72rem] font-bold text-primary-foreground">
-            1
+    <div className={cn("relative pb-1", `tono-${tono}`)}>
+      <div className="flex justify-center gap-1 rounded-md border border-white/50 p-1.5">
+        {numeros.map((n) => (
+          <span
+            key={n}
+            className={cn(
+              "flex h-7 w-8 items-center justify-center rounded-[0.2rem] text-[0.72rem] font-bold",
+              n === "54"
+                ? "bg-campo font-extrabold text-sobre-campo outline-2 outline-white"
+                : "border border-white/40 bg-white/15 text-white/80"
+            )}
+          >
+            {n}
           </span>
-        </span>
-      </div>
-      <div>
-        <p className="font-display text-[1.05rem] font-bold tracking-tight">Hola, Rosa</p>
-        <p className="text-[0.72rem] text-muted-foreground">Rosa Medina · Carpeta N° 58</p>
-      </div>
-    </div>
-  );
-}
-
-const CONCEPTOS = [
-  { descripcion: "Expensas Puestos × 2", vence: "30/09/2026", monto: 400000, estado: "pendiente" },
-  { descripcion: "Alquiler Cocheras", vence: "30/09/2026", monto: 50000, estado: "parcial" },
-  { descripcion: "Energía · Medidor N° 58 (160 kWh)", vence: null, monto: 96000, estado: "pagado" },
-] as const;
-
-/** Un renglón de «Tus conceptos»: lo pagado va gris y sin fecha; lo que falta, con su vencimiento. */
-function FilaConcepto({ c }: { c: (typeof CONCEPTOS)[number] }) {
-  const pagado = c.estado === "pagado";
-  return (
-    <div className="flex items-center justify-between gap-2 py-1.5">
-      <div className="min-w-0">
-        <p className="leading-tight font-medium">{c.descripcion}</p>
-        {c.vence ? <p className="text-[0.72rem] text-muted-foreground tabular">Vence el {c.vence}</p> : null}
-      </div>
-      <div className="flex shrink-0 items-center gap-1.5">
-        <Money monto={c.monto} className={pagado ? "text-muted-foreground" : "font-semibold"} />
-        <Sello estado={c.estado} className={SELLO} />
-      </div>
-    </div>
-  );
-}
-
-function TarjetaConceptos() {
-  return (
-    <div className="rounded-lg border border-border bg-card px-2.5 py-2">
-      <p className="font-display text-[0.85rem] font-bold">Tus conceptos de Septiembre de 2026</p>
-      <div className="divide-y divide-border">
-        {CONCEPTOS.map((c) => (
-          <FilaConcepto key={c.descripcion} c={c} />
         ))}
       </div>
+      <div className="mt-1 flex justify-center">
+        <ChapaMini>{etiqueta}</ChapaMini>
+      </div>
     </div>
   );
 }
 
-const RECIBOS = [
-  { numero: 2417, fecha: "15/09/2026", como: "Efectivo", monto: 126000 },
-  { numero: 2290, fecha: "28/08/2026", como: "Transferencia de Rosa Medina", monto: 556000 },
-];
+function CartelMini({ tono, children, className }: { tono: Tono; children: React.ReactNode; className?: string }) {
+  return (
+    <div
+      className={cn(
+        "relative space-y-0.5 bg-campo px-3 pt-3 pb-2.5 text-sobre-campo [border-radius:50%_50%_0.55rem_0.55rem/0.8rem_0.8rem_0.55rem_0.55rem]",
+        `tono-${tono}`,
+        className
+      )}
+    >
+      {children}
+    </div>
+  );
+}
 
-// ---------------------------------------------------------------------------------------
-// Portada
-// ---------------------------------------------------------------------------------------
+function BarraMini({ activa, globo = 0 }: { activa: string; globo?: number }) {
+  const tabs: { label: string; icono: LucideIcon }[] = [
+    { label: "Mi cuenta", icono: Store },
+    { label: "Mis pagos", icono: Receipt },
+    { label: "Mensajes", icono: MessagesSquare },
+    { label: "Mi carpeta", icono: FolderOpen },
+  ];
+  return (
+    <div className="-mx-3 -mb-3 mt-2 grid grid-cols-4 gap-0.5 bg-porcelana p-1 text-tinta">
+      {tabs.map((t) => {
+        const Icono = t.icono;
+        const activo = t.label === activa;
+        return (
+          <span
+            key={t.label}
+            className={cn(
+              "relative flex flex-col items-center gap-0.5 rounded-md py-1 text-[0.72rem] leading-none font-bold",
+              activo && "bg-esmalte text-porcelana"
+            )}
+          >
+            <Icono className="size-3.5" strokeWidth={2.2} />
+            {t.label}
+            {t.label === "Mensajes" && globo > 0 ? (
+              <span className="absolute top-0 right-1.5 flex size-3.5 items-center justify-center rounded-full bg-[oklch(0.56_0.215_27)] text-[0.72rem] leading-none font-bold text-white">
+                {globo}
+              </span>
+            ) : null}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
 
-/** Portada de "Mi cuenta": el saludo, el semáforo y lo del mes. */
+function Hoja({ children, className }: { children: React.ReactNode; className?: string }) {
+  return <div className={cn("rounded-lg bg-porcelana text-tinta", className)}>{children}</div>;
+}
+
+function IconoFila({ icono: Icono }: { icono: LucideIcon }) {
+  return (
+    <span className="flex size-6 shrink-0 items-center justify-center rounded-[0.3rem] bg-esmalte text-porcelana">
+      <Icono className="size-3.5" strokeWidth={2} />
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Mi cuenta
+// ---------------------------------------------------------------------------
+
+function CartelATiempo({ conBeneficio = true }: { conBeneficio?: boolean }) {
+  return (
+    <CartelMini tono="en_termino">
+      <p className="text-[0.8rem] leading-tight font-extrabold">Estás a tiempo</p>
+      <Money monto={939130} className="block text-[1.5rem] leading-none font-extrabold [font-stretch:86%]" />
+      <p className="text-[0.72rem] leading-snug font-semibold">
+        para pagar hasta el <strong className="font-extrabold">lunes 30 de noviembre</strong>
+      </p>
+      {conBeneficio ? (
+        <p className="flex items-center gap-1 pt-0.5 text-[0.72rem] font-semibold">
+          <Tag className="size-3 shrink-0" strokeWidth={2.4} />
+          Ya incluye tu beneficio de <Money monto={140870} className="font-extrabold" />
+        </p>
+      ) : null}
+    </CartelMini>
+  );
+}
+
+function CartelVencido() {
+  return (
+    <CartelMini tono="vencido">
+      <p className="text-[0.8rem] leading-tight font-extrabold">Tenés algo vencido</p>
+      <Money monto={1080000} className="block text-[1.5rem] leading-none font-extrabold [font-stretch:86%]" />
+      <p className="text-[0.72rem] leading-snug font-semibold">se venció el viernes 30 de octubre</p>
+    </CartelMini>
+  );
+}
+
+function CartelAlDia() {
+  return (
+    <CartelMini tono="al_dia">
+      <p className="text-[1.15rem] leading-none font-extrabold [font-stretch:86%]">Estás al día</p>
+      <p className="text-[0.72rem] font-semibold">No debés nada. ¡Gracias!</p>
+    </CartelMini>
+  );
+}
+
+/** Portada de «Mi cuenta»: el plano con tu puesto y el cartel. */
 export function PortadaSocioCuenta() {
   return (
     <MarcoPantalla titulo="Mi cuenta">
-      <CabeceraPortal />
-      <Resaltado mano={false}>
-        <Semaforo nivel="en_termino">
-          <APagarEnTermino />
-          <LineaBeneficio />
-        </Semaforo>
-      </Resaltado>
-      <div className="pt-1">
-        <TarjetaConceptos />
-      </div>
+      <FondoPortal>
+        <PlanoMini tono="en_termino" />
+        <CartelATiempo />
+        <BarraMini activa="Mi cuenta" />
+      </FondoPortal>
     </MarcoPantalla>
   );
 }
 
-// ---------------------------------------------------------------------------------------
-// El semáforo y el beneficio
-// ---------------------------------------------------------------------------------------
-
-/** Los tres colores del semáforo, uno debajo del otro. */
-export function PantallaSemaforoColores() {
+/** Los tres colores del cartel, uno debajo del otro. */
+export function PantallaColoresCartel() {
   return (
     <MarcoPantalla titulo="Mi cuenta">
-      <Semaforo nivel="al_dia">
-        <AlDia />
-      </Semaforo>
-      <Semaforo nivel="en_termino">
-        <APagarEnTermino />
-      </Semaforo>
-      <Semaforo nivel="vencido">
-        <APagarVencido />
-      </Semaforo>
+      <FondoPortal className="space-y-1.5">
+        <CartelAlDia />
+        <CartelATiempo conBeneficio={false} />
+        <CartelVencido />
+      </FondoPortal>
     </MarcoPantalla>
   );
 }
@@ -223,167 +214,544 @@ export function PantallaSemaforoColores() {
 export function PantallaBeneficioSocio() {
   return (
     <MarcoPantalla titulo="Mi cuenta">
-      <p className="text-[0.72rem] font-semibold text-muted-foreground">Si pagás a tiempo</p>
-      <Semaforo nivel="en_termino">
-        <APagarEnTermino />
-        <p className="text-[0.75rem] font-medium">Te quedan 10 días</p>
-        <Resaltado className="ring-offset-parcial-suave">
-          <LineaBeneficio />
+      <FondoPortal className="space-y-1.5">
+        <p className="text-[0.72rem] font-bold">Si pagás a tiempo</p>
+        <Resaltado mano={false} className="ring-offset-esmalte">
+          <CartelATiempo />
         </Resaltado>
-      </Semaforo>
-      <p className="pt-2 text-[0.72rem] font-semibold text-muted-foreground">Si se pasa la fecha</p>
-      <Semaforo nivel="vencido">
-        <APagarVencido />
-        <LineaBeneficioPerdido />
-      </Semaforo>
+        <p className="pt-1 text-[0.72rem] font-bold">Si se pasa la fecha</p>
+        <CartelVencido />
+      </FondoPortal>
     </MarcoPantalla>
   );
 }
 
-// ---------------------------------------------------------------------------------------
-// Lo del mes, los pagos y el recibo
-// ---------------------------------------------------------------------------------------
+/** Quien paga por semana: el mes en azulejos. */
+export function PantallaCuotasSocio() {
+  return (
+    <MarcoPantalla titulo="Mi cuenta">
+      <FondoPortal>
+        <CartelMini tono="en_termino" className="space-y-1">
+          <p className="text-[0.8rem] leading-tight font-extrabold">Estás a tiempo</p>
+          <Money monto={247500} className="block text-[1.5rem] leading-none font-extrabold [font-stretch:86%]" />
+          <Resaltado mano={false} className="mt-1 ring-offset-campo">
+            <div className="grid grid-cols-4 gap-1">
+              {[1, 0, 0, 0].map((lleno, i) => (
+                <span
+                  key={i}
+                  className={cn("h-3.5 -skew-x-[9deg] rounded-[0.15rem] border-[1.5px] border-current", lleno ? "bg-current" : "")}
+                />
+              ))}
+            </div>
+          </Resaltado>
+          <p className="pt-1 text-[0.72rem] leading-snug font-semibold">
+            <strong className="font-extrabold">Pagaste 1 de 4 semanas</strong> · la próxima es de{" "}
+            <Money monto={82500} className="font-extrabold" />
+          </p>
+        </CartelMini>
+      </FondoPortal>
+    </MarcoPantalla>
+  );
+}
 
-/** «Tus conceptos» del mes con los tres sellos, y un mes anterior ya pagado. */
+function FilaConceptoMini({
+  icono,
+  nombre,
+  lugar,
+  monto,
+  sello,
+}: {
+  icono: LucideIcon;
+  nombre: string;
+  lugar: string;
+  monto: number;
+  sello: string;
+}) {
+  return (
+    <div className="flex items-center gap-2 px-2 py-1.5">
+      <IconoFila icono={icono} />
+      <div className="min-w-0 flex-1">
+        <p className="text-[0.8rem] leading-tight font-bold">{nombre}</p>
+        <p className="text-[0.72rem] leading-tight text-tinta-2">{lugar}</p>
+        <p className="mt-0.5 flex flex-wrap items-center gap-1">
+          <Money monto={monto} className="text-[0.8rem] font-extrabold" />
+          <Sello estado={sello} className={SELLO} />
+        </p>
+      </div>
+      <ChevronRight className="size-3.5 shrink-0 text-tinta-2" />
+    </div>
+  );
+}
+
+/** «Lo de noviembre»: un renglón por cosa que paga. */
 export function PantallaConceptosSocio() {
   return (
     <MarcoPantalla titulo="Mi cuenta">
-      <Resaltado mano={false}>
-        <TarjetaConceptos />
-      </Resaltado>
-      <div className="mt-2 rounded-lg border border-border bg-card px-2.5 py-2">
-        <p className="font-display text-[0.85rem] font-bold">Meses anteriores</p>
-        <div className="flex items-center justify-between gap-2 pt-1">
-          <p className="font-medium">Agosto de 2026</p>
-          <p className="flex items-center gap-1 font-medium text-pagado">
-            <CheckCircle2 className="size-3.5" strokeWidth={2} />
-            Todo pagado
-          </p>
-        </div>
-      </div>
+      <FondoPortal>
+        <p className="text-[0.85rem] font-extrabold">Lo de noviembre</p>
+        <Hoja className="divide-y divide-border">
+          <FilaConceptoMini icono={Store} nombre="Expensas de tu puesto" lugar="Puesto 54" monto={939130} sello="pendiente" />
+          <FilaConceptoMini icono={Car} nombre="Tu cochera" lugar="Cochera 12" monto={31000} sello="pagado" />
+          <FilaConceptoMini icono={Zap} nombre="Luz" lugar="Puesto 54" monto={76000} sello="parcial" />
+        </Hoja>
+      </FondoPortal>
     </MarcoPantalla>
   );
 }
 
-/** «Tus pagos»: un renglón por recibo, con su botón «Recibo». */
-export function PantallaPagosSocio() {
+/** Lo que sube al tocar un renglón: el plano vuela hasta ese lugar. */
+export function PantallaHojaConcepto() {
   return (
-    <MarcoPantalla titulo="Mi cuenta">
-      <div className="rounded-lg border border-border bg-card px-2.5 py-2">
-        <p className="font-display text-[0.85rem] font-bold">Tus pagos</p>
-        <div className="divide-y divide-border">
-          {RECIBOS.map((r, i) => {
-            const boton = (
-              <BotonEjemplo variante="contorno" className="min-h-7 px-2 text-[0.72rem]">
-                <Download /> Recibo
-              </BotonEjemplo>
-            );
-            return (
-              <div key={r.numero} className="flex items-center gap-2 py-1.5">
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium">
-                    Recibo N° <span className="tabular">{r.numero}</span>
-                  </p>
-                  <p className="text-[0.72rem] leading-tight text-muted-foreground">
-                    <span className="tabular">{r.fecha}</span> · {r.como}
-                  </p>
-                </div>
-                <Money monto={r.monto} className="shrink-0 font-semibold" />
-                {i === 0 ? <Resaltado className="shrink-0">{boton}</Resaltado> : <div className="shrink-0">{boton}</div>}
-              </div>
-            );
-          })}
+    <MarcoPantalla titulo="Tu cochera" contenidoClassName="space-y-0 p-0">
+      <div className="bg-esmalte p-2 text-porcelana">
+        <PlanoMini tono="al_dia" etiqueta="Cochera 12" />
+      </div>
+      <div className="space-y-1 bg-porcelana p-2.5 text-tinta">
+        <p className="text-[0.95rem] leading-tight font-extrabold">Tu cochera</p>
+        <div className="flex items-center gap-2">
+          <Money monto={31000} className="text-[1.2rem] font-extrabold [font-stretch:88%]" />
+          <Sello estado="pagado" className={SELLO} />
         </div>
-        <p className="mt-1 border-t border-border pt-1.5 text-[0.72rem] text-muted-foreground">
-          Tocá <span className="font-medium text-foreground">Recibo</span> para verlo, guardarlo en PDF o imprimirlo.
-        </p>
+        <p className="text-[0.72rem]">Ya está pagado. ¡Gracias!</p>
       </div>
     </MarcoPantalla>
   );
 }
 
-/** El recibo como lo ve el socio: «Volver», «Descargar recibo (PDF)» y el papel. */
+// ---------------------------------------------------------------------------
+// Mis pagos
+// ---------------------------------------------------------------------------
+
+const RECIBOS = [
+  { numero: 2417, dia: "02", mes: "nov", como: "Efectivo", monto: 51000 },
+  { numero: 2290, dia: "28", mes: "oct", como: "Transferencia de Rosa Medina", monto: 556000 },
+];
+
+function TalonarioMini({ barra = false }: { barra?: boolean }) {
+  return (
+    <MarcoPantalla titulo="Mis pagos">
+      <FondoPortal>
+        <p className="text-[1.05rem] font-extrabold">Mis pagos</p>
+        <p className="text-[0.72rem]">
+          En noviembre pagaste <Money monto={51000} className="font-extrabold" />.
+        </p>
+        {RECIBOS.map((r, i) => {
+          const talon = (
+            <Hoja className="flex items-stretch">
+              <span className="flex w-10 shrink-0 flex-col items-center justify-center border-r-2 border-dashed border-border py-1 leading-none">
+                <span className="text-[0.95rem] font-extrabold tabular">{r.dia}</span>
+                <span className="text-[0.72rem] font-bold text-tinta-2">{r.mes}</span>
+              </span>
+              <span className="flex min-w-0 flex-1 items-center gap-1 px-2 py-1">
+                <span className="min-w-0 flex-1">
+                  <Money monto={r.monto} className="block text-[0.85rem] font-extrabold" />
+                  <span className="block text-[0.72rem] leading-tight text-tinta-2">
+                    {r.como} · Recibo N° {r.numero}
+                  </span>
+                </span>
+                <ChevronRight className="size-3.5 shrink-0 text-tinta-2" />
+              </span>
+            </Hoja>
+          );
+          return i === 0 ? (
+            <Resaltado key={r.numero} className="ring-offset-esmalte">
+              {talon}
+            </Resaltado>
+          ) : (
+            <div key={r.numero}>{talon}</div>
+          );
+        })}
+        {barra ? <BarraMini activa="Mis pagos" /> : null}
+      </FondoPortal>
+    </MarcoPantalla>
+  );
+}
+
+/** Portada de «Mis pagos». */
+export function PortadaSocioPagos() {
+  return <TalonarioMini barra />;
+}
+
+/** El talonario: un talón por pago. */
+export function PantallaPagosSocio() {
+  return <TalonarioMini />;
+}
+
+/** El recibo como lo ve el socio: mandarlo, guardarlo y el papel. */
 export function PantallaReciboSocio() {
   return (
     <MarcoPantalla titulo="Recibo N° 2417 — Rosa Medina" contenidoClassName="space-y-2 bg-white p-3">
-      <div className="flex items-center justify-between gap-2">
-        <BotonEjemplo variante="contorno" className="min-h-7 px-2 text-[0.72rem]">
-          <ArrowLeft /> Volver
-        </BotonEjemplo>
-        <Resaltado>
-          <BotonEjemplo className="min-h-7 px-2 text-[0.72rem]">
-            <Printer /> Descargar recibo (PDF)
-          </BotonEjemplo>
-        </Resaltado>
-      </div>
-      <p className="pt-1 text-right text-[0.72rem] text-muted-foreground">
-        Elegí &quot;Guardar como PDF&quot;. En el celular: Compartir → Imprimir → Guardar como PDF.
-      </p>
+      <Resaltado>
+        <span className="flex min-h-8 items-center justify-center gap-1.5 rounded-md bg-esmalte text-[0.8rem] font-extrabold text-porcelana">
+          <Share2 className="size-3.5" /> Compartir el recibo
+        </span>
+      </Resaltado>
+      <span className="flex min-h-7 items-center justify-center gap-1.5 rounded-md border border-border text-[0.72rem] font-bold">
+        <Printer className="size-3.5" /> Imprimir o guardar en PDF
+      </span>
       <div className="etiqueta">
         <div className="etiqueta-interior space-y-2 p-2.5 text-[0.72rem]">
           <div className="flex items-start justify-between gap-2 border-b border-border pb-1.5">
-            <div className="min-w-0">
-              <p className="font-display font-semibold tracking-wide uppercase">Cooperativa Mercado San Miguel</p>
-              <p className="text-muted-foreground">Malagueño, Córdoba</p>
-            </div>
-            <div className="shrink-0 text-right">
-              <p className="font-display text-[0.8rem] font-semibold tracking-wide uppercase">Recibo N° 2417</p>
-              <p className="text-muted-foreground tabular">15/09/2026, 10:42</p>
-            </div>
+            <p className="font-semibold">Cooperativa Mercado San Miguel</p>
+            <p className="shrink-0 text-right font-semibold">Recibo N° 2417</p>
           </div>
           <p>
             <span className="text-muted-foreground">Recibimos de:</span> <strong>Rosa Medina</strong> (Carpeta N° 58)
           </p>
-          <p className="font-display font-semibold">Cómo pagó</p>
           <div className="flex items-center gap-2 rounded border border-border px-2 py-1">
             <Banknote className="size-3.5 shrink-0 text-muted-foreground" strokeWidth={2} />
             <p className="flex-1 font-medium">Efectivo</p>
-            <Money monto={126000} className="font-semibold" />
-          </div>
-          <div className="divide-y divide-dashed divide-border">
-            <div className="flex justify-between gap-2 py-1">
-              <span>Energía · Medidor N° 58 (160 kWh) · Septiembre de 2026</span>
-              <Money monto={96000} />
-            </div>
-            <div className="flex justify-between gap-2 py-1">
-              <span>Alquiler Cocheras · Septiembre de 2026</span>
-              <Money monto={30000} />
-            </div>
+            <Money monto={51000} className="font-semibold" />
           </div>
           <div className="flex items-baseline justify-between border-t-2 border-foreground pt-1">
-            <p className="font-display font-semibold tracking-wide uppercase">Total</p>
-            <Money monto={126000} className="text-[1.05rem] font-bold" />
+            <p className="font-semibold">Total</p>
+            <Money monto={51000} className="text-[1.05rem] font-bold" />
           </div>
-          <div className="flex items-end justify-between gap-2 pt-1">
-            <div className="space-y-1">
-              <Sello grande estado="pagado" texto="Pago recibido" className="px-1.5 py-0.5 text-[0.72rem]" />
-              <p>Recibió: Marta Ríos · Administración</p>
-            </div>
-            <p className="w-20 shrink-0 border-t border-foreground pt-0.5 text-center text-muted-foreground">Firma</p>
-          </div>
+          <Sello grande estado="pagado" texto="Pago recibido" className="px-1.5 py-0.5 text-[0.72rem]" />
         </div>
       </div>
     </MarcoPantalla>
   );
 }
 
-// ---------------------------------------------------------------------------------------
-// Documentos
-// ---------------------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Mensajes
+// ---------------------------------------------------------------------------
 
-/** La ventana que abre «Subir documento»: título, categoría y la foto. */
+function FilaMensajeMini({
+  icono,
+  titulo,
+  sub,
+  sello,
+  fuerte = false,
+}: {
+  icono: LucideIcon;
+  titulo: string;
+  sub: string;
+  sello: string;
+  fuerte?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-2 px-2 py-1.5">
+      <IconoFila icono={icono} />
+      <div className="min-w-0 flex-1">
+        <p className={cn("text-[0.8rem] leading-tight", fuerte ? "font-extrabold" : "font-bold")}>{titulo}</p>
+        <p className="text-[0.72rem] leading-tight text-tinta-2">{sub}</p>
+        <Sello estado={sello} className={cn(SELLO, "mt-0.5")} />
+      </div>
+      <ChevronRight className="size-3.5 shrink-0 text-tinta-2" />
+    </div>
+  );
+}
+
+function ListaMensajesMini({ resaltar = true }: { resaltar?: boolean }) {
+  const primera = (
+    <FilaMensajeMini
+      icono={MessageSquareWarning}
+      titulo="Mercadería en el pasillo"
+      sub="Apercibimiento N° 12 · 01/11/2026"
+      sello="a_responder"
+      fuerte
+    />
+  );
+  return (
+    <>
+      <p className="text-[1.05rem] font-extrabold">Mensajes</p>
+      <span className="flex min-h-8 items-center justify-center gap-1.5 rounded-md bg-porcelana text-[0.8rem] font-extrabold text-esmalte">
+        <PenLine className="size-3.5" /> Escribirle a la cooperativa
+      </span>
+      <p className="pt-1 text-[0.85rem] font-extrabold">Te están esperando</p>
+      <Hoja className="divide-y divide-border">
+        {resaltar ? <Resaltado className="rounded-t-lg ring-inset ring-offset-0">{primera}</Resaltado> : primera}
+        <FilaMensajeMini
+          icono={MessageCircle}
+          titulo="Se rompió la luminaria"
+          sub="Reclamo N° 31 · 02/11 15:30"
+          sello="respuesta_nueva"
+          fuerte
+        />
+        <FilaMensajeMini icono={Megaphone} titulo="Horarios de carga" sub="Circular N° 3 · 02/11/2026" sello="nueva_comunicacion" fuerte />
+      </Hoja>
+    </>
+  );
+}
+
+/** Portada de «Mensajes»: todo junto, como un chat. */
+export function PortadaSocioComunicaciones() {
+  return (
+    <MarcoPantalla titulo="Mensajes">
+      <FondoPortal>
+        <ListaMensajesMini resaltar={false} />
+        <BarraMini activa="Mensajes" globo={3} />
+      </FondoPortal>
+    </MarcoPantalla>
+  );
+}
+
+/** La lista de mensajes, con lo que espera algo arriba y su sello. */
+export function PantallaMensajesSocio() {
+  return (
+    <MarcoPantalla titulo="Mensajes">
+      <FondoPortal>
+        <ListaMensajesMini />
+      </FondoPortal>
+    </MarcoPantalla>
+  );
+}
+
+/** Una circular abierta: se lee y, si trae PDF, se abre ahí. */
+export function PantallaCircularSocio() {
+  return (
+    <MarcoPantalla titulo="Circular N° 3">
+      <FondoPortal>
+        <p className="flex items-center gap-0.5 text-[0.72rem] font-extrabold">
+          <ChevronLeft className="size-3.5" /> Mensajes
+        </p>
+        <p className="text-[0.95rem] leading-tight font-extrabold">Horarios de carga durante las fiestas</p>
+        <Hoja className="space-y-1.5 p-2.5">
+          <div className="flex items-center justify-between gap-2">
+            <Sello estado="circular" className={SELLO} />
+            <p className="text-[0.72rem] text-tinta-2 tabular">02/11/2026</p>
+          </div>
+          <p className="text-[0.8rem] leading-snug">Durante diciembre la playa abre una hora antes.</p>
+          <Resaltado>
+            <span className="flex min-h-7 items-center justify-center gap-1.5 rounded-md border-2 border-esmalte text-[0.72rem] font-extrabold text-esmalte">
+              <FileText className="size-3.5" /> Abrir el PDF de la circular
+            </span>
+          </Resaltado>
+        </Hoja>
+      </FondoPortal>
+    </MarcoPantalla>
+  );
+}
+
+/** Lo que ve el socio al entrar si tiene una circular obligatoria sin confirmar. */
+export function PantallaBloqueoCirculares() {
+  return (
+    <MarcoPantalla titulo="Mercado San Miguel">
+      <FondoPortal>
+        <p className="text-[0.95rem] leading-tight font-extrabold">Tenés una circular para leer</p>
+        <p className="text-[0.72rem] leading-snug">
+          Leela y tocá <strong>Confirmo que la recibí</strong>. Después ves tu cuenta como siempre.
+        </p>
+        <Hoja className="space-y-1.5 p-2.5">
+          <Sello estado="sin_recibir" className={SELLO} />
+          <p className="text-[0.85rem] leading-tight font-extrabold">Asamblea anual de socios</p>
+          <p className="text-[0.72rem] leading-snug">Viernes 28 a las 18, en el salón de la cooperativa.</p>
+          <Resaltado>
+            <span className="flex min-h-8 items-center justify-center gap-1.5 rounded-md bg-esmalte text-[0.8rem] font-extrabold text-porcelana">
+              <CheckCircle2 className="size-3.5" /> Confirmo que la recibí
+            </span>
+          </Resaltado>
+        </Hoja>
+      </FondoPortal>
+    </MarcoPantalla>
+  );
+}
+
+/** Un apercibimiento abierto: qué pasó, la multa y «Contá tu versión». */
+export function PantallaDescargoSocio() {
+  return (
+    <MarcoPantalla titulo="Apercibimiento N° 12">
+      <FondoPortal>
+        <p className="text-[0.95rem] leading-tight font-extrabold">Mercadería en el pasillo</p>
+        <Hoja className="space-y-1 p-2.5">
+          <Sello estado="apercibimiento" className={SELLO} />
+          <p className="text-[0.8rem] leading-snug">El jueves quedaron cajones en el pasillo central toda la mañana.</p>
+        </Hoja>
+        <div className="space-y-0.5 rounded-lg bg-pendiente-suave p-2.5 text-tinta">
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[0.72rem] font-extrabold">Multa</p>
+            <Sello estado="multa" texto="Multa pendiente" className={SELLO} />
+          </div>
+          <Money monto={25000} className="block text-[1.1rem] font-extrabold text-pendiente" />
+          <p className="text-[0.72rem]">Se sumó a tu cuenta. Vence el 11/11/2026.</p>
+        </div>
+        <Resaltado className="ring-offset-esmalte">
+          <Hoja className="space-y-1 p-2.5">
+            <p className="text-[0.85rem] font-extrabold">Contá tu versión</p>
+            <div className="min-h-8 rounded-md border border-border px-2 py-1 text-[0.72rem] text-tinta-2">Contá tu versión…</div>
+            <div className="flex gap-1">
+              <span className="flex min-h-7 flex-1 items-center justify-center gap-1 rounded-md border-2 border-esmalte text-[0.72rem] font-bold text-esmalte">
+                <Camera className="size-3" /> Sumar una foto
+              </span>
+              <span className="flex min-h-7 items-center justify-center gap-1 rounded-md bg-esmalte px-2 text-[0.72rem] font-extrabold text-porcelana">
+                <Send className="size-3" /> Enviar mi versión
+              </span>
+            </div>
+          </Hoja>
+        </Resaltado>
+      </FondoPortal>
+    </MarcoPantalla>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Escribirle a la cooperativa
+// ---------------------------------------------------------------------------
+
+/** Portada: el botón para escribir y una conversación. */
+export function PortadaSocioSolicitudes() {
+  return (
+    <MarcoPantalla titulo="Mensajes">
+      <FondoPortal>
+        <span className="flex min-h-8 items-center justify-center gap-1.5 rounded-md bg-porcelana text-[0.8rem] font-extrabold text-esmalte">
+          <PenLine className="size-3.5" /> Escribirle a la cooperativa
+        </span>
+        <ChatMini />
+      </FondoPortal>
+    </MarcoPantalla>
+  );
+}
+
+/** «¿Qué querés hacer?»: las cuatro opciones. */
+export function PantallaSocioTipo() {
+  const opciones: { icono: LucideIcon; titulo: string; ayuda: string }[] = [
+    { icono: CircleHelp, titulo: "Preguntar algo", ayuda: "Una duda que necesita respuesta" },
+    { icono: Hand, titulo: "Pedir algo", ayuda: "Un cambio, un permiso, un espacio" },
+    { icono: MessageCircleWarning, titulo: "Hacer un reclamo", ayuda: "Algo no está bien" },
+    { icono: Flag, titulo: "Avisar de algo", ayuda: "Algo que pasó" },
+  ];
+  return (
+    <MarcoPantalla titulo="Escribirle a la cooperativa">
+      <p className="text-[0.95rem] font-extrabold">¿Qué querés hacer?</p>
+      <Hoja className="divide-y divide-border border border-border">
+        {opciones.map((o) => (
+          <div key={o.titulo} className="flex items-center gap-2 px-2 py-1.5">
+            <IconoFila icono={o.icono} />
+            <div>
+              <p className="text-[0.8rem] leading-tight font-bold">{o.titulo}</p>
+              <p className="text-[0.72rem] leading-tight text-tinta-2">{o.ayuda}</p>
+            </div>
+          </div>
+        ))}
+      </Hoja>
+    </MarcoPantalla>
+  );
+}
+
+/** Un solo cuadro para escribir, la foto y «Enviar». */
+export function PantallaSocioContar() {
+  return (
+    <MarcoPantalla titulo="Escribirle a la cooperativa">
+      <p className="text-[0.95rem] font-extrabold">¿Qué pasa?</p>
+      <Resaltado mano={false}>
+        <div className="min-h-16 rounded-md border border-border bg-white px-2 py-1.5 text-[0.8rem] leading-snug">
+          Se rompió la luminaria frente al puesto 54. Desde el lunes estamos a oscuras a la mañana.
+        </div>
+      </Resaltado>
+      <span className="flex min-h-7 items-center justify-center gap-1 rounded-md border-2 border-esmalte text-[0.72rem] font-bold text-esmalte">
+        <Camera className="size-3" /> Sumar una foto (si querés)
+      </span>
+      <Resaltado>
+        <span className="flex min-h-8 items-center justify-center gap-1.5 rounded-md bg-esmalte text-[0.8rem] font-extrabold text-porcelana">
+          <Send className="size-3.5" /> Enviar
+        </span>
+      </Resaltado>
+    </MarcoPantalla>
+  );
+}
+
+function ChatMini() {
+  return (
+    <div className="flex flex-col gap-1.5 rounded-lg bg-porcelana-2 p-2 text-tinta">
+      <p className="ml-auto max-w-[85%] rounded-lg rounded-br-sm bg-esmalte px-2 py-1 text-[0.8rem] leading-snug text-porcelana">
+        Se rompió la luminaria frente al puesto 54.
+      </p>
+      <p className="self-center rounded-full bg-[oklch(0.91_0.018_265)] px-2 py-0.5 text-[0.72rem]">
+        Líder de Procesos tomó la solicitud
+      </p>
+      <div className="max-w-[85%] rounded-lg rounded-bl-sm bg-white px-2 py-1 text-[0.8rem] leading-snug">
+        <p className="text-[0.72rem] font-extrabold text-esmalte">Líder de Procesos</p>
+        Gracias por avisar. Mañana pasa el electricista.
+      </div>
+    </div>
+  );
+}
+
+/** En qué está: el sello, qué quiere decir y por dónde va. */
+export function PantallaSocioEstado() {
+  return (
+    <MarcoPantalla titulo="Reclamo N° 31">
+      <FondoPortal>
+        <Hoja className="space-y-1 p-2.5">
+          <Sello estado="en_revision" className={SELLO} />
+          <p className="text-[0.8rem] leading-snug">Lo está revisando el Líder de Procesos.</p>
+          <p className="text-[0.72rem] font-bold text-esmalte underline">Ver por dónde va</p>
+        </Hoja>
+      </FondoPortal>
+    </MarcoPantalla>
+  );
+}
+
+/** La conversación: lo tuyo a la derecha y lo de ellos a la izquierda. */
+export function PantallaSocioRespuesta() {
+  return (
+    <MarcoPantalla titulo="Reclamo N° 31">
+      <ChatMini />
+    </MarcoPantalla>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Mi carpeta
+// ---------------------------------------------------------------------------
+
+/** Portada de «Mi carpeta». */
+export function PortadaSocioCarpeta() {
+  return (
+    <MarcoPantalla titulo="Mi carpeta">
+      <FondoPortal>
+        <p className="text-[1.05rem] font-extrabold">Mi carpeta</p>
+        <ChapaMini>Carpeta N° 58</ChapaMini>
+        <Hoja className="divide-y divide-border">
+          <div className="flex items-center gap-2 px-2 py-1.5">
+            <IconoFila icono={Store} />
+            <p className="flex-1 text-[0.8rem] font-bold">Puesto 54</p>
+            <ChevronRight className="size-3.5 text-tinta-2" />
+          </div>
+          <div className="flex items-center gap-2 px-2 py-1.5">
+            <IconoFila icono={Car} />
+            <p className="flex-1 text-[0.8rem] font-bold">Cochera 12</p>
+            <ChevronRight className="size-3.5 text-tinta-2" />
+          </div>
+        </Hoja>
+        <BarraMini activa="Mi carpeta" />
+      </FondoPortal>
+    </MarcoPantalla>
+  );
+}
+
+/** Lo que sube al tocar un lugar. */
+export function PantallaLugarSocio() {
+  return <PantallaHojaConcepto />;
+}
+
+/** Subir un papel: qué es y la foto. */
 export function PantallaSubirDocumentoSocio() {
   return (
-    <MarcoPantalla titulo="Subir documento">
-      <p className="text-[0.72rem] text-muted-foreground">Puede ser un PDF o una foto (JPG, PNG o WEBP).</p>
-      <CampoEjemplo etiqueta="Título" valor="Habilitación municipal 2026" />
-      <CampoEjemplo etiqueta="Categoría" valor="Habilitación municipal" />
-      <CampoEjemplo etiqueta="Archivo" valor="Foto de la habilitación.jpg" />
-      <p className="text-[0.72rem] text-muted-foreground">Las fotos se achican solas.</p>
+    <MarcoPantalla titulo="Subir un papel">
+      <p className="text-[0.95rem] font-extrabold">¿Qué papel es?</p>
+      <div className="grid grid-cols-2 gap-1">
+        {["Habilitación municipal", "SENASA", "Apto eléctrico", "Otro"].map((c, i) => (
+          <span
+            key={c}
+            className={cn(
+              "flex min-h-8 items-center justify-center rounded-md px-1 text-center text-[0.72rem] leading-tight font-bold",
+              i === 0 ? "bg-esmalte text-porcelana" : "bg-porcelana-2 text-tinta"
+            )}
+          >
+            {c}
+          </span>
+        ))}
+      </div>
+      <span className="flex min-h-7 items-center justify-center gap-1 rounded-md border-2 border-esmalte text-[0.72rem] font-bold text-esmalte">
+        <Camera className="size-3" /> Foto de la habilitación.jpg
+      </span>
       <Resaltado>
-        <BotonEjemplo className="w-full">
-          <Upload /> Subir documento
-        </BotonEjemplo>
+        <span className="flex min-h-8 items-center justify-center gap-1.5 rounded-md bg-esmalte text-[0.8rem] font-extrabold text-porcelana">
+          <Upload className="size-3.5" /> Subir
+        </span>
       </Resaltado>
     </MarcoPantalla>
   );

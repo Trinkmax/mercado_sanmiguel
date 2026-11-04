@@ -75,8 +75,51 @@ pendiente, ámbar = parcial (pedido textual del cliente y ley del sistema).
    derecha) con el acceso rápido de demo por rol (sacar en producción).
 6. Barras de cobranza: relleno verde sobre pista roja suave.
 
+## Portal del socio: «Tu lugar en el mercado»
+
+El portal (`src/app/(portal)`) tiene mundo propio desde el 03/11/2026; el panel sigue con todo lo de
+arriba. Modo: **Operate**. Lo usan puesteros y quinteros, de pie en el galpón o al sol, con una mano
+ocupada y poca costumbre con el celular. Comparten: el logo, el azul, la ley de colores y los sellos.
+Estilos en `src/app/(portal)/portal.css` (solo se carga en estas rutas); tokens en `globals.css`.
+
+**La idea.** La cuenta no es una planilla: es tu lugar en el mercado, prendido en el color de cómo
+estás. El plano real queda quieto de fondo y todo lo demás sube por encima.
+
+- **Color (Committed):** `--esmalte` (el azul del logotipo) a página entera; `--porcelana` y `--tinta`
+  donde se lee. El campo del cartel y los lugares prendidos cambian con `.tono-al_dia`,
+  `.tono-en_termino`, `.tono-vencido` y `.tono-neutro` (`--campo`, `--sobre-campo`). Verde, ámbar y rojo
+  siguen significando lo mismo que en todo el sistema; la frase siempre dice lo mismo que el color.
+- **Letra:** Archivo con eje de ancho (Omnibus-Type, Argentina), declarada en el layout del portal para
+  que el panel no la descargue. Números grandes en `font-stretch` 86 %. Base del portal: 106,25 % (17 px
+  si el navegador está en 16). A propósito es más grande que el panel: «escala contenida» rige allá.
+- **Materiales:** `.chapa` (la de la numeración de la calle: filete blanco y tornillos), `.cartel` (arco
+  con la curva del techo del logo y filete interior), `.hoja` y `.hoja-filas` (porcelana, sin tarjetas
+  dentro de tarjetas), `.talon` (el pago, con la línea de corte), `.azulejo` (una cuota, inclinada como
+  los del logo), `.burbuja` (conversación), `.boton-*`, `.campo-portal`.
+- **Plano (`plano-portal.tsx`):** silueta estática en `silueta-plano.ts` (se regenera con
+  `supabase/plano/silueta-portal.mjs`; sin datos de clientes); los lugares del socio salen de la base
+  (RLS). Un `<path>` por tipo y ningún filtro SVG, para que el vuelo ande en Safari y en gama media
+  (ver memoria de rendimiento del mapa).
+- **Un solo momento de movimiento:** al entrar, la cámara vuela de todo el mercado a tu puesto y cae la
+  chapa; al tocar un concepto o un lugar, vuela hasta ahí dentro de la hoja. Al estar al día, los azulejos
+  del logo se colocan de a uno. Con «reducir movimiento» no se anima nada.
+- **Navegación:** cuatro secciones abajo, siempre con texto: Mi cuenta, Mis pagos, Mensajes, Mi carpeta.
+  En una conversación o un trámite la barra se esconde. Las hojas van en la dirección (`?ver=`, `?lugar=`):
+  el «atrás» del celular las cierra.
+
+**Reglas del portal**
+
+1. El cartel responde primero: cómo estoy, cuánto, hasta cuándo. Nada le gana al monto.
+2. Palabras de todos los días: «Expensas de tu puesto», «Luz», «Tu cochera» (el nombre contable queda al
+   final de la hoja). Los montos nunca se recalculan: salen de las vistas de siempre (`armar-cuenta.ts`).
+3. Mensajes es una sola lista, como un chat: lo que espera algo de vos, arriba. Sin pestañas.
+4. Una cosa por vez: al escribir, primero qué querés hacer y después un solo cuadro (sin «asunto»: lo arma
+   el servidor con la primera frase). Los avisos formales son sobrios: el papel arriba, la conversación
+   abajo.
+5. Pantallas en `src/components/portal/pantallas/` (solo reciben datos); las páginas leen y les pasan.
+
 ## Contrato de dirección
 
 En `src/app/layout.tsx` como `<script type="text/x-direction-contract">`
 (sobrevive al build; seed e94ff471 + pin de marca del usuario). Cambiar la
-identidad = decisión de producto.
+identidad = decisión de producto. El portal tiene el suyo al lado (seed 17b94eb3).

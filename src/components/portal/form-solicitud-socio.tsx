@@ -3,45 +3,80 @@
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Check, Paperclip, Send, X } from "lucide-react";
+import { Camera, ChevronLeft, CircleHelp, Flag, Hand, MessageCircleWarning, Send, X, type LucideIcon } from "lucide-react";
 import { crearSolicitudSocio } from "@/lib/actions/portal";
-import { cn, uuidV4 } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { uuidV4 } from "@/lib/utils";
 import { Spinner } from "@/components/ui/spinner";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  ACCEPT_ADJUNTO,
-  firmaFormulario,
-  TIPOS_SOLICITUD,
-  type TipoSolicitud,
-} from "@/components/solicitudes/constantes";
-import {
-  AYUDA_PESO_ADJUNTO,
-  errorPesoAdjunto,
-  explicarFalloEnvio,
-  prepararAdjuntos,
-} from "@/components/comunicaciones/adjuntos";
+import { ACCEPT_ADJUNTO, firmaFormulario, type TipoSolicitud } from "@/components/solicitudes/constantes";
+import { errorPesoAdjunto, explicarFalloEnvio, prepararAdjuntos } from "@/components/comunicaciones/adjuntos";
 import { AvisoError, irAlCampo } from "@/components/comunicaciones/aviso-error";
 import { llamarAccion } from "@/lib/llamar-accion";
 
+/** Las cuatro formas de escribirle a la cooperativa, en palabras de todos los días. */
+const OPCIONES: {
+  valor: TipoSolicitud;
+  icono: LucideIcon;
+  titulo: string;
+  ayuda: string;
+  pregunta: string;
+  ejemplo: string;
+}[] = [
+  {
+    valor: "consulta",
+    icono: CircleHelp,
+    titulo: "Preguntar algo",
+    ayuda: "Una duda que necesita respuesta",
+    pregunta: "¿Qué querés preguntar?",
+    ejemplo: "Escribí tu pregunta…",
+  },
+  {
+    valor: "solicitud",
+    icono: Hand,
+    titulo: "Pedir algo",
+    ayuda: "Un cambio, un permiso, un espacio",
+    pregunta: "¿Qué necesitás?",
+    ejemplo: "Contá qué necesitás y desde cuándo…",
+  },
+  {
+    valor: "reclamo",
+    icono: MessageCircleWarning,
+    titulo: "Hacer un reclamo",
+    ayuda: "Algo no está bien y hay que arreglarlo",
+    pregunta: "¿Qué pasa?",
+    ejemplo: "Contá qué pasó, dónde y desde cuándo…",
+  },
+  {
+    valor: "informe",
+    icono: Flag,
+    titulo: "Avisar de algo",
+    ayuda: "Algo que pasó y querés que quede anotado",
+    pregunta: "¿De qué querés avisar?",
+    ejemplo: "Contá qué pasó…",
+  },
+];
+
 /**
- * Alta de solicitud del socio: tipo → asunto → detalle → foto opcional → enviar.
- * Clave de idempotencia (`ref`, como en el panel): la misma mientras no cambie lo escrito y
- * hasta que se guarde. Si se corta el wifi y el socio toca "Enviar" de nuevo, no sale otra
- * solicitud igual: vuelve la que ya había llegado. Si corrige algo, es otro envío.
+ * Escribirle a la cooperativa, de a una cosa por vez: qué querés hacer y después el mensaje.
+ * Sin «asunto»: el servidor lo arma con la primera frase. Clave de idempotencia (`ref`): la
+ * misma mientras no cambie lo escrito y hasta que se guarde; si se corta el wifi y toca
+ * «Enviar» de nuevo, no sale otro mensaje igual.
  */
 export function FormSolicitudSocio() {
   const router = useRouter();
   const [pendiente, startTransition] = useTransition();
-  const [tipo, setTipo] = useState<TipoSolicitud>("solicitud");
+  const [tipo, setTipo] = useState<TipoSolicitud | null>(null);
   const archivoRef = useRef<HTMLInputElement>(null);
   const [nombreAdjunto, setNombreAdjunto] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  /** El aviso de "falta el asunto" va debajo del asunto; los demás, junto al botón. */
-  const [faltaAsunto, setFaltaAsunto] = useState(false);
   const claveRef = useRef<{ firma: string; ref: string } | null>(null);
+
+  const opcion = OPCIONES.find((o) => o.valor === tipo) ?? null;
+
+  function elegir(valor: TipoSolicitud) {
+    setTipo(valor);
+    // Es lo único que falta hacer: el cuadro queda listo para escribir.
+    requestAnimationFrame(() => document.getElementById("soc-detalle")?.focus());
+  }
 
   function quitarAdjunto() {
     if (archivoRef.current) archivoRef.current.value = "";
@@ -50,13 +85,12 @@ export function FormSolicitudSocio() {
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (pendiente) return;
+    if (pendiente || !tipo) return;
     setError(null);
-    setFaltaAsunto(false);
     const fd = new FormData(e.currentTarget);
-    if (!String(fd.get("asunto") ?? "").trim()) {
-      setFaltaAsunto(true);
-      irAlCampo("soc-asunto");
+    if (!String(fd.get("detalle") ?? "").trim()) {
+      setError("Escribí lo que nos querés contar antes de enviarlo.");
+      irAlCampo("soc-detalle");
       return;
     }
     fd.set("tipo", tipo);
@@ -71,107 +105,76 @@ export function FormSolicitudSocio() {
       }
       const res = await llamarAccion(() => crearSolicitudSocio(fd));
       if (!res.ok) {
-        // Lo escrito queda en el formulario y la clave se conserva: tocar "Enviar" de nuevo
-        // no la manda dos veces.
+        // Lo escrito queda y la clave se conserva: tocar «Enviar» de nuevo no lo manda dos veces.
         setError(explicarFalloEnvio(res.error, fd, ["adjunto"]));
         return;
       }
       claveRef.current = null;
-      if (res.data.repetido) {
-        toast.info(`Ya la habíamos recibido: es la solicitud N° ${res.data.numero}. No se mandó dos veces.`);
-      } else {
-        toast.success(`Solicitud N° ${res.data.numero} enviada`);
-      }
+      if (res.data.repetido) toast.info("Ya lo habíamos recibido: no se mandó dos veces.");
+      else toast.success("Listo: tu mensaje llegó a la cooperativa.");
       router.push(`/mi-cuenta/solicitudes/${res.data.id}`);
     });
   }
 
   return (
-    <form onSubmit={onSubmit} noValidate className="space-y-7">
-      <fieldset className="space-y-2" data-tour="solicitudes-socio-tipo">
-        <legend className="text-base font-medium">¿Qué querés hacer?</legend>
-        <div className="grid grid-cols-2 gap-2">
-          {TIPOS_SOLICITUD.map((t) => {
-            const activo = tipo === t.valor;
+    <>
+      <fieldset hidden={opcion !== null} className="flex flex-col gap-2.5 [&[hidden]]:hidden" data-tour="solicitudes-socio-tipo">
+        <legend className="mb-2.5 px-1.5 text-[1.32rem] font-extrabold [font-stretch:92%]">¿Qué querés hacer?</legend>
+        <div className="hoja hoja-filas">
+          {OPCIONES.map((o) => {
+            const Icono = o.icono;
             return (
-              <button
-                key={t.valor}
-                type="button"
-                onClick={() => setTipo(t.valor)}
-                aria-pressed={activo}
-                className={cn(
-                  "flex min-h-14 items-center justify-center gap-1.5 rounded-md border px-3 text-base font-semibold transition-colors",
-                  activo
-                    ? "border-primary bg-primary text-primary-foreground"
-                    : "border-border bg-card hover:bg-accent"
-                )}
-              >
-                {activo ? <Check className="size-4" strokeWidth={2.5} /> : null}
-                {t.label}
+              <button key={o.valor} type="button" className="fila-toque" onClick={() => elegir(o.valor)}>
+                <span className="fila-icono" aria-hidden>
+                  <Icono strokeWidth={2} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="fila-titulo block">{o.titulo}</span>
+                  <span className="fila-sub block">{o.ayuda}</span>
+                </span>
               </button>
             );
           })}
         </div>
-        <p className="text-sm text-muted-foreground">
-          {TIPOS_SOLICITUD.find((t) => t.valor === tipo)?.ayuda}
-        </p>
       </fieldset>
 
-      <div className="space-y-2" data-tour="solicitudes-socio-asunto">
-        <Label htmlFor="soc-asunto" className="text-base">
-          Asunto
-        </Label>
-        <Input
-          id="soc-asunto"
-          name="asunto"
-          maxLength={200}
-          autoComplete="off"
-          placeholder="En pocas palabras, ¿de qué se trata?"
-          className="h-12 text-base md:text-base"
-          onChange={() => faltaAsunto && setFaltaAsunto(false)}
-        />
-        {faltaAsunto ? <AvisoError mensaje="Poné el asunto: en pocas palabras, de qué se trata." /> : null}
-      </div>
+      {/* Queda siempre montado: al elegir otra opción no se pierde lo escrito ni la foto. */}
+      <form onSubmit={onSubmit} noValidate hidden={opcion === null} className="flex flex-1 flex-col gap-3 [&[hidden]]:hidden">
+      <button
+        type="button"
+        onClick={() => setTipo(null)}
+        className="inline-flex min-h-11 items-center gap-1 self-start rounded-lg pr-3 text-[1.02rem] font-bold text-esmalte"
+      >
+        <ChevronLeft aria-hidden className="size-5" strokeWidth={2.6} />
+        Elegí otra cosa
+      </button>
 
-      <div className="space-y-2">
-        <Label htmlFor="soc-detalle" className="text-base">
-          Contanos más
-        </Label>
-        <Textarea
+      <div className="flex flex-col gap-2" data-tour="solicitudes-socio-asunto">
+        <label htmlFor="soc-detalle" className="px-1 text-[1.32rem] font-extrabold [font-stretch:92%]">
+          {opcion?.pregunta}
+        </label>
+        <textarea
           id="soc-detalle"
           name="detalle"
-          rows={5}
+          rows={6}
           maxLength={6000}
-          placeholder="Qué pasó, desde cuándo, qué necesitás."
-          className="min-h-32 text-base md:text-base"
+          placeholder={opcion?.ejemplo}
+          className="campo-portal min-h-[10rem]"
+          onChange={() => error && setError(null)}
         />
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="soc-adjunto" className="text-base">
-          Foto o PDF (opcional)
-        </Label>
-        <div className="flex gap-2">
-          <Label
-            htmlFor="soc-adjunto"
-            className="inline-flex min-h-12 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md border bg-card px-4 text-sm font-medium hover:bg-muted"
-          >
-            <Paperclip className="size-4 shrink-0" strokeWidth={2} />
-            <span className="truncate">{nombreAdjunto ?? "Sacar una foto o elegir archivo"}</span>
-          </Label>
-          {nombreAdjunto ? (
-            <Button
-              type="button"
-              variant="ghost"
-              className="min-h-12"
-              onClick={quitarAdjunto}
-              aria-label="Quitar el archivo"
-            >
-              <X className="size-4" strokeWidth={2} />
-            </Button>
-          ) : null}
-        </div>
-        <Input
+      <div className="flex items-stretch gap-2">
+        <label htmlFor="soc-adjunto" className="boton boton-suave min-w-0 flex-1 cursor-pointer !text-[1.02rem]">
+          <Camera aria-hidden strokeWidth={2.2} />
+          <span className="truncate">{nombreAdjunto ?? "Sumar una foto (si querés)"}</span>
+        </label>
+        {nombreAdjunto ? (
+          <button type="button" onClick={quitarAdjunto} aria-label="Quitar la foto" className="boton boton-suave !px-3">
+            <X aria-hidden strokeWidth={2.4} />
+          </button>
+        ) : null}
+        <input
           ref={archivoRef}
           id="soc-adjunto"
           name="adjunto"
@@ -190,25 +193,20 @@ export function FormSolicitudSocio() {
             setNombreAdjunto(f?.name ?? null);
           }}
         />
-        <p className="text-sm text-muted-foreground">{AYUDA_PESO_ADJUNTO}</p>
       </div>
 
       {error ? <AvisoError mensaje={error} /> : null}
 
-      <Button
+      <button
         type="submit"
-        size="lg"
         disabled={pendiente}
-        className="h-14 w-full text-base font-semibold"
         data-tour="solicitudes-socio-enviar"
+        className="boton boton-primario mt-auto min-h-[3.8rem] w-full !text-[1.2rem]"
       >
-        {pendiente ? (
-          <Spinner className="size-5" />
-        ) : (
-          <Send className="size-5" strokeWidth={2} />
-        )}
-        Enviar solicitud
-      </Button>
-    </form>
+        {pendiente ? <Spinner className="size-5" /> : <Send aria-hidden strokeWidth={2.3} />}
+        Enviar
+      </button>
+      </form>
+    </>
   );
 }

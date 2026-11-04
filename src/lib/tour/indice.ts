@@ -6,6 +6,7 @@ import {
   Compass,
   DoorOpen,
   FileBarChart2,
+  FolderOpen,
   HandCoins,
   Landmark,
   LayoutDashboard,
@@ -16,7 +17,6 @@ import {
   Settings,
   Store,
   Users,
-  Wallet,
   Zap,
   Bell,
 } from "lucide-react";
@@ -53,7 +53,7 @@ export const CAPITULOS_META: Record<IdCapitulo, MetaCapitulo> = {
     roles: ["socio"],
     icono: Compass,
     titulo: () => "Cómo moverte",
-    resumen: () => "Tus dos secciones, la ayuda y cómo salir",
+    resumen: () => "Tus cuatro secciones, la ayuda y cómo salir",
   },
   inicio: {
     id: "inicio",
@@ -244,28 +244,44 @@ export const CAPITULOS_META: Record<IdCapitulo, MetaCapitulo> = {
     id: "socio-cuenta",
     ruta: "/mi-cuenta",
     roles: ["socio"],
-    icono: Wallet,
+    icono: Store,
     titulo: () => "Mi cuenta",
-    resumen: () => "Cuánto debés, qué pagaste y cuánto te ahorrás pagando a tiempo",
+    resumen: () => "Tu lugar en el mercado, cuánto debés y cuánto te ahorrás pagando a tiempo",
+  },
+  "socio-pagos": {
+    id: "socio-pagos",
+    ruta: "/mi-cuenta/pagos",
+    roles: ["socio"],
+    icono: Receipt,
+    titulo: () => "Mis pagos",
+    resumen: () => "Lo que pagaste, mes por mes, con sus recibos",
   },
   "socio-comunicaciones": {
     id: "socio-comunicaciones",
-    ruta: "/mi-cuenta/comunicaciones",
-    cubre: ["/mi-cuenta/circulares"],
+    ruta: "/mi-cuenta/mensajes",
+    cubre: ["/mi-cuenta/comunicaciones", "/mi-cuenta/circulares"],
     roles: ["socio"],
     icono: Bell,
-    titulo: () => "Comunicaciones",
-    resumen: () => "Las circulares de la cooperativa y los avisos de tu carpeta",
+    titulo: () => "Mensajes",
+    resumen: () => "Las circulares de la cooperativa y los avisos para vos",
   },
   "socio-solicitudes": {
     id: "socio-solicitudes",
-    // /mi-cuenta/solicitudes lleva a «Mi cuenta»: ahí está la lista de sus pedidos.
-    ruta: "/mi-cuenta",
+    // Se escribe desde «Mensajes»; la conversación y el formulario son pantallas propias.
+    ruta: "/mi-cuenta/mensajes",
     cubre: ["/mi-cuenta/solicitudes"],
     roles: ["socio"],
     icono: MessagesSquare,
-    titulo: () => "Solicitudes",
-    resumen: () => "Hacer un pedido o un reclamo y ver la respuesta",
+    titulo: () => "Escribirle a la cooperativa",
+    resumen: () => "Preguntar, pedir o reclamar algo y ver la respuesta",
+  },
+  "socio-carpeta": {
+    id: "socio-carpeta",
+    ruta: "/mi-cuenta/carpeta",
+    roles: ["socio"],
+    icono: FolderOpen,
+    titulo: () => "Mi carpeta",
+    resumen: () => "Tus lugares en el mercado y tus papeles",
   },
 };
 
@@ -324,7 +340,7 @@ export const RECORRIDOS: Record<Rol, IdCapitulo[]> = {
     "configuracion",
   ],
   consejo: [],
-  socio: ["bienvenida-socio", "socio-cuenta", "socio-comunicaciones", "socio-solicitudes"],
+  socio: ["bienvenida-socio", "socio-cuenta", "socio-pagos", "socio-comunicaciones", "socio-solicitudes", "socio-carpeta"],
 };
 
 export function recorridoDe(rol: Rol): MetaCapitulo[] {

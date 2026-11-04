@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-/** Las circulares del socio viven en Comunicaciones → Circulares. */
+/** Las circulares del socio viven en Mensajes. */
 export default function CircularesSocioIndex() {
-  redirect("/mi-cuenta/comunicaciones?tab=circulares");
+  redirect("/mi-cuenta/mensajes");
 }

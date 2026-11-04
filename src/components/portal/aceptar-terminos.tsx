@@ -3,18 +3,17 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { FileSignature, LogIn } from "lucide-react";
+import { LogIn } from "lucide-react";
 import { aceptarTerminos } from "@/lib/actions/terminos";
-import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Spinner } from "@/components/ui/spinner";
 import { AvisoError } from "@/components/comunicaciones/aviso-error";
+import { BotonSalir } from "./boton-salir";
 import { llamarAccion } from "@/lib/llamar-accion";
 
 /**
- * Pantalla de aceptación de términos: bloquea TODO el portal hasta que el
- * socio marque la casilla y toque "Aceptar y entrar".
+ * La primera pantalla que ve cada socio: la bienvenida y los términos, enteros y de corrido.
+ * Bloquea el portal hasta que los acepte. Tocar el botón es aceptar: lo dice bien claro y no
+ * hace falta marcar además una casilla.
  */
 export function AceptarTerminos({
   terminosId,
@@ -30,91 +29,44 @@ export function AceptarTerminos({
   nombre: string;
 }) {
   const router = useRouter();
-  const [acepta, setAcepta] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendiente, startTransition] = useTransition();
 
   function confirmar() {
     setError(null);
-    if (!acepta) {
-      // El botón no queda gris sin explicación: dice qué falta.
-      setError("Marcá la casilla “Leí y acepto los términos y condiciones” para entrar.");
-      return;
-    }
     startTransition(async () => {
       const res = await llamarAccion(() => aceptarTerminos({ terminosId, acepta: true }));
       if (!res.ok) {
         setError(res.error);
         return;
       }
-      toast.success("Términos aceptados. ¡Bienvenido!");
+      toast.success("¡Listo! Ya podés ver tu cuenta.");
       router.refresh();
     });
   }
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-1">
-        <p className="text-muted-foreground">Hola, {nombre}</p>
-        <h1 className="font-display text-2xl font-bold tracking-tight text-balance">
-          Antes de entrar, leé y aceptá los términos y condiciones
-        </h1>
-        <p className="text-sm text-muted-foreground">
+    <>
+      <div className="portal-espacio-chico !min-h-[11rem]">
+        <h1 className="portal-titulo">{nombre ? `¡Hola, ${nombre}!` : "¡Hola!"}</h1>
+        <p className="portal-bajada">
           {version > 1
-            ? `Hay una versión nueva (v${version}). Tenés que aceptarla para seguir usando el portal.`
-            : "Es un paso único: la próxima vez entrás directo."}
+            ? `Hay una versión nueva de los términos (v${version}). Para seguir, hay que aceptarla.`
+            : "Este es tu portal del mercado. Antes de entrar, leé esto una sola vez: la próxima entrás directo."}
         </p>
       </div>
-
-      <div className="etiqueta">
-        <div className="etiqueta-interior space-y-4">
-          <div className="flex items-center gap-2.5 border-b pb-3">
-            <FileSignature className="size-5 text-primary" strokeWidth={2} />
-            <h2 className="font-display text-lg font-bold">{titulo}</h2>
-          </div>
-          <div className="max-h-[45svh] overflow-y-auto pr-2">
-            <p className="whitespace-pre-line text-[15px] leading-relaxed">
-              {contenido}
-            </p>
-          </div>
-        </div>
+      <div className="portal-suelo !gap-3 !pt-1">
+        <section className="hoja flex flex-col gap-3 px-4 py-4">
+          <h2 className="text-[1.3rem] leading-tight font-extrabold [font-stretch:92%] text-balance">{titulo}</h2>
+          <p className="text-[1.05rem] leading-relaxed whitespace-pre-line">{contenido}</p>
+        </section>
+        {error ? <AvisoError mensaje={error} /> : null}
+        <button type="button" disabled={pendiente} onClick={confirmar} className="boton boton-claro min-h-[3.9rem] w-full !text-[1.18rem]">
+          {pendiente ? <Spinner className="size-5" /> : <LogIn aria-hidden strokeWidth={2.3} />}
+          Leí y acepto: quiero entrar
+        </button>
+        <BotonSalir />
       </div>
-
-      <label
-        className={cn(
-          "flex cursor-pointer items-start gap-4 rounded-lg border bg-card p-4 transition-colors select-none",
-          acepta && "border-primary bg-accent/50"
-        )}
-      >
-        <Checkbox
-          checked={acepta}
-          onCheckedChange={(v) => {
-            setAcepta(v === true);
-            setError(null);
-          }}
-          className="mt-0.5 size-6 [&_svg]:size-4"
-          aria-label="Leí y acepto los términos y condiciones"
-        />
-        <span className="text-base font-medium leading-snug">
-          Leí y acepto los términos y condiciones
-        </span>
-      </label>
-
-      {error ? <AvisoError mensaje={error} /> : null}
-
-      <Button
-        size="lg"
-        className="h-14 w-full text-lg font-semibold"
-        disabled={pendiente}
-        onClick={confirmar}
-      >
-        {pendiente ? (
-          <Spinner className="size-5" />
-        ) : (
-          <LogIn className="size-5" strokeWidth={2} />
-        )}
-        Aceptar y entrar
-      </Button>
-    </div>
+    </>
   );
 }

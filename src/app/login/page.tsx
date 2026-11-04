@@ -6,8 +6,11 @@ import { destinoTrasEntrar, getPerfil, sesionSinAcceso } from "@/lib/auth";
 import { rutaVolverSegura } from "@/lib/volver";
 import { Marca } from "@/components/shared/marca";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { PlanoPortal } from "@/components/portal/plano-portal";
 import { FormLogin } from "./form-login";
+import "../(portal)/portal.css";
 import logoFull from "../../../public/logo_full.png";
+import logo from "../../../public/logo.png";
 
 export const metadata: Metadata = { title: "Entrar" };
 
@@ -34,16 +37,24 @@ export default async function LoginPage({
     <div className="grid min-h-svh lg:grid-cols-2">
       {/* Izquierda: el formulario */}
       <div className="flex flex-col bg-background px-6 py-8 sm:px-12">
-        <Marca compacta className="text-foreground" />
+        {/* En el celular se entra por el mercado entero: al entrar, la cámara vuela hasta tu puesto. */}
+        <div className="relative -mx-6 -mt-8 h-[24svh] min-h-36 shrink-0 overflow-hidden bg-esmalte sm:-mx-12 lg:hidden" aria-hidden>
+          <PlanoPortal lugares={[]} tono="neutro" />
+          <div className="absolute top-3 left-3 flex h-11 items-center rounded-[0.6rem] bg-porcelana px-2.5 shadow-md">
+            <Image src={logo} alt="" className="h-7 w-auto" priority />
+          </div>
+        </div>
+        <Marca compacta className="hidden text-foreground lg:flex" />
 
-        <div className="flex flex-1 items-center justify-center py-10">
+        <div className="flex flex-1 items-center justify-center py-8 lg:py-10">
           <div className="w-full max-w-sm space-y-8">
             <div className="space-y-1.5">
               <h1 className="font-display text-3xl font-extrabold tracking-tight">
-                Hola de nuevo
+                ¡Hola!
               </h1>
               <p className="text-muted-foreground">
-                Entrá con tu DNI y la contraseña que te dio la cooperativa.
+                <strong className="font-semibold text-foreground">¿Sos puestero o quintero?</strong> Tu usuario y tu
+                contraseña son tu DNI, solo los números.
               </p>
             </div>
 

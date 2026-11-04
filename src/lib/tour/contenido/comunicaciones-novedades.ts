@@ -1,12 +1,8 @@
 import type { Rol } from "@/lib/auth";
 import type { ContenidoCapitulo, Paso } from "@/lib/tour/tipos";
 import {
-  PantallaAvisosSocio,
   PantallaBandeja,
-  PantallaBloqueoCirculares,
-  PantallaCircularSocio,
   PantallaDescargo,
-  PantallaDescargoSocio,
   PantallaEnviarNovedad,
   PantallaGuardarNovedad,
   PantallaNovedadEnviada,
@@ -22,7 +18,6 @@ import {
   PortadaComunicaciones,
   PortadaNovedades,
   PortadaNovedadesJefe,
-  PortadaSocioComunicaciones,
 } from "@/components/tour/pantallas/comunicaciones-novedades";
 
 // Tour guiado · comunicaciones-novedades: pasos de los capítulos de esta área (docs/GUIA-TOUR.md).
@@ -345,112 +340,4 @@ export const NOVEDADES: ContenidoCapitulo = {
   portada: PortadaNovedades,
   portadaPorRol: (rol) => (rol === "guardia" ? PortadaNovedadesJefe : undefined),
   pasos: (rol: Rol): Paso[] => (rol === "guardia" ? pasosNovedadesJefe() : pasosNovedadesRevisan(rol)),
-};
-
-// ---------------------------------------------------------------------------
-// Comunicaciones del socio (portal)
-// ---------------------------------------------------------------------------
-
-/** Capítulo "socio-comunicaciones" (metadatos en src/lib/tour/indice.ts). */
-export const SOCIO_COMUNICACIONES: ContenidoCapitulo = {
-  portada: PortadaSocioComunicaciones,
-  pasos: (): Paso[] => [
-    {
-      // Con una circular obligatoria sin confirmar, el portal muestra solo esa (GateCirculares):
-      // su título lleva "encabezado" y "socio-comunicaciones-bloqueo".
-      id: "que-es",
-      ancla: ["socio-comunicaciones-bloqueo", "encabezado"],
-      titulo: "Lo que te manda la cooperativa",
-      texto: "Acá llegan las circulares para todos y los avisos que la cooperativa te manda a vos.",
-      variantes: {
-        "socio-comunicaciones-bloqueo": {
-          titulo: "Primero, esta circular",
-          texto:
-            "La cooperativa te mandó una circular que tenés que confirmar. Hasta que la confirmes, vas a ver solo esa. Igual te muestro cómo es esta sección.",
-        },
-      },
-    },
-    {
-      id: "pestanas",
-      ancla: "socio-comunicaciones-pestanas",
-      titulo: "Cuatro pestañas",
-      texto:
-        "«Circulares» son avisos para todos. «Notificaciones», «Apercibimientos» y «Sanciones» son avisos solo para vos. El número de color te dice cuántas cosas nuevas hay en cada una.",
-      // Con una circular para confirmar, el portal muestra solo esa: no hay pestañas a la vista.
-      sinAncla: { pantalla: PortadaSocioComunicaciones },
-    },
-    {
-      id: "circulares",
-      // Si está en otra pestaña (o todavía no hay circulares), se señala la pestaña.
-      ancla: ["socio-comunicaciones-circular", "socio-comunicaciones-pestana-circulares"],
-      titulo: "Las circulares",
-      texto:
-        "Las que todavía no abriste dicen «Nueva». Tocás una y la leés entera; si trae un PDF, lo abrís ahí mismo. Después pasa a «Leída».",
-      pantalla: PantallaCircularSocio,
-      variantes: {
-        "socio-comunicaciones-pestana-circulares": {
-          texto:
-            "En «Circulares» están los avisos para todos. Cuando llega una nueva, dice «Nueva» hasta que la abrís. Así se ve por dentro:",
-        },
-      },
-      sinAncla: {
-        texto:
-          "Cuando la cooperativa publique una circular para tu grupo, aparece en «Circulares» con el sello «Nueva». Así se ve por dentro:",
-      },
-    },
-    {
-      // "Mirar": el botón guarda (confirma la circular). Solo está a la vista si tiene una
-      // circular obligatoria sin confirmar; si no, el dibujo.
-      id: "confirmar",
-      ancla: "socio-comunicaciones-confirmar",
-      titulo: "Algunas hay que confirmarlas",
-      texto:
-        "Cuando llega una circular que hay que confirmar, al entrar vas a ver solo esa. La leés y tocás «Confirmo que la recibí». Después ves tu cuenta como siempre.",
-      variantes: {
-        "socio-comunicaciones-confirmar": {
-          titulo: "Confirmala cuando termine la guía",
-          texto:
-            "Leé la circular entera y tocá «Confirmo que la recibí». Así la cooperativa sabe que te llegó, y después ves tu cuenta como siempre.",
-        },
-      },
-      sinAncla: { pantalla: PantallaBloqueoCirculares },
-      consejo: "Las circulares no se responden. Si tenés una duda, hacé una solicitud.",
-    },
-    {
-      id: "avisos",
-      ancla: "socio-comunicaciones-pestana-notificaciones",
-      accion: "tocar",
-      titulo: "Avisos solo para vos",
-      texto:
-        "En las otras pestañas están los avisos que la cooperativa te manda a vos. Un apercibimiento es un llamado de atención y una sanción, una medida: los dos pueden traer una multa. Tocá «Notificaciones».",
-      sinAncla: {
-        texto:
-          "En las otras pestañas están los avisos que la cooperativa te manda a vos. Un apercibimiento es un llamado de atención y una sanción, una medida: los dos pueden traer una multa.",
-      },
-    },
-    {
-      // Si tocó «Siguiente» en vez de la pestaña, la ruta la abre sola.
-      id: "sellos",
-      ruta: "/mi-cuenta/comunicaciones?tab=notificaciones",
-      ancla: "socio-comunicaciones-registro",
-      titulo: "Qué te pide cada aviso",
-      texto:
-        "El sello te dice qué hacer: «Nueva» si no lo abriste, «Tenés que responder» si espera tu descargo, «Respuesta nueva» si la cooperativa te contestó.",
-      sinAncla: {
-        texto:
-          "En cada pestaña, los avisos llevan un sello que te dice qué hacer: «Nueva», «Tenés que responder» o «Respuesta nueva». Así se ve:",
-        pantalla: PantallaAvisosSocio,
-      },
-    },
-    {
-      // Con el dibujo y sin abrir un aviso de verdad: abrirlo lo marca como visto
-      // (RegistrarVista) y la cooperativa vería "lo abrió" aunque fuera la guía.
-      id: "descargo",
-      titulo: "Contá tu versión",
-      texto:
-        "Adentro de cada aviso ves qué pasó y la multa, si tiene: se suma a tu cuenta. Abajo contás tu versión en «Presentar mi descargo» (en una notificación dice «Responder») y podés sumar una foto.",
-      pantalla: PantallaDescargoSocio,
-      consejo: "La respuesta de la cooperativa te llega ahí mismo, con el sello «Respuesta nueva».",
-    },
-  ],
 };

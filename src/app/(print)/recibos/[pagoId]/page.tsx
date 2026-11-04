@@ -15,6 +15,7 @@ import {
 import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
 import { BotonImprimir } from "@/components/shared/boton-imprimir";
+import { AccionesRecibo } from "@/components/portal/acciones-recibo";
 import { DescripcionCargo, textoCargo } from "@/components/cobranza/descripcion-cargo";
 import { resumirLugares } from "@/components/cobranza/tipos";
 
@@ -195,12 +196,7 @@ export default async function ReciboPage({
   return (
     <>
       {esSocio ? (
-        <>
-          <BotonImprimir volverA="/mi-cuenta" etiquetaImprimir="Descargar recibo (PDF)" />
-          <p className="no-print -mt-4 mb-6 text-right text-sm text-muted-foreground">
-            Elegí &quot;Guardar como PDF&quot;. En el celular: Compartir → Imprimir → Guardar como PDF.
-          </p>
-        </>
+        <AccionesRecibo pagoId={pagoId} numero={recibo.numero} volverA="/mi-cuenta/pagos" />
       ) : (
         <BotonImprimir autoImprimir={autoImprimir} />
       )}

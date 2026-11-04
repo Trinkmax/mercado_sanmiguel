@@ -1,0 +1,1085 @@
+/* ============================================================
+   Portal del socio: «Tu lugar en el mercado» (DESIGN.md).
+   Azul del logotipo como chapa enlozada a página entera, líneas de plano en
+   porcelana, chapas con filete y tornillos, cartel de arco en el color de la
+   cuenta (verde / ámbar / rojo), sellos de goma. Lo lee gente grande, de pie y
+   con una mano ocupada: letra grande, un solo camino, todo con su texto.
+   Solo se carga en las rutas del portal; los tokens viven en globals.css.
+   ============================================================ */
+
+/* Letra de base más grande que el panel (17 px si el navegador está en 16):
+   es un porcentaje para respetar el tamaño de letra que eligió la persona. */
+html:has(.portal) {
+  font-size: 106.25%;
+  background: var(--esmalte);
+}
+html:has(.portal) body {
+  background: var(--esmalte);
+  font-family: var(--font-chapa, var(--font-sans));
+}
+
+/* En el portal, títulos y texto van con la misma letra (también lo que abre el tour). */
+html:has(.portal) .font-display {
+  font-family: var(--font-chapa, var(--font-display));
+}
+
+/* El alto real de la pantalla, en los navegadores que lo saben medir. */
+@supports (height: 1svh) {
+  .portal {
+    --alto-plano: clamp(13.5rem, 36svh, 24rem);
+    min-height: 100svh;
+  }
+}
+
+/* Colores del cartel y del lugar prendido: la ley de siempre, a página entera. */
+.tono-al_dia {
+  --campo: oklch(0.79 0.175 150);
+  --sobre-campo: var(--tinta);
+}
+.tono-en_termino {
+  --campo: oklch(0.85 0.165 88);
+  --sobre-campo: var(--tinta);
+}
+.tono-vencido {
+  --campo: oklch(0.56 0.215 27);
+  --sobre-campo: oklch(0.99 0.004 27);
+}
+.tono-neutro {
+  --campo: oklch(0.86 0.02 265);
+  --sobre-campo: var(--tinta);
+}
+
+@layer components {
+  .portal {
+    --alto-plano: clamp(13.5rem, 36vh, 24rem);
+    --alto-barra: calc(4.6rem + max(0.5rem, env(safe-area-inset-bottom)));
+    --foco: var(--porcelana);
+    position: relative;
+    display: flex;
+    min-height: 100vh;
+    flex-direction: column;
+    background: var(--esmalte);
+    color: var(--porcelana);
+    font-family: var(--font-chapa, var(--font-sans));
+    font-size: 1rem;
+    line-height: 1.4;
+  }
+  .portal :focus-visible,
+  .portal-hoja-flotante :focus-visible {
+    outline: 0.19rem solid var(--foco);
+    outline-offset: 0.14rem;
+  }
+
+  .portal-cuerpo {
+    position: relative;
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    flex-direction: column;
+  }
+
+  /* El cielo: el plano queda quieto y todo lo demás sube por encima. */
+  .portal-cielo {
+    position: sticky;
+    top: 0;
+    z-index: 0;
+    height: var(--alto-plano);
+    flex: none;
+    margin-bottom: calc(-1 * var(--alto-plano));
+    overflow: hidden;
+    background: var(--esmalte);
+  }
+  .portal-main {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    flex-direction: column;
+    pointer-events: none;
+  }
+  .portal-main > * {
+    pointer-events: auto;
+  }
+
+  /* Lo que se ve del plano arriba de cada pantalla. No tapa los toques al saludo y a «Ayuda». */
+  .portal-espacio {
+    pointer-events: none !important;
+    position: relative;
+    height: calc(var(--alto-plano) - 3.3rem);
+    flex: none;
+  }
+  .portal-espacio > * {
+    pointer-events: auto;
+  }
+  /* Con el aviso colgando del cartel, el cartel baja un poco: no pisa la chapa. */
+  .portal-espacio:has(+ .pildora-avisos-lugar) {
+    height: calc(var(--alto-plano) - 2rem);
+  }
+  .portal-espacio-chico {
+    pointer-events: none !important;
+    display: flex;
+    min-height: 9.2rem;
+    flex: none;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 4.4rem 1.05rem 1.05rem;
+  }
+  .portal-espacio-chico > * {
+    pointer-events: auto;
+  }
+  .portal-titulo {
+    text-shadow: 0 1px 0.6rem oklch(0.2 0.1 268 / 0.7);
+    font-size: 2rem;
+    font-weight: 800;
+    font-stretch: 92%;
+    line-height: 1.05;
+    letter-spacing: -0.012em;
+    text-wrap: balance;
+  }
+  .portal-bajada {
+    margin-top: 0.3rem;
+    max-width: 34rem;
+    font-size: 1.02rem;
+    color: oklch(0.94 0.02 265);
+    text-wrap: pretty;
+  }
+
+  /* El piso: el esmalte tapa el plano cuando el contenido sube. */
+  .portal-suelo {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: 2rem;
+    background: var(--esmalte);
+    padding: 1.6rem 0.7rem 2rem;
+  }
+  .portal-seccion {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+  }
+  .portal-seccion-titulo {
+    padding-inline: 0.35rem;
+    font-size: 1.32rem;
+    font-weight: 800;
+    font-stretch: 92%;
+    line-height: 1.15;
+    text-wrap: balance;
+  }
+  .portal-seccion-nota {
+    padding-inline: 0.35rem;
+    margin-top: -0.3rem;
+    font-size: 0.98rem;
+    color: oklch(0.94 0.02 265);
+    text-wrap: pretty;
+  }
+
+  /* Los sellos del portal, un poco más grandes: es lo que lleva el color en cada lista. */
+  .portal .sello:not(.sello-grande),
+  .portal-hoja-flotante .sello:not(.sello-grande) {
+    font-size: 0.9rem;
+    padding: 0.32rem 0.58rem;
+  }
+
+  /* Hoja de porcelana: donde se lee y se toca. */
+  .hoja {
+    --foco: var(--esmalte);
+    background: var(--porcelana);
+    color: var(--tinta);
+    border-radius: 1.1rem;
+    box-shadow: 0 0.9rem 1.8rem -1.1rem oklch(0.16 0.08 268 / 0.7);
+  }
+  .hoja-filas > * + * {
+    border-top: 1px solid oklch(0.89 0.012 265);
+  }
+  .fila-toque {
+    display: flex;
+    width: 100%;
+    min-height: 4.6rem;
+    align-items: center;
+    gap: 0.8rem;
+    padding: 0.8rem 0.9rem;
+    text-align: left;
+    transition: background-color 120ms ease-out;
+  }
+  .hoja-filas > .fila-toque:first-child {
+    border-top-left-radius: inherit;
+    border-top-right-radius: inherit;
+  }
+  .hoja-filas > .fila-toque:last-child {
+    border-bottom-left-radius: inherit;
+    border-bottom-right-radius: inherit;
+  }
+  .fila-toque:hover {
+    background: var(--porcelana-2);
+  }
+  .fila-toque:active {
+    background: oklch(0.91 0.02 265);
+  }
+  .fila-icono {
+    display: flex;
+    width: 2.75rem;
+    height: 2.75rem;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.72rem;
+    background: var(--esmalte);
+    color: var(--porcelana);
+    box-shadow: inset 0 0 0 0.11rem var(--esmalte), inset 0 0 0 0.16rem oklch(1 0 0 / 0.75);
+  }
+  .fila-icono svg {
+    width: 1.45rem;
+    height: 1.45rem;
+  }
+  .fila-titulo {
+    font-size: 1.09rem;
+    font-weight: 700;
+    line-height: 1.2;
+    text-wrap: pretty;
+  }
+  .fila-sub {
+    margin-top: 0.14rem;
+    font-size: 0.94rem;
+    line-height: 1.28;
+    color: var(--tinta-2);
+    text-wrap: pretty;
+  }
+  .fila-monto {
+    font-size: 1.14rem;
+    font-weight: 800;
+    font-stretch: 92%;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.15;
+    white-space: nowrap;
+  }
+
+  /* Chapa enlozada: la de la numeración de la calle, con su filete y sus tornillos. */
+  .chapa {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55em;
+    padding: 0.42em 0.7em;
+    border-radius: 0.5em;
+    background: var(--esmalte-hondo);
+    color: oklch(0.995 0.002 265);
+    font-weight: 800;
+    font-stretch: 92%;
+    line-height: 1.1;
+    white-space: nowrap;
+    box-shadow:
+      inset 0 0 0 0.12em var(--esmalte-hondo),
+      inset 0 0 0 0.19em oklch(1 0 0 / 0.95),
+      0 0.42em 0.85em -0.28em oklch(0.1 0.06 268 / 0.75);
+  }
+  .chapa::before,
+  .chapa::after {
+    content: "";
+    width: 0.3em;
+    height: 0.3em;
+    flex: none;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #fff 0 22%, #c7cee8 55%, #8a93b8 100%);
+  }
+
+  /* Cartel de arco: el estado de la cuenta, en grande, en su color. La curva es la del techo. */
+  .cartel {
+    position: relative;
+    margin-inline: 0.7rem;
+    padding: 2.05rem 1.35rem 1.4rem;
+    border-radius: 50% 50% 1.2rem 1.2rem / 1.95rem 1.95rem 1.2rem 1.2rem;
+    background: var(--campo);
+    color: var(--sobre-campo);
+    box-shadow: 0 1.1rem 2.2rem -1rem oklch(0.12 0.08 268 / 0.85);
+    container-type: inline-size;
+    --foco: var(--sobre-campo);
+  }
+  .cartel::before {
+    content: "";
+    position: absolute;
+    inset: 0.42rem;
+    border: 0.13rem solid color-mix(in oklab, var(--sobre-campo) 82%, transparent);
+    border-radius: 50% 50% 0.88rem 0.88rem / 1.62rem 1.62rem 0.88rem 0.88rem;
+    pointer-events: none;
+  }
+  .cartel-estado {
+    position: relative;
+    font-size: 1.62rem;
+    font-weight: 800;
+    font-stretch: 92%;
+    line-height: 1.08;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+  .cartel-monto {
+    display: block;
+    font-size: clamp(2.5rem, 15vw, 4.7rem);
+    font-size: min(calc(100cqi / var(--em, 6)), 5.3rem);
+    font-weight: 800;
+    font-stretch: 86%;
+    font-variant-numeric: lining-nums;
+    line-height: 1.02;
+    letter-spacing: -0.022em;
+    white-space: nowrap;
+  }
+  .cartel-monto sup {
+    /* Los centavos como en los precios del mercado: chicos y arriba. */
+    top: -0.76em;
+    margin-left: 0.04em;
+    font-size: 0.42em;
+    line-height: 0;
+    letter-spacing: -0.01em;
+  }
+  .cartel-linea {
+    font-size: 1.14rem;
+    font-weight: 600;
+    line-height: 1.26;
+    text-wrap: pretty;
+  }
+  .cartel-linea strong {
+    font-weight: 800;
+  }
+  .cartel-separador {
+    border-top: 0.11rem solid color-mix(in oklab, var(--sobre-campo) 42%, transparent);
+  }
+  .sello-tinta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35em;
+    padding: 0.28em 0.55em;
+    border: 0.12em solid currentColor;
+    border-radius: 0.3em;
+    font-weight: 800;
+    font-stretch: 92%;
+    line-height: 1.1;
+    transform: rotate(-1.6deg);
+    white-space: nowrap;
+  }
+
+  /* El mosaico del mes: un azulejo por cuota, como los del logo. */
+  .mosaico {
+    display: grid;
+    gap: 0.32rem;
+    grid-template-columns: repeat(var(--columnas, 4), minmax(0, 1fr));
+  }
+  .azulejo {
+    position: relative;
+    height: var(--alto-azulejo, 1.75rem);
+    overflow: hidden;
+    border-radius: 0.28rem;
+    box-shadow: inset 0 0 0 0.12rem currentColor;
+    transform: skewX(-9deg);
+  }
+  .azulejo > i {
+    position: absolute;
+    inset: 0;
+    display: block;
+    width: var(--lleno, 0%);
+    background: currentColor;
+  }
+  /* Muchas cuotas (por día): bloquecitos llenos, no contornos que parecen ceros. */
+  .mosaico-chico .azulejo {
+    background: color-mix(in oklab, currentColor 20%, transparent);
+    border-radius: 0.14rem;
+    box-shadow: none;
+  }
+  .azulejo > svg {
+    position: absolute;
+    inset: 0;
+    margin: auto;
+    width: 1.05rem;
+    height: 1.05rem;
+    color: var(--campo);
+    transform: skewX(9deg);
+  }
+
+  /* Botones: chapas que se tocan. */
+  .boton {
+    display: inline-flex;
+    min-height: 3.35rem;
+    align-items: center;
+    justify-content: center;
+    gap: 0.55rem;
+    padding: 0.6rem 1.25rem;
+    border-radius: 0.85rem;
+    font-size: 1.1rem;
+    font-weight: 800;
+    font-stretch: 94%;
+    line-height: 1.15;
+    text-align: center;
+    transition: transform 120ms ease-out, background-color 120ms ease-out, opacity 120ms ease-out;
+  }
+  .boton:active {
+    transform: scale(0.985);
+  }
+  .boton:disabled {
+    opacity: 0.65;
+  }
+  .boton svg {
+    width: 1.35rem;
+    height: 1.35rem;
+    flex: none;
+  }
+  .boton-primario {
+    background: var(--esmalte);
+    color: var(--porcelana);
+    box-shadow: inset 0 0 0 0.14rem var(--esmalte), inset 0 0 0 0.21rem oklch(1 0 0 / 0.85),
+      0 0.7rem 1.3rem -0.8rem oklch(0.16 0.08 268 / 0.8);
+  }
+  .boton-primario:hover {
+    background: var(--esmalte-hondo);
+  }
+  .boton-claro {
+    background: var(--porcelana);
+    color: var(--esmalte);
+    box-shadow: 0 0.7rem 1.3rem -0.8rem oklch(0.16 0.08 268 / 0.7);
+  }
+  .boton-claro:hover {
+    background: var(--porcelana-2);
+  }
+  .boton-suave {
+    background: transparent;
+    color: var(--esmalte);
+    box-shadow: inset 0 0 0 0.13rem var(--esmalte);
+  }
+  .boton-suave:hover {
+    background: var(--porcelana-2);
+  }
+  .boton-peligro {
+    background: transparent;
+    color: oklch(0.47 0.19 27);
+    box-shadow: inset 0 0 0 0.13rem currentColor;
+  }
+
+  /* Campos */
+  .campo-portal {
+    display: block;
+    width: 100%;
+    border: 0.13rem solid oklch(0.72 0.03 265);
+    border-radius: 0.85rem;
+    background: #fff;
+    color: var(--tinta);
+    font-size: 1.1rem;
+    line-height: 1.38;
+    padding: 0.75rem 0.9rem;
+  }
+  .campo-portal::placeholder {
+    color: oklch(0.47 0.025 265);
+  }
+  .campo-portal:focus-visible {
+    border-color: var(--esmalte);
+  }
+
+  /* Barra de abajo: cuatro chapas al alcance del pulgar. */
+  .portal-barra {
+    position: fixed;
+    inset-inline: 0;
+    bottom: 0;
+    z-index: 30;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.25rem;
+    padding: 0.5rem 0.5rem max(0.5rem, env(safe-area-inset-bottom));
+    background: var(--porcelana);
+    color: var(--tinta);
+    box-shadow: 0 -0.7rem 1.6rem -0.9rem oklch(0.12 0.08 268 / 0.7);
+    --foco: var(--esmalte);
+  }
+  .portal-tab {
+    position: relative;
+    display: flex;
+    min-height: 3.75rem;
+    min-width: 0;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.2rem;
+    border-radius: 0.8rem;
+    font-size: 0.88rem;
+    font-weight: 700;
+    font-stretch: 90%;
+    line-height: 1;
+    text-align: center;
+    transition: background-color 140ms ease-out, color 140ms ease-out, transform 120ms ease-out;
+  }
+  .portal-tab:hover {
+    background: var(--porcelana-2);
+  }
+  .portal-tab:active {
+    transform: scale(0.96);
+  }
+  .portal-tab svg {
+    width: 1.4rem;
+    height: 1.4rem;
+  }
+  .portal-tab-chapa {
+    display: grid;
+    width: 2.7rem;
+    height: 2.1rem;
+    place-items: center;
+    border-radius: 0.5rem;
+    background: var(--esmalte);
+    color: var(--porcelana);
+    box-shadow: inset 0 0 0 0.1rem var(--esmalte), inset 0 0 0 0.15rem oklch(1 0 0 / 0.8);
+  }
+  .portal-tab[aria-current="page"] {
+    background: var(--esmalte);
+    color: var(--porcelana);
+    box-shadow: inset 0 0 0 0.12rem var(--esmalte), inset 0 0 0 0.18rem oklch(1 0 0 / 0.85);
+  }
+  .portal-tab[aria-current="page"] .portal-tab-chapa {
+    background: var(--porcelana);
+    color: var(--esmalte);
+    box-shadow: none;
+  }
+  .portal-globo {
+    position: absolute;
+    top: 0.08rem;
+    left: calc(50% + 0.72rem);
+    display: flex;
+    min-width: 1.32rem;
+    height: 1.32rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: oklch(0.56 0.215 27);
+    color: #fff;
+    font-size: 0.82rem;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    padding-inline: 0.28rem;
+    box-shadow: 0 0 0 0.14rem var(--porcelana);
+  }
+  .portal-tab[aria-current="page"] .portal-globo {
+    box-shadow: 0 0 0 0.14rem var(--esmalte);
+  }
+  .portal-espacio-barra {
+    height: var(--alto-barra);
+    flex: none;
+    background: var(--esmalte);
+  }
+
+  /* Encabezado: logo, saludo y ayuda, sobre el plano. */
+  .portal-encabezado {
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    z-index: 3;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.6rem 0.75rem;
+  }
+  .portal-logo {
+    display: flex;
+    height: 2.45rem;
+    flex: none;
+    align-items: center;
+    border-radius: 0.6rem;
+    background: var(--porcelana);
+    padding-inline: 0.4rem;
+    box-shadow: 0 0.35rem 0.8rem -0.35rem oklch(0.1 0.06 268 / 0.8);
+  }
+  .portal-saludo {
+    min-width: 0;
+    flex: 1;
+    font-size: 0.94rem;
+    font-weight: 700;
+    font-stretch: 92%;
+    line-height: 1.08;
+    text-shadow: 0 1px 0.5rem oklch(0.2 0.1 268 / 0.9);
+  }
+  .portal-saludo strong {
+    display: block;
+    overflow: hidden;
+    font-size: 1.2rem;
+    font-weight: 800;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* El plano */
+  .plano {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    background: var(--esmalte);
+  }
+  .plano-svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  .plano-svg path,
+  .plano-svg rect {
+    vector-effect: non-scaling-stroke;
+  }
+  .plano-edificios {
+    fill: oklch(1 0 0 / 0.055);
+    stroke: oklch(1 0 0 / 0.62);
+    stroke-width: 1.3px;
+  }
+  .plano-pasillo {
+    fill: var(--esmalte);
+    stroke: oklch(1 0 0 / 0.34);
+    stroke-width: 1px;
+    stroke-dasharray: 5 5;
+  }
+  .plano-puestos {
+    fill: oklch(1 0 0 / 0.15);
+    stroke: oklch(1 0 0 / 0.46);
+    stroke-width: 1px;
+  }
+  .plano-cocheras {
+    fill: oklch(1 0 0 / 0.05);
+    stroke: oklch(1 0 0 / 0.34);
+    stroke-width: 1px;
+  }
+  .plano-rotulos text {
+    fill: oklch(1 0 0 / 0.72);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    text-anchor: middle;
+    dominant-baseline: middle;
+  }
+  .plano-numeros text {
+    fill: oklch(1 0 0 / 0.76);
+    font-size: 13.5px;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-anchor: middle;
+    dominant-baseline: central;
+  }
+  .plano-numeros {
+    animation: plano-aparece 300ms ease-out both;
+  }
+  .plano[data-aterrizado] .plano-rotulos {
+    display: none;
+  }
+  .plano-mio {
+    fill: var(--campo);
+    stroke: oklch(1 0 0);
+    stroke-width: 2.5px;
+  }
+  .plano-mio-numero {
+    fill: var(--sobre-campo);
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    text-anchor: middle;
+    dominant-baseline: central;
+  }
+  .plano-pulso {
+    fill: none;
+    stroke: var(--campo);
+    stroke-width: 3px;
+    transform-box: fill-box;
+    transform-origin: center;
+    animation: plano-pulso 2300ms cubic-bezier(0.2, 0.7, 0.2, 1) 5;
+    opacity: 0;
+  }
+  .plano-chapa {
+    position: absolute;
+    z-index: 2;
+    font-size: 1.12rem;
+    transform: translateX(-50%);
+    animation: plano-chapa 460ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    pointer-events: none;
+  }
+  /* En las otras pantallas el plano es solo el fondo del título: velado, sin chapa ni números. */
+  .portal-cuerpo:has(.portal-espacio-chico) .plano-velo {
+    display: block;
+  }
+  .portal-cuerpo:has(.portal-espacio-chico) .plano-chapa,
+  .portal-cuerpo:has(.portal-espacio-chico) .plano-numeros,
+  .portal-cuerpo:has(.portal-espacio-chico) .plano-mio-numero,
+  .portal-cuerpo:has(.portal-espacio-chico) .plano-rotulos {
+    display: none;
+  }
+  @media (width >= 64rem) {
+    .portal-cuerpo:has(.portal-espacio-chico) .plano-velo {
+      display: none;
+    }
+    .portal-cuerpo:has(.portal-espacio-chico) .plano-chapa {
+      display: block;
+    }
+    .portal-cuerpo:has(.portal-espacio-chico) .plano-numeros,
+    .portal-cuerpo:has(.portal-espacio-chico) .plano-mio-numero,
+    .portal-cuerpo:has(.portal-espacio-chico) .plano-rotulos {
+      display: inline;
+    }
+  }
+  .plano-velo {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    display: none;
+    background: linear-gradient(
+      to bottom,
+      oklch(0.385 0.135 268 / 0.62),
+      oklch(0.385 0.135 268 / 0.93) 25%,
+      var(--esmalte) 40%
+    );
+    pointer-events: none;
+  }
+  /* Arriba, un velo muy suave para que el saludo se lea sobre las líneas. */
+  .plano-sombra-alta {
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    z-index: 1;
+    height: 4.2rem;
+    background: linear-gradient(to bottom, oklch(0.315 0.115 268 / 0.72), transparent);
+    pointer-events: none;
+  }
+
+  /* Talonario: cada pago es un talón con su fecha separada por la línea de puntos. */
+  .talon {
+    position: relative;
+    display: flex;
+    min-height: 4.7rem;
+    align-items: stretch;
+    border-radius: 0.8rem;
+    background: var(--porcelana);
+    color: var(--tinta);
+    --foco: var(--esmalte);
+    box-shadow: 0 0.6rem 1.2rem -0.85rem oklch(0.16 0.08 268 / 0.7);
+    transition: background-color 120ms ease-out;
+  }
+  .talon:hover {
+    background: var(--porcelana-2);
+  }
+  .talon-fecha {
+    position: relative;
+    display: flex;
+    width: 4.15rem;
+    flex: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border-right: 0.13rem dashed oklch(0.76 0.025 265);
+    line-height: 1;
+    padding-block: 0.5rem;
+  }
+  .talon-fecha::before,
+  .talon-fecha::after {
+    /* Los mordiscos de la línea de corte */
+    content: "";
+    position: absolute;
+    right: -0.45rem;
+    width: 0.78rem;
+    height: 0.78rem;
+    border-radius: 50%;
+    background: var(--esmalte);
+  }
+  .talon-fecha::before {
+    top: -0.39rem;
+  }
+  .talon-fecha::after {
+    bottom: -0.39rem;
+  }
+  .talon-dia {
+    font-size: 1.72rem;
+    font-weight: 800;
+    font-stretch: 86%;
+    font-variant-numeric: tabular-nums;
+  }
+  .talon-mes {
+    margin-top: 0.2rem;
+    font-size: 0.84rem;
+    font-weight: 700;
+    color: var(--tinta-2);
+    text-transform: lowercase;
+  }
+
+  /* Conversación: como WhatsApp, lo mío a la derecha. */
+  .chat-fondo {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    background: var(--porcelana-2);
+    color: var(--tinta);
+    border-radius: 1.25rem 1.25rem 0 0;
+    --foco: var(--esmalte);
+  }
+  .burbuja {
+    position: relative;
+    max-width: min(86%, 32rem);
+    border-radius: 1rem;
+    padding: 0.62rem 0.85rem 0.5rem;
+    font-size: 1.05rem;
+    line-height: 1.36;
+    box-shadow: 0 0.2rem 0.5rem -0.3rem oklch(0.16 0.08 268 / 0.5);
+  }
+  .burbuja-mia {
+    align-self: flex-end;
+    border-bottom-right-radius: 0.28rem;
+    background: var(--esmalte);
+    color: var(--porcelana);
+  }
+  .burbuja-otra {
+    align-self: flex-start;
+    border-bottom-left-radius: 0.28rem;
+    background: #fff;
+    color: var(--tinta);
+  }
+  .chat-fondo .hoja {
+    box-shadow: none;
+  }
+  /* El papel de arriba llega hasta el borde de la hoja: no es una tarjeta dentro de otra. */
+  .chat-fondo > div > section.hoja:first-child {
+    margin: -0.75rem -0.75rem 0;
+    border-radius: 1.25rem 1.25rem 0 0;
+  }
+  .chat-caja {
+    margin-top: auto;
+    background: var(--porcelana);
+    color: var(--tinta);
+    padding: 0.6rem 0.7rem max(0.6rem, env(safe-area-inset-bottom));
+    box-shadow: 0 -0.6rem 1.3rem -0.9rem oklch(0.12 0.08 268 / 0.55);
+    --foco: var(--esmalte);
+  }
+  .chat-caja-pegada {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+  }
+  .chat-caja .boton {
+    min-height: 2.95rem;
+  }
+  .chat-fecha {
+    align-self: center;
+    border-radius: 999px;
+    background: oklch(0.88 0.02 265);
+    color: var(--tinta);
+    font-size: 0.86rem;
+    font-weight: 700;
+    padding: 0.2rem 0.75rem;
+  }
+  .chat-hecho {
+    align-self: center;
+    max-width: 92%;
+    border-radius: 0.8rem;
+    background: oklch(0.91 0.018 265);
+    color: var(--tinta);
+    font-size: 0.95rem;
+    line-height: 1.3;
+    padding: 0.42rem 0.8rem;
+    text-align: center;
+    text-wrap: pretty;
+  }
+
+  /* Hoja que sube (lo que abre un concepto o un lugar). */
+  .portal-hoja-flotante {
+    --foco: var(--esmalte);
+    font-family: var(--font-chapa, var(--font-sans));
+  }
+
+  /* El plano se prende del color del cartel que está a la vista, aunque la plantilla sea de antes. */
+  .portal-cuerpo:has(.cartel.tono-al_dia) .portal-cielo .plano {
+    --campo: oklch(0.79 0.175 150);
+    --sobre-campo: var(--tinta);
+  }
+  .portal-cuerpo:has(.cartel.tono-en_termino) .portal-cielo .plano {
+    --campo: oklch(0.85 0.165 88);
+    --sobre-campo: var(--tinta);
+  }
+  .portal-cuerpo:has(.cartel.tono-vencido) .portal-cielo .plano {
+    --campo: oklch(0.56 0.215 27);
+    --sobre-campo: oklch(0.99 0.004 27);
+  }
+
+  /* El aviso cuelga del cartel: lo primero que se ve, sin tapar el lugar en el plano. */
+  .pildora-avisos-lugar {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    justify-content: center;
+    margin-top: -1.7rem;
+    margin-bottom: -1.15rem;
+    padding-inline: 1rem;
+  }
+  .pildora-avisos {
+    display: inline-flex;
+    max-width: 100%;
+    min-height: 2.85rem;
+    align-items: center;
+    gap: 0.5rem;
+    border-radius: 999px;
+    background: var(--porcelana);
+    color: var(--tinta);
+    font-size: 1.02rem;
+    font-weight: 800;
+    font-stretch: 94%;
+    line-height: 1.1;
+    padding: 0.3rem 0.7rem 0.3rem 0.4rem;
+    box-shadow: 0 0.55rem 1.1rem -0.5rem oklch(0.08 0.06 268 / 0.8);
+    --foco: var(--esmalte);
+  }
+  .pildora-avisos-lugar + .cartel {
+    padding-top: 2.45rem;
+  }
+
+  /* La cuenta entra con el plano: un solo momento. */
+  .cartel-entra {
+    animation: cartel-entra 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  /* Cargando: el esqueleto brilla apenas sobre la porcelana. */
+  .esqueleto {
+    border-radius: 0.5rem;
+    background: oklch(0.91 0.012 265);
+  }
+  .esqueleto-sobre-campo {
+    border-radius: 0.5rem;
+    background: color-mix(in oklab, var(--sobre-campo) 16%, transparent);
+  }
+}
+
+/* El premio de estar al día: los azulejos del logo se colocan de a uno. */
+.abanico-azulejo {
+  animation: abanico-azulejo 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+@keyframes abanico-azulejo {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+}
+@keyframes plano-aparece {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes plano-pulso {
+  0% {
+    opacity: 0.85;
+    transform: scale(1);
+  }
+  70%,
+  100% {
+    opacity: 0;
+    transform: scale(1.75);
+  }
+}
+@keyframes plano-chapa {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-0.55rem) rotate(-2deg) scale(0.92);
+  }
+}
+@keyframes cartel-entra {
+  from {
+    opacity: 0;
+    transform: translateY(1.1rem);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .plano-numeros,
+  .plano-chapa,
+  .cartel-entra,
+  .abanico-azulejo {
+    animation: none;
+  }
+  .plano-pulso {
+    display: none;
+  }
+}
+
+/* Desde la tablet parada el contenido no se estira: columna cómoda y centrada. */
+@media (width >= 40rem) {
+  .cartel {
+    width: min(100% - 1.4rem, 38rem);
+    margin-inline: auto;
+  }
+  .portal-suelo {
+    padding-inline: max(0.7rem, calc((100% - 38rem) / 2));
+  }
+  .portal-espacio-chico {
+    padding-inline: max(1.05rem, calc((100% - 37rem) / 2));
+  }
+  .chat-fondo {
+    width: min(100%, 40rem);
+    margin-inline: auto;
+  }
+  .portal-barra {
+    left: 50%;
+    right: auto;
+    bottom: 0.8rem;
+    width: min(35rem, calc(100vw - 1.5rem));
+    padding: 0.42rem;
+    border-radius: 1.15rem;
+    transform: translateX(-50%);
+    box-shadow: 0 1rem 2rem -0.9rem oklch(0.08 0.06 268 / 0.85);
+  }
+}
+
+/* Compu o tablet acostada: el plano a la izquierda, entero de alto; la cuenta a la derecha. */
+@media (width >= 64rem) {
+  .portal-cuerpo {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(32rem, 42rem);
+    align-items: start;
+    min-height: 100vh;
+  }
+  .portal-main {
+    align-self: stretch;
+  }
+  .portal-cielo {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    height: 100svh;
+    margin-bottom: 0;
+  }
+  .portal-main {
+    background: var(--esmalte-hondo);
+  }
+  .portal-espacio {
+    height: 1.5rem;
+  }
+  .pildora-avisos-lugar {
+    margin-top: 0;
+  }
+  .cartel {
+    width: auto;
+    margin-inline: 0.7rem;
+  }
+  .portal-suelo {
+    padding-inline: 0.7rem;
+  }
+  .portal-espacio-chico {
+    padding-inline: 1.05rem;
+  }
+  .chat-fondo {
+    width: auto;
+  }
+  .portal-espacio-chico {
+    min-height: 0;
+    padding: 1.6rem 1.05rem 1.05rem;
+  }
+  .portal-suelo,
+  .portal-espacio-barra {
+    background: var(--esmalte-hondo);
+  }
+  .talon-fecha::before,
+  .talon-fecha::after {
+    background: var(--esmalte-hondo);
+  }
+  .portal-barra {
+    position: sticky;
+    top: 0.8rem;
+    left: auto;
+    bottom: auto;
+    z-index: 30;
+    width: auto;
+    margin: 0.8rem 0.7rem 0;
+    transform: none;
+  }
+  .portal-espacio-barra {
+    height: 2rem;
+  }
+}

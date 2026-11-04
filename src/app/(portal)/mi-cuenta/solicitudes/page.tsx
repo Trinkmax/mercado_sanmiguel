@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-/** La lista de solicitudes del socio vive en /mi-cuenta ("Tus solicitudes"). */
+/** Las consultas y pedidos del socio viven en Mensajes. */
 export default function SolicitudesSocioIndex() {
-  redirect("/mi-cuenta");
+  redirect("/mi-cuenta/mensajes");
 }

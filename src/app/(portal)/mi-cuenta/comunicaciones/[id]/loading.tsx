@@ -1,35 +1,21 @@
-import { Skeleton } from "@/components/ui/skeleton";
-
-export default function LoadingRegistroSocio() {
+/** Mientras carga: la forma de la conversación. */
+export default function LoadingConversacion() {
   return (
-    <div className="space-y-6">
-      <Skeleton className="h-11 w-48 rounded-md" />
-      <div className="space-y-2">
-        <Skeleton className="h-8 w-60" />
-        <Skeleton className="h-5 w-72 max-w-full" />
+    <>
+      <div className="portal-espacio-chico" aria-hidden>
+        <div className="h-7 w-28 rounded-lg bg-white/25" />
+        <div className="mt-3 h-8 w-64 max-w-full rounded-lg bg-white/25" />
       </div>
-
-      {/* Recorrido + detalle */}
-      <div className="space-y-4 rounded-xl border bg-card p-6">
-        <div className="flex justify-between gap-4">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="flex flex-1 flex-col items-center gap-1.5">
-              <Skeleton className="size-8 rounded-full" />
-              <Skeleton className="h-4 w-20" />
-            </div>
-          ))}
+      <div className="chat-fondo" aria-hidden>
+        <div className="flex flex-col gap-3 p-3">
+          <div className="hoja space-y-2 p-4">
+            <div className="esqueleto h-6 w-28" />
+            <div className="esqueleto h-4 w-56 max-w-full" />
+          </div>
+          <div className="esqueleto ml-auto h-20 w-2/3 rounded-2xl" />
+          <div className="esqueleto h-16 w-3/5 rounded-2xl" />
         </div>
-        <Skeleton className="h-4 w-40" />
-        <Skeleton className="h-16 w-full" />
       </div>
-
-      {/* Multa */}
-      <Skeleton className="h-32 w-full rounded-xl" />
-
-      {/* Hilo + caja */}
-      <Skeleton className="h-6 w-28" />
-      <Skeleton className="h-20 w-3/4 rounded-xl" />
-      <Skeleton className="h-64 w-full rounded-xl" />
-    </div>
+    </>
   );
 }

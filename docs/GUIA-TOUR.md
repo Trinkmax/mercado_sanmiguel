@@ -161,6 +161,16 @@ y ambulantes; Tesorería valida en vez de cerrar), **los pasos cambian por rol**
 - Las páginas que no usan `PageHeader` (Inicio, Mapa, …) pueden poner `encabezado` en su
   título.
 
+## El tour del portal
+
+Los capítulos del socio viven juntos en `src/lib/tour/contenido/portal.ts` y sus dibujos en
+`src/components/tour/pantallas/portal.tsx` (mismo lenguaje que el portal: plano, chapa, cartel, hojas):
+`bienvenida-socio`, `socio-cuenta`, `socio-pagos`, `socio-comunicaciones` (Mensajes),
+`socio-solicitudes` (Escribirle a la cooperativa) y `socio-carpeta`. El menú son las cuatro secciones de
+abajo (`nav:/mi-cuenta`, `nav:/mi-cuenta/pagos`, `nav:/mi-cuenta/mensajes`, `nav:/mi-cuenta/carpeta`).
+«Salir» está en Mi carpeta: el paso lleva `ruta`. Abrir un aviso lo marca como visto, por eso esos pasos
+son con dibujo y nunca entran a uno de verdad.
+
 ## Pantallas de ejemplo
 
 Dibujos **quietos** de ≈ 360 px de ancho, con datos inventados. Van en

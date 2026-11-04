@@ -46,6 +46,16 @@
   --color-pendiente-suave: var(--pendiente-suave);
   --color-parcial: var(--parcial);
   --color-parcial-suave: var(--parcial-suave);
+  /* Portal del socio (src/app/(portal)/portal.css). */
+  --color-esmalte: var(--esmalte);
+  --color-esmalte-hondo: var(--esmalte-hondo);
+  --color-porcelana: var(--porcelana);
+  --color-porcelana-2: var(--porcelana-2);
+  --color-tinta: var(--tinta);
+  --color-tinta-2: var(--tinta-2);
+  --color-campo: var(--campo);
+  --color-sobre-campo: var(--sobre-campo);
+  --font-chapa: var(--font-chapa);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -102,6 +112,17 @@
   --pendiente-suave: oklch(0.96 0.02 27);
   --parcial: oklch(0.55 0.11 70);
   --parcial-suave: oklch(0.965 0.035 85);
+  /* Portal del socio: chapa enlozada (el azul del logotipo a página entera), porcelana,
+     tinta y el campo del cartel (por defecto ámbar: lo cambia .tono-*). */
+  --esmalte: oklch(0.385 0.135 268);
+  --esmalte-hondo: oklch(0.315 0.115 268);
+  --esmalte-claro: oklch(0.47 0.14 268);
+  --porcelana: oklch(0.985 0.004 265);
+  --porcelana-2: oklch(0.945 0.012 265);
+  --tinta: oklch(0.2 0.035 268);
+  --tinta-2: oklch(0.42 0.03 265);
+  --campo: oklch(0.85 0.165 88);
+  --sobre-campo: var(--tinta);
 }
 
 .dark {
