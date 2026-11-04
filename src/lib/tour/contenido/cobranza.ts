@@ -249,7 +249,7 @@ function pasoMonto(rol: Rol): Paso {
         texto:
           "Al ambulante se le cobra por día y no hay un precio fijo: primero escribís cuánto te paga por día. Después elegís cuántos días («Solo hoy», «2 días», «3 días» o «Semana (7)»). Abajo, en verde, los días que ya pagó.",
         consejo:
-          "El total se calcula solo: los días por el precio que escribiste. Si paga lo mismo que la otra vez, tocá «Como la última vez».",
+          "El total se calcula solo: los días por el precio que escribiste. Si paga lo mismo que la otra vez, tocá «Como la última vez». Si debe la cochera, primero te pregunta «¿Qué te paga?»: elegí la cochera o los días.",
       },
       "cobranza-dias": {
         titulo: "¿Cuántos días paga?",

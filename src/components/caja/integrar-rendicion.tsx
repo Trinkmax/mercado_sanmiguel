@@ -134,7 +134,8 @@ export function BotonIntegrarRendicion({
   const idObs = useId();
   const idContado = useId();
   // Carga atrasada: la rendición de un día anterior puede entrar en la caja de administración
-  // de ese mismo día. Si esa caja está abierta (se está cargando ese día), es lo que se ofrece.
+  // de ese mismo día. Si esa caja está abierta (se está cargando ese día), entra ahí sin
+  // preguntar (04/11/2026: la del 03/11 se integró por error en la de hoy). Cerrada, se elige.
   const puedeMismoDia = Boolean(r.adminMismoDia) && r.fecha < hoyISO();
   const destinoInicial = puedeMismoDia && r.adminMismoDia === "abierta" ? "mismo" : "hoy";
   const [destino, setDestino] = useState<"mismo" | "hoy">(destinoInicial);
@@ -229,7 +230,7 @@ export function BotonIntegrarRendicion({
             </DialogDescription>
           </DialogHeader>
 
-          {puedeMismoDia ? (
+          {puedeMismoDia && r.adminMismoDia !== "abierta" ? (
             <fieldset className="space-y-2">
               <legend className="text-base font-medium">¿En qué caja de administración entra?</legend>
               <div className="grid grid-cols-2 gap-2">

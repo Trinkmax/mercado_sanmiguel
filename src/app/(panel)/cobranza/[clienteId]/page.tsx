@@ -20,7 +20,7 @@ import { Sello } from "@/components/shared/sello";
 import { FormCobro, type PlanDelMes } from "@/components/cobranza/form-cobro";
 import { AvisoDeuda } from "@/components/cobranza/aviso-deuda";
 import { CobroAmbulante } from "@/components/cobranza/cobro-ambulante";
-import { OtrasDeudas } from "@/components/cobranza/otras-deudas";
+import { ElegirCobroAmbulante } from "@/components/cobranza/elegir-cobro-ambulante";
 import { DescripcionCargo } from "@/components/cobranza/descripcion-cargo";
 import { NoVino, type QuintaDelMes } from "@/components/cobranza/no-vino";
 import {
@@ -93,10 +93,12 @@ export default async function CobrarClientePage({
   searchParams,
 }: {
   params: Promise<{ clienteId: string }>;
-  searchParams: Promise<{ fecha?: string | string[] }>;
+  searchParams: Promise<{ fecha?: string | string[]; cochera?: string | string[] }>;
 }) {
   const { clienteId } = await params;
-  const { fecha: fechaParam } = await searchParams;
+  const { fecha: fechaParam, cochera: cocheraParam } = await searchParams;
+  // Entró desde la pestaña «Cocheras» del Jefe: viene a cobrar la cochera.
+  const desdeCocheras = (Array.isArray(cocheraParam) ? cocheraParam[0] : cocheraParam) === "1";
   const perfil = await requireRol("admin", "guardia", "lider");
   const supabase = await createClient();
   const esJefe = perfil.rol === "guardia";
@@ -336,7 +338,7 @@ export default async function CobrarClientePage({
       ? "/caja?tipo=administracion"
       : "/caja";
 
-  const volverA = `/cobranza?cat=${categoria}${sufijoFecha}`;
+  const volverA = `/cobranza?cat=${desdeCocheras ? "cocheras" : categoria}${sufijoFecha}`;
   const descripcion = [
     `Carpeta N° ${cliente.codigo}`,
     LABEL_CATEGORIA[categoria],
@@ -438,8 +440,8 @@ export default async function CobrarClientePage({
   );
 
   const tieneOtrosCargos = todos.some((c) => c.origen !== "diario");
-  // El ambulante que alquila cochera o quinta la paga por mes (EXPC, 0045; EXPQ, 0047): se
-  // cobra en "Otras deudas".
+  // El ambulante que alquila cochera o quinta la paga por mes (EXPC, 0045; EXPQ, 0047): si la
+  // debe, primero se elige qué paga (ElegirCobroAmbulante); se cobra en "Otras deudas".
   const delMes = [
     items.some((c) => c.codigo === "EXPC") ? "la cochera" : null,
     items.some((c) => c.codigo === "EXPQ") ? "la quinta" : null,
@@ -487,41 +489,53 @@ export default async function CobrarClientePage({
       )}
 
       {esAmbulante ? (
-        <>
-          {/* AMB apagado frena solo el cobro por día: la cochera o la quinta del mes y otras
-              deudas se siguen cobrando abajo (registrar_cobro no depende de AMB). */}
-          {!ambRes.data?.activo ? (
-            <Alert variant="destructive">
-              <AlertTitle className="text-base font-semibold">Los cobros por día están desactivados</AlertTitle>
-              <AlertDescription className="text-base">
-                El concepto «Ambulantes» (AMB) está apagado en Configuración → Precios. Pedile al Líder de
-                Procesos que lo prenda para poder cobrar por día.
-              </AlertDescription>
-            </Alert>
-          ) : (
-            <CobroAmbulante
-              clienteId={cliente.id}
-              clienteNombre={cliente.nombre}
-              precioAnterior={
-                Number(ultimoPrecioRes.data?.precio_unitario ?? 0) > 0
-                  ? Number(ultimoPrecioRes.data?.precio_unitario)
-                  : null
-              }
-              pagados={pagados}
-              ultimoPagoHasta={ultimoPagoRes.data?.pago_hasta ?? null}
-              volverA={volverA}
-              cajaCerrada={cajaCerrada}
-              irACaja={irACaja}
-              fechaCaja={diaCaja ?? undefined}
-            />
-          )}
-          {tieneOtrosCargos || deudaTotal > 0 ? (
-            <OtrasDeudas deuda={deudaNeta} detalle={detalleOtras}>
+        <ElegirCobroAmbulante
+          pideElegir={desdeCocheras || delMes.length > 0}
+          inicial={desdeCocheras ? "otras" : null}
+          tituloOtras={
+            delMes.length > 0
+              ? `${listaOtras.charAt(0).toUpperCase()}${listaOtras.slice(1)}`
+              : "La cochera"
+          }
+          deuda={deudaNeta}
+          detalleOtras={detalleOtras}
+          mostrarOtras={desdeCocheras || tieneOtrosCargos || deudaTotal > 0}
+          dias={
+            // AMB apagado frena solo el cobro por día: la cochera o la quinta del mes y otras
+            // deudas se siguen cobrando (registrar_cobro no depende de AMB).
+            !ambRes.data?.activo ? (
+              <Alert variant="destructive">
+                <AlertTitle className="text-base font-semibold">Los cobros por día están desactivados</AlertTitle>
+                <AlertDescription className="text-base">
+                  El concepto «Ambulantes» (AMB) está apagado en Configuración → Precios. Pedile al Líder de
+                  Procesos que lo prenda para poder cobrar por día.
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <CobroAmbulante
+                clienteId={cliente.id}
+                clienteNombre={cliente.nombre}
+                precioAnterior={
+                  Number(ultimoPrecioRes.data?.precio_unitario ?? 0) > 0
+                    ? Number(ultimoPrecioRes.data?.precio_unitario)
+                    : null
+                }
+                pagados={pagados}
+                ultimoPagoHasta={ultimoPagoRes.data?.pago_hasta ?? null}
+                volverA={volverA}
+                cajaCerrada={cajaCerrada}
+                irACaja={irACaja}
+                fechaCaja={diaCaja ?? undefined}
+              />
+            )
+          }
+          otras={
+            <>
               {deudaDelDia}
               {formCobro}
-            </OtrasDeudas>
-          ) : null}
-        </>
+            </>
+          }
+        />
       ) : (
         <>
           {deudaTotal > 0 ? (
