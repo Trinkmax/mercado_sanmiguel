@@ -384,20 +384,6 @@ export function nombreCuotas(a: Pick<AvanceMes, "cuotas" | "semanas_no_vino">): 
   return { uno: "cuota", varios: "cuotas" };
 }
 
-/**
- * Cuántas cuotas están pagas de verdad. `cuotas_cubiertas` de v_avance_mes compara contra el total
- * sin el beneficio, así que cuenta el beneficio como pagado («3 de 30 días» sin haber pagado nada).
- * Acá sale de lo que pagó sobre lo que tiene que pagar (lo pagado + lo que falta hoy).
- */
-export function avanceReal(a: AvanceMes): { fraccion: number; cubiertas: number } {
-  const cuotas = Math.max(1, Number(a.cuotas ?? 1));
-  const falta = Number(a.falta ?? 0);
-  const pagado = Number(a.pagado ?? 0);
-  if (falta <= 0.009) return { fraccion: 1, cubiertas: cuotas };
-  const fraccion = pagado > 0 ? pagado / (pagado + falta) : 0;
-  return { fraccion, cubiertas: Math.min(cuotas - 1, Math.floor(fraccion * cuotas)) };
-}
-
 /** Ancho aproximado de un monto en em, en la letra del cartel: el número llena el ancho justo. */
 export function anchoMontoEm(entero: string): number {
   let em = 0;

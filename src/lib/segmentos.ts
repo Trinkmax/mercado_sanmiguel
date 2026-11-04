@@ -231,6 +231,18 @@ export type AvanceMes = {
   semanas_no_vino?: number;
 };
 
+/**
+ * Qué parte del mes está paga, para dibujar barras: lo pagado sobre lo que hay que pagar hoy (lo
+ * pagado + lo que falta). Mismo criterio que `cuotas_cubiertas` de la vista (0061): `total` no
+ * sirve porque no lleva el beneficio, y contaría el beneficio como si estuviera pagado.
+ */
+export function fraccionAvance(a: Pick<AvanceMes, "pagado" | "falta">): number {
+  const falta = Number(a.falta ?? 0);
+  if (falta <= 0.009) return 1;
+  const pagado = Math.max(0, Number(a.pagado ?? 0));
+  return pagado / (pagado + falta);
+}
+
 /** "2 de 4 · Falta $165.000" · "Pagó 12 de 30 días · Falta $45.000" · "Al día" */
 export function textoAvance(a: AvanceMes): string {
   const falta = Number(a.falta ?? 0);

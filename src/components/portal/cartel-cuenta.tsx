@@ -1,10 +1,10 @@
 import { Check, Tag } from "lucide-react";
 import { formatARS, formatFechaLarga, redondear2 } from "@/lib/format";
+import { fraccionAvance } from "@/lib/segmentos";
 import { Money } from "@/components/shared/money";
 import { cn } from "@/lib/utils";
 import {
   anchoMontoEm,
-  avanceReal,
   diaEnPalabras,
   nombreCuotas,
   sinComa,
@@ -216,7 +216,8 @@ function SoloPlan({ cuenta }: { cuenta: Cuenta }) {
 /** El mes en azulejos, para quien paga en partes: los llenos ya están pagos. */
 export function CuotasDelMes({ avance }: { avance: NonNullable<Cuenta["avance"]> }) {
   const cuotas = Math.max(1, Number(avance.cuotas));
-  const { fraccion: frac, cubiertas } = avanceReal(avance);
+  const cubiertas = Number(avance.cuotas_cubiertas);
+  const frac = fraccionAvance(avance);
   // La misma cuota que le sugiere Cobrar a quien le cobra.
   const sugerida = redondear2(Number(avance.cuota_sugerida));
   const nombre = nombreCuotas(avance);

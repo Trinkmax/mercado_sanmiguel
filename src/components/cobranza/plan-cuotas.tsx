@@ -3,7 +3,7 @@
 import { CalendarRange, History } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatARS, labelPeriodo } from "@/lib/format";
-import type { AvanceMes } from "@/lib/segmentos";
+import { fraccionAvance, type AvanceMes } from "@/lib/segmentos";
 import { Button } from "@/components/ui/button";
 import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
@@ -25,11 +25,9 @@ export function BarraAvance({
   className?: string;
   alta?: string;
 }) {
-  const total = Number(avance.total ?? 0);
-  const falta = Number(avance.falta ?? 0);
   const cuotas = Math.max(1, Number(avance.cuotas ?? 1));
   // Solo para dibujar: la cuenta de cuotas cubiertas la hace v_avance_mes.
-  const frac = falta <= 0.009 ? 1 : total > 0 ? Math.min(1, Math.max(0, (total - falta) / total)) : 0;
+  const frac = fraccionAvance(avance);
 
   if (cuotas > 10) {
     return (

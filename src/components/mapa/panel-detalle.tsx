@@ -16,7 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { LABEL_CATEGORIA_PLURAL, textoAvance, type CategoriaCliente } from "@/lib/segmentos";
+import { fraccionAvance, LABEL_CATEGORIA_PLURAL, textoAvance, type CategoriaCliente } from "@/lib/segmentos";
 import { Button } from "@/components/ui/button";
 import { Money } from "@/components/shared/money";
 import { Sello } from "@/components/shared/sello";
@@ -87,7 +87,7 @@ function AvanceQuintero({ cliente }: { cliente: ClienteMapa }) {
     return <p className="text-sm text-muted-foreground">Este mes todavía no se generó su quinta.</p>;
   }
   const total = Number(mes.total) || 0;
-  const pct = total > 0 ? Math.min(100, Math.max(0, ((total - Number(mes.falta)) / total) * 100)) : 100;
+  const pct = fraccionAvance(mes) * 100;
   return (
     <div className="space-y-1.5">
       <p className="text-sm font-medium">{textoAvance(mes)}</p>
