@@ -83,6 +83,12 @@ export function origenInicial({
   return { origen: "tesoreria", caja: null, medio: preferirCaja ? "efectivo" : "transferencia", fecha: hoy };
 }
 
+/**
+ * Día en que arranca el saldo inicial de cada cuenta de Tesorería en pesos (null = sin cargar).
+ * Un pago de antes de ese día se toma como ya descontado en el saldo y no baja la cuenta.
+ */
+export type InicioCuentas = { efectivo: string | null; banco: string | null };
+
 /** ¿El origen elegido está completo para pagar? */
 export function origenCompleto(v: OrigenPago, hoy: string): boolean {
   if (v.origen === "caja") return v.caja !== null;
@@ -110,6 +116,7 @@ export function SelectorOrigen({
   monto,
   hoy,
   idBase,
+  inicioCuentas = null,
 }: {
   valor: OrigenPago;
   onCambiar: (v: OrigenPago) => void;
@@ -117,6 +124,7 @@ export function SelectorOrigen({
   monto: number;
   hoy: string;
   idBase: string;
+  inicioCuentas?: InicioCuentas | null;
 }) {
   const hayCajas = cajas.length > 0;
   const caja = valor.origen === "caja" ? valor.caja : null;
@@ -125,6 +133,11 @@ export function SelectorOrigen({
   // Si no alcanza, va solo el aviso rojo (que ya dice si la caja está cerrada), no los dos.
   const noAlcanza =
     caja !== null && caja.estado !== "nueva" && efectivoDespues !== null && efectivoDespues < 0;
+  // 06/11/2026: los sueldos se pagaron por banco con fecha 02/11 y el saldo del banco arranca el
+  // 03/11: el pago no se descontó. Se avisa antes de pagar.
+  const inicioCuenta =
+    valor.origen === "tesoreria" ? (valor.medio === "efectivo" ? inicioCuentas?.efectivo : inicioCuentas?.banco) ?? null : null;
+  const antesDelSaldo = inicioCuenta !== null && /^\d{4}-\d{2}-\d{2}$/.test(valor.fecha) && valor.fecha < inicioCuenta;
 
   return (
     <div className="space-y-5">
@@ -307,6 +320,16 @@ export function SelectorOrigen({
             </div>
             {valor.fecha > hoy ? (
               <p className="text-sm font-medium text-pendiente">La fecha de pago no puede ser futura.</p>
+            ) : antesDelSaldo && inicioCuenta ? (
+              <p className="flex items-start gap-2 rounded-lg border border-parcial/50 bg-parcial-suave px-3 py-2 text-sm font-medium">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0 text-parcial" strokeWidth={2} />
+                <span>
+                  Ojo: el saldo inicial {valor.medio === "efectivo" ? "del efectivo" : "del banco"} es al comenzar el{" "}
+                  {formatFecha(inicioCuenta)}. Un pago del {formatFecha(valor.fecha)} se toma como ya descontado en
+                  ese saldo y no {valor.medio === "efectivo" ? "baja el efectivo" : "baja el banco"}. Si la plata salió
+                  el {formatFecha(inicioCuenta)} o después, poné ese día.
+                </span>
+              </p>
             ) : valor.fecha !== hoy && diasEntre(valor.fecha, hoy) !== 1 && valor.fecha ? (
               <p className="text-sm text-muted-foreground">Se registra como pagado el {formatFecha(valor.fecha)}.</p>
             ) : null}

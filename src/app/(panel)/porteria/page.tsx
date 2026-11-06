@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FilePlus2, MessagesSquare, Settings2 } from "lucide-react";
+import { FilePlus2, MessagesSquare } from "lucide-react";
 import { requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { pendientesNav } from "@/lib/pendientes";
@@ -147,7 +147,6 @@ export default async function PorteriaPage({ searchParams }: Props) {
   const entradas = filasCanon.map((f) => aCanonEntrada(f, nombres));
   const totales = totalesCanon(entradas);
   const tarifas = (tarifasRes.data ?? []).map(aTarifaTransporte);
-  const tarifasActivas = tarifas.filter((t) => t.activo);
 
   const estadoHoy = (estadoRes.data ?? null) as { estado?: unknown; reapertura_pedida?: unknown } | null;
   const estadoCaja: EstadoCaja | null = esHoy
@@ -193,7 +192,6 @@ export default async function PorteriaPage({ searchParams }: Props) {
     >
       {esHoy ? (
         <CanonTransporte
-          tarifas={tarifasActivas}
           puestos={puestos}
           bloqueo={
             cajaRendida
@@ -209,7 +207,6 @@ export default async function PorteriaPage({ searchParams }: Props) {
       ) : cargaAtrasada ? (
         <CanonTransporte
           key={fecha}
-          tarifas={tarifasActivas}
           puestos={puestos}
           fecha={fecha}
           bloqueo={
@@ -332,12 +329,6 @@ export default async function PorteriaPage({ searchParams }: Props) {
         {esLider ? (
           <>
             <SelectorFecha fecha={fecha} />
-            <Button asChild variant="outline" size="lg" className="h-12 px-4 text-base" data-tour="porteria-tarifas">
-              <Link href="/configuracion?tab=tarifas">
-                <Settings2 className="size-5" strokeWidth={2} />
-                Editar tarifas
-              </Link>
-            </Button>
             <BotonExportar
               dataset="canon"
               periodo={`${fecha.slice(0, 7)}-01`}

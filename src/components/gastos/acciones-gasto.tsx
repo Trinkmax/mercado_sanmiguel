@@ -31,6 +31,7 @@ import {
   origenCompleto,
   origenInicial,
   textoBotonPago,
+  type InicioCuentas,
 } from "@/components/gastos/selector-origen";
 import { delDia, type CajaElegible, type OrigenPago } from "@/components/gastos/tipos";
 import { AlertaError } from "@/components/cobranza/alerta-error";
@@ -88,6 +89,7 @@ export function AccionesGasto({
   preferirCaja,
   cajaPreseleccionadaId,
   soloPagar = false,
+  inicioCuentas = null,
 }: {
   gasto: GastoAcciones;
   cajas: CajaElegible[];
@@ -98,6 +100,8 @@ export function AccionesGasto({
   cajaPreseleccionadaId?: string | null;
   /** En listas compactas (Tesorería → Hoy) solo se ofrece Pagar. */
   soloPagar?: boolean;
+  /** Para avisar si se paga con fecha de antes del saldo inicial de la cuenta. */
+  inicioCuentas?: InicioCuentas | null;
 }) {
   const router = useRouter();
   const [dialogo, setDialogo] = useState<Dialogo>(null);
@@ -246,6 +250,7 @@ export function AccionesGasto({
             monto={gasto.monto}
             hoy={hoy}
             idBase={`pagar-${gasto.id}`}
+            inicioCuentas={inicioCuentas}
           />
           {error ? <AlertaError error={error} titulo="No se pudo pagar" /> : null}
           {/* Una salida clara además de la X, como en Anular y Deshacer. */}

@@ -38,6 +38,7 @@ import {
   SelectorOrigen,
   origenCompleto,
   origenInicial,
+  type InicioCuentas,
 } from "@/components/gastos/selector-origen";
 import { avisarPago } from "@/components/gastos/acciones-gasto";
 import { AlertaError } from "@/components/cobranza/alerta-error";
@@ -67,6 +68,7 @@ export function DialogNuevoGasto({
   trigger,
   fijosCargados = {},
   puedeConfigurar = false,
+  inicioCuentas = null,
 }: {
   rubros: Rubro[];
   frecuentes: string[];
@@ -85,6 +87,8 @@ export function DialogNuevoGasto({
   fijosCargados?: Record<string, { monto: number; vencimiento: string | null; estado: string }>;
   /** Administración y el Líder configuran los fijos (cambia la ayuda). */
   puedeConfigurar?: boolean;
+  /** Para avisar si se paga con fecha de antes del saldo inicial de la cuenta. */
+  inicioCuentas?: InicioCuentas | null;
 }) {
   const router = useRouter();
   const cajaElegida = cajaPreseleccionadaId
@@ -369,6 +373,7 @@ export function DialogNuevoGasto({
                 monto={montoNumero}
                 hoy={hoy}
                 idBase="nuevo-gasto"
+                inicioCuentas={inicioCuentas}
               />
             ) : null}
           </div>

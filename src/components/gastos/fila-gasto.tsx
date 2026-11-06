@@ -10,6 +10,7 @@ import { AccionesGasto } from "@/components/gastos/acciones-gasto";
 import { AdjuntarFactura } from "@/components/gastos/adjuntar-factura";
 import { SelloComprobante } from "@/components/gastos/sello-comprobante";
 import { LABEL_MEDIO_GASTO, type CajaElegible } from "@/components/gastos/tipos";
+import type { InicioCuentas } from "@/components/gastos/selector-origen";
 
 export type GastoFila = {
   id: string;
@@ -74,6 +75,7 @@ export function FilaGasto({
   preferirCaja,
   cajaPreseleccionadaId,
   verCheques,
+  inicioCuentas = null,
 }: {
   g: GastoFila;
   hoy: string;
@@ -83,6 +85,7 @@ export function FilaGasto({
   cajaPreseleccionadaId: string | null;
   /** Tesorería y el Líder entran a Cheques (ahí se deshace un pago con cheque). */
   verCheques: boolean;
+  inicioCuentas?: InicioCuentas | null;
 }) {
   const vencido = g.estado === "pendiente" && g.vencimiento !== null && g.vencimiento < hoy;
   const venceHoy = g.estado === "pendiente" && g.vencimiento === hoy;
@@ -231,6 +234,7 @@ export function FilaGasto({
             hoy={hoy}
             preferirCaja={preferirCaja}
             cajaPreseleccionadaId={cajaPreseleccionadaId}
+            inicioCuentas={inicioCuentas}
           />
         )}
       </div>

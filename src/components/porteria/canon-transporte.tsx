@@ -3,34 +3,27 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { CircleAlert, CircleCheck, TriangleAlert, Truck } from "lucide-react";
+import { CircleAlert, CircleCheck, TriangleAlert } from "lucide-react";
 import { anularCanon, registrarCanon } from "@/lib/actions/porteria";
-import { formatARS } from "@/lib/format";
+import { formatARS, parseMonto, sanitizarMonto } from "@/lib/format";
 import { cn, uuidV4 } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { Money } from "@/components/shared/money";
-import { NumeroConPasos } from "@/components/shared/numero-con-pasos";
 import { Sello } from "@/components/shared/sello";
-import { EmptyState } from "@/components/shared/empty-state";
 import { AlertaError } from "@/components/cobranza/alerta-error";
-import { DibujoTarifa } from "@/components/porteria/dibujo-tarifa";
 import {
   DESTINOS,
   LABEL_DESTINO,
   LABEL_MEDIO_CANON,
-  LABEL_UNIDAD,
   MEDIOS_CANON,
   esPatenteValida,
   formatPatente,
   normalizarPatente,
-  preguntaCantidad,
-  textoEntrada,
   type DestinoCanon,
   type MedioCanon,
-  type TarifaTransporte,
 } from "@/components/porteria/tarifas";
 import { llamarAccion } from "@/lib/llamar-accion";
 
@@ -44,20 +37,22 @@ const nuevoRef = uuidV4;
 
 type Exito = { id: string; numero: number; monto: number; texto: string };
 
+/** Lo que entra en el bono camioneros de una vez (como la base, 0062). */
+const MONTO_MAXIMO = 99_999_999;
+
+const TEXTO_BONO = "Bono camioneros";
+
 /**
- * Talonario del canon de transporte (H1, H2): "¿Qué entró?" → "Cobrar $6.000".
- * Dos toques en el caso común; cantidad, medio, patente y "¿A quién viene?" son ajustes.
- * El monto lo pone la tarifa (nadie tipea montos). Después de cobrar conserva la tarifa y
- * el medio (los vehículos llegan en tandas) y limpia el resto.
+ * Talonario del bono camioneros (H1, H2): "¿Cuánto se cobró?" → "Cobrar $ 432.000".
+ * Pedido del 06/11/2026: el monto se escribe a mano («no por balancín, no por camión»): con
+ * tarifa × cantidad las cajas no cerraban. Medio, patente y "¿A quién viene?" son ajustes.
+ * Después de cobrar conserva el medio y limpia el resto.
  */
 export function CanonTransporte({
-  tarifas,
   puestos,
   bloqueo,
   fecha,
 }: {
-  /** Tarifas ACTIVAS, en el orden de la tabla. */
-  tarifas: TarifaTransporte[];
   /** Puestos del plano para validar "Puesto 58 ✓" al instante. */
   puestos: PuestoPlano[];
   /** Caja de portería rendida: el formulario queda bloqueado con este aviso. */
@@ -65,9 +60,7 @@ export function CanonTransporte({
   /** Carga atrasada (el Líder): el canon entra en la caja de portería de este día anterior. */
   fecha?: string;
 }) {
-  const primeraConPrecio = tarifas.find((t) => t.precio > 0) ?? null;
-  const [tarifaId, setTarifaId] = useState<string | null>(primeraConPrecio?.id ?? null);
-  const [cantidad, setCantidad] = useState(1);
+  const [montoTexto, setMontoTexto] = useState("");
   const [medio, setMedio] = useState<MedioCanon>("efectivo");
   const [patente, setPatente] = useState("");
   const [destino, setDestino] = useState<DestinoCanon | null>(null);
@@ -77,8 +70,7 @@ export function CanonTransporte({
   const [pendiente, startTransition] = useTransition();
   const refIntento = useRef<string | null>(null);
 
-  const tarifa = tarifas.find((t) => t.id === tarifaId) ?? null;
-  const monto = tarifa ? Math.round(tarifa.precio * cantidad * 100) / 100 : 0;
+  const monto = Math.round(parseMonto(montoTexto) * 100) / 100;
 
   // ---------- Validaciones en vivo (prevenir, no explicar después)
   const patenteNorm = normalizarPatente(patente);
@@ -99,10 +91,10 @@ export function CanonTransporte({
 
   const motivoBloqueo = bloqueo
     ? null
-    : !tarifa
-      ? "Elegí qué entró."
-      : tarifa.precio <= 0
-        ? `La tarifa de ${tarifa.nombre} no tiene precio: pedile al Líder que la cargue.`
+    : monto <= 0
+      ? "Escribí cuánto se cobró."
+      : monto > MONTO_MAXIMO
+        ? "Revisá el monto: es demasiado grande."
         : patenteInvalida
           ? "Revisá la patente o borrala: es opcional."
           : puestoInvalido
@@ -117,16 +109,6 @@ export function CanonTransporte({
     return () => clearTimeout(t);
   }, [exito]);
 
-  function cambiarCantidad(n: number) {
-    setCantidad(Math.min(99, Math.max(1, Math.round(n))));
-    setError(null);
-  }
-
-  function elegirTarifa(id: string) {
-    setTarifaId(id);
-    setError(null);
-    setExito(null);
-  }
 
   function deshacer(e: Exito) {
     toast.promise(
@@ -144,18 +126,17 @@ export function CanonTransporte({
 
   function cobrar(ev: React.FormEvent<HTMLFormElement>) {
     ev.preventDefault();
-    if (!puedeCobrar || !tarifa) {
+    if (!puedeCobrar) {
       if (motivoBloqueo) setError(motivoBloqueo);
       return;
     }
     if (!refIntento.current) refIntento.current = nuevoRef();
     const ref = refIntento.current;
-    const texto = textoEntrada({ tarifa_nombre: tarifa.nombre, unidad: tarifa.unidad, cantidad });
+    const texto = TEXTO_BONO;
 
     startTransition(async () => {
       const res = await llamarAccion(() => registrarCanon({
-        tarifaId: tarifa.id,
-        cantidad,
+        monto,
         medio,
         patente: patenteNorm || undefined,
         destino,
@@ -185,22 +166,12 @@ export function CanonTransporte({
           action: { label: "Deshacer", onClick: () => deshacer(hecho) },
         });
       }
-      // Conserva tarifa y medio; limpia lo del vehículo que ya pasó.
-      setCantidad(1);
+      // Conserva el medio; limpia lo que ya se cobró.
+      setMontoTexto("");
       setPatente("");
       setDestino(null);
       setPuesto("");
     });
-  }
-
-  if (tarifas.length === 0) {
-    return (
-      <EmptyState
-        icono={Truck}
-        titulo="No hay tarifas de transporte cargadas"
-        descripcion="Pedile al Líder de Procesos que cargue las tarifas (Camioneta, Chasis…) para poder cobrar."
-      />
-    );
   }
 
   return (
@@ -226,89 +197,28 @@ export function CanonTransporte({
         ) : null}
 
         <fieldset disabled={Boolean(bloqueo) || pendiente} className="space-y-6 disabled:opacity-60">
-          {/* ---------------------------------------------------- ¿Qué entró? */}
-          <div className="space-y-2" data-tour="porteria-que-entro">
-            <p id="que-entro" className="font-display text-xl font-bold tracking-tight">
-              ¿Qué entró?
-            </p>
-            <div
-              role="radiogroup"
-              aria-labelledby="que-entro"
-              className="grid grid-cols-2 gap-3 sm:grid-cols-3"
-              onKeyDown={(e) => {
-                const idx = tarifas.findIndex((t) => t.id === tarifaId);
-                const paso = e.key === "ArrowRight" || e.key === "ArrowDown" ? 1 : e.key === "ArrowLeft" || e.key === "ArrowUp" ? -1 : 0;
-                if (!paso) return;
-                e.preventDefault();
-                const siguiente = tarifas[(idx + paso + tarifas.length) % tarifas.length];
-                elegirTarifa(siguiente.id);
-                document.getElementById(`tarifa-${siguiente.id}`)?.focus();
-              }}
-            >
-              {tarifas.map((t) => {
-                const elegida = t.id === tarifaId;
-                const sinPrecio = t.precio <= 0;
-                return (
-                  <button
-                    key={t.id}
-                    id={`tarifa-${t.id}`}
-                    type="button"
-                    role="radio"
-                    aria-checked={elegida}
-                    tabIndex={elegida || (!tarifaId && t === tarifas[0]) ? 0 : -1}
-                    disabled={sinPrecio}
-                    onClick={() => elegirTarifa(t.id)}
-                    className={cn(
-                      "relative flex min-h-24 flex-col items-start justify-between gap-2 rounded-lg border-2 p-3 text-left transition-colors outline-none",
-                      "focus-visible:ring-3 focus-visible:ring-ring/40 disabled:cursor-not-allowed disabled:opacity-55",
-                      elegida
-                        ? "border-primary bg-primary/[0.06] text-primary"
-                        : "border-border bg-card text-foreground hover:border-primary/40 hover:bg-muted/40"
-                    )}
-                  >
-                    <span className="flex w-full items-start justify-between gap-2">
-                      <DibujoTarifa icono={t.icono} className="size-8" />
-                      {elegida ? <CircleCheck className="size-5 shrink-0" strokeWidth={2.2} aria-hidden /> : null}
-                    </span>
-                    <span className="space-y-0.5">
-                      <span className="block text-lg leading-tight font-bold">{t.nombre}</span>
-                      <span
-                        className={cn(
-                          "block text-sm tabular",
-                          elegida ? "text-primary/85" : "text-muted-foreground"
-                        )}
-                      >
-                        {sinPrecio ? (
-                          "Sin precio: avisale al Líder"
-                        ) : (
-                          <>
-                            <span className="font-semibold">{formatARS(t.precio)}</span> {LABEL_UNIDAD[t.unidad]}
-                          </>
-                        )}
-                      </span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* ---------------------------------------------------- Cantidad y medio */}
+          {/* ---------------------------------------------------- ¿Cuánto se cobró? y medio */}
           <div className="grid gap-6 sm:grid-cols-2" data-tour="porteria-cantidad-medio">
-            <div className="space-y-2">
-              <Label htmlFor="canon-cantidad" className="text-base">
-                {tarifa ? preguntaCantidad(tarifa.unidad) : "¿Cuántos?"}
+            <div className="space-y-2" data-tour="porteria-que-entro">
+              <Label htmlFor="canon-monto" className="text-base font-medium">
+                ¿Cuánto se cobró?
               </Label>
-              {/* El número se escribe directo (23 días no son 22 toques de "+"). */}
-              <NumeroConPasos
-                id="canon-cantidad"
-                valor={cantidad}
-                onCambiar={cambiarCantidad}
-                max={99}
-                unidad={tarifa?.unidad === "dia" ? "días" : "vehículos"}
-                etiquetaMenos={tarifa?.unidad === "dia" ? "Un día menos" : "Un vehículo menos"}
-                etiquetaMas={tarifa?.unidad === "dia" ? "Un día más" : "Un vehículo más"}
+              <Input
+                id="canon-monto"
+                inputMode="decimal"
+                value={montoTexto}
+                onChange={(e) => {
+                  setMontoTexto(sanitizarMonto(e.target.value).slice(0, 14));
+                  setError(null);
+                  setExito(null);
+                }}
+                placeholder="0"
+                aria-describedby="canon-monto-ayuda"
+                className="h-14 text-2xl font-bold tabular md:text-2xl"
               />
+              <p id="canon-monto-ayuda" className="min-h-5 text-sm text-muted-foreground tabular">
+                {montoTexto !== "" ? formatARS(monto) : "Todo lo que te pagaron de bono, junto."}
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -465,9 +375,7 @@ export function CanonTransporte({
                 <div className="min-w-0">
                   <p className="text-sm text-muted-foreground">Total</p>
                   <p className="truncate text-sm text-muted-foreground">
-                    {tarifa
-                      ? `${textoEntrada({ tarifa_nombre: tarifa.nombre, unidad: tarifa.unidad, cantidad })} · ${LABEL_MEDIO_CANON[medio]}`
-                      : "Elegí qué entró"}
+                    {`${TEXTO_BONO} · ${LABEL_MEDIO_CANON[medio]}`}
                   </p>
                 </div>
                 <Money monto={monto} className="font-display text-3xl font-bold tracking-tight" />
@@ -486,7 +394,7 @@ export function CanonTransporte({
             {pendiente ? <Spinner className="size-6" /> : null}
             {pendiente ? "Cobrando…" : monto > 0 ? `Cobrar ${formatARS(monto)}` : "Cobrar"}
           </Button>
-          {!bloqueo && !pendiente && motivoBloqueo && tarifa ? (
+          {!bloqueo && !pendiente && motivoBloqueo && montoTexto !== "" ? (
             <p className="text-center text-sm text-muted-foreground">{motivoBloqueo}</p>
           ) : null}
         </div>

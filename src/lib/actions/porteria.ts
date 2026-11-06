@@ -400,12 +400,12 @@ export async function marcarEgreso(
 // ============================================================ Canon de transporte (H1, H2)
 
 const schemaCanon = z.object({
-  tarifaId: z.uuid("Elegí qué entró"),
-  cantidad: z.coerce
-    .number()
-    .int("La cantidad va de 1 a 99")
-    .min(1, "La cantidad va de 1 a 99")
-    .max(99, "La cantidad va de 1 a 99"),
+  /** 0062: lo que se cobró, escrito a mano (ya no tarifa × cantidad). */
+  monto: z
+    .number("Escribí cuánto se cobró")
+    .positive("Escribí cuánto se cobró")
+    .max(99_999_999, "Revisá el monto: es demasiado grande")
+    .transform((n) => Math.round(n * 100) / 100),
   medio: z.enum(["efectivo", "transferencia"], { message: "Elegí cómo paga" }),
   patente: z
     .string()
@@ -453,7 +453,7 @@ export type CanonRegistrado = {
 
 /**
  * Cobra el canon de transporte en la caja de portería de hoy (la abre si hace falta).
- * El monto lo calcula la base con la tarifa (nadie tipea montos). `ref` = un
+ * El monto se escribe a mano (0062: con tarifa × cantidad las cajas no cerraban). `ref` = un
  * `crypto.randomUUID()` por intento: el doble toque o el reintento sin red no cobran dos veces.
  */
 export async function registrarCanon(
@@ -474,8 +474,7 @@ export async function registrarCanon(
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("registrar_canon", {
     ...(dia ? { p_fecha: dia } : {}),
-    p_tarifa: d.tarifaId,
-    p_cantidad: d.cantidad,
+    p_monto: d.monto,
     p_medio: d.medio,
     p_patente: d.patente ?? undefined,
     p_destino: d.destino ?? undefined,

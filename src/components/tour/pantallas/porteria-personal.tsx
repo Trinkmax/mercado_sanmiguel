@@ -1,18 +1,15 @@
 import {
   BadgeCheck,
   Banknote,
-  Caravan,
   CircleCheck,
   ClipboardList,
   Clock,
-  Container,
   Copy,
   Eraser,
   FileText,
   History,
   LogIn,
   LogOut,
-  Minus,
   Paperclip,
   Pencil,
   PencilLine,
@@ -93,72 +90,22 @@ function PestanasGarita({ activa, resaltar }: { activa: "canon" | "personal"; re
   );
 }
 
-const TARIFAS: { nombre: string; precio: number; unidad: string; Icono: LucideIcon }[] = [
-  { nombre: "Camioneta", precio: 6000, unidad: "por vehículo", Icono: Van },
-  { nombre: "Chasis", precio: 8000, unidad: "por vehículo", Icono: Truck },
-  { nombre: "Balancín", precio: 9000, unidad: "por vehículo", Icono: Caravan },
-  { nombre: "Equipo", precio: 12000, unidad: "por vehículo", Icono: Container },
-  { nombre: "Estadía diaria", precio: 12000, unidad: "por día", Icono: SquareParking },
-];
-
-/** Una tarjeta de "¿Qué entró?". */
-function TarjetaTarifa({ tarifa, elegida }: { tarifa: (typeof TARIFAS)[number]; elegida: boolean }) {
-  const { Icono } = tarifa;
-  return (
-    <div
-      className={cn(
-        "flex min-h-16 flex-col justify-between gap-1 rounded-lg border-2 p-1.5",
-        elegida ? "border-primary bg-primary/[0.06] text-primary" : "border-border bg-card"
-      )}
-    >
-      <span className="flex items-start justify-between">
-        <Icono className="size-4.5" strokeWidth={1.9} />
-        {elegida ? <CircleCheck className="size-3.5" strokeWidth={2.2} /> : null}
-      </span>
-      <span>
-        <span className="block text-[0.78rem] leading-tight font-bold">{tarifa.nombre}</span>
-        <span className={cn("block text-[0.72rem] leading-tight tabular", elegida ? "text-primary/85" : "text-muted-foreground")}>
-          <Money monto={tarifa.precio} className="font-semibold" />
-          {tarifa.unidad === "por día" ? " por día" : null}
-        </span>
-      </span>
-    </div>
-  );
-}
-
 /** El formulario del canon en chico, señalando una parte. */
 function FormCanon({ resaltar, portada = false }: { resaltar?: "tarifa" | "cuantos" | "cobrar"; portada?: boolean }) {
-  const tarifas = portada ? TARIFAS.slice(0, 3) : TARIFAS;
   return (
     <MarcoPantalla titulo="Portería">
       <PestanasGarita activa="canon" />
       <div className="space-y-1.5">
-        <p className="font-display text-[0.85rem] font-bold">¿Qué entró?</p>
+        <p className="text-[0.72rem] font-medium">¿Cuánto se cobró?</p>
         <Quizas si={resaltar === "tarifa"}>
-          <div className="grid grid-cols-3 gap-1.5">
-            {tarifas.map((t, i) => (
-              <TarjetaTarifa key={t.nombre} tarifa={t} elegida={i === 0} />
-            ))}
-          </div>
+          <span className="flex h-9 items-center rounded-md border bg-card px-2 font-display text-[1rem] font-bold tabular">
+            432.000
+          </span>
         </Quizas>
       </div>
       {portada ? null : (
         <Quizas si={resaltar === "cuantos"}>
           <div className="space-y-1.5">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-[0.72rem] font-medium">¿Cuántos vehículos?</p>
-              <div className="flex w-32 items-center gap-1">
-                <span className="flex size-7 items-center justify-center rounded-md border bg-card text-muted-foreground/60">
-                  <Minus className="size-3.5" strokeWidth={2.2} />
-                </span>
-                <span className="flex h-7 flex-1 items-center justify-center rounded-md border bg-card font-display text-[0.95rem] font-bold tabular">
-                  1
-                </span>
-                <span className="flex size-7 items-center justify-center rounded-md border bg-card">
-                  <Plus className="size-3.5" strokeWidth={2.2} />
-                </span>
-              </div>
-            </div>
             <div className="space-y-1">
               <p className="text-[0.72rem] font-medium">¿Cómo paga?</p>
               <div className="grid grid-cols-2 gap-1.5">
@@ -180,33 +127,33 @@ function FormCanon({ resaltar, portada = false }: { resaltar?: "tarifa" | "cuant
           <div className="flex items-end justify-between gap-2">
             <div>
               <p className="text-[0.72rem] text-muted-foreground">Total</p>
-              <p className="text-[0.72rem] text-muted-foreground">Camioneta · Efectivo</p>
+              <p className="text-[0.72rem] text-muted-foreground">Bono camioneros · Efectivo</p>
             </div>
-            <Money monto={6000} className="font-display text-[1.15rem] font-bold" />
+            <Money monto={432000} className="font-display text-[1.15rem] font-bold" />
           </div>
-          <BotonEjemplo className="w-full">Cobrar $ 6.000</BotonEjemplo>
+          <BotonEjemplo className="w-full">Cobrar $ 432.000</BotonEjemplo>
         </div>
       </Quizas>
     </MarcoPantalla>
   );
 }
 
-/** Portada del capítulo "Portería": las pestañas y el "¿Qué entró?". */
+/** Portada del capítulo "Portería": las pestañas y el "¿Cuánto se cobró?". */
 export function PortadaPorteria() {
   return <FormCanon portada resaltar="tarifa" />;
 }
 
-/** Las tarjetas de "¿Qué entró?" (una por vehículo, con su precio). */
+/** "¿Cuánto se cobró?": el bono camioneros se escribe a mano (0062). */
 export function PantallaCanonQueEntro() {
   return <FormCanon resaltar="tarifa" />;
 }
 
-/** Cantidad y cómo paga. */
+/** Cómo paga. */
 export function PantallaCanonCuantos() {
   return <FormCanon resaltar="cuantos" />;
 }
 
-/** El total y el botón «Cobrar $ 6.000». */
+/** El total y el botón «Cobrar $ 432.000». */
 export function PantallaCanonCobrar() {
   return <FormCanon resaltar="cobrar" />;
 }
@@ -219,7 +166,7 @@ export function PantallaCobrado() {
         <div className="min-w-0">
           <p className="flex items-center gap-1 text-[0.75rem] font-semibold">
             <CircleCheck className="size-3.5 shrink-0 text-pagado" strokeWidth={2.2} />
-            Cobrado N° 14 · Camioneta · $ 6.000
+            Cobrado N° 14 · Bono camioneros · $ 432.000
           </p>
           <p className="pl-4.5 text-[0.72rem] text-muted-foreground">Efectivo</p>
         </div>

@@ -115,7 +115,6 @@ export default async function BonoAdministracionPage({ searchParams }: { searchP
       <div className="grid gap-8 xl:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] xl:items-start">
         <CanonTransporte
           key={fechaCaja}
-          tarifas={tarifas.filter((t) => t.activo)}
           puestos={puestos}
           fecha={diaCaja ?? undefined}
           bloqueo={noDejaCobrar ? { titulo: "No se puede cobrar: la caja no está abierta (mirá el aviso de arriba)." } : null}

@@ -3443,10 +3443,11 @@ export type Database = {
           p_destino_detalle?: string
           p_fecha?: string
           p_medio?: Database["public"]["Enums"]["medio_pago"]
+          p_monto?: number
           p_notas?: string
           p_patente?: string
           p_ref?: string
-          p_tarifa: string
+          p_tarifa?: string
         }
         Returns: Json
       }

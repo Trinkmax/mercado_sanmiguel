@@ -27,6 +27,7 @@ import { FilaGasto, type GastoFila } from "@/components/gastos/fila-gasto";
 import { FiltroTipo, type FiltroTipoGasto } from "@/components/gastos/filtro-tipo";
 import { GrupoPlegable } from "@/components/gastos/grupo-plegable";
 import { cargarCajasElegibles } from "@/components/gastos/datos";
+import type { InicioCuentas } from "@/components/gastos/selector-origen";
 import {
   delDia,
   diasEntre,
@@ -99,7 +100,7 @@ export default async function GastosPage({
     const { error: errorFijos } = await supabase.rpc("generar_gastos_fijos");
     if (errorFijos) console.error("generar_gastos_fijos", errorFijos.message);
   }
-  const [gastosRes, rubrosRes, usoRes, cajas, impagosRes, pagadosHoyAntRes] = await Promise.all([
+  const [gastosRes, rubrosRes, usoRes, cajas, impagosRes, pagadosHoyAntRes, saldosRes] = await Promise.all([
     supabase.from("gastos").select(COLUMNAS_GASTO).eq("periodo", periodo),
     supabase
       .from("rubros_gasto")
@@ -134,6 +135,7 @@ export default async function GastosPage({
           .gte("pagado_en", `${hoy}T00:00:00-03:00`)
           .limit(100)
       : null,
+    supabase.from("saldos_iniciales").select("medio, fecha").eq("moneda", "ARS"),
   ]);
 
   const gastos = gastosRes.data ?? [];
@@ -311,8 +313,14 @@ export default async function GastosPage({
     .filter(Boolean)
     .join("&");
 
+  // Día en que arranca cada cuenta de Tesorería: un pago de antes no la baja (se avisa al pagar).
+  const inicioCuentas: InicioCuentas = {
+    efectivo: (saldosRes.data ?? []).find((s) => s.medio === "efectivo")?.fecha ?? null,
+    banco: (saldosRes.data ?? []).find((s) => s.medio === "transferencia")?.fecha ?? null,
+  };
   const filaProps = {
     hoy,
+    inicioCuentas,
     puedeOperar,
     verCheques,
     cajas,
@@ -322,6 +330,7 @@ export default async function GastosPage({
   const filaGasto = (g: GastoFila) => <FilaGasto key={g.id} g={g} {...filaProps} />;
   const mesEnFrase = labelPeriodo(periodo).toLowerCase();
   const propsDialogo = {
+    inicioCuentas,
     rubros,
     frecuentes,
     periodo,

@@ -1,8 +1,6 @@
 import type { AjustePaso, ContenidoCapitulo, Paso } from "@/lib/tour/tipos";
 import {
   PantallaCanonCobrar,
-  PantallaCanonCuantos,
-  PantallaCanonQueEntro,
   PantallaCobrado,
   PantallaCobrosDelDia,
   PantallaCobrosJefe,
@@ -80,24 +78,17 @@ function pasosPorteria(): Paso[] {
     enPestana("canon", {
       id: "que-entro",
       ancla: "porteria-que-entro",
-      titulo: "Tocá lo que entró",
+      titulo: "¿Cuánto se cobró?",
       texto:
-        "Cuando llega un vehículo, tocá su tarjeta: Camioneta, Chasis, Balancín… El precio ya está puesto: vos no escribís ningún monto.",
-      consejo: "La tarjeta que elegiste se pone azul, con un tilde.",
-      sinAncla: {
-        texto:
-          "Todavía no hay tarifas cargadas: pedile al Líder que las cargue. Cuando estén, vas a ver una tarjeta por cada vehículo, así:",
-        pantalla: PantallaCanonQueEntro,
-      },
+        "Escribí cuánto te pagaron de bono camioneros, todo junto. No hace falta elegir el tipo de vehículo ni la cantidad.",
+      consejo: "Abajo aparece el total con el botón «Cobrar»: revisá que sea lo que tenés en la mano.",
     }),
     enPestana("canon", {
       id: "cuantos",
       ancla: "porteria-cantidad-medio",
-      titulo: "¿Cuántos y cómo paga?",
-      texto:
-        "Si entran varios iguales, o la estadía es de varios días, tocá el número y escribilo (por ejemplo 23 días), o sumá con «+». Después tocá «Efectivo» o «Transferencia», según cómo te pague.",
+      titulo: "¿Cómo paga?",
+      texto: "Tocá «Efectivo» o «Transferencia», según cómo te pague.",
       consejo: "La patente y «¿A quién viene?» son opcionales: completalos solo si querés.",
-      sinAncla: { pantalla: PantallaCanonCuantos },
     }),
     enPestana("canon", {
       id: "cobrar",
@@ -216,13 +207,6 @@ function pasosLiderPorteria(): Paso[] {
       consejo: "«Canon del mes (.xlsx)» te baja todos los cobros del mes en una planilla.",
     },
     {
-      id: "tarifas",
-      ancla: "porteria-tarifas",
-      titulo: "Los precios los ponés vos",
-      texto:
-        "Con «Editar tarifas» cambiás el precio de cada vehículo: Camioneta, Chasis, Estadía diaria… En la garita nadie escribe montos: se cobra lo que dice la tarifa.",
-    },
-    {
       id: "tareas",
       ancla: ["porteria-abrir-canon", "porteria-pestanas"],
       titulo: "Las dos tareas de la garita",
@@ -241,12 +225,11 @@ function pasosLiderPorteria(): Paso[] {
       ancla: "porteria-que-entro",
       titulo: "Cobrar, si hace falta",
       texto:
-        "Es el mismo formulario del portero: se toca lo que entró, cuántos, cómo paga y «Cobrar». Lo que cobres acá va a la caja de portería de hoy.",
+        "Es el mismo formulario del portero: escribís cuánto se cobró, cómo paga y «Cobrar». Lo que cobres acá va a la caja de portería de hoy.",
       consejo: "Si la caja de portería de hoy ya se rindió, el formulario queda trabado hasta que la reabran.",
       sinAncla: {
         texto:
-          "Mirando otro día no se cobra: tocá «Volver a hoy». Si no hay tarifas, cargalas con «Editar tarifas». El formulario de hoy se ve así:",
-        pantalla: PantallaCanonQueEntro,
+          "Mirando otro día no se cobra: tocá «Volver a hoy». Ahí escribís cuánto se cobró y tocás «Cobrar».",
       },
     }),
     enPestana("canon", {

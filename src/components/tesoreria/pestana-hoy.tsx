@@ -262,6 +262,10 @@ export async function PestanaHoy({
                         pagadoDesde: g.pagado_desde,
                       }}
                       cajas={cajasElegibles}
+                      inicioCuentas={{
+                        efectivo: saldos.find((x) => x.medio === "efectivo" && x.moneda === "ARS")?.fecha ?? null,
+                        banco: saldos.find((x) => x.medio === "transferencia" && x.moneda === "ARS")?.fecha ?? null,
+                      }}
                       hoy={hoy}
                       preferirCaja={rol !== "tesoreria"}
                       soloPagar
