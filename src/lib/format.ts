@@ -145,6 +145,14 @@ export function sumarMeses(periodo: string, meses: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`;
 }
 
+/**
+ * La energía se cobra a mes vencido (0063): en el período de noviembre se cobra lo que marcó
+ * el medidor en octubre. "2026-11-01" → "octubre".
+ */
+export function mesDelConsumo(periodo: string): string {
+  return labelPeriodo(sumarMeses(periodo, -1)).split(" ")[0].toLowerCase();
+}
+
 /** Hoy en el huso argentino como "YYYY-MM-DD" (idéntico a private.hoy_ar en SQL). */
 export function hoyISO(): string {
   // en-CA formatea YYYY-MM-DD

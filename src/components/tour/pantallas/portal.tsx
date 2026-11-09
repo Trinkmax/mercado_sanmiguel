@@ -292,7 +292,7 @@ export function PantallaConceptosSocio() {
         <Hoja className="divide-y divide-border">
           <FilaConceptoMini icono={Store} nombre="Expensas de tu puesto" lugar="Puesto 54" monto={939130} sello="pendiente" />
           <FilaConceptoMini icono={Car} nombre="Tu cochera" lugar="Cochera 12" monto={31000} sello="pagado" />
-          <FilaConceptoMini icono={Zap} nombre="Luz" lugar="Puesto 54" monto={76000} sello="parcial" />
+          <FilaConceptoMini icono={Zap} nombre="Luz de octubre" lugar="Puesto 54" monto={76000} sello="parcial" />
         </Hoja>
       </FondoPortal>
     </MarcoPantalla>

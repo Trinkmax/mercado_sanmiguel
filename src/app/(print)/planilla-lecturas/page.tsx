@@ -1,6 +1,7 @@
 import { requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { formatNumero, labelPeriodo, periodoActual } from "@/lib/format";
+import { formatNumero, labelPeriodo, mesDelConsumo, periodoActual } from "@/lib/format";
+import { periodoMaximoEnergia } from "@/components/energia/selector-periodo";
 import { BotonImprimir } from "@/components/shared/boton-imprimir";
 import { etiquetaEspacio } from "@/components/mapa/geometria";
 
@@ -20,12 +21,21 @@ type EspacioMedidor = {
  * orden en que se recorre el mercado (según su lugar en el plano; los que no tienen
  * lugar, al final), la última lectura conocida impresa y una columna ancha vacía para
  * anotar la lectura actual con lapicera.
+ *
+ * ?periodo= es el mes que se va a cobrar (el que se mira en Energía), hasta el que viene: la
+ * de diciembre se imprime a fin de noviembre, con la lectura de noviembre como anterior.
  */
-export default async function PlanillaLecturasPage() {
+export default async function PlanillaLecturasPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ periodo?: string }>;
+}) {
   // J5: Tesorería ya no carga lecturas.
   const perfil = await requireRol("admin", "lider");
   const supabase = await createClient();
-  const periodo = periodoActual();
+  const crudo = (await searchParams).periodo ?? "";
+  const periodo =
+    /^\d{4}-\d{2}-01$/.test(crudo) && crudo <= periodoMaximoEnergia() ? crudo : periodoActual();
 
   const [orgRes, medidoresRes, lecturasMesRes, previasRes, configRes] = await Promise.all([
     supabase
@@ -41,6 +51,7 @@ export default async function PlanillaLecturasPage() {
     supabase
       .from("lecturas")
       .select("medidor_id, lectura_anterior")
+      .eq("org_id", perfil.org_id)
       .eq("periodo", periodo),
     // Una fila por medidor, calculada en SQL (el historial entero pasaba el tope de 1000 filas).
     supabase.rpc("ultimas_lecturas", { p_antes: periodo }),
@@ -81,7 +92,7 @@ export default async function PlanillaLecturasPage() {
 
   return (
     <div>
-      <BotonImprimir volverA="/energia" autoImprimir={autoImprimir} />
+      <BotonImprimir volverA={`/energia?periodo=${periodo}`} autoImprimir={autoImprimir} />
 
       <div className="etiqueta mb-6">
         <div className="etiqueta-interior space-y-1 text-center">
@@ -92,8 +103,8 @@ export default async function PlanillaLecturasPage() {
             Planilla de lecturas — {labelPeriodo(periodo)}
           </h1>
           <p className="text-sm text-muted-foreground">
-            {medidores.length} medidores, en el orden del recorrido · Anotá la lectura
-            actual de cada uno en la última columna.
+            Consumo de {mesDelConsumo(periodo)} · {medidores.length} medidores, en el orden del
+            recorrido · Anotá la lectura actual de cada uno en la última columna.
           </p>
         </div>
       </div>

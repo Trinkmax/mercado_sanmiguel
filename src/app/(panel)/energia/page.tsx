@@ -1,15 +1,15 @@
 import Link from "next/link";
-import { ArrowRight, Equal, Gauge, Plus, Printer, type LucideIcon } from "lucide-react";
+import { ArrowRight, CalendarClock, Equal, Gauge, Plus, Printer, ReceiptText, type LucideIcon } from "lucide-react";
 import { aplicaDirecto, requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { labelPeriodo, periodoActual } from "@/lib/format";
+import { labelPeriodo, mesDelConsumo, periodoActual } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Money } from "@/components/shared/money";
 import { BotonExportar } from "@/components/shared/boton-exportar";
 import { PrecioConcepto, PrecioKwh } from "@/components/energia/precio-kwh";
-import { SelectorPeriodo } from "@/components/energia/selector-periodo";
+import { periodoMaximoEnergia, SelectorPeriodo } from "@/components/energia/selector-periodo";
 import { CargaRapida, type FilaMedidor } from "@/components/energia/carga-rapida";
 import { SumarAbonos, type AbonoFaltante } from "@/components/energia/sumar-abonos";
 import { AgregarMedidor, type ClienteParaMedidor } from "@/components/energia/agregar-medidor";
@@ -64,13 +64,14 @@ export default async function EnergiaPage({
   const supabase = await createClient();
   const params = await searchParams;
 
-  // Período elegido (?periodo=YYYY-MM-01), acotado al mes actual como máximo.
+  // Período elegido (?periodo=YYYY-MM-01), hasta el mes que viene como máximo (la planilla
+  // del electricista se imprime antes de que empiece y las lecturas se pueden adelantar, 0063).
   const actual = periodoActual();
   let periodo = actual;
   const crudo = params.periodo ?? "";
   if (/^\d{4}-\d{2}(-\d{2})?$/.test(crudo)) {
     const normalizado = `${crudo.slice(0, 7)}-01`;
-    if (normalizado <= actual) periodo = normalizado;
+    if (normalizado <= periodoMaximoEnergia()) periodo = normalizado;
   }
 
   const [
@@ -258,6 +259,9 @@ export default async function EnergiaPage({
   const totalEnergia = totalAbonos + consumoCargado;
   const mesGenerado = Boolean(periodoRes.data?.generado_en);
   const mes = labelPeriodo(periodo);
+  // A mes vencido (0063): en noviembre se cobra lo que marcaron los medidores en octubre.
+  const consumo = mesDelConsumo(periodo);
+  const esMesQueViene = periodo > actual;
   // Solo el mes en curso: sumarle el abono a un mes viejo sería cobrarlo retroactivo (§1.2-11).
   const esMesActual = periodo === actual;
   const abonosFaltantes = esMesActual && mesGenerado ? sinAbonoGenerado : [];
@@ -281,9 +285,15 @@ export default async function EnergiaPage({
           aplicaDirecto={aplicaDirecto(perfil.rol)}
         />
         <Button asChild variant="outline" className="h-11 px-4 text-sm" data-tour="energia-planilla">
-          <Link href="/planilla-lecturas">
+          <Link href={`/planilla-lecturas?periodo=${periodo}`}>
             <Printer className="size-5" strokeWidth={2} />
             Imprimir planilla para el electricista
+          </Link>
+        </Button>
+        <Button asChild variant="outline" className="h-11 px-4 text-sm" data-tour="energia-cedulones">
+          <Link href={`/cedulones/${periodo}`}>
+            <ReceiptText className="size-5" strokeWidth={2} />
+            Imprimir cedulones
           </Link>
         </Button>
         <BotonExportar dataset="lecturas" periodo={periodo} label="Exportar lecturas" />
@@ -291,6 +301,17 @@ export default async function EnergiaPage({
       </PageHeader>
 
       <SelectorPeriodo periodo={periodo} />
+
+      {esMesQueViene ? (
+        <div className="flex items-start gap-3 rounded-xl border border-primary/30 bg-primary/5 px-4 py-3">
+          <CalendarClock className="mt-0.5 size-5 shrink-0 text-primary" strokeWidth={2} />
+          <p>
+            <span className="font-semibold">{mes} todavía no empezó.</span> Ya podés imprimir la
+            planilla para el electricista y adelantar las lecturas de fin de {consumo}: se cobran en{" "}
+            {mes.split(" ")[0].toLowerCase()}.
+          </p>
+        </div>
+      ) : null}
 
       {/* I1: la energía del mes. Arriba el abono (editable); abajo la cuenta, con cada
           signo pegado a su término: si no entra en un renglón, "+ Consumo" y "= Total"
@@ -302,7 +323,9 @@ export default async function EnergiaPage({
       >
         <div className="flex flex-wrap items-center justify-between gap-x-5 gap-y-3">
           <div className="min-w-0">
-            <p className="font-display text-base font-bold">Energía de {mes}</p>
+            <p className="font-display text-base font-bold">
+              Energía de {mes} <span className="font-normal text-muted-foreground">· consumo de {consumo}</span>
+            </p>
             <p className="text-sm text-muted-foreground">
               {mesGenerado ? "Abonos generados con el mes" : "El abono se suma al generar el mes"}
             </p>
@@ -352,7 +375,8 @@ export default async function EnergiaPage({
       <div className="space-y-2 text-sm text-muted-foreground">
         <p>
           Al guardar cada lectura se genera solo el cargo del consumo del cliente, y ya queda listo
-          para cobrarse.
+          para cobrarse. Va a mes vencido: en su cuenta y en el cedulón figura como «Energía de{" "}
+          {consumo}».
         </p>
         {mesGenerado ? (
           <p>

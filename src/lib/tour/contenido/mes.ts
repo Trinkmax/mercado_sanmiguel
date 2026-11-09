@@ -202,8 +202,17 @@ export const ENERGIA: ContenidoCapitulo = {
         ancla: "energia-mes",
         titulo: "La energía del mes",
         texto:
-          "Esta es la cuenta del mes: el abono de cada cliente con medidor, más el consumo que vas cargando, da el total de energía. Con las flechas de arriba mirás otro mes.",
-        consejo: "El abono mensual se suma solo cuando se genera el mes en «Facturación».",
+          "Esta es la cuenta del mes: el abono de cada cliente con medidor, más el consumo que vas cargando, da el total de energía. Va a mes vencido: en noviembre se cobra lo que marcaron los medidores en octubre, y al cliente le figura «Energía de octubre».",
+        consejo:
+          "Con las flechas de arriba mirás otro mes, hasta el que viene: así imprimís la planilla antes y adelantás las lecturas de fin de mes.",
+      },
+      {
+        id: "cedulones",
+        ancla: "energia-cedulones",
+        titulo: "Los cedulones",
+        texto:
+          "Con las lecturas cargadas, tocá «Imprimir cedulones». Sale uno por cliente con todos sus medidores sumados (cada medidor con su consumo, el abono y el total), dos por hoja para cortar.",
+        consejo: "El de un solo cliente se imprime desde su ficha, en «Medidores».",
       },
       {
         id: "cargar",

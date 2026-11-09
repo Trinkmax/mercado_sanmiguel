@@ -57,6 +57,7 @@ import {
   labelCategoria,
 } from "@/components/clientes/constantes";
 import { DescripcionCargo } from "@/components/cobranza/descripcion-cargo";
+import { BotonCedulon } from "@/components/energia/boton-cedulon";
 import { EnElPlano } from "@/components/mapa/en-el-plano";
 import { conArticulo, etiquetaEspacio, etiquetaEspacios, listaConY } from "@/components/mapa/geometria";
 import type { TipoEspacio } from "@/components/mapa/tipos";
@@ -142,7 +143,7 @@ type Supabase = Awaited<ReturnType<typeof createClient>>;
 async function datosEnergia(
   supabase: Supabase,
   clienteId: string
-): Promise<{ medidores: MedidorConLectura[]; abono: AbonoEnergia }> {
+): Promise<{ medidores: MedidorConLectura[]; abono: AbonoEnergia; ultimoPeriodo: string | null }> {
   const [medidoresRes, abenRes, pendientesRes] = await Promise.all([
     supabase
       .from("medidores")
@@ -179,6 +180,7 @@ async function datosEnergia(
   );
 
   // Última lectura conocida de cada medidor (pocos por cliente: sin tope de filas).
+  let ultimoPeriodo: string | null = null;
   const ultimaPorMedidor = new Map<string, { lectura_actual: number; periodo: string; fecha_lectura: string }>();
   if (medidores.length > 0) {
     const { data: lecturas } = await supabase
@@ -190,6 +192,7 @@ async function datosEnergia(
       )
       .order("periodo", { ascending: false });
     for (const l of lecturas ?? []) {
+      if (!ultimoPeriodo || l.periodo > ultimoPeriodo) ultimoPeriodo = l.periodo;
       if (!ultimaPorMedidor.has(l.medidor_id)) {
         ultimaPorMedidor.set(l.medidor_id, {
           lectura_actual: Number(l.lectura_actual),
@@ -215,6 +218,8 @@ async function datosEnergia(
       exento: Boolean(itemAben && !itemAben.activo),
       pendiente: abonoPendiente,
     },
+    // El cedulón sale del último mes con alguna lectura cargada (0063: a mes vencido).
+    ultimoPeriodo,
   };
 }
 
@@ -234,7 +239,7 @@ async function FichaSoloEnergia({
   categoria: CategoriaCliente;
   rol: Rol;
 }) {
-  const [{ medidores, abono }, espaciosRes] = await Promise.all([
+  const [{ medidores, abono, ultimoPeriodo }, espaciosRes] = await Promise.all([
     datosEnergia(supabase, cliente.id),
     supabase.from("espacios").select("id").eq("cliente_id", cliente.id),
   ]);
@@ -259,9 +264,12 @@ async function FichaSoloEnergia({
           </Button>
         </PageHeader>
       </div>
-      <div className="flex items-center gap-2 text-lg font-semibold">
-        <Zap className="size-5 text-muted-foreground" strokeWidth={1.9} />
-        Medidores y abono de energía
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2 text-lg font-semibold">
+          <Zap className="size-5 text-muted-foreground" strokeWidth={1.9} />
+          Medidores y abono de energía
+        </div>
+        {ultimoPeriodo ? <BotonCedulon clienteId={cliente.id} periodo={ultimoPeriodo} /> : null}
       </div>
       <MedidoresCliente
         clienteId={cliente.id}
@@ -1083,7 +1091,12 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
 
         {/* ------------------------------------------------ Medidores */}
         {energia ? (
-          <TabsContent value="medidores" className="pt-4 text-base">
+          <TabsContent value="medidores" className="space-y-4 pt-4 text-base">
+            {energia.ultimoPeriodo ? (
+              <div className="flex justify-end">
+                <BotonCedulon clienteId={cliente.id} periodo={energia.ultimoPeriodo} />
+              </div>
+            ) : null}
             <MedidoresCliente
               clienteId={cliente.id}
               medidores={energia.medidores}

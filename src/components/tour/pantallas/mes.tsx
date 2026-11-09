@@ -484,7 +484,9 @@ function EnergiaDelMes() {
     <div className="space-y-1.5 rounded-lg border border-border bg-card p-2.5">
       <div className="flex items-center justify-between gap-2">
         <div>
-          <p className="font-display text-[0.8rem] font-bold">Energía de {MES}</p>
+          <p className="font-display text-[0.8rem] font-bold">
+            Energía de {MES} <span className="font-normal text-muted-foreground">· consumo de septiembre</span>
+          </p>
           <Chico>Abonos generados con el mes</Chico>
         </div>
         <PrecioChico etiqueta="Abono mensual" monto={15000} />

@@ -2,6 +2,7 @@ import {
   formatFechaLarga,
   hoyISO,
   labelPeriodo,
+  mesDelConsumo,
   nivelDeuda,
   redondear2,
   saldoCargo,
@@ -77,12 +78,20 @@ const POR_CODIGO: Record<string, Datos> = {
   EXPE: { nombre: "Expensas de tu contéiner", icono: "conteiner", ayuda: "Lo que paga tu contéiner todos los meses." },
   EXPQ: { nombre: "Tu quinta", icono: "quinta", ayuda: "El alquiler mensual de tu lugar en la playa de quintas." },
   EXPC: { nombre: "Tu cochera", icono: "cochera", ayuda: "El alquiler mensual de tu cochera." },
-  ENER: { nombre: "Luz", icono: "luz", ayuda: "Lo que marcó tu medidor este mes." },
   ABEN: { nombre: "Abono de la luz", icono: "luz", ayuda: "El abono fijo de la luz, todos los meses." },
   MULT: { nombre: "Multa", icono: "multa", ayuda: "Una multa de la cooperativa. Los detalles están en Mensajes." },
 };
 
-function datosDe(c: Pick<CargoCrudo, "codigo" | "descripcion" | "reconocimiento">): Datos {
+function datosDe(c: Pick<CargoCrudo, "codigo" | "descripcion" | "reconocimiento" | "periodo">): Datos {
+  // La luz va a mes vencido (0063): en noviembre se paga lo que marcó el medidor en octubre.
+  if (c.codigo === "ENER") {
+    const mes = mesDelConsumo(c.periodo);
+    return {
+      nombre: `Luz de ${mes}`,
+      icono: "luz",
+      ayuda: `Lo que marcó tu medidor en ${mes}. La luz se paga a mes vencido.`,
+    };
+  }
   if (c.codigo === "RD") {
     return c.reconocimiento
       ? {
