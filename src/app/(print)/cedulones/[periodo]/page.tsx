@@ -4,13 +4,13 @@ import { AlertTriangle, ArrowLeft, ReceiptText } from "lucide-react";
 import { requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { formatARS, labelPeriodo, mesDelConsumo, sumarMeses } from "@/lib/format";
-import { cn } from "@/lib/utils";
 import { etiquetaEspacio, textoEspacios } from "@/components/mapa/geometria";
 import type { TipoEspacio } from "@/components/mapa/tipos";
 import { periodoMaximoEnergia } from "@/components/energia/selector-periodo";
 import { Button } from "@/components/ui/button";
 import { BotonImprimir } from "@/components/shared/boton-imprimir";
-import { HojaCedulon, type Cedulon } from "@/components/energia/hoja-cedulon";
+import { type Cedulon } from "@/components/energia/hoja-cedulon";
+import { HojasCedulones } from "@/components/energia/hojas-cedulones";
 
 export const metadata = { title: "Cedulones de energía" };
 
@@ -33,7 +33,7 @@ function redondear2(n: number): number {
  * Pedido del mercado (09/11/2026): «es por cliente, no por medidor, debe sumarse: Medidor 1 =
  * tanto, Medidor 2 = tanto. Que se imprima una vez. Cedulón se llama el tipo de comprobante.»
  *
- * Un cedulón por cliente con todos sus medidores y el abono, dos por hoja A4 para cortar. La
+ * Un cedulón por cliente con todos sus medidores y el abono, tres por hoja A4 para cortar. La
  * energía va a mes vencido (0063): el de noviembre es el consumo de octubre. Salen en el orden
  * del recorrido, como la planilla del electricista. Con ?cliente= sale solo el de ese cliente.
  */
@@ -240,7 +240,7 @@ export default async function CedulonesPage({
         </p>
         {cedulones.length > 1 ? (
           <p className="text-muted-foreground">
-            Uno por cliente, con todos sus medidores sumados. Salen dos por hoja, en el orden del
+            Uno por cliente, con todos sus medidores sumados. Salen tres por hoja, en el orden del
             recorrido: se cortan por la línea punteada.
           </p>
         ) : null}
@@ -260,25 +260,7 @@ export default async function CedulonesPage({
         ) : null}
       </div>
 
-      <div>
-        {cedulones.map((c, i) => {
-          const segundoDeLaHoja = i % 2 === 1;
-          const ultimo = i === cedulones.length - 1;
-          return (
-            <div key={c.clienteId} className={cn(segundoDeLaHoja && !ultimo && "print:break-after-page")}>
-              <HojaCedulon c={c} periodo={periodo} mes={mes} consumoLargo={consumoLargo} />
-              {!segundoDeLaHoja && !ultimo ? (
-                <div
-                  aria-hidden
-                  className="my-8 border-t-2 border-dashed border-foreground/40 print:my-[5mm]"
-                />
-              ) : !ultimo ? (
-                <div aria-hidden className="my-8 print:hidden" />
-              ) : null}
-            </div>
-          );
-        })}
-      </div>
+      <HojasCedulones cedulones={cedulones} periodo={periodo} mes={mes} consumoLargo={consumoLargo} />
     </>
   );
 }

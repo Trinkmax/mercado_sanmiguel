@@ -211,7 +211,7 @@ export const ENERGIA: ContenidoCapitulo = {
         ancla: "energia-cedulones",
         titulo: "Los cedulones",
         texto:
-          "Con las lecturas cargadas, tocá «Imprimir cedulones». Sale uno por cliente con todos sus medidores sumados (cada medidor con su consumo, el abono y el total), dos por hoja para cortar.",
+          "Con las lecturas cargadas, tocá «Imprimir cedulones». Sale uno por cliente con todos sus medidores sumados (cada medidor con su consumo, el abono y el total), tres por hoja para cortar.",
         consejo: "El de un solo cliente se imprime desde su ficha, en «Medidores».",
       },
       {
