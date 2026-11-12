@@ -3,8 +3,9 @@ import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { Perfil } from "@/lib/auth";
 import type { BadgesNav } from "@/lib/navegacion";
-import { hoyISO } from "@/lib/format";
+import { hoyISO, periodoActual } from "@/lib/format";
 import { categoriasDeRol } from "@/lib/segmentos";
+import { CATEGORIAS_LIBRES_DEUDA } from "@/lib/libre-deuda";
 
 /**
  * Pendientes por ruta para los badges de la navegación (§6 M8.7). Una sola pasada
@@ -18,6 +19,7 @@ import { categoriasDeRol } from "@/lib/segmentos";
  *  - Tesorería: cajas para contar y validar, transferencias sin conciliar,
  *    cheques para depositar + entregados sin gasto, gastos vencidos.
  *  - Portería: nada más que lo de abajo (simple).
+ *  - Administración y el Líder, además: los libres deuda del mes que faltan imprimir (0064).
  *  - Portería, Tesorería, el Jefe y Administración, además: SUS solicitudes con una respuesta
  *    o un cambio que todavía no abrieron (se apaga al abrir el detalle).
  */
@@ -43,6 +45,17 @@ export const pendientesNav = cache(async (perfil: Perfil): Promise<BadgesNav> =>
         () => []
       )
     : Promise.resolve([]);
+  // Los que pagaron todo el mes y todavía no tienen su libre deuda impreso (0064).
+  const libresDeudaP: Promise<number> =
+    perfil.rol === "admin" || perfil.rol === "lider"
+      ? Promise.resolve(supabase.rpc("libres_deuda_del_mes", { p_periodo: periodoActual() })).then(
+          (r) => {
+            const categorias = categoriasDeRol(perfil.rol).filter((c) => CATEGORIAS_LIBRES_DEUDA.includes(c));
+            return (r.data ?? []).filter((f) => !f.impreso_en && categorias.includes(f.categoria)).length;
+          },
+          () => 0
+        )
+      : Promise.resolve(0);
   // Las que ya suman al badge por otro lado (no se cuentan dos veces).
   const yaContadas = new Set<string>();
 
@@ -227,8 +240,9 @@ export const pendientesNav = cache(async (perfil: Perfil): Promise<BadgesNav> =>
   }
 
   // Ya estaba en vuelo desde el principio: esperarla acá no suma otro viaje a la base.
-  const conRespuesta = await conRespuestaP;
+  const [conRespuesta, libresDeuda] = await Promise.all([conRespuestaP, libresDeudaP]);
   sumar("/solicitudes", conRespuesta.filter((id) => !yaContadas.has(id)).length);
+  sumar("/libres-deuda", libresDeuda);
 
   return badges;
 });

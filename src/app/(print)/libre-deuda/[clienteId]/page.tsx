@@ -5,15 +5,14 @@ import { requireRol } from "@/lib/auth";
 import { ROLES_COBRAN } from "@/lib/roles";
 import { categoriasDeRol, LABEL_CATEGORIA, type CategoriaCliente } from "@/lib/segmentos";
 import { createClient } from "@/lib/supabase/server";
-import { formatCuit, formatFecha, formatNumero, hoyISO, saldoCargo } from "@/lib/format";
-import { textoEspacios } from "@/components/mapa/geometria";
-import type { TipoEspacio } from "@/components/mapa/tipos";
+import { formatNumero, periodoActual } from "@/lib/format";
+import { armarLibresDeuda } from "@/lib/libre-deuda";
+import { marcarLibresDeuda } from "@/lib/actions/libres-deuda";
 import { Button } from "@/components/ui/button";
-import { Marca } from "@/components/shared/marca";
 import { Sello } from "@/components/shared/sello";
-import { Codigo } from "@/components/shared/codigo";
 import { Money } from "@/components/shared/money";
 import { BotonImprimir } from "@/components/shared/boton-imprimir";
+import { HojaLibreDeuda } from "@/components/libre-deuda/hoja-libre-deuda";
 
 export const metadata = { title: "Libre deuda" };
 
@@ -62,39 +61,17 @@ export default async function LibreDeudaPage({ params }: Props) {
   }
   const puedeCobrar = ROLES_COBRAN.includes(perfil.rol);
 
-  const [cargosRes, itemsRes, configRes, espaciosRes] = await Promise.all([
-    supabase
-      .from("cargos")
-      .select("estado, monto, monto_pagado, descuento_pronto_pago, vencimiento")
-      .eq("cliente_id", clienteId)
-      .in("estado", ["pendiente", "parcial"]),
-    supabase
-      .from("cliente_conceptos")
-      .select("cantidad, activo, conceptos(codigo, nombre)")
-      .eq("cliente_id", clienteId)
-      .eq("activo", true),
-    supabase
-      .from("configuracion")
-      .select("impresion_directa")
-      .eq("org_id", perfil.org_id)
-      .maybeSingle(),
-    // Sus lugares en el plano ("Puesto 58 · Puesto propio 12"). El Jefe no lee espacios
-    // (0022) y sus quinteros no tienen puesto: le vuelve vacío.
-    supabase
-      .from("espacios")
-      .select("tipo, numero, medio, propio, x, y")
-      .eq("org_id", perfil.org_id)
-      .eq("cliente_id", clienteId),
+  const periodo = periodoActual();
+  const [{ libres, conDeuda }, configRes] = await Promise.all([
+    armarLibresDeuda(supabase, perfil.org_id, [clienteId], periodo),
+    supabase.from("configuracion").select("impresion_directa").eq("org_id", perfil.org_id).maybeSingle(),
   ]);
   const autoImprimir = Boolean(configRes.data?.impresion_directa);
-
-  const deuda = (cargosRes.data ?? []).reduce(
-    (acc, c) => acc + saldoCargo(c),
-    0
-  );
+  const ld = libres[0];
+  const deuda = conDeuda[0]?.deuda ?? 0;
 
   // Con deuda no hay libre deuda: lo decimos claro y mandamos a cobrar.
-  if (deuda > 0) {
+  if (!ld) {
     return (
       <div className="space-y-6 py-10">
         <div className="etiqueta">
@@ -135,90 +112,14 @@ export default async function LibreDeudaPage({ params }: Props) {
     );
   }
 
-  const lugares = textoEspacios(
-    (espaciosRes.data ?? []).map((e) => ({
-      tipo: e.tipo as TipoEspacio,
-      numero: e.numero,
-      medio: e.medio,
-      propio: e.propio,
-      x: Number(e.x),
-      y: Number(e.y),
-    }))
-  );
-
-  const conceptos = (itemsRes.data ?? [])
-    .map((i) => ({
-      codigo: i.conceptos?.codigo ?? "?",
-      nombre: i.conceptos?.nombre ?? "Concepto",
-      cantidad: Number(i.cantidad),
-    }))
-    .sort((a, b) => a.codigo.localeCompare(b.codigo));
-
   return (
     <>
-      <BotonImprimir volverA={`/clientes/${cliente.id}`} autoImprimir={autoImprimir} />
-
-      <div className="etiqueta">
-        <div className="etiqueta-interior space-y-8 p-8">
-          <header className="flex flex-wrap items-start justify-between gap-6 border-b pb-6">
-            <Marca />
-            <div className="text-right text-sm text-muted-foreground">
-              <p>Malagueño, Córdoba</p>
-              <p>Emitido el {formatFecha(hoyISO())}</p>
-            </div>
-          </header>
-
-          <div className="flex flex-wrap items-center justify-between gap-6">
-            <h1 className="font-display text-5xl font-bold uppercase tracking-wide">
-              Libre deuda
-            </h1>
-            <Sello grande estado="pagado" texto="Libre deuda" />
-          </div>
-
-          <section className="space-y-1">
-            <p className="text-2xl font-semibold">{cliente.nombre}</p>
-            <div className="flex flex-wrap items-center gap-3 text-muted-foreground">
-              <Codigo codigo={`N° ${cliente.codigo}`} />
-              {cliente.cuit ? <span>CUIT {formatCuit(cliente.cuit)}</span> : null}
-              {lugares ? <span>{lugares}</span> : null}
-            </div>
-          </section>
-
-          <p className="text-lg leading-relaxed">
-            No registra deudas con la Cooperativa Mercado San Miguel al{" "}
-            <strong>{formatFecha(hoyISO())}</strong>.
-          </p>
-
-          {conceptos.length > 0 ? (
-            <section className="space-y-3">
-              <h2 className="text-sm font-semibold tracking-wide text-muted-foreground uppercase">
-                Conceptos que abona
-              </h2>
-              <ul className="space-y-2">
-                {conceptos.map((c) => (
-                  <li key={c.codigo} className="flex items-center gap-3">
-                    <Codigo codigo={c.codigo} />
-                    <span className="flex-1">{c.nombre}</span>
-                    <span className="text-muted-foreground tabular">
-                      × {formatNumero(c.cantidad)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ) : null}
-
-          <div className="pt-16">
-            <div className="mx-auto w-64 border-t border-foreground pt-2 text-center text-sm">
-              Administración
-            </div>
-          </div>
-
-          <p className="text-center text-xs text-muted-foreground">
-            Comprobante interno — sin validez fiscal
-          </p>
-        </div>
-      </div>
+      <BotonImprimir
+        volverA={`/clientes/${cliente.id}`}
+        autoImprimir={autoImprimir}
+        alImprimir={marcarLibresDeuda.bind(null, [cliente.id], periodo)}
+      />
+      <HojaLibreDeuda ld={ld} />
     </>
   );
 }

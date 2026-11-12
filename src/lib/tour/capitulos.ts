@@ -6,7 +6,7 @@ import { INICIO, MAPA } from "@/lib/tour/contenido/inicio-mapa";
 import { COBRAR } from "@/lib/tour/contenido/cobranza";
 import { CAJA, CHEQUES } from "@/lib/tour/contenido/caja-cheques";
 import { GASTOS, TESORERIA } from "@/lib/tour/contenido/tesoreria-gastos";
-import { APROBACIONES, CLIENTES } from "@/lib/tour/contenido/clientes-aprobaciones";
+import { APROBACIONES, CLIENTES, LIBRES_DEUDA } from "@/lib/tour/contenido/clientes-aprobaciones";
 import { PERSONAL, PORTERIA } from "@/lib/tour/contenido/porteria-personal";
 import { COMUNICACIONES, NOVEDADES } from "@/lib/tour/contenido/comunicaciones-novedades";
 import { SOLICITUDES } from "@/lib/tour/contenido/solicitudes";
@@ -34,6 +34,7 @@ const CONTENIDO: Record<IdCapitulo, ContenidoCapitulo> = {
   tesoreria: TESORERIA,
   gastos: GASTOS,
   clientes: CLIENTES,
+  "libres-deuda": LIBRES_DEUDA,
   aprobaciones: APROBACIONES,
   porteria: PORTERIA,
   personal: PERSONAL,

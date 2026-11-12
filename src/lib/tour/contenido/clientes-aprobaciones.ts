@@ -544,3 +544,44 @@ export const APROBACIONES: ContenidoCapitulo = {
           },
         ],
 };
+
+// ---------------------------------------------------------------------------------------
+// Libres deuda (admin, lider) · pedido del 12/11/2026
+// ---------------------------------------------------------------------------------------
+
+/** Capítulo "libres-deuda" (metadatos en src/lib/tour/indice.ts). */
+export const LIBRES_DEUDA: ContenidoCapitulo = {
+  pasos: (): Paso[] => [
+    {
+      id: "que-es",
+      ancla: "encabezado",
+      titulo: "Los libres deuda del mes",
+      texto:
+        "Acá aparece cada cliente que pagó todo el mes y no debe nada de antes. Imprimís sus libres deuda juntos, los firmás y se los entregás.",
+      consejo: "El número al lado de «Libres deuda» en el menú te avisa cuántos faltan imprimir.",
+    },
+    {
+      id: "para-imprimir",
+      ancla: "libres-para-imprimir",
+      titulo: "Los que faltan imprimir",
+      texto: "Arrancan marcados. Si a alguno no lo querés imprimir ahora, sacale la marca.",
+      opcional: true,
+    },
+    {
+      id: "imprimir",
+      ancla: "libres-imprimir",
+      titulo: "Imprimí todos juntos",
+      texto:
+        "Tocá «Imprimir». Sale uno por hoja con todo lo que pagó en el mes, la energía también, y quedan anotados como impresos.",
+      opcional: true,
+    },
+    {
+      id: "impresos",
+      ancla: "libres-impresos",
+      titulo: "Los ya impresos",
+      texto: "Quedan abajo, con la fecha. Si se perdió alguno, marcalo y volvé a imprimirlo.",
+      consejo: "El libre deuda de un solo cliente también sale desde su ficha.",
+      opcional: true,
+    },
+  ],
+};

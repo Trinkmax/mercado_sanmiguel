@@ -6,6 +6,7 @@ import {
   Compass,
   DoorOpen,
   FileBarChart2,
+  FileCheck2,
   FolderOpen,
   HandCoins,
   Landmark,
@@ -203,6 +204,14 @@ export const CAPITULOS_META: Record<IdCapitulo, MetaCapitulo> = {
           ? "Anotar un pedido o un aviso para el Jefe de Portería e imprimirlo"
           : "Pedidos, reclamos y consultas: contestar y seguir cada uno",
   },
+  "libres-deuda": {
+    id: "libres-deuda",
+    ruta: "/libres-deuda",
+    roles: ["admin", "lider"],
+    icono: FileCheck2,
+    titulo: () => "Libres deuda",
+    resumen: () => "Los que pagaron todo el mes: sus libres deuda para imprimir juntos y entregar",
+  },
   facturacion: {
     id: "facturacion",
     ruta: "/facturacion",
@@ -309,6 +318,7 @@ export const RECORRIDOS: Record<Rol, IdCapitulo[]> = {
     "caja",
     "mapa",
     "clientes",
+    "libres-deuda",
     "solicitudes",
     "comunicaciones",
     "novedades",
@@ -323,6 +333,7 @@ export const RECORRIDOS: Record<Rol, IdCapitulo[]> = {
     "inicio",
     "aprobaciones",
     "clientes",
+    "libres-deuda",
     "solicitudes",
     "comunicaciones",
     "novedades",

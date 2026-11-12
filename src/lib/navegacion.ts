@@ -6,6 +6,7 @@ import {
   ClipboardList,
   DoorOpen,
   FileBarChart2,
+  FileCheck2,
   HandCoins,
   LayoutDashboard,
   Map,
@@ -87,6 +88,9 @@ export const NAVEGACION: ItemNav[] = [
     roles: ["admin", "guardia", "lider"],
     porRol: { guardia: { label: "Quinteros y ambulantes", corto: "Quintas" } },
   },
+  // Los que pagaron todo el mes: sus libres deuda para imprimir juntos (0064). El número
+  // cuenta los que faltan imprimir.
+  { href: "/libres-deuda", label: "Libres deuda", icono: FileCheck2, grupo: "gestion", roles: ["admin", "lider"] },
   { href: "/solicitudes", label: "Solicitudes", icono: MessagesSquare, grupo: "gestion", roles: ["admin", "guardia", "porteria", "tesoreria", "lider"] },
   { href: "/aprobaciones", label: "Aprobaciones", corto: "Aprobar", icono: ClipboardCheck, grupo: "gestion", roles: ["lider"] },
   { href: "/comunicaciones", label: "Comunicaciones", corto: "Avisos", icono: Megaphone, grupo: "gestion", roles: ["admin", "lider"] },

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { ArrowLeft, Printer } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -13,26 +13,44 @@ import { Button } from "@/components/ui/button";
  * Chrome de kiosco (`--kiosk-printing`) el diálogo se saltea y va derecho a la
  * impresora predeterminada: ese es el "driver" recomendado para la tablet de
  * administración. Se dispara una sola vez por carga.
+ *
+ * `alImprimir`: lo que se anota al imprimir (p. ej. el libre deuda como impreso). Corre una
+ * sola vez por carga, aunque se vuelva a tocar «Imprimir».
  */
 export function BotonImprimir({
   volverA,
   autoImprimir = false,
   etiquetaImprimir = "Imprimir / Guardar PDF",
+  alImprimir,
 }: {
   volverA?: string;
   autoImprimir?: boolean;
   etiquetaImprimir?: string;
+  alImprimir?: () => Promise<unknown>;
 }) {
   const router = useRouter();
   const disparado = useRef(false);
+  const anotado = useRef(false);
+
+  const imprimir = useCallback(() => {
+    if (alImprimir && !anotado.current) {
+      anotado.current = true;
+      // Sale antes del diálogo de impresión (que frena la página): si falla, no se reintenta
+      // solo, pero el documento se imprime igual.
+      alImprimir().catch(() => {
+        anotado.current = false;
+      });
+    }
+    window.print();
+  }, [alImprimir]);
 
   useEffect(() => {
     if (!autoImprimir || disparado.current) return;
     disparado.current = true;
     // Esperar un frame para que las fuentes y el layout estén listos.
-    const t = window.setTimeout(() => window.print(), 350);
+    const t = window.setTimeout(imprimir, 350);
     return () => window.clearTimeout(t);
-  }, [autoImprimir]);
+  }, [autoImprimir, imprimir]);
 
   return (
     <div className="no-print mb-6 flex items-center justify-between gap-3">
@@ -44,7 +62,7 @@ export function BotonImprimir({
         <ArrowLeft className="size-4" />
         Volver
       </Button>
-      <Button onClick={() => window.print()} size="lg" className="min-h-12 font-semibold">
+      <Button onClick={imprimir} size="lg" className="min-h-12 font-semibold">
         <Printer className="size-5" />
         {etiquetaImprimir}
       </Button>

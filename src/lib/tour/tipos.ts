@@ -20,6 +20,7 @@ export type IdCapitulo =
   | "tesoreria"
   | "gastos"
   | "clientes"
+  | "libres-deuda"
   | "aprobaciones"
   | "porteria"
   | "personal"

@@ -1692,6 +1692,48 @@ export type Database = {
           },
         ]
       }
+      libres_deuda: {
+        Row: {
+          cliente_id: string
+          impreso_en: string
+          impreso_por: string | null
+          org_id: string
+          periodo: string
+          veces: number
+        }
+        Insert: {
+          cliente_id: string
+          impreso_en?: string
+          impreso_por?: string | null
+          org_id: string
+          periodo: string
+          veces?: number
+        }
+        Update: {
+          cliente_id?: string
+          impreso_en?: string
+          impreso_por?: string | null
+          org_id?: string
+          periodo?: string
+          veces?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "libres_deuda_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "libres_deuda_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizaciones"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lecturas: {
         Row: {
           creado_en: string
@@ -3374,6 +3416,18 @@ export type Database = {
         }
         Returns: Json
       }
+      libres_deuda_del_mes: {
+        Args: { p_periodo: string }
+        Returns: {
+          categoria: Database["public"]["Enums"]["categoria_cliente"]
+          cliente_id: string
+          codigo: number
+          completo_en: string | null
+          impreso_en: string | null
+          nombre: string
+          veces: number | null
+        }[]
+      }
       lugares_del_cliente: {
         Args: { p_cliente: string }
         Returns: {
@@ -3383,6 +3437,10 @@ export type Database = {
           propio: boolean
           tipo: string
         }[]
+      }
+      marcar_libres_deuda: {
+        Args: { p_clientes: string[]; p_periodo?: string }
+        Returns: number
       }
       marcar_registro_visto: {
         Args: { p_registro: string }
