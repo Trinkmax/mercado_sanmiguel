@@ -319,7 +319,7 @@ function pasosAdministracion(): Paso[] {
       ancla: ["clientes-alta-que-es", "clientes-alta-conceptos", "clientes-alta-enviar"],
       titulo: "Un puestero nuevo",
       texto:
-        "Cargás sus datos y marcás qué paga cada mes, con cantidad y porcentaje. Al final tocás «Enviar a aprobación»: aparece en la lista cuando el Líder lo apruebe.",
+        "Cargás sus datos y marcás qué paga cada mes, con cantidad y porcentaje. Si el mes ya está generado, te pregunta desde cuándo paga: si es desde este mes, se le carga. Al final tocás «Enviar a aprobación»: aparece en la lista cuando el Líder lo apruebe.",
       pantalla: PantallaAltaPuestero,
       consejo:
         "Si solo alquila una cochera, en «¿Qué es?» elegí «Empleado»: alcanza con el nombre y se le cobra solo la cochera. Mientras espera, arriba de la lista vas a ver «Hay 1 alta esperando la aprobación del Líder de Procesos».",

@@ -333,9 +333,29 @@ function ListaAlta({
  * aprobarlo se corrige lo de ese mes (o se le carga); si rige desde el que viene, no se toca.
  */
 function RigeDesde({ cambio }: { cambio: CambioFila }) {
-  const desde = cambio.entidad === "cliente_concepto" ? cambio.datos.corregir_desde : undefined;
+  const esAlta = cambio.entidad === "cliente" && cambio.accion === "alta";
+  const desde = cambio.entidad === "cliente_concepto" || esAlta ? cambio.datos.corregir_desde : undefined;
   if (typeof desde !== "string" || !/^\d{4}-\d{2}-01$/.test(desde)) return null;
   const actual = periodoActual();
+  // 0065: el alta de un cliente con el mes ya generado dice desde cuándo paga.
+  if (esAlta) {
+    return (
+      <p className="mt-2 flex items-start gap-2 rounded-lg bg-muted/60 px-4 py-2.5 text-sm">
+        <CalendarCheck className="mt-0.5 size-4 shrink-0 text-primary" strokeWidth={2} />
+        {desde <= actual ? (
+          <span>
+            Paga desde <span className="font-semibold">{labelPeriodo(actual).toLowerCase()}</span>, que ya está
+            generado: al aprobarla se le carga lo de este mes.
+          </span>
+        ) : (
+          <span>
+            Paga desde <span className="font-semibold">{labelPeriodo(desde).toLowerCase()}</span>: lo de{" "}
+            {labelPeriodo(actual).toLowerCase()} no se le cobra.
+          </span>
+        )}
+      </p>
+    );
+  }
   return (
     <p className="mt-2 flex items-start gap-2 rounded-lg bg-muted/60 px-4 py-2.5 text-sm">
       <CalendarCheck className="mt-0.5 size-4 shrink-0 text-primary" strokeWidth={2} />

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { aplicaDirecto, requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { periodoActual } from "@/lib/format";
 import { categoriasDeRol, CATEGORIAS, type CategoriaCliente } from "@/lib/segmentos";
 import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/shared/page-header";
@@ -21,7 +22,7 @@ export default async function NuevoClientePage({ searchParams }: Props) {
     : undefined;
   const supabase = await createClient();
 
-  const [codigoRes, conceptosRes, configRes] = await Promise.all([
+  const [codigoRes, conceptosRes, configRes, mesGeneradoRes] = await Promise.all([
     // Mira TODOS los clientes y las altas pendientes (el Jefe no los ve por RLS).
     supabase.rpc("siguiente_codigo_cliente"),
     supabase
@@ -30,6 +31,13 @@ export default async function NuevoClientePage({ searchParams }: Props) {
       .eq("activo", true)
       .order("orden_imputacion"),
     supabase.from("configuracion").select("cuotas_default_quintero").maybeSingle(),
+    // 0065: con el mes en curso ya generado, el alta pregunta desde cuándo paga.
+    supabase
+      .from("periodos")
+      .select("periodo")
+      .eq("periodo", periodoActual())
+      .not("generado_en", "is", null)
+      .maybeSingle(),
   ]);
 
   // Lo que el rol puede asignar en alguna de las categorías que da de alta (el formulario
@@ -85,6 +93,7 @@ export default async function NuevoClientePage({ searchParams }: Props) {
           rol={perfil.rol}
           categoriaInicial={categoriaInicial}
           cuotasQuintero={configRes.data?.cuotas_default_quintero ?? 4}
+          mesGenerado={mesGeneradoRes.data ? periodoActual() : null}
         />
       </div>
     </div>

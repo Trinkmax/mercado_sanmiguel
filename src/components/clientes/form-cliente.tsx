@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import type { Rol } from "@/lib/auth";
 import { crearCliente, editarCliente } from "@/lib/actions/clientes";
-import { formatDni, normalizarDni } from "@/lib/format";
+import { fechaLocal, formatARS, formatDni, montoConcepto, normalizarDni, sumarMeses } from "@/lib/format";
 import { categoriasDeRol, LABEL_CATEGORIA, type CategoriaCliente } from "@/lib/segmentos";
 import { cn, uuidV4 } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -102,6 +102,7 @@ export function FormCliente({
   rol,
   categoriaInicial,
   cuotasQuintero = 4,
+  mesGenerado = null,
   conceptosActivos = [],
   lugaresSiPasaA = {},
   medidoresActivos = [],
@@ -116,6 +117,8 @@ export function FormCliente({
   categoriaInicial?: CategoriaCliente;
   /** configuracion.cuotas_default_quintero (G7). */
   cuotasQuintero?: number;
+  /** Alta: el mes en curso si ya está generado ("2026-11-01"): se pregunta desde cuándo paga (0065). */
+  mesGenerado?: string | null;
   /** Edición: lo mensual que factura hoy (qué deja de facturarse al cambiar de categoría). */
   conceptosActivos?: ConceptoActivo[];
   /** Edición: qué se libera y qué conserva si pasa a empleado (sus cocheras, 0040) o a
@@ -166,7 +169,9 @@ export function FormCliente({
   const [codigoAbierto, setCodigoAbierto] = useState(false);
   const [codigo, setCodigo] = useState<string>(String(cliente?.codigo ?? codigoSugerido ?? ""));
   const [notasAbiertas, setNotasAbiertas] = useState(Boolean(cliente?.notas));
-  const [errores, setErrores] = useState<{ nombre?: string; socio?: string; codigo?: string }>({});
+  const [errores, setErrores] = useState<{ nombre?: string; socio?: string; codigo?: string; desde?: string }>({});
+  // Con el mes en curso ya generado: el primer mes que paga (no se elige solo).
+  const [pagaDesde, setPagaDesde] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [altaHecha, setAltaHecha] = useState<AltaHecha | null>(null);
   // Un id por intento de alta: si el toque se repite o se corta la red, queda UNA sola alta.
@@ -193,6 +198,15 @@ export function FormCliente({
         porcentaje: porcentajes[c.id] ?? 100,
       }))
   );
+
+  // 0065: generar_periodo ya corrió este mes; si no se le carga acá, no paga nada hasta el que viene.
+  const montoDelMes =
+    Math.round(
+      conceptosVisibles
+        .filter((c) => (cantidades[c.id] ?? 0) > 0)
+        .reduce((s, c) => s + montoConcepto(cantidades[c.id], c.precio, porcentajes[c.id] ?? 100), 0) * 100
+    ) / 100;
+  const preguntaDesde = esAlta && !esAmbulante && mesGenerado && montoDelMes > 0 ? mesGenerado : null;
 
   function cambiarCampo<K extends keyof Campos>(campo: K, valor: string) {
     setCampos((prev) => ({ ...prev, [campo]: valor }));
@@ -233,6 +247,7 @@ export function FormCliente({
     if (!sinDatosPersonales && esSocio === null) faltan.socio = "Elegí si es socio de la cooperativa";
     if (codigoAbierto && !/^\d+$/.test(codigo.trim()))
       faltan.codigo = "Poné el número de carpeta, solo números";
+    if (preguntaDesde && !pagaDesde) faltan.desde = "Elegí desde cuándo paga";
     setErrores(faltan);
     if (Object.keys(faltan).length > 0) {
       setError("Revisá lo que está marcado en rojo.");
@@ -294,6 +309,7 @@ export function FormCliente({
         ...(sinDatosPersonales ? {} : { cuotas_mes: cuotasMes }),
         ...(codigoAbierto ? { codigo: codigo.trim() } : {}),
         conceptos: conceptosElegidos,
+        ...(preguntaDesde && pagaDesde && conceptosElegidos.length > 0 ? { corregirDesde: pagaDesde } : {}),
         ref,
       }));
       if (!res.ok) return mostrarError(res.error);
@@ -321,7 +337,10 @@ export function FormCliente({
         toast.success(
           conceptosElegidos.length > 0
             ? "Cliente creado con lo que paga. Esta es su carpeta."
-            : "Cliente creado. Esta es su carpeta."
+            : "Cliente creado. Esta es su carpeta.",
+          preguntaDesde && pagaDesde === preguntaDesde
+            ? { description: `Se le cargó ${nombreMes(preguntaDesde)}: ${formatARS(montoDelMes)}.` }
+            : undefined
         );
         router.push(`/clientes/${res.data.id}`);
         return;
@@ -672,6 +691,60 @@ export function FormCliente({
         </div>
       ) : null}
 
+      {preguntaDesde ? (
+        <fieldset className="space-y-2">
+          <legend className="mb-2 text-base font-medium">¿Desde cuándo paga?</legend>
+          <p className="text-sm text-muted-foreground">
+            {capitalizar(nombreMes(preguntaDesde))} ya está generado: si paga desde este mes, hay que cargárselo.
+          </p>
+          <div role="radiogroup" aria-label="¿Desde cuándo paga?" className="grid gap-2 sm:grid-cols-2">
+            {[
+              {
+                desde: preguntaDesde,
+                detalle: `Se le carga ${nombreMes(preguntaDesde)}: ${formatARS(montoDelMes)}.`,
+              },
+              {
+                desde: sumarMeses(preguntaDesde, 1),
+                detalle: `${capitalizar(nombreMes(preguntaDesde))} no se le cobra.`,
+              },
+            ].map((o) => (
+              <button
+                key={o.desde}
+                type="button"
+                role="radio"
+                aria-checked={pagaDesde === o.desde}
+                onClick={() => {
+                  setPagaDesde(o.desde);
+                  setErrores((e) => ({ ...e, desde: undefined }));
+                }}
+                className={cn(
+                  "min-h-16 rounded-lg border-2 px-4 py-3 text-left transition-colors",
+                  pagaDesde === o.desde
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : errores.desde
+                      ? "border-pendiente/50 bg-card hover:bg-accent"
+                      : "border-border bg-card hover:bg-accent"
+                )}
+              >
+                <span className="block text-base font-semibold">Desde {nombreMes(o.desde)}</span>
+                <span
+                  className={cn(
+                    "block text-sm tabular",
+                    pagaDesde === o.desde ? "text-primary-foreground/85" : "text-muted-foreground"
+                  )}
+                >
+                  {o.detalle}
+                </span>
+              </button>
+            ))}
+          </div>
+          {!directo ? (
+            <p className="text-sm text-muted-foreground">Se le carga cuando el Líder de Procesos apruebe el alta.</p>
+          ) : null}
+          {errores.desde ? <ErrorCampo texto={errores.desde} /> : null}
+        </fieldset>
+      ) : null}
+
       <div className="space-y-2">
         {codigoAbierto ? (
           <>
@@ -793,6 +866,15 @@ function cantidadesQuintero(conceptos: ConceptoRecurrente[] | undefined): Record
   const quinta = (conceptos ?? []).find((c) => c.codigo === "EXPQ") ??
     (conceptos ?? []).find((c) => c.segmento === "quinteros");
   return quinta ? { [quinta.id]: 1 } : {};
+}
+
+/** "noviembre" */
+function nombreMes(periodo: string): string {
+  return fechaLocal(periodo).toLocaleDateString("es-AR", { month: "long" });
+}
+
+function capitalizar(texto: string): string {
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
 }
 
 function articulo(categoria: CategoriaCliente): string {

@@ -327,13 +327,15 @@ export async function crearCliente(
   const parsed = schemaDatosCliente
     .extend({
       conceptos: schemaConceptosAlta,
+      // 0065: con el mes en curso ya generado, desde qué mes paga (si es este, se le carga).
+      corregirDesde: schemaRigeDesde,
       // Un uuid por intento: doble toque o reintento sin red = una sola alta (§4.0-5).
       ref: z.uuid("Recargá la página y probá de nuevo.").optional(),
     })
     .safeParse(input);
   if (!parsed.success) return fallo(parsed.error.issues[0].message);
 
-  const { conceptos: conceptosAlta, codigo: codigoElegido, ref, ...datos } = parsed.data;
+  const { conceptos: conceptosAlta, codigo: codigoElegido, ref, corregirDesde, ...datos } = parsed.data;
   const categoria: CategoriaCliente =
     datos.categoria ?? (perfil.rol === "guardia" ? "quintero" : "puestero");
   if (!categoriasDeRol(perfil.rol).includes(categoria))
@@ -366,6 +368,9 @@ export async function crearCliente(
         "Alguno de los conceptos elegidos no existe. Recargá la página y probá de nuevo."
       );
   }
+
+  // Sin nada que pague por mes no hay nada que cargarle.
+  const rigeDesde = conceptoIds.length > 0 ? corregirDesde : undefined;
 
   // N° de carpeta: el elegido o el que sigue. Si es automático y otro lo tomó en el
   // medio, la RPC dice cuál usar y se reintenta una vez con ese.
@@ -401,10 +406,13 @@ export async function crearCliente(
         ...(porcentaje !== 100 ? { porcentaje } : {}),
       };
     }),
+    ...(rigeDesde ? { corregir_desde: rigeDesde } : {}),
     ...(ref ? { ref } : {}),
   });
   const resumen = (n: number) =>
-    `Alta de ${LABEL_CATEGORIA[categoria].toLowerCase()} ${datos.nombre} (N° ${n})`;
+    `Alta de ${LABEL_CATEGORIA[categoria].toLowerCase()} ${datos.nombre} (N° ${n})${
+      rigeDesde ? ` · paga desde ${labelPeriodo(rigeDesde).toLowerCase()}` : ""
+    }`;
 
   let res = await solicitarCambio(supabase, {
     entidad: "cliente",
@@ -428,6 +436,7 @@ export async function crearCliente(
 
   revalidarCliente(res.data.id);
   revalidatePath("/inicio");
+  if (rigeDesde) revalidarMesCorregido();
   // Repetido: el N° es el del primer intento (no lo sabemos acá); no se muestra uno equivocado.
   return ok({ ...res.data, codigo: res.data.repetido ? undefined : codigo, categoria });
 }
