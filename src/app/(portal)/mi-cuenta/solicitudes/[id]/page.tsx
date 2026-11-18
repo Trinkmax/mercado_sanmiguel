@@ -8,6 +8,7 @@ import type { ItemChat } from "@/components/portal/hilo-portal";
 import { PantallaSolicitud } from "@/components/portal/pantallas/pantalla-solicitud";
 import { MarcarSolicitudVista } from "@/components/solicitudes/marcar-vista";
 import { getClienteSocio } from "@/components/portal/datos-portal";
+import { describirAdjunto } from "@/lib/storage";
 
 export const metadata = { title: "Conversación" };
 
@@ -46,6 +47,7 @@ export default async function SolicitudSocioPage({ params }: { params: Promise<{
   }
 
   const mio = s.creada_por === perfil.user_id;
+  const tipoDe = (path: string): "foto" | "pdf" => (describirAdjunto(path).esPdf ? "pdf" : "foto");
 
   const items: ItemChat[] = [];
   if (s.detalle || s.adjunto_path) {
@@ -57,6 +59,7 @@ export default async function SolicitudSocioPage({ params }: { params: Promise<{
       texto: s.detalle ?? s.asunto,
       fecha: s.creada_en,
       adjunto: s.adjunto_path ? (urls.get(s.adjunto_path) ?? null) : null,
+      adjuntoTipo: s.adjunto_path ? tipoDe(s.adjunto_path) : undefined,
     });
   } else {
     items.push({ clase: "mensaje", id: "inicial", mio, autor: mio ? null : "Administración", texto: s.asunto, fecha: s.creada_en });
@@ -80,6 +83,7 @@ export default async function SolicitudSocioPage({ params }: { params: Promise<{
       texto: m.mensaje,
       fecha: m.creado_en,
       adjunto: m.adjunto_path ? (urls.get(m.adjunto_path) ?? null) : null,
+      adjuntoTipo: m.adjunto_path ? tipoDe(m.adjunto_path) : undefined,
     });
   }
 

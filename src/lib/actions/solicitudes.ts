@@ -293,11 +293,8 @@ export async function avisarSobrePuesto(input: {
 
 const schemaMensaje = z.object({
   solicitudId: z.string().min(1),
-  mensaje: z
-    .string()
-    .trim()
-    .min(1, "Escribí el mensaje antes de enviarlo")
-    .max(6000, "El mensaje es demasiado largo"),
+  // Puede ir vacío si lleva un archivo (se controla abajo).
+  mensaje: z.string().trim().max(6000, "El mensaje es demasiado largo"),
   interno: z.boolean(),
   ref: refOpcional,
 });
@@ -307,6 +304,8 @@ const schemaMensaje = z.object({
  * marcarlo interno (la RLS también lo impide). La bandeja sube sola: el trigger
  * `tocar_solicitud` actualiza `actualizada_en` con cualquier mensaje.
  * Con `ref` un reintento tras un corte no duplica el mensaje (`repetido: true`).
+ * Puede ser solo un archivo, sin texto: así llegan las fotos o PDF que se mandan de a varios
+ * (cada uno en su pedido, components/solicitudes/archivos-sueltos.ts).
  */
 export async function enviarMensaje(
   formData: FormData
@@ -318,11 +317,14 @@ export async function enviarMensaje(
 
   const parsed = schemaMensaje.safeParse({
     solicitudId: formData.get("solicitudId"),
-    mensaje: formData.get("mensaje"),
+    mensaje: formData.get("mensaje") ?? "",
     interno: !desdePortal && formData.get("interno") === "true",
     ref: formData.get("ref") ?? undefined,
   });
   if (!parsed.success) return fallo(parsed.error.issues[0].message);
+  const archivo = formData.get("adjunto");
+  if (!parsed.data.mensaje && !(archivo instanceof File && archivo.size > 0))
+    return fallo("Escribí el mensaje antes de enviarlo");
 
   const supabase = await createClient();
 
@@ -348,7 +350,7 @@ export async function enviarMensaje(
   const previo = await mensajeConRef();
   if (previo) return ok({ id: previo, repetido: true });
 
-  const adjunto = await subirAdjunto(supabase, perfil.org_id, formData.get("adjunto"));
+  const adjunto = await subirAdjunto(supabase, perfil.org_id, archivo);
   if (!adjunto.ok) return fallo(adjunto.error);
 
   const { data, error } = await supabase

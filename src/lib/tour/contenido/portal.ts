@@ -334,7 +334,7 @@ export const SOCIO_SOLICITUDES: ContenidoCapitulo = {
       ruta: SOCIO_NUEVA,
       titulo: "Contá de qué se trata",
       texto:
-        "Escribí como en WhatsApp: qué pasó, desde cuándo, qué necesitás. Si tenés una foto, sumala con «Sumar una foto». Después tocá «Enviar».",
+        "Escribí como en WhatsApp: qué pasó, desde cuándo, qué necesitás. Si tenés fotos o un PDF, sumalos con «Sumar fotos o PDF»: van varios juntos. Después tocá «Enviar».",
       pantalla: PantallaSocioContar,
       consejo: "Si se corta el wifi, tocá «Enviar» de nuevo: no se manda dos veces.",
     },

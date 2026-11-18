@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ArrowLeft, MapPin, Paperclip, Printer, Store } from "lucide-react";
 import { requireRol, type Rol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { describirAdjunto } from "@/lib/storage";
 import { SIN_CONEXION } from "@/lib/sesion";
 import { formatFechaHora } from "@/lib/format";
 import { LABEL_ROL } from "@/lib/roles";
@@ -78,8 +79,10 @@ export default async function SolicitudPage({ params }: Props) {
   const mensajes: MensajeHilo[] = mensajesCrudos.map((m) => ({
     ...m,
     adjunto_url: m.adjunto_path ? (urls.get(m.adjunto_path) ?? null) : null,
+    adjunto_nombre: m.adjunto_path ? describirAdjunto(m.adjunto_path).nombre : null,
   }));
   const adjuntoUrl = s.adjunto_path ? urls.get(s.adjunto_path) : undefined;
+  const adjuntoNombre = s.adjunto_path ? describirAdjunto(s.adjunto_path).nombre : null;
 
   // Tesorería no ve Clientes (J4); el Jefe y Portería no ven puesteros: sin link a la ficha.
   const puedeVerFicha = perfil.rol === "admin" || perfil.rol === "lider";
@@ -216,10 +219,13 @@ export default async function SolicitudPage({ params }: Props) {
                 <p className="text-sm text-muted-foreground">Sin detalle.</p>
               )}
               {adjuntoUrl ? (
-                <Button asChild variant="outline" className="mt-3 min-h-11">
+                <Button asChild variant="outline" className="mt-3 min-h-11 max-w-full">
                   <a href={adjuntoUrl} target="_blank" rel="noopener noreferrer">
                     <Paperclip className="size-4" strokeWidth={2} />
                     Ver adjunto
+                    {adjuntoNombre ? (
+                      <span className="min-w-0 truncate font-normal text-muted-foreground">· {adjuntoNombre}</span>
+                    ) : null}
                   </a>
                 </Button>
               ) : null}

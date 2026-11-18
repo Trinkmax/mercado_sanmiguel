@@ -14,6 +14,8 @@ export type MensajeHilo = {
   interno: boolean;
   creado_en: string;
   adjunto_url?: string | null;
+  /** El nombre con que se subió (sin el prefijo de la ruta). */
+  adjunto_nombre?: string | null;
 };
 
 /**
@@ -116,18 +118,27 @@ export function HiloMensajes({
                   Interno — no lo ve el socio
                 </p>
               ) : null}
-              <p className="whitespace-pre-line text-[15px] leading-relaxed">
-                {m.mensaje}
-              </p>
+              {/* Vacío cuando el mensaje es solo un archivo (los que se mandan de a varios). */}
+              {m.mensaje ? (
+                <p className="whitespace-pre-line text-[15px] leading-relaxed">
+                  {m.mensaje}
+                </p>
+              ) : null}
               {m.adjunto_url ? (
                 <a
                   href={m.adjunto_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="mt-2 inline-flex min-h-11 items-center gap-1.5 rounded-md border bg-card px-3 text-sm font-medium hover:bg-muted"
+                  className={cn(
+                    "inline-flex min-h-11 max-w-full items-center gap-1.5 rounded-md border bg-card px-3 text-sm font-medium hover:bg-muted",
+                    m.mensaje && "mt-2"
+                  )}
                 >
-                  <Paperclip className="size-4" strokeWidth={2} />
-                  Ver adjunto
+                  <Paperclip className="size-4 shrink-0" strokeWidth={2} />
+                  <span className="shrink-0">Ver adjunto</span>
+                  {m.adjunto_nombre ? (
+                    <span className="min-w-0 truncate text-muted-foreground">· {m.adjunto_nombre}</span>
+                  ) : null}
                 </a>
               ) : null}
             </div>

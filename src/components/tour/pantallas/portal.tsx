@@ -630,7 +630,7 @@ export function PantallaSocioTipo() {
   );
 }
 
-/** Un solo cuadro para escribir, la foto y «Enviar». */
+/** Un solo cuadro para escribir, las fotos y «Enviar». */
 export function PantallaSocioContar() {
   return (
     <MarcoPantalla titulo="Escribirle a la cooperativa">
@@ -641,7 +641,7 @@ export function PantallaSocioContar() {
         </div>
       </Resaltado>
       <span className="flex min-h-7 items-center justify-center gap-1 rounded-md border-2 border-esmalte text-[0.72rem] font-bold text-esmalte">
-        <Camera className="size-3" /> Sumar una foto (si querés)
+        <Camera className="size-3" /> Sumar fotos o PDF (si querés)
       </span>
       <Resaltado>
         <span className="flex min-h-8 items-center justify-center gap-1.5 rounded-md bg-esmalte text-[0.8rem] font-extrabold text-porcelana">

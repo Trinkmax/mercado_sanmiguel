@@ -66,6 +66,17 @@ export function rutaAdjuntoNovedad(orgId: string, nombreArchivo: string): string
   return `${orgId}/novedades/${crypto.randomUUID()}-${limpiarNombre(nombreArchivo)}`;
 }
 
+/** El prefijo aleatorio que le ponen las rutaX() al nombre: `${uuid}-`. */
+const PREFIJO_RUTA = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}-/i;
+
+/** Lo que se muestra de un archivo guardado: el nombre con que se subió (sin el prefijo
+ * aleatorio de la ruta) y si es un PDF o una foto. Sirve también en componentes cliente. */
+export function describirAdjunto(ruta: string): { nombre: string; esPdf: boolean } {
+  const archivo = ruta.slice(ruta.lastIndexOf("/") + 1);
+  const nombre = archivo.replace(PREFIJO_RUTA, "") || archivo;
+  return { nombre, esPdf: /\.pdf$/i.test(nombre) };
+}
+
 export const MIME_PERMITIDOS = [
   "application/pdf",
   "image/jpeg",

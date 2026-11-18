@@ -16,9 +16,12 @@ export type ItemChat =
       mio: boolean;
       /** Quién escribe, si no sos vos ("Administración"). */
       autor: string | null;
+      /** Puede venir vacío: un mensaje que es solo una foto o un PDF. */
       texto: string;
       fecha: string;
       adjunto?: string | null;
+      /** Qué es el adjunto, si se sabe (cambia el ícono y el texto del enlace). */
+      adjuntoTipo?: "foto" | "pdf";
     }
   | { clase: "hecho"; id: string; texto: string; fecha: string };
 
@@ -58,19 +61,24 @@ export function HiloPortal({ items, vacio }: { items: ItemChat[]; vacio?: string
             ) : (
               <div className={cn("burbuja", it.mio ? "burbuja-mia" : "burbuja-otra")}>
                 {it.autor ? <p className="mb-0.5 text-[0.9rem] font-extrabold text-esmalte">{it.autor}</p> : null}
-                <p className="whitespace-pre-line break-words">{it.texto}</p>
+                {it.texto ? <p className="whitespace-pre-line break-words">{it.texto}</p> : null}
                 {it.adjunto ? (
                   <a
                     href={it.adjunto}
                     target="_blank"
                     rel="noopener noreferrer"
                     className={cn(
-                      "mt-1.5 inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2.5 text-[0.98rem] font-bold underline-offset-2",
+                      "inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2.5 text-[0.98rem] font-bold underline-offset-2",
+                      it.texto && "mt-1.5",
                       it.mio ? "bg-white/15" : "bg-porcelana-2"
                     )}
                   >
-                    <ImageIcon aria-hidden className="size-[1.15rem]" strokeWidth={2.2} />
-                    Ver lo que se adjuntó
+                    {it.adjuntoTipo === "pdf" ? (
+                      <FileText aria-hidden className="size-[1.15rem]" strokeWidth={2.2} />
+                    ) : (
+                      <ImageIcon aria-hidden className="size-[1.15rem]" strokeWidth={2.2} />
+                    )}
+                    {it.adjuntoTipo === "pdf" ? "Ver el PDF" : it.adjuntoTipo === "foto" ? "Ver la foto" : "Ver lo que se adjuntó"}
                   </a>
                 ) : null}
                 <p className={cn("mt-0.5 text-right text-[0.82rem] tabular", it.mio ? "text-white/80" : "text-tinta-2")}>

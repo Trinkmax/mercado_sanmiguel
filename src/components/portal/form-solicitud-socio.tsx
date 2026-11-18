@@ -1,16 +1,23 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Camera, ChevronLeft, CircleHelp, Flag, Hand, MessageCircleWarning, Send, X, type LucideIcon } from "lucide-react";
+import { ChevronLeft, CircleHelp, Flag, Hand, MessageCircleWarning, Send, type LucideIcon } from "lucide-react";
 import { crearSolicitudSocio } from "@/lib/actions/portal";
 import { uuidV4 } from "@/lib/utils";
 import { Spinner } from "@/components/ui/spinner";
-import { ACCEPT_ADJUNTO, firmaFormulario, type TipoSolicitud } from "@/components/solicitudes/constantes";
-import { errorPesoAdjunto, explicarFalloEnvio, prepararAdjuntos } from "@/components/comunicaciones/adjuntos";
+import { firmaFormulario, type TipoSolicitud } from "@/components/solicitudes/constantes";
+import { explicarFalloEnvio, prepararAdjuntos } from "@/components/comunicaciones/adjuntos";
 import { AvisoError, irAlCampo } from "@/components/comunicaciones/aviso-error";
 import { llamarAccion } from "@/lib/llamar-accion";
+import {
+  cuantosArchivos,
+  mandarArchivosSueltos,
+  type ArchivoElegido,
+} from "@/components/solicitudes/archivos-sueltos";
+import { BotonSumarArchivos, ListaArchivos } from "@/components/portal/elegir-archivos";
 
 /** Las cuatro formas de escribirle a la cooperativa, en palabras de todos los días. */
 const OPCIONES: {
@@ -60,14 +67,20 @@ const OPCIONES: {
  * Sin «asunto»: el servidor lo arma con la primera frase. Clave de idempotencia (`ref`): la
  * misma mientras no cambie lo escrito y hasta que se guarde; si se corta el wifi y toca
  * «Enviar» de nuevo, no sale otro mensaje igual.
+ * Fotos o PDF: varios (hasta 10). El primero va con el mensaje y los demás después, cada uno
+ * en su pedido (archivos-sueltos.ts). Si alguno no llega, el mensaje ya está en la cooperativa:
+ * lo escrito queda fijo y «Mandar lo que falta» manda solo esos, sin repetir ninguno.
  */
 export function FormSolicitudSocio() {
   const router = useRouter();
   const [pendiente, startTransition] = useTransition();
   const [tipo, setTipo] = useState<TipoSolicitud | null>(null);
-  const archivoRef = useRef<HTMLInputElement>(null);
-  const [nombreAdjunto, setNombreAdjunto] = useState<string | null>(null);
+  const [archivos, setArchivos] = useState<ArchivoElegido[]>([]);
   const [error, setError] = useState<string | null>(null);
+  /** «2 de 5» mientras se mandan varios archivos. */
+  const [avance, setAvance] = useState<string | null>(null);
+  /** La solicitud ya se creó pero faltan archivos: su id. */
+  const [creada, setCreada] = useState<string | null>(null);
   const claveRef = useRef<{ firma: string; ref: string } | null>(null);
 
   const opcion = OPCIONES.find((o) => o.valor === tipo) ?? null;
@@ -78,15 +91,52 @@ export function FormSolicitudSocio() {
     requestAnimationFrame(() => document.getElementById("soc-detalle")?.focus());
   }
 
-  function quitarAdjunto() {
-    if (archivoRef.current) archivoRef.current.value = "";
-    setNombreAdjunto(null);
+  function irALaConversacion(id: string) {
+    router.push(`/mi-cuenta/solicitudes/${id}`);
+  }
+
+  /** Manda los archivos que van sueltos; si llegan todos, a la conversación. */
+  async function mandarSueltos(id: string, pendientes: ArchivoElegido[], yaVan: number, total: number) {
+    let van = yaVan;
+    setAvance(`${van + 1} de ${total}`);
+    const r = await mandarArchivosSueltos(id, pendientes, {
+      desdePortal: true,
+      alLlegar: (a) => {
+        van += 1;
+        setArchivos((lista) => lista.filter((x) => x.ref !== a.ref));
+        if (van < total) setAvance(`${van + 1} de ${total}`);
+      },
+    });
+    setAvance(null);
+    if (r.error) {
+      const faltan = pendientes.length - r.llegaron.length;
+      setError(
+        `Tu mensaje ya llegó a la cooperativa, pero ${faltan === 1 ? "falta" : "faltan"} mandar ${cuantosArchivos(faltan)}. ${r.error}`
+      );
+      return;
+    }
+    toast.success(
+      yaVan === 0 ? "Listo: llegó lo que faltaba." : `Listo: tu mensaje y ${cuantosArchivos(total)} llegaron a la cooperativa.`
+    );
+    irALaConversacion(id);
   }
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (pendiente || !tipo) return;
     setError(null);
+
+    if (creada) {
+      // El mensaje ya llegó: solo faltan archivos (si los quitó todos, a la conversación).
+      if (archivos.length === 0) {
+        irALaConversacion(creada);
+        return;
+      }
+      const pendientes = archivos;
+      startTransition(() => mandarSueltos(creada, pendientes, 0, pendientes.length));
+      return;
+    }
+
     const fd = new FormData(e.currentTarget);
     if (!String(fd.get("detalle") ?? "").trim()) {
       setError("Escribí lo que nos querés contar antes de enviarlo.");
@@ -94,25 +144,37 @@ export function FormSolicitudSocio() {
       return;
     }
     fd.set("tipo", tipo);
+    const [primero, ...resto] = archivos;
+    if (primero) fd.set("adjunto", primero.archivo, primero.archivo.name);
     const firma = firmaFormulario(fd);
     if (claveRef.current?.firma !== firma) claveRef.current = { firma, ref: uuidV4() };
     fd.set("ref", claveRef.current.ref);
+    const total = archivos.length;
     startTransition(async () => {
+      if (total > 1) setAvance(`1 de ${total}`);
       const errorPeso = await prepararAdjuntos(fd, ["adjunto"]);
       if (errorPeso) {
+        setAvance(null);
         setError(errorPeso);
         return;
       }
       const res = await llamarAccion(() => crearSolicitudSocio(fd));
       if (!res.ok) {
         // Lo escrito queda y la clave se conserva: tocar «Enviar» de nuevo no lo manda dos veces.
+        setAvance(null);
         setError(explicarFalloEnvio(res.error, fd, ["adjunto"]));
         return;
       }
       claveRef.current = null;
-      if (res.data.repetido) toast.info("Ya lo habíamos recibido: no se mandó dos veces.");
-      else toast.success("Listo: tu mensaje llegó a la cooperativa.");
-      router.push(`/mi-cuenta/solicitudes/${res.data.id}`);
+      if (resto.length === 0) {
+        if (res.data.repetido) toast.info("Ya lo habíamos recibido: no se mandó dos veces.");
+        else toast.success("Listo: tu mensaje llegó a la cooperativa.");
+        irALaConversacion(res.data.id);
+        return;
+      }
+      setCreada(res.data.id);
+      setArchivos(resto);
+      await mandarSueltos(res.data.id, resto, 1, total);
     });
   }
 
@@ -138,16 +200,18 @@ export function FormSolicitudSocio() {
         </div>
       </fieldset>
 
-      {/* Queda siempre montado: al elegir otra opción no se pierde lo escrito ni la foto. */}
+      {/* Queda siempre montado: al elegir otra opción no se pierde lo escrito ni las fotos. */}
       <form onSubmit={onSubmit} noValidate hidden={opcion === null} className="flex flex-1 flex-col gap-3 [&[hidden]]:hidden">
-      <button
-        type="button"
-        onClick={() => setTipo(null)}
-        className="inline-flex min-h-11 items-center gap-1 self-start rounded-lg pr-3 text-[1.02rem] font-bold text-esmalte"
-      >
-        <ChevronLeft aria-hidden className="size-5" strokeWidth={2.6} />
-        Elegí otra cosa
-      </button>
+      {creada ? null : (
+        <button
+          type="button"
+          onClick={() => setTipo(null)}
+          className="inline-flex min-h-11 items-center gap-1 self-start rounded-lg pr-3 text-[1.02rem] font-bold text-esmalte"
+        >
+          <ChevronLeft aria-hidden className="size-5" strokeWidth={2.6} />
+          Elegí otra cosa
+        </button>
+      )}
 
       <div className="flex flex-col gap-2" data-tour="solicitudes-socio-asunto">
         <label htmlFor="soc-detalle" className="px-1 text-[1.32rem] font-extrabold [font-stretch:92%]">
@@ -159,41 +223,30 @@ export function FormSolicitudSocio() {
           rows={6}
           maxLength={6000}
           placeholder={opcion?.ejemplo}
-          className="campo-portal min-h-[10rem]"
+          // Ya está en la cooperativa: cambiarlo acá no cambiaría lo que llegó.
+          readOnly={creada !== null}
+          className="campo-portal min-h-[10rem] read-only:bg-porcelana-2 read-only:text-tinta-2"
           onChange={() => error && setError(null)}
         />
       </div>
 
-      <div className="flex items-stretch gap-2">
-        <label htmlFor="soc-adjunto" className="boton boton-suave min-w-0 flex-1 cursor-pointer !text-[1.02rem]">
-          <Camera aria-hidden strokeWidth={2.2} />
-          <span className="truncate">{nombreAdjunto ?? "Sumar una foto (si querés)"}</span>
-        </label>
-        {nombreAdjunto ? (
-          <button type="button" onClick={quitarAdjunto} aria-label="Quitar la foto" className="boton boton-suave !px-3">
-            <X aria-hidden strokeWidth={2.4} />
-          </button>
-        ) : null}
-        <input
-          ref={archivoRef}
-          id="soc-adjunto"
-          name="adjunto"
-          type="file"
-          accept={ACCEPT_ADJUNTO}
-          className="sr-only"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
-            const pesado = errorPesoAdjunto(f);
-            if (pesado) {
-              quitarAdjunto();
-              setError(pesado);
-              return;
-            }
-            setError(null);
-            setNombreAdjunto(f?.name ?? null);
-          }}
-        />
-      </div>
+      <ListaArchivos
+        archivos={archivos}
+        deshabilitado={pendiente}
+        onQuitar={(ref) => {
+          setArchivos((lista) => lista.filter((a) => a.ref !== ref));
+          setError(null);
+        }}
+      />
+      <BotonSumarArchivos
+        id="soc-adjunto"
+        archivos={archivos}
+        deshabilitado={pendiente}
+        texto="Sumar fotos o PDF (si querés)"
+        textoOtro="Sumar otra foto o PDF"
+        onCambio={setArchivos}
+        onError={setError}
+      />
 
       {error ? <AvisoError mensaje={error} /> : null}
 
@@ -204,8 +257,16 @@ export function FormSolicitudSocio() {
         className="boton boton-primario mt-auto min-h-[3.8rem] w-full !text-[1.2rem]"
       >
         {pendiente ? <Spinner className="size-5" /> : <Send aria-hidden strokeWidth={2.3} />}
-        Enviar
+        {avance ? `Enviando ${avance}…` : creada ? (archivos.length > 0 ? "Mandar lo que falta" : "Ver la conversación") : "Enviar"}
       </button>
+      {creada && archivos.length > 0 ? (
+        <Link
+          href={`/mi-cuenta/solicitudes/${creada}`}
+          className="inline-flex min-h-11 items-center justify-center self-center px-3 text-[1.02rem] font-bold text-esmalte underline underline-offset-4"
+        >
+          Dejarlo así y ver la conversación
+        </Link>
+      ) : null}
       </form>
     </>
   );
