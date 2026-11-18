@@ -76,7 +76,7 @@ export function PantallaPagos({ recibos, cargos }: { recibos: ReciboPortal[]; ca
                       const { dia, mes } = diaYMesTS(r.fecha);
                       return (
                         <li key={r.pagoId}>
-                          <Link href={`/recibos/${r.pagoId}`} data-tour="portal-recibo" className="talon">
+                          <Link href={`/recibos/${r.pagoId}?desde=portal`} data-tour="portal-recibo" className="talon">
                             <span className="talon-fecha" aria-hidden>
                               <span className="talon-dia">{dia}</span>
                               <span className="talon-mes">{mes}</span>

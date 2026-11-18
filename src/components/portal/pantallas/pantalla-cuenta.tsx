@@ -69,7 +69,7 @@ export function PantallaCuenta({
 
       <div className="portal-suelo">
         {ultimo ? (
-          <Link href={`/recibos/${ultimo.pagoId}`} data-tour="portal-ultimo-pago" className="hoja fila-toque">
+          <Link href={`/recibos/${ultimo.pagoId}?desde=portal`} data-tour="portal-ultimo-pago" className="hoja fila-toque">
             <span className="fila-icono" aria-hidden>
               <ReceiptText strokeWidth={2} />
             </span>

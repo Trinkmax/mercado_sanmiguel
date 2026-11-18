@@ -1,7 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
-import type { Perfil } from "@/lib/auth";
+import { getCarpetaPropia, type Perfil } from "@/lib/auth";
 import type { BadgesNav } from "@/lib/navegacion";
 import { hoyISO, periodoActual } from "@/lib/format";
 import { categoriasDeRol } from "@/lib/segmentos";
@@ -41,7 +41,16 @@ export const pendientesNav = cache(async (perfil: Perfil): Promise<BadgesNav> =>
     perfil.rol === "porteria" || perfil.rol === "tesoreria" || perfil.rol === "guardia" || perfil.rol === "admin";
   const conRespuestaP: Promise<string[]> = recibeRespuestas
     ? Promise.resolve(supabase.rpc("solicitudes_con_respuesta")).then(
-        (r) => r.data ?? [],
+        async (r) => {
+          const ids = r.data ?? [];
+          // Las de SU carpeta (alguien del equipo que además es cliente, 0066) se avisan en
+          // «Mi lugar en el mercado», no acá.
+          const carpeta = ids.length > 0 ? await getCarpetaPropia().catch(() => null) : null;
+          if (!carpeta) return ids;
+          const { data } = await supabase.from("solicitudes").select("id").in("id", ids).eq("cliente_id", carpeta.id);
+          const suyas = new Set((data ?? []).map((s) => s.id));
+          return ids.filter((id) => !suyas.has(id));
+        },
         () => []
       )
     : Promise.resolve([]);

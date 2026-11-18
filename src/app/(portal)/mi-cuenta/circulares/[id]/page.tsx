@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { requireRol } from "@/lib/auth";
+import { requirePortal } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getCircularesSocio } from "@/components/portal/datos-portal";
 import { PantallaCircular } from "@/components/portal/pantallas/pantalla-circular";
@@ -8,7 +8,7 @@ import { RegistrarVista } from "@/components/portal/registrar-vista";
 export const metadata = { title: "Circular" };
 
 export default async function CircularSocioPage({ params }: { params: Promise<{ id: string }> }) {
-  const perfil = await requireRol("socio");
+  const perfil = await requirePortal();
   const { id } = await params;
 
   // Solo las circulares activas de SU público (RLS + clienteEnPublico).

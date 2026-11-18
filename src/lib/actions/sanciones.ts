@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { requireRol, type Perfil } from "@/lib/auth";
+import { requireRol, requirePortal, filtroClientePortal, type Perfil } from "@/lib/auth";
 import { ok, fallo, type ActionResult } from "@/lib/actions/result";
 import { rutaAdjuntoRegistro, MIME_PERMITIDOS, TAMANO_MAX_BYTES } from "@/lib/storage";
 import { categoriasDeRol, type CategoriaCliente } from "@/lib/segmentos";
@@ -341,7 +341,7 @@ export async function dejarSinEfectoMulta(input: unknown): Promise<ActionResult>
 
 /** El socio presenta su descargo (apercibimiento/sanción) o responde una notificación. */
 export async function presentarDescargo(formData: FormData): Promise<ActionResult<MensajeEnviado>> {
-  await requireRol("socio");
+  const perfil = await requirePortal();
   const parsed = leerRespuesta(formData);
   if (!parsed.success) {
     const msg = parsed.error.issues[0].message;
@@ -349,11 +349,19 @@ export async function presentarDescargo(formData: FormData): Promise<ActionResul
   }
 
   const supabase = await createClient();
-  // La RLS solo deja ver los registros propios.
+  // Solo los registros de SU carpeta: al socio la RLS ya no le muestra otros, pero alguien del
+  // equipo con carpeta propia (0066) puede leer más.
+  const { data: cliente } = await supabase
+    .from("clientes")
+    .select("id")
+    .eq(...filtroClientePortal(perfil))
+    .maybeSingle();
+  if (!cliente) return fallo("Registro inexistente.");
   const { data: reg } = await supabase
     .from("sanciones")
     .select("id, cliente_id, org_id")
     .eq("id", parsed.data.registroId)
+    .eq("cliente_id", cliente.id)
     .maybeSingle();
   if (!reg) return fallo("Registro inexistente.");
 
@@ -391,7 +399,7 @@ export async function responderComoSocio(formData: FormData): Promise<ActionResu
  * Revalida el layout del portal para que el contador de "nuevas" quede al día.
  */
 export async function marcarRegistroVisto(input: unknown): Promise<ActionResult> {
-  const perfil = await requireRol("socio");
+  const perfil = await requirePortal();
   // Vista previa del superadministrador: no marca nada en nombre del cliente.
   if (perfil.vistaClienteId) return ok(undefined);
   const parsed = z.object({ registroId: uuid("Registro inexistente") }).safeParse(input);

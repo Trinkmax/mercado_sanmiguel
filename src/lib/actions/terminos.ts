@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { requireRol, filtroClientePortal } from "@/lib/auth";
+import { requireRol, requirePortal, filtroClientePortal } from "@/lib/auth";
 import { ok, fallo, type ActionResult } from "@/lib/actions/result";
 
 const schemaPublicar = z.object({
@@ -82,7 +82,7 @@ export async function publicarTerminos(
 
 /** El socio acepta la versión vigente de los términos (gate del portal). */
 export async function aceptarTerminos(input: unknown): Promise<ActionResult> {
-  const perfil = await requireRol("socio");
+  const perfil = await requirePortal();
   const parsed = z
     .object({
       terminosId: z.string().min(1),

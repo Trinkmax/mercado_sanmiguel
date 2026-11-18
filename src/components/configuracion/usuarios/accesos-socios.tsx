@@ -2,11 +2,23 @@
 
 import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { KeyRound, Loader2, PencilLine, QrCode, Search, Store, TriangleAlert, UserPlus } from "lucide-react";
+import {
+  KeyRound,
+  Link2,
+  Loader2,
+  PencilLine,
+  QrCode,
+  Search,
+  Store,
+  TriangleAlert,
+  Unlink,
+  UserCog,
+  UserPlus,
+} from "lucide-react";
 import { toast } from "sonner";
-import { crearAccesoSocio } from "@/lib/actions/usuarios";
+import { crearAccesoSocio, separarCarpetaEquipo, unirCarpetaEquipo } from "@/lib/actions/usuarios";
 import type { Rol } from "@/lib/auth";
-import { puedeGestionarRol } from "@/lib/roles";
+import { LABEL_ROL, puedeGestionarRol } from "@/lib/roles";
 import { esDniValido, formatDni, normalizarDni } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +30,7 @@ import { CampoContrasena, CampoDni, CampoEmailOpcional } from "./campos";
 import { Credencial } from "./credencial";
 import { FilaUsuario } from "./fila-usuario";
 import { dniDesdeCuit, generarContrasena } from "./contrasena";
-import type { ClienteAcceso } from "./tipos";
+import type { ClienteAcceso, PersonaEquipo } from "./tipos";
 import { llamarAccion } from "@/lib/llamar-accion";
 
 function plano(texto: string): string {
@@ -51,8 +63,10 @@ export function AccesosSocios({
   // "Con acceso" = pueden entrar hoy. A quien se le quitó el acceso va en "Sin acceso"
   // (con "Devolver acceso", sin crear otro usuario con el mismo DNI).
   const activos = clientes.filter((c) => !c.dadoDeBaja);
-  const conAcceso = activos.filter((c) => c.acceso?.activo);
-  const sinAcceso = activos.filter((c) => !c.acceso?.activo);
+  // 0066: la carpeta unida al usuario de alguien del equipo también «tiene acceso».
+  const entra = (c: ClienteAcceso) => Boolean(c.acceso?.activo || c.equipo?.activo);
+  const conAcceso = activos.filter(entra);
+  const sinAcceso = activos.filter((c) => !entra(c));
   // Ya no son clientes pero su usuario del portal sigue andando: se muestran aparte.
   const dadosDeBaja = clientes.filter((c) => c.dadoDeBaja && c.acceso?.activo);
   const puedeGestionar = puedeGestionarRol(miRol, "socio");
@@ -197,9 +211,12 @@ export function AccesosSocios({
       ) : (
         <ul className="divide-y overflow-hidden rounded-xl border bg-card">
           {visibles.map((c) =>
-            // Tiene usuario (activo en "Con acceso", quitado en "Sin acceso"): su fila
-            // con Quitar / Devolver acceso. Sin usuario: "Dar acceso".
-            c.acceso ? (
+            // Unida al usuario de alguien del equipo (0066): su acceso es el del equipo; acá
+            // solo se separa. Tiene usuario del portal (activo en "Con acceso", quitado en
+            // "Sin acceso"): su fila con Quitar / Devolver acceso. Sin usuario: "Dar acceso".
+            c.equipo ? (
+              <FilaEquipo key={c.id} cliente={c} equipo={c.equipo} puedeSeparar={miRol === "lider"} />
+            ) : c.acceso ? (
               <FilaUsuario
                 key={c.id}
                 usuario={c.acceso}
@@ -265,15 +282,14 @@ function FilaSinAcceso({
   onCreado: (datos: { nombre: string; dni: string; password: string }) => void;
   hayClaveAdmin: boolean;
 }) {
+  // 0066: alguien del equipo ya entra con el DNI de esta carpeta (solo lo ve el Líder): no se
+  // le crea otro usuario, se une la carpeta al que ya tiene.
+  if (cliente.equipoConSuDni) return <FilaUnir cliente={cliente} equipo={cliente.equipoConSuDni} />;
   return (
     <li className="px-4 py-4 sm:px-5" data-tour="config-socio-fila">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-base font-semibold break-words">
-            <span className="tabular text-muted-foreground">Carpeta {cliente.codigo}</span> · {cliente.nombre}
-            {cliente.apodo ? <span className="font-normal text-muted-foreground"> ({cliente.apodo})</span> : null}
-            <MarcaSocio cliente={cliente} />
-          </p>
+          <TituloCarpeta cliente={cliente} />
           <p className="text-sm text-muted-foreground">{cliente.lugares ?? "Sin lugar en el plano"}</p>
         </div>
         <Button
@@ -291,6 +307,154 @@ function FilaSinAcceso({
 
       {/* El formulario se monta al abrir, con el DNI de la carpeta. */}
       {abierto ? <FormDarAcceso cliente={cliente} onCreado={onCreado} /> : null}
+    </li>
+  );
+}
+
+function TituloCarpeta({ cliente }: { cliente: ClienteAcceso }) {
+  return (
+    <p className="text-base font-semibold break-words">
+      <span className="tabular text-muted-foreground">Carpeta {cliente.codigo}</span> · {cliente.nombre}
+      {cliente.apodo ? <span className="font-normal text-muted-foreground"> ({cliente.apodo})</span> : null}
+      <MarcaSocio cliente={cliente} />
+    </p>
+  );
+}
+
+/**
+ * Carpeta de alguien del equipo (Gerardo, Jefe de Portería, es la carpeta 82): la ve con su mismo
+ * usuario en «Mi lugar en el mercado». Su contraseña y su acceso se manejan en «Equipo».
+ */
+function FilaEquipo({
+  cliente,
+  equipo,
+  puedeSeparar,
+}: {
+  cliente: ClienteAcceso;
+  equipo: PersonaEquipo;
+  puedeSeparar: boolean;
+}) {
+  const [confirmar, setConfirmar] = useState(false);
+  const [pendiente, startTransition] = useTransition();
+
+  function separar() {
+    startTransition(async () => {
+      const res = await llamarAccion(() => separarCarpetaEquipo({ cliente_id: cliente.id }));
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      setConfirmar(false);
+      toast.success(`Listo. ${equipo.nombre} ya no ve la carpeta ${cliente.codigo}; su usuario sigue igual.`);
+    });
+  }
+
+  return (
+    <li className="px-4 py-4 sm:px-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0 flex-1 basis-72 space-y-1">
+          <TituloCarpeta cliente={cliente} />
+          <p className="flex items-start gap-1.5 text-sm">
+            <UserCog className="mt-0.5 size-4 shrink-0 text-primary" strokeWidth={2} />
+            <span className="min-w-0 break-words">
+              Entra con su usuario del equipo: <strong className="font-semibold">{equipo.nombre}</strong> (
+              {LABEL_ROL[equipo.rol]}). La ve en «Mi lugar en el mercado».
+              {equipo.activo ? null : (
+                <span className="font-medium text-parcial"> Hoy no tiene acceso al sistema.</span>
+              )}
+            </span>
+          </p>
+          <p className="text-sm text-muted-foreground">{cliente.lugares ?? "Sin lugar en el plano"}</p>
+        </div>
+        {puedeSeparar && !confirmar ? (
+          <Button
+            variant="outline"
+            className="min-h-11 bg-card px-4 text-sm font-semibold"
+            onClick={() => setConfirmar(true)}
+          >
+            <Unlink className="size-4" strokeWidth={2} />
+            Separar
+          </Button>
+        ) : null}
+      </div>
+      {confirmar ? (
+        <div className="mt-3 space-y-3 rounded-lg border border-parcial bg-parcial-suave p-4">
+          <p className="text-sm">
+            {equipo.nombre} va a dejar de ver la carpeta {cliente.codigo} en «Mi lugar en el mercado». Su usuario
+            del equipo sigue igual, y la carpeta vuelve a «Sin acceso».
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="destructive" className="min-h-11 px-4 text-sm font-semibold" onClick={separar} disabled={pendiente}>
+              {pendiente ? <Loader2 className="size-4 animate-spin" /> : <Unlink className="size-4" strokeWidth={2} />}
+              {pendiente ? "Separando…" : "Sí, separar"}
+            </Button>
+            <Button
+              variant="outline"
+              className="min-h-11 bg-card px-4 text-sm font-semibold"
+              onClick={() => setConfirmar(false)}
+              disabled={pendiente}
+            >
+              No, dejarla
+            </Button>
+          </div>
+        </div>
+      ) : null}
+    </li>
+  );
+}
+
+/**
+ * Carpeta cuyo DNI es el de alguien del equipo (solo el Líder la ve así). Un mismo DNI no puede
+ * tener dos usuarios: se une la carpeta al usuario que ya tiene, sin contraseña nueva.
+ */
+function FilaUnir({ cliente, equipo }: { cliente: ClienteAcceso; equipo: PersonaEquipo }) {
+  const [pendiente, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const bloqueo = !equipo.activo
+    ? `${equipo.nombre} hoy no tiene acceso al sistema: devolvéselo en «Equipo» antes de unirle la carpeta.`
+    : equipo.conOtraCarpeta
+      ? `${equipo.nombre} ya tiene otra carpeta unida a su usuario: se puede unir una sola.`
+      : null;
+
+  function unir() {
+    setError(null);
+    startTransition(async () => {
+      const res = await llamarAccion(() => unirCarpetaEquipo({ cliente_id: cliente.id }));
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      toast.success(
+        `Listo. ${res.data.nombre || equipo.nombre} ya ve la carpeta ${cliente.codigo} con su mismo usuario: en su menú, «Mi lugar en el mercado».`
+      );
+    });
+  }
+
+  return (
+    <li className="px-4 py-4 sm:px-5" data-tour="config-socio-fila">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0 flex-1 basis-72 space-y-1">
+          <TituloCarpeta cliente={cliente} />
+          <p className="flex items-start gap-1.5 text-sm">
+            <UserCog className="mt-0.5 size-4 shrink-0 text-primary" strokeWidth={2} />
+            <span className="min-w-0 break-words">
+              <strong className="font-semibold">{equipo.nombre}</strong> ya entra al sistema como{" "}
+              {LABEL_ROL[equipo.rol]} con el DNI de esta carpeta. No hace falta otro usuario: uní la carpeta al suyo y
+              la va a ver en «Mi lugar en el mercado», con el mismo DNI y la misma contraseña.
+            </span>
+          </p>
+          <p className="text-sm text-muted-foreground">{cliente.lugares ?? "Sin lugar en el plano"}</p>
+        </div>
+        <Button className="min-h-11 px-4 text-sm font-semibold" onClick={unir} disabled={pendiente || Boolean(bloqueo)}>
+          {pendiente ? <Loader2 className="size-4 animate-spin" /> : <Link2 className="size-4" strokeWidth={2} />}
+          {pendiente ? "Uniendo…" : "Unir a su usuario"}
+        </Button>
+      </div>
+      {bloqueo || error ? (
+        <p className="mt-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm font-medium text-destructive">
+          {error ?? bloqueo}
+        </p>
+      ) : null}
     </li>
   );
 }

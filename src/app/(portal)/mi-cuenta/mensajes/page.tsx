@@ -1,4 +1,4 @@
-import { requireRol } from "@/lib/auth";
+import { requirePortal } from "@/lib/auth";
 import {
   getCircularesSocio,
   getRegistrosSocio,
@@ -10,7 +10,7 @@ import { PantallaMensajes } from "@/components/portal/pantallas/pantalla-mensaje
 export const metadata = { title: "Mensajes" };
 
 export default async function MensajesPage() {
-  const perfil = await requireRol("socio");
+  const perfil = await requirePortal();
   const [circulares, registros, solicitudes, respondidas] = await Promise.all([
     getCircularesSocio(perfil.user_id),
     getRegistrosSocio(perfil.user_id),

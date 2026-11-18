@@ -85,6 +85,7 @@ export function BarraInferior({
   rolLabel,
   logout,
   vista,
+  miLugar,
 }: {
   rol: Rol;
   badges?: BadgesNav;
@@ -93,6 +94,8 @@ export function BarraInferior({
   logout: React.ReactNode;
   /** Selector "Ver el sistema como" (solo el superadministrador). */
   vista?: React.ReactNode;
+  /** «Mi lugar en el mercado»: alguien del equipo que además es cliente (0066). */
+  miLugar?: React.ReactNode;
 }) {
   const pathname = usePathname();
   const [abierto, setAbierto] = useState(false);
@@ -196,6 +199,8 @@ export function BarraInferior({
           </div>
 
           <div className="overflow-y-auto px-4 pb-2">
+            {/* Lleva al portal (otro layout): el menú se va con el panel, no hace falta cerrarlo. */}
+            {miLugar ? <div className="pt-1">{miLugar}</div> : null}
             {(conGrupos ? grupos : [{ grupo: "hoy" as const, items }]).map((g) => (
               <section key={g.grupo} className="pt-3">
                 {conGrupos ? (

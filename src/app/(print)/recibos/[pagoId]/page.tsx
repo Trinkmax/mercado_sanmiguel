@@ -2,7 +2,7 @@ import { cache } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { Banknote, FileText, Landmark, Paperclip } from "lucide-react";
-import { requireRol } from "@/lib/auth";
+import { getCarpetaPropia, requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import {
   formatARS,
@@ -152,15 +152,22 @@ function Detalle({ partes }: { partes: string[] }) {
 
 export default async function ReciboPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ pagoId: string }>;
+  searchParams: Promise<{ desde?: string }>;
 }) {
   const { pagoId } = await params;
-  const perfil = await requireRol("admin", "guardia", "tesoreria", "lider", "socio");
-  const esSocio = perfil.rol === "socio";
+  const { desde } = await searchParams;
+  // Portería solo llega a los recibos de su propia carpeta (la base no le da otros).
+  const perfil = await requireRol("admin", "guardia", "porteria", "tesoreria", "lider", "socio");
 
   const recibo = await leerRecibo(pagoId);
   if (!recibo) notFound();
+  // Alguien del equipo que abre un recibo de SU carpeta desde «Mi lugar en el mercado» (0066)
+  // lo ve como cualquier cliente: compartir, descargar y volver a «Mis pagos».
+  const carpeta = perfil.rol === "socio" || desde !== "portal" ? null : await getCarpetaPropia();
+  const esSocio = perfil.rol === "socio" || (carpeta !== null && carpeta.id === recibo.cliente.id);
 
   const supabase = await createClient();
   const conComprobante = esSocio ? [] : recibo.lineas.filter((l) => l.comprobante_path);

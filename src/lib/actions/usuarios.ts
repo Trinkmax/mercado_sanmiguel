@@ -108,8 +108,12 @@ async function dniOcupado(
     if (perfil.rol !== "lider") {
       return `Ya hay un usuario con el DNI ${dniTexto}. Un mismo DNI no puede tener dos usuarios: consultalo con el Líder de Procesos.`;
     }
-    const loQueFalta = rolNuevo === "socio" ? "el acceso al portal" : "un usuario del equipo";
-    return `${data.nombre} ya entra al sistema como ${LABEL_ROL[data.rol]} con el DNI ${dniTexto}. Un mismo DNI no puede tener dos usuarios: por ahora no se le puede dar ${loQueFalta}.`;
+    // Alguien del equipo que además es cliente (0066): no hace falta otro usuario, su carpeta se
+    // une al que ya tiene («Unir a su usuario» aparece cuando la carpeta tiene cargado su DNI).
+    if (rolNuevo === "socio") {
+      return `${data.nombre} ya entra al sistema como ${LABEL_ROL[data.rol]} con el DNI ${dniTexto}. Un mismo DNI no puede tener dos usuarios, pero no hace falta: si la carpeta es suya, cargale ese DNI en la ficha del cliente y tocá «Unir a su usuario». Va a ver su carpeta con su mismo usuario.`;
+    }
+    return `${data.nombre} ya entra al portal con el DNI ${dniTexto}. Un mismo DNI no puede tener dos usuarios: por ahora no se le puede dar un usuario del equipo.`;
   }
 
   // Mismo tipo: el nombre solo si es alguien que este rol ve y gestiona (no filtra socios al Jefe).
@@ -315,6 +319,49 @@ export async function crearAccesoSocio(input: unknown): Promise<ActionResult<Usu
   revalidatePath("/clientes");
   revalidatePath(`/clientes/${cliente_id}`);
   return ok({ user_id: auth.userId, nombre, dni });
+}
+
+/* ---------- Carpeta propia de alguien del equipo (0066, solo el Líder) ---------- */
+
+const carpetaSchema = z.object({ cliente_id: z.uuid("Elegí el cliente.") });
+
+function revalidarCarpeta(clienteId: string) {
+  revalidarUsuarios();
+  revalidatePath("/clientes");
+  revalidatePath(`/clientes/${clienteId}`);
+}
+
+/**
+ * Une la carpeta al usuario del equipo que tiene el DNI de la carpeta (Gerardo, Jefe de
+ * Portería, es también la carpeta 82): con su mismo usuario la ve en «Mi lugar en el mercado».
+ * La base controla todo (Líder, DNI de la carpeta, que no tenga otra unida).
+ */
+export async function unirCarpetaEquipo(input: unknown): Promise<ActionResult<{ nombre: string }>> {
+  await requireRol("lider");
+  const parsed = carpetaSchema.safeParse(input);
+  if (!parsed.success) return fallo(parsed.error.issues[0].message);
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("unir_carpeta_equipo", { p_cliente: parsed.data.cliente_id });
+  if (error) return fallo(error);
+
+  revalidarCarpeta(parsed.data.cliente_id);
+  const nombre = data && typeof data === "object" && "nombre" in data ? String(data.nombre) : "";
+  return ok({ nombre });
+}
+
+/** La separa: vuelve a «Sin acceso» y su usuario del equipo sigue igual. */
+export async function separarCarpetaEquipo(input: unknown): Promise<ActionResult> {
+  await requireRol("lider");
+  const parsed = carpetaSchema.safeParse(input);
+  if (!parsed.success) return fallo(parsed.error.issues[0].message);
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc("separar_carpeta_equipo", { p_cliente: parsed.data.cliente_id });
+  if (error) return fallo(error);
+
+  revalidarCarpeta(parsed.data.cliente_id);
+  return ok(undefined);
 }
 
 /* ---------- Quitar / devolver acceso ---------- */

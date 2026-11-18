@@ -1,26 +1,31 @@
 import { notFound } from "next/navigation";
-import { requireRol } from "@/lib/auth";
+import { requirePortal } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { LABEL_ROL } from "@/lib/roles";
 import type { ItemChat } from "@/components/portal/hilo-portal";
 import { PantallaAviso } from "@/components/portal/pantallas/pantalla-aviso";
 import { RegistrarVista } from "@/components/portal/registrar-vista";
 import { fechasDelHilo } from "@/components/comunicaciones/linea-estado-registro";
+import { getClienteSocio } from "@/components/portal/datos-portal";
 
 export const metadata = { title: "Aviso" };
 
 export default async function RegistroSocioPage({ params }: { params: Promise<{ id: string }> }) {
-  const perfil = await requireRol("socio");
+  const perfil = await requirePortal();
   const { id } = await params;
+  const cliente = await getClienteSocio(perfil.user_id);
+  if (!cliente) notFound();
   const supabase = await createClient();
 
-  // La RLS solo devuelve los registros propios: uno ajeno es un 404.
+  // Solo los de SU carpeta: uno ajeno es un 404 (al socio la RLS ya no se lo da; alguien del
+  // equipo con carpeta propia, 0066, puede leer más).
   const { data: r } = await supabase
     .from("sanciones")
     .select(
       "id, numero, tipo, titulo, detalle, fecha, storage_path, estado, multa, multa_vencimiento, multa_sin_efecto_en, creado_en, cargos(estado, monto, monto_pagado), espacios(tipo, numero, medio)"
     )
     .eq("id", id)
+    .eq("cliente_id", cliente.id)
     .maybeSingle();
   if (!r) notFound();
 

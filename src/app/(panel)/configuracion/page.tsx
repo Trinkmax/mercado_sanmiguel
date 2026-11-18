@@ -30,6 +30,7 @@ import type {
   EmpleadoPadron,
   UsuarioFila,
 } from "@/components/configuracion/usuarios/tipos";
+import { dniDesdeCuit } from "@/components/configuracion/usuarios/contrasena";
 import { TarifasTransporte } from "@/components/configuracion/tarifas-transporte";
 import type { TarifaTransporte } from "@/components/porteria/tarifas";
 
@@ -315,6 +316,20 @@ async function Usuarios(supabase: Supabase, perfil: Perfil, ver: "equipo" | "soc
   // El superadministrador no se gestiona desde acá (la base no lo deja): no se lista.
   const todos = (perfiles ?? []).filter((p) => !p.superadmin);
   const nombresPorId = Object.fromEntries(todos.map((p) => [p.user_id, p.nombre]));
+  // 0066: carpetas unidas al usuario de alguien del equipo (cuentan en «Con acceso»).
+  const delEquipoActivos = new Set(todos.filter((p) => p.rol !== "socio" && p.activo).map((p) => p.user_id));
+  const carpetasEquipo =
+    perfil.rol === "lider"
+      ? ((
+          await supabase
+            .from("clientes")
+            .select("auth_user_id")
+            .eq("org_id", perfil.org_id)
+            .eq("activo", true)
+            .not("auth_user_id", "is", null)
+            .in("categoria", ["puestero", "quintero"])
+        ).data ?? []).filter((c) => c.auth_user_id && delEquipoActivos.has(c.auth_user_id)).length
+      : 0;
 
   const avisoClave = claveAdmin ? null : (
     <Alert className="mb-5 border-parcial bg-parcial-suave px-4 py-3">
@@ -338,7 +353,7 @@ async function Usuarios(supabase: Supabase, perfil: Perfil, ver: "equipo" | "soc
             {
               valor: "socios",
               label: "Portal de clientes",
-              n: todos.filter((p) => p.rol === "socio" && p.activo).length,
+              n: todos.filter((p) => p.rol === "socio" && p.activo).length + carpetasEquipo,
             },
           ] as const
         ).map((o) => (
@@ -386,8 +401,19 @@ async function Usuarios(supabase: Supabase, perfil: Perfil, ver: "equipo" | "soc
       if (!espaciosPorCliente.has(e.cliente_id)) espaciosPorCliente.set(e.cliente_id, []);
       espaciosPorCliente.get(e.cliente_id)!.push(e);
     }
+    // 0066: alguien del equipo que entra con el DNI de una carpeta. Solo para el Líder, que es
+    // quien la une a su usuario (a Administración no se le dice quién es del equipo por su DNI).
+    const equipoPorDni = new Map(
+      perfil.rol === "lider"
+        ? todos.filter((p) => p.rol !== "socio" && p.dni).map((p) => [p.dni as string, p] as const)
+        : []
+    );
+    const yaUnidos = new Set((clientesRes ?? []).map((c) => c.auth_user_id).filter(Boolean));
     const lista: ClienteAcceso[] = clientes.map((c) => {
-      const socio = c.auth_user_id ? perfilPorId.get(c.auth_user_id) : undefined;
+      const vinculado = c.auth_user_id ? perfilPorId.get(c.auth_user_id) : undefined;
+      const delEquipo = vinculado && vinculado.rol !== "socio" ? vinculado : undefined;
+      const dni = !c.auth_user_id && c.tipo_persona === "fisica" ? dniDesdeCuit(c.cuit) : null;
+      const candidato = dni ? equipoPorDni.get(dni) : undefined;
       return {
         id: c.id,
         codigo: c.codigo,
@@ -397,7 +423,16 @@ async function Usuarios(supabase: Supabase, perfil: Perfil, ver: "equipo" | "soc
         tipoPersona: c.tipo_persona,
         esSocio: Boolean(c.es_socio),
         lugares: lugaresDe(espaciosPorCliente.get(c.id) ?? []),
-        acceso: socio ? aFila(socio) : null,
+        acceso: vinculado && !delEquipo ? aFila(vinculado) : null,
+        equipo: delEquipo ? { nombre: delEquipo.nombre, rol: delEquipo.rol, activo: delEquipo.activo } : null,
+        equipoConSuDni: candidato
+          ? {
+              nombre: candidato.nombre,
+              rol: candidato.rol,
+              activo: candidato.activo,
+              conOtraCarpeta: yaUnidos.has(candidato.user_id),
+            }
+          : null,
         dadoDeBaja: !c.activo,
       };
     });

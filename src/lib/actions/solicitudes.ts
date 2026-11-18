@@ -312,11 +312,14 @@ export async function enviarMensaje(
   formData: FormData
 ): Promise<ActionResult<{ id: string; repetido: boolean }>> {
   const perfil = await requireRol("admin", "guardia", "porteria", "tesoreria", "lider", "socio");
+  // Desde el portal escribe el cliente: el socio, o alguien del equipo en SU carpeta (0066: la
+  // base deja autor_rol 'socio' solo si la solicitud es de su carpeta).
+  const desdePortal = perfil.rol === "socio" || formData.get("desde") === "portal";
 
   const parsed = schemaMensaje.safeParse({
     solicitudId: formData.get("solicitudId"),
     mensaje: formData.get("mensaje"),
-    interno: perfil.rol !== "socio" && formData.get("interno") === "true",
+    interno: !desdePortal && formData.get("interno") === "true",
     ref: formData.get("ref") ?? undefined,
   });
   if (!parsed.success) return fallo(parsed.error.issues[0].message);
@@ -355,7 +358,7 @@ export async function enviarMensaje(
       solicitud_id: solicitud.id,
       autor_id: perfil.user_id,
       autor_nombre: perfil.nombre,
-      autor_rol: perfil.rol,
+      autor_rol: desdePortal ? "socio" : perfil.rol,
       mensaje: parsed.data.mensaje,
       interno: parsed.data.interno,
       adjunto_path: adjunto.data,
@@ -399,10 +402,10 @@ export async function marcarSolicitudVista(input: unknown): Promise<ActionResult
   if (error) return fallo(error);
 
   if (data) {
-    if (perfil.rol === "socio") {
-      // El layout del portal cuenta las respuestas nuevas en "Mi cuenta".
-      revalidatePath("/mi-cuenta", "layout");
-    } else {
+    // El layout del portal cuenta las respuestas nuevas en "Mi cuenta" (también el de alguien
+    // del equipo con carpeta propia, 0066).
+    revalidatePath("/mi-cuenta", "layout");
+    if (perfil.rol !== "socio") {
       revalidatePath("/solicitudes");
       revalidatePath(`/solicitudes/${parsed.data.solicitudId}`);
       revalidatePath("/porteria");

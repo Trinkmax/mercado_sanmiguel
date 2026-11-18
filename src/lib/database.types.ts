@@ -3653,6 +3653,7 @@ export type Database = {
         Args: { p_aprobar: boolean; p_motivo?: string; p_novedad: string }
         Returns: Database["public"]["Enums"]["estado_novedad"]
       }
+      separar_carpeta_equipo: { Args: { p_cliente: string }; Returns: undefined }
       siguiente_codigo_cliente: { Args: never; Returns: number }
       solicitar_cambio: {
         Args: {
@@ -3680,6 +3681,7 @@ export type Database = {
           periodo: string
         }[]
       }
+      unir_carpeta_equipo: { Args: { p_cliente: string }; Returns: Json }
       validar_caja: {
         Args: {
           p_caja: string

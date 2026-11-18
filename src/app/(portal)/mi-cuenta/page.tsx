@@ -1,5 +1,5 @@
 import { UserX } from "lucide-react";
-import { requireRol } from "@/lib/auth";
+import { requirePortal } from "@/lib/auth";
 import { aLugarPlano } from "@/components/portal/armar-cuenta";
 import { PantallaCuenta } from "@/components/portal/pantallas/pantalla-cuenta";
 import {
@@ -13,7 +13,7 @@ import {
 export const metadata = { title: "Mi cuenta" };
 
 export default async function MiCuentaPage() {
-  const perfil = await requireRol("socio");
+  const perfil = await requirePortal();
   const cliente = await getClienteSocio(perfil.user_id);
 
   if (!cliente) {

@@ -1,6 +1,6 @@
 import { LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { requireStaff } from "@/lib/auth";
+import { getCarpetaPropia, requireStaff } from "@/lib/auth";
 import { cerrarSesion } from "@/lib/actions/auth";
 import { LABEL_ROL } from "@/lib/roles";
 import { pendientesNav } from "@/lib/pendientes";
@@ -14,6 +14,7 @@ import { SelectorVista } from "@/components/shared/selector-vista";
 import { ProveedorTour } from "@/components/tour/proveedor-tour";
 import { BotonAyuda } from "@/components/tour/boton-ayuda";
 import { BienvenidaTour } from "@/components/tour/bienvenida-tour";
+import { MiLugar } from "@/components/shared/mi-lugar";
 
 /** Salir: en la barra lateral (azul) o en la hoja del menú del celular (clara). */
 function BotonSalir({ claro = false }: { claro?: boolean }) {
@@ -58,7 +59,12 @@ export default async function PanelLayout({
 }) {
   const perfil = await requireStaff();
   const rolLabel = LABEL_ROL[perfil.rol];
-  const badges = await pendientesNav(perfil);
+  // Alguien del equipo que además es cliente (0066): su carpeta, a un toque. Si la base no
+  // responde, el panel sigue andando sin el acceso.
+  const [badges, carpeta] = await Promise.all([
+    pendientesNav(perfil),
+    getCarpetaPropia().catch(() => null),
+  ]);
 
   return (
     <ProveedorTour rol={perfil.rol} usuario={perfil.user_id}>
@@ -73,6 +79,11 @@ export default async function PanelLayout({
         <div className="flex-1 overflow-y-auto overscroll-contain p-2.5" style={SOMBRAS_DESPLAZAR}>
           <NavLinks rol={perfil.rol} badges={badges} data-tour="menu-lateral" />
         </div>
+        {carpeta ? (
+          <div className="border-t border-sidebar-border p-2.5">
+            <MiLugar carpeta={carpeta} />
+          </div>
+        ) : null}
         {/* Ayuda: la guía paso a paso de la pantalla actual o del trabajo completo. */}
         <div className="border-t border-sidebar-border p-2.5">
           <BotonAyuda variante="barra" />
@@ -115,6 +126,7 @@ export default async function PanelLayout({
           rolLabel={rolLabel}
           logout={<BotonSalir claro />}
           vista={perfil.superadmin ? <SelectorVista rolActual={perfil.rol} /> : undefined}
+          miLugar={carpeta ? <MiLugar carpeta={carpeta} claro /> : undefined}
         />
       </div>
     </div>

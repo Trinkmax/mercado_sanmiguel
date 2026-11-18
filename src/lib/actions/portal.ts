@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { requireRol, filtroClientePortal } from "@/lib/auth";
+import { requirePortal, filtroClientePortal } from "@/lib/auth";
 import { ok, fallo, type ActionResult } from "@/lib/actions/result";
 import {
   rutaDocumentoCliente,
@@ -26,7 +26,7 @@ const CATEGORIAS = [
 export async function subirDocumentoSocio(
   formData: FormData
 ): Promise<ActionResult<{ id: string }>> {
-  const perfil = await requireRol("socio");
+  const perfil = await requirePortal();
 
   const parsed = z
     .object({
@@ -143,7 +143,7 @@ function asuntoDe(detalle: string): string {
 export async function crearSolicitudSocio(
   formData: FormData
 ): Promise<ActionResult<SolicitudSocioCreada>> {
-  const perfil = await requireRol("socio");
+  const perfil = await requirePortal();
 
   const parsed = z
     .object({

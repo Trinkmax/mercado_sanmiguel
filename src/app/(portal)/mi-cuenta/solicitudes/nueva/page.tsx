@@ -1,5 +1,5 @@
 import { UserX } from "lucide-react";
-import { requireRol, filtroClientePortal } from "@/lib/auth";
+import { requirePortal, filtroClientePortal } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { EncabezadoDetalle } from "@/components/portal/encabezado-detalle";
 import { FormSolicitudSocio } from "@/components/portal/form-solicitud-socio";
@@ -7,7 +7,7 @@ import { FormSolicitudSocio } from "@/components/portal/form-solicitud-socio";
 export const metadata = { title: "Escribirle a la cooperativa" };
 
 export default async function NuevaSolicitudSocioPage() {
-  const perfil = await requireRol("socio");
+  const perfil = await requirePortal();
   const supabase = await createClient();
 
   const { data: cliente } = await supabase

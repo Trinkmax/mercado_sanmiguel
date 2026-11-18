@@ -74,7 +74,11 @@ export function CajaChat({
     const firma = firmaMensaje(mensaje, fd.get("adjunto"));
     fd.set(destino.tipo === "solicitud" ? "solicitudId" : "registroId", destino.id);
     fd.set("ref", ref);
-    if (destino.tipo === "solicitud") fd.set("interno", "false");
+    if (destino.tipo === "solicitud") {
+      fd.set("interno", "false");
+      // Escribe el cliente (también alguien del equipo en su propia carpeta, 0066).
+      fd.set("desde", "portal");
+    }
     startTransition(async () => {
       const errorPeso = await prepararAdjuntos(fd, ["adjunto"]);
       if (errorPeso) {

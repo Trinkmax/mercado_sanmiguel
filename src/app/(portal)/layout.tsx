@@ -2,7 +2,7 @@ import type { Viewport } from "next";
 import { Archivo } from "next/font/google";
 import Image from "next/image";
 import { Eye } from "lucide-react";
-import { requireRol } from "@/lib/auth";
+import { requirePortal, rutaInicio } from "@/lib/auth";
 import { nivelDeuda, TZ_AR } from "@/lib/format";
 import { SesionViva } from "@/components/shared/sesion-viva";
 import { RefrescarAlVolver } from "@/components/portal/refrescar-al-volver";
@@ -20,6 +20,7 @@ import { SelectorVista } from "@/components/shared/selector-vista";
 import { ProveedorTour } from "@/components/tour/proveedor-tour";
 import { BotonAyuda } from "@/components/tour/boton-ayuda";
 import { BienvenidaTour } from "@/components/tour/bienvenida-tour";
+import { FranjaCarpetaPropia } from "@/components/portal/franja-carpeta-propia";
 import logo from "../../../public/logo.png";
 import "./portal.css";
 
@@ -45,8 +46,11 @@ function saludo(): string {
  * los términos vigentes y confirmar las circulares obligatorias de su público.
  */
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
-  const perfil = await requireRol("socio");
-  const vistaPrevia = perfil.superadmin;
+  const perfil = await requirePortal();
+  const vistaPrevia = perfil.superadmin && perfil.rol === "socio";
+  // Alguien del equipo con su propia carpeta (0066): la ve como cualquier cliente y vuelve a
+  // su trabajo con un toque. El tour y la guía son los del portal.
+  const delEquipo = perfil.rol !== "socio";
   const [cliente, lugares, deuda, pendientes] = await Promise.all([
     getClienteSocio(perfil.user_id),
     getLugaresSocio(perfil.user_id),
@@ -68,12 +72,15 @@ export default async function PortalLayout({ children }: { children: React.React
   );
 
   return (
-    <ProveedorTour rol={perfil.rol} usuario={perfil.user_id}>
+    <ProveedorTour rol="socio" usuario={perfil.user_id}>
       {/* La letra se declara acá (y no en la raíz) para que el panel no la descargue. */}
       <style href="portal-letra" precedence="default">{`:root{--font-chapa:${archivo.style.fontFamily}}`}</style>
       <div className="portal">
         <SesionViva />
         <RefrescarAlVolver />
+        {delEquipo ? (
+          <FranjaCarpetaPropia rol={perfil.rol} codigo={cliente?.codigo ?? null} volverA={rutaInicio(perfil.rol)} />
+        ) : null}
         {vistaPrevia ? (
           // Vista previa del superadministrador: se ve el portal como el cliente, sin guardar
           // nada en su nombre (la base lo bloquea) y sin pedirle términos ni circulares.

@@ -1,4 +1,4 @@
-import { requireRol } from "@/lib/auth";
+import { requirePortal } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { getClienteSocio, getCuentaSocio, getLugaresSocio } from "@/components/portal/datos-portal";
 import type { LugarCarpeta } from "@/components/portal/lugares-carpeta";
@@ -9,7 +9,7 @@ import { etiquetaEspacio } from "@/components/mapa/geometria";
 export const metadata = { title: "Mi carpeta" };
 
 export default async function CarpetaPage() {
-  const perfil = await requireRol("socio");
+  const perfil = await requirePortal();
   const [cliente, lugares, cuenta] = await Promise.all([
     getClienteSocio(perfil.user_id),
     getLugaresSocio(perfil.user_id),

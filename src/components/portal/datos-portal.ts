@@ -400,11 +400,19 @@ export const getSolicitudesSocio = cache(async (userId: string): Promise<Solicit
  * sola, el aviso de «Mi cuenta» lleva directo a ella.
  */
 export const getPendientesSocio = cache(async (userId: string): Promise<{ href: string; aResponder: boolean }[]> => {
-  const [circulares, registros, conRespuesta] = await Promise.all([
+  const perfil = await getPerfil();
+  const [circulares, registros, respondidas] = await Promise.all([
     getCircularesSocio(userId),
     getRegistrosSocio(userId),
     getSolicitudesConRespuesta(),
   ]);
+  // Alguien del equipo con carpeta propia (0066) también carga solicitudes desde el panel: acá
+  // cuentan solo las de su carpeta.
+  let conRespuesta = respondidas;
+  if (perfil && perfil.rol !== "socio" && respondidas.length > 0) {
+    const suyas = new Set((await getSolicitudesSocio(userId)).map((s) => s.id));
+    conRespuesta = respondidas.filter((id) => suyas.has(id));
+  }
   return [
     ...registros
       .filter((r) => registroEsNuevo(r) || esperaDescargo(r))

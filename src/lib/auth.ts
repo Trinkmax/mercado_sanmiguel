@@ -117,6 +117,42 @@ export async function requireStaff(): Promise<Perfil> {
   return requireRol("admin", "guardia", "porteria", "tesoreria", "lider");
 }
 
+/** La carpeta propia de alguien del equipo: la que el Líder unió a su usuario (0066). */
+export type CarpetaPropia = { id: string; codigo: number; nombre: string; apodo: string | null };
+
+/**
+ * Alguien del equipo que además es cliente (Gerardo, Jefe de Portería, es la carpeta 82): un
+ * mismo DNI no puede tener dos usuarios, así que su MISMO usuario queda unido a su carpeta y la
+ * ve en el portal («Mi lugar en el mercado»). Null para el socio (su portal es el de siempre),
+ * sin carpeta unida o con la carpeta dada de baja.
+ */
+export const getCarpetaPropia = cache(async (): Promise<CarpetaPropia | null> => {
+  const perfil = await getPerfil();
+  if (!perfil || perfil.rol === "socio") return null;
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("clientes")
+    .select("id, codigo, nombre, apodo")
+    .eq("auth_user_id", perfil.user_id)
+    .eq("activo", true)
+    .maybeSingle();
+  // Sin respuesta de la base no se sabe: el portal reintenta, el panel sigue sin el acceso.
+  if (error) throw new Error(SIN_CONEXION);
+  return data;
+});
+
+/**
+ * El portal: el socio o alguien del equipo con su propia carpeta (que lo abre desde el panel).
+ * En lo de su carpeta la base lo trata como al cliente (0066).
+ */
+export async function requirePortal(): Promise<Perfil> {
+  const { hayUsuario, perfil } = await leerSesion();
+  if (!perfil) redirect(hayUsuario ? LOGIN_SIN_ACCESO : "/login");
+  if (perfil.rol === "socio") return perfil;
+  if (await getCarpetaPropia()) return perfil;
+  redirect(rutaInicio(perfil.rol));
+}
+
 /** El Líder de Procesos aplica cambios de clientes/conceptos directo; los demás
  * roles de gestión los proponen y esperan aprobación. */
 export function aplicaDirecto(rol: Rol): boolean {

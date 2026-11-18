@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { requireRol } from "@/lib/auth";
+import { requirePortal } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { LABEL_ROL } from "@/lib/roles";
 import { fraseAutomatica } from "@/components/solicitudes/hilo-mensajes";
@@ -7,29 +7,35 @@ import { esMensajeAutomatico } from "@/components/solicitudes/constantes";
 import type { ItemChat } from "@/components/portal/hilo-portal";
 import { PantallaSolicitud } from "@/components/portal/pantallas/pantalla-solicitud";
 import { MarcarSolicitudVista } from "@/components/solicitudes/marcar-vista";
+import { getClienteSocio } from "@/components/portal/datos-portal";
 
 export const metadata = { title: "Conversación" };
 
 export default async function SolicitudSocioPage({ params }: { params: Promise<{ id: string }> }) {
-  const perfil = await requireRol("socio");
+  const perfil = await requirePortal();
   const { id } = await params;
+  const cliente = await getClienteSocio(perfil.user_id);
+  if (!cliente) notFound();
   const supabase = await createClient();
 
-  // La RLS ya limita a las solicitudes del propio cliente.
+  // Solo las de SU carpeta: al socio la RLS ya no le da otras, pero alguien del equipo con
+  // carpeta propia (0066) lee también las de su trabajo.
   const { data: s } = await supabase
     .from("solicitudes")
     .select(
       "id, numero, tipo, asunto, detalle, estado, adjunto_path, resolucion, nota_ejecucion, creada_en, revisada_en, derivada_consejo_en, resuelta_en, asignada_en, ejecutada_en, cerrada_en, actualizada_en, cliente_id, creada_por"
     )
     .eq("id", id)
+    .eq("cliente_id", cliente.id)
     .maybeSingle();
   if (!s) notFound();
 
-  // Los mensajes internos no llegan: la RLS los filtra para el socio.
+  // Los mensajes internos no llegan: la RLS los filtra para el cliente (y acá tampoco se piden).
   const { data: crudos } = await supabase
     .from("solicitud_mensajes")
     .select("id, autor_id, autor_nombre, autor_rol, mensaje, interno, creado_en, adjunto_path")
     .eq("solicitud_id", s.id)
+    .eq("interno", false)
     .order("creado_en", { ascending: true });
 
   const paths = [s.adjunto_path, ...(crudos ?? []).map((m) => m.adjunto_path)].filter((p): p is string => Boolean(p));

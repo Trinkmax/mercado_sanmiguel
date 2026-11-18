@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { ChevronDown, ChevronRight, MapPin, MessageSquare, MessagesSquare, Plus } from "lucide-react";
-import { requireRol } from "@/lib/auth";
+import { getCarpetaPropia, requireRol } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { SIN_CONEXION } from "@/lib/sesion";
 import { formatFechaHora, formatNumero, periodoActual } from "@/lib/format";
@@ -48,11 +48,20 @@ export default async function SolicitudesPage({
     .limit(cantidad);
   if (filtro.estados) lista = lista.in("estado", filtro.estados);
   if (filtro.origen) lista = lista.eq("origen", filtro.origen);
+  // Las de SU carpeta (alguien del equipo que además es cliente, 0066) van en «Mi lugar en el
+  // mercado»: Portería, el Jefe y Tesorería no atienden las de los clientes.
+  const carpeta =
+    perfil.rol === "guardia" || perfil.rol === "porteria" || perfil.rol === "tesoreria"
+      ? await getCarpetaPropia().catch(() => null)
+      : null;
+  const sinSuCarpeta = carpeta ? `cliente_id.is.null,cliente_id.neq.${carpeta.id}` : null;
+  if (sinSuCarpeta) lista = lista.or(sinSuCarpeta);
 
   const contar = (f: FiltroSolicitud) => {
     let q = supabase.from("solicitudes").select("id", { count: "exact", head: true });
     if (f.estados) q = q.in("estado", f.estados);
     if (f.origen) q = q.eq("origen", f.origen);
+    if (sinSuCarpeta) q = q.or(sinSuCarpeta);
     return q;
   };
 
