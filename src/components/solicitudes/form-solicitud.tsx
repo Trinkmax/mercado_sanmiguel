@@ -3,7 +3,7 @@
 import { useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
-import { Check, MapPin, Paperclip, Printer, Search, Store, X } from "lucide-react";
+import { Check, MapPin, Printer, Search, Store, X } from "lucide-react";
 import type { Rol } from "@/lib/auth";
 import { crearSolicitud } from "@/lib/actions/solicitudes";
 import { cn, uuidV4 } from "@/lib/utils";
@@ -14,7 +14,6 @@ import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { Sello } from "@/components/shared/sello";
 import {
-  ACCEPT_ADJUNTO,
   LABEL_ORIGEN,
   firmaFormulario,
   ORIGENES_SOLICITUD,
@@ -27,12 +26,14 @@ import { etiquetaLugar, type LugarSimple } from "./lugares";
 import { SelectorPuesto } from "./selector-puesto";
 import { llamarAccion } from "@/lib/llamar-accion";
 import { AlertaError } from "@/components/cobranza/alerta-error";
+import { explicarFalloEnvio, prepararAdjuntos } from "@/components/comunicaciones/adjuntos";
 import {
-  AYUDA_PESO_ADJUNTO,
-  errorPesoAdjunto,
-  explicarFalloEnvio,
-  prepararAdjuntos,
-} from "@/components/comunicaciones/adjuntos";
+  AYUDA_VARIOS_ARCHIVOS,
+  cuantosArchivos,
+  mandarArchivosSueltos,
+  type ArchivoElegido,
+} from "./archivos-sueltos";
+import { BotonArchivosPanel, ListaArchivosPanel } from "./archivos-panel";
 
 export type ClienteBuscable = {
   id: string;
@@ -52,7 +53,9 @@ function normalizar(texto: string): string {
 
 /**
  * Alta de solicitud desde el panel. Un solo camino: tipo → asunto → detalle → ¿sobre qué? →
- * adjunto → crear. Portería, el Jefe de Portería y Tesorería eligen el puesto por número (no
+ * fotos o PDF → crear. Varios archivos (hasta 10): el primero va con la solicitud y los demás
+ * después, como mensajes sueltos del hilo, cada uno en su pedido (archivos-sueltos.ts); si
+ * alguno no llega, la pantalla de «Le llegó…» lo muestra con «Mandar lo que falta». Portería, el Jefe de Portería y Tesorería eligen el puesto por número (no
  * ven clientes); Administración y el Líder pueden además buscar un cliente. Al crear dice a
  * quién le llegó ("Le llegó al Jefe de Portería" / "Le llegó al Líder de Procesos").
  */
@@ -104,18 +107,40 @@ function Formulario({
   const [clienteId, setClienteId] = useState<string | null>(clienteInicial?.id ?? null);
   const [lugar, setLugar] = useState<LugarSimple | null>(lugarInicial);
   const [origen, setOrigen] = useState<OrigenSolicitud>(origenInicial);
-  const [nombreAdjunto, setNombreAdjunto] = useState<string | null>(null);
+  const [archivos, setArchivos] = useState<ArchivoElegido[]>([]);
   const [error, setError] = useState<string | null>(null);
+  /** «2 de 5» mientras se mandan varios archivos. */
+  const [avance, setAvance] = useState<string | null>(null);
   const [creada, setCreada] = useState<{ id: string; numero: number; estado: EstadoSolicitud } | null>(null);
-  const adjuntoRef = useRef<HTMLInputElement>(null);
+  /** Ya creada: los archivos que no llegaron y por qué. */
+  const [faltan, setFaltan] = useState<ArchivoElegido[]>([]);
+  const [errorFaltan, setErrorFaltan] = useState<string | null>(null);
   // Clave de idempotencia: la misma mientras no cambie lo cargado y hasta que se guarde (un
   // corte de red no la renueva: tocar "Enviar" de nuevo no crea otra solicitud igual). Si la
   // persona corrige algo, es otro envío. "Cargar otra" remonta el formulario.
   const claveRef = useRef<{ firma: string; ref: string } | null>(null);
 
-  function quitarAdjunto() {
-    if (adjuntoRef.current) adjuntoRef.current.value = "";
-    setNombreAdjunto(null);
+  /** Ya creada la solicitud: manda los que faltaron, con su misma clave (no se repite ninguno). */
+  function mandarLosQueFaltan() {
+    if (!creada || pendiente || faltan.length === 0) return;
+    const solicitudId = creada.id;
+    const pendientes = faltan;
+    startTransition(async () => {
+      setErrorFaltan(null);
+      let van = 0;
+      setAvance(pendientes.length > 1 ? `1 de ${pendientes.length}` : null);
+      const r = await mandarArchivosSueltos(solicitudId, pendientes, {
+        desdePortal: false,
+        alLlegar: (a) => {
+          van += 1;
+          setFaltan((lista) => lista.filter((x) => x.ref !== a.ref));
+          if (van < pendientes.length) setAvance(`${van + 1} de ${pendientes.length}`);
+        },
+      });
+      setAvance(null);
+      setErrorFaltan(r.error);
+      if (!r.error) toast.success("Listo: llegaron los archivos que faltaban.");
+    });
   }
 
   const puedeElegirOrigen = conClientes;
@@ -167,22 +192,47 @@ function Formulario({
       fd.set("espacioId", lugar.id);
       fd.delete("referencia");
     }
+    // El primer archivo va con la solicitud; los demás, después (cada uno en su pedido).
+    const [primero, ...resto] = archivos;
+    if (primero) fd.set("adjunto", primero.archivo, primero.archivo.name);
     const firma = firmaFormulario(fd);
     if (claveRef.current?.firma !== firma) claveRef.current = { firma, ref: uuidV4() };
     fd.set("ref", claveRef.current.ref);
+    const total = archivos.length;
     startTransition(async () => {
+      if (total > 1) setAvance(`1 de ${total}`);
       // Las fotos se achican antes de subir (una de la tablet pesa 3–8 MB).
       const errorPeso = await prepararAdjuntos(fd, ["adjunto"]);
       if (errorPeso) {
+        setAvance(null);
         setError(errorPeso);
         return;
       }
       const res = await llamarAccion(() => crearSolicitud(fd));
       if (!res.ok) {
         // Lo cargado queda en el formulario y la clave se conserva para el reintento.
+        setAvance(null);
         setError(explicarFalloEnvio(res.error, fd, ["adjunto"]));
         return;
       }
+      let noLlegaron: ArchivoElegido[] = [];
+      let porQue: string | null = null;
+      if (resto.length > 0) {
+        let van = 1;
+        setAvance(`${van + 1} de ${total}`);
+        const r = await mandarArchivosSueltos(res.data.id, resto, {
+          desdePortal: false,
+          alLlegar: () => {
+            van += 1;
+            if (van < total) setAvance(`${van + 1} de ${total}`);
+          },
+        });
+        noLlegaron = resto.filter((a) => !r.llegaron.includes(a.ref));
+        porQue = r.error;
+      }
+      setAvance(null);
+      setFaltan(noLlegaron);
+      setErrorFaltan(porQue);
       toast.success(
         res.data.repetido
           ? `Ya se había enviado: es la solicitud N° ${res.data.numero}`
@@ -212,8 +262,31 @@ function Formulario({
                 : "Las respuestas y el avance los ves en Solicitudes."}
             </p>
           </div>
+          {faltan.length > 0 ? (
+            <div className="flex w-full max-w-sm flex-col gap-2 text-left">
+              <AlertaError
+                titulo="La solicitud se creó, pero no llegó todo"
+                error={`${faltan.length === 1 ? "Falta mandar 1 archivo" : `Faltan mandar ${cuantosArchivos(faltan.length)}`}.${errorFaltan ? ` ${errorFaltan}` : ""}`}
+              />
+              <ListaArchivosPanel
+                archivos={faltan}
+                deshabilitado={pendiente}
+                onQuitar={(ref) => setFaltan((lista) => lista.filter((a) => a.ref !== ref))}
+              />
+              <Button
+                type="button"
+                size="lg"
+                disabled={pendiente}
+                onClick={mandarLosQueFaltan}
+                className="h-12 text-base font-semibold"
+              >
+                {pendiente ? <Spinner className="size-5" /> : null}
+                {avance ? `Enviando ${avance}…` : "Mandar lo que falta"}
+              </Button>
+            </div>
+          ) : null}
           <div className="flex w-full max-w-sm flex-col gap-2">
-            <Button asChild size="lg" className="h-12 text-base font-semibold">
+            <Button asChild size="lg" variant={faltan.length > 0 ? "outline" : "default"} className="h-12 text-base font-semibold">
               <Link href={`/solicitudes/${creada.id}`}>Ver la solicitud</Link>
             </Button>
             <Button type="button" variant="outline" className="h-12 text-base" onClick={onOtra}>
@@ -409,50 +482,32 @@ function Formulario({
         )}
       </fieldset>
 
-      {/* Adjunto */}
+      {/* Fotos o PDF */}
       <div className="space-y-2">
         <Label htmlFor="sol-adjunto" className="text-base">
-          Foto o PDF (opcional)
+          Fotos o PDF (opcional)
         </Label>
-        <div className="flex flex-wrap items-center gap-2">
-          <Label
-            htmlFor="sol-adjunto"
-            className="inline-flex min-h-12 max-w-full min-w-0 cursor-pointer items-center gap-2 rounded-md border bg-card px-4 text-sm font-medium hover:bg-muted"
-          >
-            <Paperclip className="size-4 shrink-0" strokeWidth={2} />
-            <span className="min-w-0 truncate">{nombreAdjunto ?? "Sacá una foto o elegí un PDF"}</span>
-          </Label>
-          {nombreAdjunto ? (
-            <Button type="button" variant="ghost" className="h-12 px-3" onClick={quitarAdjunto}>
-              <X className="size-4" strokeWidth={2} />
-              Quitar
-            </Button>
-          ) : null}
-        </div>
-        <p className="text-sm text-muted-foreground">
-          {nombreAdjunto ? "Se adjunta al enviar." : `Foto o PDF. ${AYUDA_PESO_ADJUNTO}`}
-        </p>
-        {/* <input> nativo: el Input de shadcn trae w-full y, oculto con sr-only, mide todo el ancho de la ventana. */}
-        <input
-          ref={adjuntoRef}
-          id="sol-adjunto"
-          name="adjunto"
-          type="file"
-          accept={ACCEPT_ADJUNTO}
-          className="sr-only"
-          onChange={(e) => {
-            const archivo = e.target.files?.[0] ?? null;
-            const pesado = errorPesoAdjunto(archivo);
-            if (pesado) {
-              e.target.value = "";
-              setNombreAdjunto(null);
-              setError(pesado);
-              return;
-            }
+        <ListaArchivosPanel
+          archivos={archivos}
+          deshabilitado={pendiente}
+          onQuitar={(ref) => {
+            setArchivos((lista) => lista.filter((a) => a.ref !== ref));
             setError(null);
-            setNombreAdjunto(archivo?.name ?? null);
           }}
         />
+        <BotonArchivosPanel
+          id="sol-adjunto"
+          archivos={archivos}
+          deshabilitado={pendiente}
+          texto="Sacá una foto o elegí un PDF"
+          textoOtro="Sumar otra foto o PDF"
+          className="min-h-12 px-4"
+          onCambio={setArchivos}
+          onError={setError}
+        />
+        <p className="text-sm text-muted-foreground">
+          {archivos.length > 0 ? "Se adjuntan al enviar." : `Fotos o PDF. ${AYUDA_VARIOS_ARCHIVOS}`}
+        </p>
       </div>
 
       {/* Origen (solo quien carga formularios de otros) */}
@@ -493,7 +548,7 @@ function Formulario({
         className="h-12 w-full text-base font-semibold sm:w-auto sm:px-8"
       >
         {pendiente ? <Spinner className="size-5" /> : null}
-        Enviar solicitud
+        {avance ? `Enviando ${avance}…` : "Enviar solicitud"}
       </Button>
     </form>
   );

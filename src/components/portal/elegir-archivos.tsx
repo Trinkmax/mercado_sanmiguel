@@ -2,8 +2,8 @@
 
 import { Camera, FileText, ImageIcon, Plus, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ACCEPT_ADJUNTO } from "@/components/solicitudes/constantes";
-import { MAX_ARCHIVOS, sumarArchivos, type ArchivoElegido } from "@/components/solicitudes/archivos-sueltos";
+import { MAX_ARCHIVOS, type ArchivoElegido } from "@/components/solicitudes/archivos-sueltos";
+import { EntradaArchivos } from "@/components/solicitudes/entrada-archivos";
 
 /**
  * Las fotos o PDF elegidos para mandar, uno por renglón, cada uno con su cruz para quitarlo.
@@ -53,12 +53,7 @@ export function ListaArchivos({
   );
 }
 
-/**
- * El botón para sumar fotos o PDF: abre el mismo selector de siempre (cámara, galería o
- * archivos) y deja elegir varios de una vez; se puede tocar de nuevo para sumar otros.
- * El campo no tiene `name`: los archivos viven en la lista (estado) y cada pantalla los pone
- * en el pedido que corresponde. Con `max` 1 (el descargo) es un archivo solo, como antes.
- */
+/** El botón para sumar fotos o PDF (ver EntradaArchivos): se puede tocar de nuevo para sumar otros. */
 export function BotonSumarArchivos({
   id,
   archivos,
@@ -105,22 +100,13 @@ export function BotonSumarArchivos({
         {archivos.length > 0 ? <Plus aria-hidden strokeWidth={2.4} /> : <Camera aria-hidden strokeWidth={2.2} />}
         <span className="truncate">{archivos.length > 0 ? textoOtro : texto}</span>
       </label>
-      <input
+      <EntradaArchivos
         id={id}
-        type="file"
-        multiple={max > 1}
-        accept={ACCEPT_ADJUNTO}
-        disabled={deshabilitado}
-        className="sr-only"
-        onChange={(e) => {
-          const elegidos = Array.from(e.target.files ?? []);
-          // Vacío otra vez: se puede volver a tocar y sumar más (aunque sea el mismo).
-          e.target.value = "";
-          if (elegidos.length === 0) return;
-          const { lista, error } = sumarArchivos(archivos, elegidos, max);
-          onCambio(lista);
-          onError(error);
-        }}
+        archivos={archivos}
+        max={max}
+        deshabilitado={deshabilitado}
+        onCambio={onCambio}
+        onError={onError}
       />
     </>
   );

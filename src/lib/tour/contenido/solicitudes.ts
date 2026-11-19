@@ -430,7 +430,7 @@ function pasosPorteria(): Paso[] {
       texto:
         "Si es sobre un puesto, tocá «Un puesto», escribí el número y tocá «Es el Puesto…». Si no, dejá «Algo general» y escribí el lugar en «¿Dónde?».",
       pantalla: PantallaFormularioPuesto,
-      consejo: "Si tenés una foto, sumala con «Sacá una foto o elegí un PDF».",
+      consejo: "Si tenés fotos o un PDF, sumalos con «Sacá una foto o elegí un PDF»: entran varios.",
     },
     {
       id: "enviar",
@@ -505,7 +505,7 @@ function pasosTesoreria(): Paso[] {
       titulo: "Contalo en pocas palabras",
       texto:
         "En «Asunto», de qué se trata: «Autorizar el pago al electricista». Abajo, en «Detalle», todo lo que haga falta para decidir.",
-      consejo: "Podés sumar una foto o un PDF, por ejemplo un presupuesto.",
+      consejo: "Podés sumar fotos o PDF, varios si hace falta: por ejemplo un presupuesto.",
     },
     {
       id: "enviar",
