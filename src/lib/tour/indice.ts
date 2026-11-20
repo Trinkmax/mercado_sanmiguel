@@ -231,7 +231,7 @@ export const CAPITULOS_META: Record<IdCapitulo, MetaCapitulo> = {
   reportes: {
     id: "reportes",
     ruta: "/reportes",
-    roles: ["lider"],
+    roles: ["admin", "lider"],
     icono: FileBarChart2,
     titulo: () => "Reportes",
     resumen: () => "Cuánto entró, cuánto falta y cuánto se gastó, mes a mes",

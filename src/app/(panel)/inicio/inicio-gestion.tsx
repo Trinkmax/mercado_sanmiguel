@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import type { Perfil } from "@/lib/auth";
 import { labelPeriodo, periodoActual } from "@/lib/format";
+import { ROLES_REPORTES } from "@/lib/roles";
 import { categoriasDeRol } from "@/lib/segmentos";
 import { CajaRegistradora } from "@/components/shared/iconos";
 import { Button } from "@/components/ui/button";
@@ -341,7 +342,7 @@ export async function InicioGestion({ perfil, supabase }: { perfil: Perfil; supa
                 Lo de los puesteros. Quintas y ambulantes los cobra el Jefe de Portería.
               </CardDescription>
             ) : null}
-            {esLider ? (
+            {ROLES_REPORTES.includes(rol) ? (
               <CardAction>
                 <Link
                   href="/reportes"

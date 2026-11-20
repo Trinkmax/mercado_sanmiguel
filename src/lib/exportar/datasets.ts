@@ -26,7 +26,8 @@ export const DATASETS: Record<DatasetExportable, DefinicionDataset> = {
   balance_mensual: {
     label: "Balance del mes",
     descripcion: "Ingresos por concepto, gastos por rubro y resumen",
-    roles: ["lider"],
+    // Los mismos que ven Reportes (ROLES_REPORTES): Administración lo baja para su punteo del mes.
+    roles: ["admin", "lider"],
     mensual: true,
     grupo: "plata",
   },

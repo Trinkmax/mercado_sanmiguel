@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { requireRol } from "@/lib/auth";
+import { ROLES_REPORTES } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/server";
 import { formatFecha, hoyISO, labelPeriodo } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -23,8 +24,8 @@ export default async function ReporteMensualPage({
   const { periodo } = await params;
   if (!/^\d{4}-\d{2}-01$/.test(periodo)) notFound();
 
-  // J7: solo el Líder de Procesos.
-  const perfil = await requireRol("lider");
+  // Los mismos que ven Reportes: el Líder de Procesos (J7) y Administración (20/11/2026).
+  const perfil = await requireRol(...ROLES_REPORTES);
   const supabase = await createClient();
 
   const [ingresosRes, gastosRes] = await Promise.all([

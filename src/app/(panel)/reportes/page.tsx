@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, Equal, FileText, Minus, Receipt, TrendingUp, type LucideIcon } from "lucide-react";
 import { requireRol } from "@/lib/auth";
+import { ROLES_REPORTES } from "@/lib/roles";
 import { createClient } from "@/lib/supabase/server";
 import { formatARS, labelPeriodo, periodoActual } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -101,8 +102,8 @@ export default async function ReportesPage({
 }: {
   searchParams: Promise<{ periodo?: string | string[] }>;
 }) {
-  // J7: Reportes es solo del Líder de Procesos.
-  const perfil = await requireRol("lider");
+  // Reportes: el Líder de Procesos (J7) y Administración (20/11/2026), ver ROLES_REPORTES.
+  const perfil = await requireRol(...ROLES_REPORTES);
   const sp = await searchParams;
   const crudo = typeof sp.periodo === "string" ? sp.periodo : "";
   const periodo = /^\d{4}-\d{2}-01$/.test(crudo) ? crudo : periodoActual();

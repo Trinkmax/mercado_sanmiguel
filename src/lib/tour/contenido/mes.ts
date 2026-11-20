@@ -290,7 +290,7 @@ export const REPORTES: ContenidoCapitulo = {
       titulo: "Cómo viene la plata del mes",
       texto:
         "Acá ves cuánto se esperaba cobrar, cuánto entró y cuánto se gastó. No cargás nada: se arma solo con los cobros, las lecturas y los gastos que carga cada uno.",
-      consejo: "Esta pantalla es solo tuya: Administración no la ve.",
+      consejo: "La ven el Líder de Procesos y Administración, que la usa para puntear lo cobrado a fin de mes.",
     },
     {
       id: "mes",

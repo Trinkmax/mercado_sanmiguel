@@ -37,8 +37,10 @@ export const ROLES_STAFF: Rol[] = ["admin", "guardia", "porteria", "tesoreria", 
  * Tesorería no cobra (J1); Portería cobra solo el canon de transporte (no cuenta acá). */
 export const ROLES_COBRAN: Rol[] = ["admin", "guardia", "lider"];
 
-/** Roles que ven el módulo global de Reportes (J7: solo el Líder). */
-export const ROLES_REPORTES: Rol[] = ["lider"];
+/** Roles que ven el módulo global de Reportes: el Líder (J7) y, desde el 20/11/2026,
+ * Administración (pedido de Franco: a fin de mes puntean lo cobrado de cada concepto y
+ * necesitan el reporte del mes y su Excel). */
+export const ROLES_REPORTES: Rol[] = ["admin", "lider"];
 
 /** Roles que gestionan clientes: el Líder aplica directo; Administración (puesteros)
  * y el Jefe de Portería (quinteros y ambulantes) proponen y el Líder aprueba. */

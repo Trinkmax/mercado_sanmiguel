@@ -102,7 +102,7 @@ export const NAVEGACION: ItemNav[] = [
   { href: "/gastos", label: "Gastos", icono: Receipt, grupo: "plata", roles: ["admin", "tesoreria", "lider"] },
   { href: "/tesoreria", label: "Tesorería", icono: Landmark, grupo: "plata", roles: ["tesoreria", "lider"] },
   // Dirección: mirar, decidir, configurar.
-  { href: "/reportes", label: "Reportes", icono: FileBarChart2, grupo: "direccion", roles: ["lider"] },
+  { href: "/reportes", label: "Reportes", icono: FileBarChart2, grupo: "direccion", roles: ["admin", "lider"] },
   { href: "/personal", label: "Personal", icono: Users, grupo: "direccion", roles: ["admin", "lider"] },
   { href: "/configuracion", label: "Configuración", corto: "Ajustes", icono: Settings, grupo: "direccion", roles: ["admin", "guardia", "lider"] },
 ];
