@@ -741,6 +741,10 @@ export function FormCliente({
           {!directo ? (
             <p className="text-sm text-muted-foreground">Se le carga cuando el Líder de Procesos apruebe el alta.</p>
           ) : null}
+          <p className="text-sm text-muted-foreground">
+            ¿Ya estaba en el mercado desde antes? Elegí «Desde {nombreMes(preguntaDesde)}»: los meses anteriores los
+            carga después el Líder de Procesos desde su carpeta, en «Cuenta».
+          </p>
           {errores.desde ? <ErrorCampo texto={errores.desde} /> : null}
         </fieldset>
       ) : null}

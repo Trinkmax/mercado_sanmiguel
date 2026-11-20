@@ -14,8 +14,10 @@ import {
   PASO_CANTIDAD,
   formatPorcentaje,
   periodoActual,
+  sumarMeses,
 } from "@/lib/format";
 import { mesDeudaPasada, primerMesDelSistema, TEXTO_DEUDA_PASADA, TEXTO_RECONOCIMIENTO } from "@/lib/deuda-pasada";
+import { MESES_ATRAS, mesesParaCargar, renglonDeCarpeta } from "@/lib/mes-anterior";
 import {
   categoriasDeRol,
   LABEL_CATEGORIA,
@@ -800,6 +802,162 @@ export async function anularCargoManual(
   revalidatePath("/clientes");
   revalidatePath("/cobranza", "layout");
   return ok({ repetido: Boolean(r.repetido), creditoDevuelto: Number(r.credito_devuelto ?? 0) });
+}
+
+/* ------------------------------------------------------------------ */
+/* Cargar un mes anterior                                              */
+/* ------------------------------------------------------------------ */
+
+const schemaMesAnterior = z.object({
+  clienteId: z.uuid("No encontramos el cliente. Recargá la página."),
+  periodo: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])-01$/, "Elegí qué mes cargar."),
+  codigos: z
+    .array(z.string().min(1).max(20))
+    .min(1, "Elegí qué se le carga.")
+    .max(40, "Son demasiados conceptos de una vez."),
+});
+
+/** Lo que pasó al cargar un mes anterior. */
+export type MesAnteriorCargado = {
+  /** Cuántos cargos quedaron cargados. 0 = ya los tenía (doble toque): no se repitió nada. */
+  cargados: number;
+  /** La suma de lo cargado, importe completo. */
+  total: number;
+  /** Cuándo vence lo cargado: con el mes en curso. */
+  vencimiento: string;
+  /** Lo que se cubrió en el acto con su saldo a favor; null si no se pudo aplicar. */
+  aplicado: number | null;
+};
+
+/**
+ * Carga un mes anterior que no se le facturó a alguien que ya estaba en el mercado (pedido de
+ * Franco del 20/11/2026, ver @/lib/mes-anterior): lo que dice HOY su carpeta, en ese mes y con
+ * el vencimiento del mes en curso, así lo paga junto con este mes y mantiene el beneficio.
+ * Queda como cargo cargado a mano (se ve quién lo cargó y se anula desde «Cuenta»). No repite
+ * lo que ese mes ya tiene. Lo hace el Líder de Procesos: decide desde cuándo paga alguien, igual
+ * que al aprobar un alta.
+ */
+export async function cargarMesAnterior(input: unknown): Promise<ActionResult<MesAnteriorCargado>> {
+  const perfil = await requireRol("lider");
+  const parsed = schemaMesAnterior.safeParse(input);
+  if (!parsed.success) return fallo(parsed.error.issues[0].message);
+  const { clienteId, periodo } = parsed.data;
+  const pedidos = new Set(parsed.data.codigos);
+  const actual = periodoActual();
+
+  if (periodo >= actual) return fallo("Ese mes no es anterior: lo de este mes se cambia desde «Qué paga».");
+  if (periodo < sumarMeses(actual, -MESES_ATRAS)) {
+    return fallo(`Ese mes es de hace más de ${MESES_ATRAS} meses: no se carga desde acá.`);
+  }
+
+  const supabase = await createClient();
+  const [clienteRes, periodosRes, filasRes, cargosRes] = await Promise.all([
+    supabase
+      .from("clientes")
+      .select("categoria, activo")
+      .eq("id", clienteId)
+      .eq("org_id", perfil.org_id)
+      .maybeSingle(),
+    supabase
+      .from("periodos")
+      .select("periodo, vencimiento")
+      .eq("org_id", perfil.org_id)
+      .in("periodo", [periodo, actual])
+      .not("generado_en", "is", null),
+    supabase
+      .from("cliente_conceptos")
+      .select(
+        "cantidad, porcentaje, activo, concepto_id, conceptos(codigo, nombre, tipo, precio, descuento_pronto_pago, segmento, activo)"
+      )
+      .eq("cliente_id", clienteId),
+    supabase.from("cargos").select("periodo, codigo, origen, estado").eq("cliente_id", clienteId).eq("periodo", periodo),
+  ]);
+  if (clienteRes.error || periodosRes.error || filasRes.error || cargosRes.error) {
+    return fallo("No pudimos leer su carpeta. Probá de nuevo en un momento.");
+  }
+
+  const cliente = clienteRes.data;
+  if (!cliente) return fallo("Ese cliente no existe");
+  const categoria = cliente.categoria as CategoriaCliente;
+  if (!categoriasDeRol(perfil.rol).includes(categoria)) return fallo(mensajeCategoriaAjena(perfil.rol));
+  if (!cliente.activo) return fallo("Está dado de baja: reactivalo antes de cargarle un mes.");
+
+  const generados = periodosRes.data ?? [];
+  const mesEnCurso = generados.find((p) => p.periodo === actual);
+  if (!mesEnCurso) {
+    return fallo(
+      `Primero hay que generar ${labelPeriodo(actual).toLowerCase()}: el mes anterior vence junto con el mes en curso.`
+    );
+  }
+  if (!generados.some((p) => p.periodo === periodo)) {
+    return fallo(`${labelPeriodo(periodo)} no se generó: no hay nada que cargar de ese mes.`);
+  }
+
+  // Lo que dice hoy la carpeta (la misma cuenta que la generación) y lo que a ese mes le falta.
+  const renglones = (filasRes.data ?? []).flatMap((f) => {
+    const co = f.conceptos;
+    if (!co || co.tipo !== "recurrente") return [];
+    const renglon = renglonDeCarpeta(
+      {
+        conceptoId: f.concepto_id,
+        codigo: co.codigo,
+        nombre: co.nombre,
+        segmento: co.segmento,
+        precio: Number(co.precio),
+        beneficio: Number(co.descuento_pronto_pago),
+        cantidad: Number(f.cantidad),
+        porcentaje: Number(f.porcentaje ?? 100),
+        activo: f.activo && co.activo,
+      },
+      categoria
+    );
+    return renglon ? [renglon] : [];
+  });
+  const mes = mesesParaCargar({
+    periodoActual: actual,
+    generados: [periodo],
+    cargos: cargosRes.data ?? [],
+    renglones,
+  })[0];
+  const aCargar = (mes?.renglones ?? []).filter((r) => pedidos.has(r.codigo));
+
+  // Doble toque, o alguien lo cargó hace un momento: ese mes ya lo tiene, no se repite.
+  if (aCargar.length === 0) {
+    return ok({ cargados: 0, total: 0, vencimiento: mesEnCurso.vencimiento, aplicado: 0 });
+  }
+
+  const { error } = await supabase.from("cargos").insert(
+    aCargar.map((r) => ({
+      org_id: perfil.org_id,
+      periodo,
+      cliente_id: clienteId,
+      concepto_id: r.conceptoId,
+      codigo: r.codigo,
+      descripcion: r.descripcion,
+      cantidad: r.cantidad,
+      precio_unitario: r.precioUnitario,
+      monto: r.monto,
+      descuento_pronto_pago: r.beneficio,
+      vencimiento: mesEnCurso.vencimiento,
+      origen: "manual",
+    }))
+  );
+  if (error) return fallo(error.message);
+
+  // Si tenía saldo a favor, cubre lo más viejo primero (la misma RPC de «Aplicar saldo a favor»).
+  const { data: aplicado, error: errorSaldo } = await supabase.rpc("aplicar_saldo_favor_cliente", {
+    p_cliente: clienteId,
+  });
+
+  revalidarCliente(clienteId);
+  revalidarMesCorregido();
+  revalidatePath("/mapa");
+  return ok({
+    cargados: aCargar.length,
+    total: Math.round(aCargar.reduce((acc, r) => acc + r.monto, 0) * 100) / 100,
+    vencimiento: mesEnCurso.vencimiento,
+    aplicado: errorSaldo ? null : Number(aplicado ?? 0),
+  });
 }
 
 /** Lo que pasó al corregir un cargo del mes (corregir_cargo, 0054). */

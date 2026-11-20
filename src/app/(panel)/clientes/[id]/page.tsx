@@ -14,9 +14,11 @@ import {
   periodoActual,
   saldoCargo,
   SELLO_NIVEL_DEUDA,
+  sumarMeses,
 } from "@/lib/format";
 import { categoriasDeRol, type CategoriaCliente } from "@/lib/segmentos";
 import { primerMesDelSistema, textoPrimerMes } from "@/lib/deuda-pasada";
+import { MESES_ATRAS, mesesParaCargar, renglonDeCarpeta } from "@/lib/mes-anterior";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -37,6 +39,7 @@ import {
 } from "@/components/clientes/cambios-pendientes-cliente";
 import { DeudaPasada } from "@/components/clientes/deuda-pasada";
 import { AnularDeuda } from "@/components/clientes/anular-deuda";
+import { CargarMesAnterior } from "@/components/clientes/cargar-mes-anterior";
 import { NoVino } from "@/components/cobranza/no-vino";
 import { CorregirCargo, type CargoParaCorregir } from "@/components/clientes/corregir-cargo";
 import { ConceptosCliente } from "@/components/clientes/conceptos-cliente";
@@ -346,7 +349,7 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
     medidoresJefeRes,
     porCorregirRes,
     primerMes,
-    mesGeneradoRes,
+    generadosRes,
   ] = await Promise.all([
     supabase
       .from("cargos")
@@ -425,13 +428,15 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
     supabase.rpc("cargos_para_corregir", { p_cliente: id }),
     // La deuda pasada es "de antes de octubre de 2026": el primer mes que facturó el sistema.
     primerMesDelSistema(supabase, perfil.org_id),
-    // 0057: con el mes en curso ya generado, un cambio de la carpeta pregunta desde cuándo rige.
+    // Los meses ya generados, del más nuevo al más viejo. 0057: con el mes en curso generado,
+    // un cambio de la carpeta pregunta desde cuándo rige. Los de antes son los que se le pueden
+    // cargar si no se le facturaron («Cargar un mes anterior»).
     supabase
       .from("periodos")
-      .select("periodo")
-      .eq("periodo", periodoActual())
+      .select("periodo, vencimiento")
       .not("generado_en", "is", null)
-      .maybeSingle(),
+      .gte("periodo", sumarMeses(periodoActual(), -MESES_ATRAS))
+      .order("periodo", { ascending: false }),
   ]);
 
   const porCorregir = new Map<string, CargoParaCorregir>(
@@ -511,7 +516,9 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
 
   // Qué paga: lo mensual (sin energía, que va en Medidores) y lo que el rol puede sumar. De cada
   // concepto, lo que ya se le generó este mes: un cambio que lo toca pregunta desde cuándo rige.
-  const mesGenerado = mesGeneradoRes.data ? periodoActual() : null;
+  const generados = generadosRes.data ?? [];
+  const mesEnCurso = generados.find((p) => p.periodo === periodoActual()) ?? null;
+  const mesGenerado = mesEnCurso ? mesEnCurso.periodo : null;
   const delMesPorCodigo = new Map(
     cargos
       .filter((c) => c.periodo === mesGenerado && c.origen === "generacion" && c.estado !== "anulado")
@@ -600,6 +607,38 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
   const reconocimientoCargado = cargadoSinAnular(cargosReconocimiento);
   // Lo que le queda del reconocimiento: está dentro de «Debe hoy», se dice aparte.
   const reconocimientoDebe = cargosReconocimiento.reduce((acc, c) => acc + saldoCargo(c), 0);
+
+  // Meses anteriores que no se le facturaron (pedido del 20/11/2026, ver @/lib/mes-anterior): lo
+  // que dice hoy su carpeta y a ese mes le falta. Los carga el Líder y vencen con el mes en
+  // curso, que tiene que estar generado.
+  const conceptosVigentes = new Set((conceptosRes.data ?? []).map((c) => c.id));
+  const mesesAnteriores =
+    perfil.rol === "lider" && cliente.activo && mesEnCurso
+      ? mesesParaCargar({
+          periodoActual: mesEnCurso.periodo,
+          generados: generados.map((p) => p.periodo),
+          cargos,
+          renglones: items.flatMap((i) => {
+            const co = i.conceptos;
+            if (!co || co.tipo !== "recurrente") return [];
+            const renglon = renglonDeCarpeta(
+              {
+                conceptoId: i.concepto_id,
+                codigo: co.codigo,
+                nombre: co.nombre,
+                segmento: co.segmento,
+                precio: Number(co.precio),
+                beneficio: Number(co.descuento_pronto_pago),
+                cantidad: Number(i.cantidad),
+                porcentaje: Number(i.porcentaje ?? 100),
+                activo: i.activo && conceptosVigentes.has(i.concepto_id),
+              },
+              categoria
+            );
+            return renglon ? [renglon] : [];
+          }),
+        })
+      : [];
 
   const contacto = [
     cliente.apodo ? `Le dicen “${cliente.apodo}”` : null,
@@ -869,6 +908,18 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
               extra={{ cliente: cliente.id }}
               label="Cuenta corriente de la carpeta (.xlsx)"
             />
+            {mesEnCurso && mesesAnteriores.length > 0 ? (
+              <CargarMesAnterior
+                clienteId={cliente.id}
+                nombre={cliente.nombre}
+                meses={mesesAnteriores}
+                mesEnCurso={mesEnCurso.periodo}
+                vencimiento={mesEnCurso.vencimiento}
+                deuda={deuda}
+                saldoFavor={saldoFavor}
+                hoy={hoy}
+              />
+            ) : null}
           </div>
           {cargos.length === 0 ? (
             <EmptyState
@@ -962,6 +1013,7 @@ export default async function FichaClientePage({ params, searchParams }: Props) 
                               clienteId={cliente.id}
                               descripcion={c.descripcion}
                               monto={c.monto}
+                              mes={c.origen === "manual" ? labelPeriodo(c.periodo).toLowerCase() : undefined}
                             />
                           </div>
                         ) : null}

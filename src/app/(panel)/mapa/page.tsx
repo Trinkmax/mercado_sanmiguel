@@ -73,7 +73,7 @@ export default async function MapaPage({ searchParams }: Props) {
   const [plano, clientesRes, deudaRes, avanceRes, conceptosRes, pendientesRes, avisosRes, quintasRes] = await Promise.all([
     cargarPlano(supabase, perfil, { conClientes: vista === "completa" }),
     consultaClientes,
-    supabase.from("v_deuda_clientes").select("cliente_id, deuda, periodo_mas_viejo").eq("org_id", perfil.org_id),
+    supabase.from("v_deuda_clientes").select("cliente_id, deuda, deuda_vencida").eq("org_id", perfil.org_id),
     supabase
       .from("v_avance_mes")
       .select("cliente_id, total, pagado, falta, cuotas, cuotas_cubiertas, cuota_sugerida")
@@ -179,13 +179,11 @@ export default async function MapaPage({ searchParams }: Props) {
     }
     const d = deudaPorCliente.get(c.id);
     const deuda = Number(d?.deuda ?? 0);
-    // Debe = tiene saldo del mes; deuda atrasada = arrastra meses anteriores.
+    // Debe = tiene saldo que todavía no venció; deuda atrasada = algo ya venció (la misma regla
+    // que la ficha y la lista de clientes). Un mes anterior cargado después vence con el mes
+    // en curso: no es deuda atrasada aunque sea de otro mes.
     const estado: EstadoCobro =
-      deuda <= 0
-        ? "al_dia"
-        : d?.periodo_mas_viejo && d.periodo_mas_viejo < periodo
-          ? "vencido"
-          : "debe";
+      deuda <= 0 ? "al_dia" : Number(d?.deuda_vencida ?? 0) > 0.009 ? "vencido" : "debe";
     return {
       id: c.id,
       codigo: c.codigo,

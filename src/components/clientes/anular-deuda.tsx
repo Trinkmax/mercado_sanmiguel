@@ -32,11 +32,14 @@ export function AnularDeuda({
   clienteId,
   descripcion,
   monto,
+  mes,
 }: {
   cargoId: string;
   clienteId: string;
   descripcion: string;
   monto: number;
+  /** Un mes anterior cargado a mano ("octubre de 2026"), no una deuda de antes del sistema. */
+  mes?: string;
 }) {
   const router = useRouter();
   const [abierto, setAbierto] = useState(false);
@@ -58,7 +61,13 @@ export function AnularDeuda({
         return;
       }
       toast.success(
-        res.data.repetido ? "Esa deuda ya estaba anulada." : `Deuda de ${formatARS(monto)} anulada.`,
+        mes
+          ? res.data.repetido
+            ? "Ese cargo ya estaba anulado."
+            : `Cargo de ${formatARS(monto)} anulado.`
+          : res.data.repetido
+            ? "Esa deuda ya estaba anulada."
+            : `Deuda de ${formatARS(monto)} anulada.`,
         res.data.creditoDevuelto > 0
           ? { description: `Los ${formatARS(res.data.creditoDevuelto)} que la cubrían volvieron a su saldo a favor.` }
           : undefined
@@ -91,10 +100,21 @@ export function AnularDeuda({
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-lg font-semibold">¿Anular esta deuda de {formatARS(monto)}?</DialogTitle>
+          <DialogTitle className="text-lg font-semibold">
+            {mes ? `¿Anular este cargo de ${formatARS(monto)}?` : `¿Anular esta deuda de ${formatARS(monto)}?`}
+          </DialogTitle>
           <DialogDescription className="text-base break-words">
-            {descripcion}. Deja de sumar en su cuenta y queda anotado quién la anuló y por qué. No se
-            puede deshacer: si hacía falta, cargala de nuevo con el monto correcto.
+            {mes ? (
+              <>
+                {descripcion}, de {mes}. Deja de sumar en su cuenta y queda anotado quién lo anuló y por qué. No
+                se puede deshacer: si hacía falta, cargá el mes de nuevo.
+              </>
+            ) : (
+              <>
+                {descripcion}. Deja de sumar en su cuenta y queda anotado quién la anuló y por qué. No se
+                puede deshacer: si hacía falta, cargala de nuevo con el monto correcto.
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-2">
@@ -127,7 +147,7 @@ export function AnularDeuda({
             onClick={() => setAbierto(false)}
             disabled={pendiente}
           >
-            No, dejarla
+            {mes ? "No, dejarlo" : "No, dejarla"}
           </Button>
           <Button
             variant="destructive"
@@ -136,7 +156,7 @@ export function AnularDeuda({
             disabled={pendiente}
           >
             {pendiente ? <Spinner className="size-5" /> : <Ban className="size-5" strokeWidth={2} />}
-            Sí, anularla
+            {mes ? "Sí, anularlo" : "Sí, anularla"}
           </Button>
         </DialogFooter>
       </DialogContent>

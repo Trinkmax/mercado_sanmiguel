@@ -295,7 +295,8 @@ const TEXTOS_RECONOCIMIENTO: typeof TEXTOS_DEUDA_PASADA = {
   siTeEquivocaste: "Si te equivocaste, anulalo desde «Cuenta».",
 };
 
-function Renglon({ etiqueta, children }: { etiqueta: string; children: ReactNode }) {
+/** Un renglón de «Cómo queda su cuenta» (también en «Cargar un mes anterior»). */
+export function Renglon({ etiqueta, children }: { etiqueta: string; children: ReactNode }) {
   return (
     <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-0.5">
       <dt className="text-muted-foreground">{etiqueta}</dt>
@@ -306,7 +307,7 @@ function Renglon({ etiqueta, children }: { etiqueta: string; children: ReactNode
 }
 
 /** "$ 0 → $ 1.108.800": cómo estaba y cómo queda, lo nuevo resaltado. */
-function AntesDespues({ antes, despues, claseDespues }: { antes: number; despues: number; claseDespues: string }) {
+export function AntesDespues({ antes, despues, claseDespues }: { antes: number; despues: number; claseDespues: string }) {
   return (
     <span className="inline-flex flex-wrap items-center justify-end gap-x-1.5 tabular">
       <span className="text-muted-foreground">{formatARS(antes)}</span>
